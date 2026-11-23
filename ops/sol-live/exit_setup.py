@@ -72,6 +72,22 @@ class ExitCluster(Cluster):
         pass
 
 
+def prove_roles(config):
+    require(config["pause_authority"] == bytes(PAUSE).hex(), "Unreviewed pause authority.")
+    digest = hashlib.sha256(b"\x03" + encode(config)).hexdigest()
+    nonce = os.urandom(32).hex()
+    roles = {}
+    for role, expected, name in (
+        ("fee_payer", FEE_PAYER, "exit-fee-payer.json"),
+        ("pause_authority", PAUSE, "exit-pause-authority.json"),
+    ):
+        challenge = f"postfiat.sol-exit.offline-possession.v1/{digest}/{nonce}/{role}/{expected}".encode()
+        sig = load(DIRECTORY / name).sign_message(challenge)
+        require(sig.verify(expected, challenge), f"Offline {role} challenge failed.")
+        roles[role] = dict(address=str(expected), challenge_hex=challenge.hex(), signature=str(sig))
+    return dict(tag3_sha256=digest, nonce=nonce, roles=roles)
+
+
 def check_payout_authorities(c):
     addresses = [str(pda(LOADER, bytes(program))) for program in (VAULT, VERIFIER)]
     result = c.call(
@@ -274,6 +290,11 @@ def main():
         certified_witness,
     )
 
+    if sys.argv[1:2] == ["prove-roles"]:
+        parser = argparse.ArgumentParser(description="Verify both exit roles offline")
+        parser.add_argument("--output", required=True, type=Path)
+        save(parser.parse_args(sys.argv[2:]).output, prove_roles(read(CONFIG)))
+        return
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument(
@@ -403,6 +424,7 @@ def main():
             "waiting for governed series on six validators",
         )
         inspect_vault(c)
+        prove_roles(config)
         c.unlock(DIRECTORY / "mainnet-payer.json")
         deployment = load(DIRECTORY / "egress-verifier.json")
         require(deployment.pubkey() == VERIFIER, "incorrect program signer")
