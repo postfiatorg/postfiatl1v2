@@ -116,15 +116,19 @@ class JobsTest(unittest.TestCase):
         import threading
         from http.client import HTTPConnection
         from http.server import ThreadingHTTPServer
-        from exit_service import BASE, Handler
+        from unittest.mock import patch
+        from exit_service import BASE, Handler, Admissions
 
         burn = "ac" * 48
         with (
             tempfile.TemporaryDirectory() as directory,
             ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server,
+            patch("exit_service.service_readiness",return_value={"payout_ready":True}) as ready,
+            patch("exit_service.redemptions",return_value=[dict(burn_tx_id=burn,bucket_id=BUCKET,amount_atoms=20000,destination_ref=PREFIX+"00"*32)]) as reds,
         ):
             server.journal = Journal(Path(directory) / "jobs.sqlite")
             server.wake = threading.Event()
+            server.admissions=Admissions()
             threading.Thread(target=server.serve_forever, daemon=True).start()
             try:
 
@@ -153,6 +157,14 @@ class JobsTest(unittest.TestCase):
                     self.assertEqual(code, expected)
                     self.assertTrue(payload["error"])
                 raw = json.dumps({"burn_tx_id": burn}).encode()
+                ready.return_value={"payout_ready":False}
+                post_args=("POST",BASE,raw,dict(hdr,**{"Content-Length":str(len(raw))}))
+                self.assertEqual(request(*post_args)[0],503)
+                self.assertIsNone(server.journal.get(burn))
+                ready.return_value={"payout_ready":True}
+                with patch("exit_service.redemptions", return_value=[]):
+                    self.assertEqual(request(*post_args)[0],404)
+                    self.assertIsNone(server.journal.get(burn))
                 code, row = request(
                     "POST", BASE, raw, dict(hdr, **{"Content-Length": str(len(raw))})
                 )
@@ -174,6 +186,8 @@ class JobsTest(unittest.TestCase):
             source_series_id=payout.SERIES,
             status="active",
             outstanding_vault_bridge_atoms=40000,
+            source_domain="shared",redemption_queue_atoms=0,other_allocations_atoms=0,
+            nav_subscription_allocations_atoms=0,counted_value_atoms=40000,
         )
         live_status = dict(
             buckets=[b],
@@ -185,7 +199,7 @@ class JobsTest(unittest.TestCase):
             active=True,
             profile_hash=payout.EXIT,
             profile={"route_epoch": 8},
-            current_height=1755,
+            current_height=1755, burns_open=True,
         )
 
         def rpc(index, method, asset_id):
@@ -202,7 +216,8 @@ class JobsTest(unittest.TestCase):
         c.account.return_value = account
         with (
             patch.object(payout, "cluster", return_value=c),
-            patch.object(payout, "light"),
+            patch.object(payout, "light",return_value=(1753,"anchor")),
+            patch.object(payout, "payout_budget", return_value=1000),
             patch.object(payout, "balance", return_value=payout.FLOOR + 10000000),
             patch.object(payout, "available"),
             patch.object(payout, "rpc", side_effect=rpc),

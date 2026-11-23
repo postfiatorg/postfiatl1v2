@@ -5,7 +5,9 @@ import hashlib
 import logging
 import os
 from pathlib import Path
-from types import SimpleNamespace
+import re
+import shutil
+from solders.transaction import Transaction
 
 from solders.compute_budget import set_compute_unit_limit
 from solders.keypair import Keypair
@@ -43,7 +45,7 @@ from exit_setup import (
     rw,
     six,
 )
-from exit_segments import select_target, validate_segment, committee
+from exit_segments import public_checkpoint, select_target, validate_segment, committee
 from exit_proof import available, prove
 
 ATA = pk("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
@@ -84,17 +86,26 @@ def balance(c, debit=0):
     return value
 
 
-def funded_send(c, label, instructions, *signers, rent=0):
-    block = Hash.from_string(
-        c.call("getLatestBlockhash", c.level)["value"]["blockhash"]
-    )
+def funded_send(c, label, instructions, *signers, rent=0, before_send=None):
+    recent = c.call("getLatestBlockhash", c.level)["value"]
+    block = Hash.from_string(recent["blockhash"])
     message = Message.new_with_blockhash(instructions, c.owner, block)
     fee = c.call(
         "getFeeForMessage", base64.b64encode(bytes(message)).decode(), c.level
     )["value"]
     require(isinstance(fee, int), "Solana fee quote unavailable.")
     balance(c, rent + fee)
-    return c.send(label, instructions, *signers)
+    if before_send is None:
+        require(label != "exit.withdrawal", "Withdrawal journal is required.")
+        return c.send(label, instructions, *signers)
+    tx = Transaction.new_signed_with_payer(instructions,c.owner,[c.payer,*signers],block)
+    sig = str(tx.signatures[0])
+    before_send(sig,recent["lastValidBlockHeight"])
+    result = c.call("sendTransaction",base64.b64encode(bytes(tx)).decode(),
+                    dict(encoding="base64",preflightCommitment="finalized",maxRetries=5))
+    require(result == sig, "Solana signature mismatch.")
+    c.confirm([(label,sig)])
+    return sig
 
 
 def light(c):
@@ -205,46 +216,62 @@ def readiness():
         return dict(ok=True, ready=False, payout_ready=False, message=message)
 
 
-def signature(c, burn):
-    key = marker(burn)
-    account = c.account(key)
-    if not account or account["owner"] != str(VERIFIER):
-        return None
-    require(account["data"] == b"\x01", "Unexpected verifier burn marker.")
-    # A prefunding transaction can also mention this PDA. Verify the successful
-    # tag-2 instruction and its nullifier account position before returning a link.
-    import base58
+PAID_NO_HISTORY = object()
 
-    before = None
-    for _ in range(5):
-        opts = dict(c.level, limit=20)
-        if before:
-            opts["before"] = before
-        history = c.call("getSignaturesForAddress", str(key), opts)
+
+class CheckpointAdvanced(Exception):
+    """A verified checkpoint completed this scheduling turn."""
+
+
+def matches_payout(c, key, sig):
+    import base58
+    tx=c.call("getTransaction",sig,dict(c.level,encoding="json",maxSupportedTransactionVersion=0))
+    if not tx or tx["meta"]["err"] is not None or tx["transaction"]["signatures"][0]!=sig:
+        return False
+    msg=tx["transaction"]["message"]
+    keys=msg["accountKeys"]
+    return any(keys[ix["programIdIndex"]]==str(VERIFIER) and len(ix["accounts"])>=7
+               and keys[ix["accounts"][6]]==str(key) and base58.b58decode(ix["data"])[:1]==b"\x02"
+               for ix in msg["instructions"])
+
+
+def signature(c, burn, known=None):
+    key=marker(burn)
+    account=c.account(key)
+    if not account or (account["owner"]==str(SYSTEM) and not account["data"]):
+        return None
+    require(account["owner"]==str(VERIFIER) and account["data"]==b"\x01","Unexpected burn marker.")
+    # A verified permanent marker is authoritative even when RPC history is pruned.
+    try:
+        if known and matches_payout(c,key,known):
+            return known
+        history=c.call("getSignaturesForAddress",str(key),dict(c.level,limit=100))
         for row in history:
-            if row["err"] is not None:
-                continue
-            tx = c.call(
-                "getTransaction",
-                row["signature"],
-                dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
-            )
-            if not tx or tx["meta"]["err"] is not None:
-                continue
-            msg = tx["transaction"]["message"]
-            keys = msg["accountKeys"]
-            for ix in msg["instructions"]:
-                if (
-                    keys[ix["programIdIndex"]] == str(VERIFIER)
-                    and len(ix["accounts"]) >= 7
-                    and keys[ix["accounts"][6]] == str(key)
-                    and base58.b58decode(ix["data"])[:1] == b"\x02"
-                ):
-                    return row["signature"]
-        if len(history) < 20:
-            break
-        before = history[-1]["signature"]
-    raise ValueError("Burn already paid. Finalized signature history is unavailable.")
+            if row["err"] is None and matches_payout(c,key,row["signature"]):
+                return row["signature"]
+    except (RuntimeError, OSError, KeyError, ValueError, TypeError):
+        pass
+    return PAID_NO_HISTORY
+
+
+def finish_payment(update, result):
+    update("paid",solana_tx=None if result is PAID_NO_HISTORY else result,
+           detail="Finalized marker. Signature unavailable." if result is PAID_NO_HISTORY else None,error=None)
+
+
+def prune_work(c, work):
+    if not work.exists():
+        return
+    for path in work.iterdir():
+        if path.is_symlink():
+            continue
+        if re.fullmatch("[a-f0-9]{64}",path.name) and path.is_dir():
+            shutil.rmtree(path)
+        elif re.fullmatch(r"[a-f0-9]{64}\.key",path.name):
+            if c.account(load(path).pubkey()) is None:
+                path.unlink()
+    if not any(work.iterdir()):
+        work.rmdir()
 
 
 def verify_endpoints(c, witness, prior, target):
@@ -292,7 +319,17 @@ def upload(c, vals, work):
     return signer
 
 
-def submit(c, kind, witness, work, owner=None, on_pay=None):
+def check_work_capacity(work):
+    if not work.exists():
+        return
+    count = sum(1 for p in work.iterdir() if p.is_dir())
+    keys = sum(1 for p in work.glob("*.key"))
+    size = sum(p.stat().st_size for p in work.rglob("*") if p.is_file())
+    require(count < 4 and keys < 4 and size < 96*1024*1024,"Burn artifact capacity reached.")
+
+
+def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
+    check_work_capacity(work)
     vals, proof = prove(kind, witness, work)
     require(0 < len(vals) <= 2048 and len(proof) == 356, "Invalid proof size.")
     balance(c)
@@ -345,7 +382,7 @@ def submit(c, kind, witness, work, owner=None, on_pay=None):
     ixs.append(
         Instruction(VERIFIER, bytes([2 if owner is not None else 8]) + proof, accounts)
     )
-    sig = funded_send(c, "exit." + kind, ixs, rent=rent)
+    sig = funded_send(c, "exit." + kind, ixs, rent=rent, before_send=before_send)
     try:
         funded_send(
             c,
@@ -355,11 +392,11 @@ def submit(c, kind, witness, work, owner=None, on_pay=None):
         )
     except (ValueError, RuntimeError, OSError) as error:
         # The payout or checkpoint is finalized. Preserve the buffer key for rent recovery.
-        logging.warning("Buffer rent recovery pending for %s: %s", path, error)
+        logging.warning("Buffer rent recovery pending.")
     return sig
 
 
-def process(burn, work, update):
+def process(burn, work, update, *, attempt=None, before_send=None):
     update("reading")
     c = cluster()
     red = next(
@@ -379,10 +416,16 @@ def process(burn, work, update):
         recipient=str(owner),
         burn_height=h,
     )
-    paid = signature(c, burn)
+    paid = signature(c, burn, attempt[0] if attempt else None)
     if paid:
-        update("paid", solana_tx=paid)
+        finish_payment(update,paid)
+        prune_work(c,work)
         return
+    if attempt:
+        status=c.call("getSignatureStatuses",[attempt[0]],{"searchTransactionHistory":True})["value"][0]
+        failed=status and status.get("confirmationStatus")=="finalized" and status["err"] is not None
+        if not failed:
+            require(not status and c.call("getBlockHeight",c.level)>attempt[1], "Prior payout confirmation pending.")
     balance(c)
     latest, prior = light(c)
     if latest >= h:
@@ -409,18 +452,33 @@ def process(burn, work, update):
         require(prior, "No known checkpoint precedes this burn.")
     update("proving")
     work.mkdir(parents=True, exist_ok=True)
-    while h - latest > 65:
+    if h - latest > 65:
         block = select_target(latest, rpc)
-        w = rpc(
-            0,
-            "pfusdc_checkpoint_witness",
-            prior_checkpoint=prior,
-            target_block=block["block_hash"],
-        )
+        cache=work.parent/"committee.json"
+        from live import save
+        try:
+            w = rpc(0,"pfusdc_checkpoint_witness",prior_checkpoint=prior,target_block=block["block_hash"])
+        except RuntimeError as err:
+            if "rpc_method_not_allowed" not in str(err):
+                raise
+            saved=read(cache) if cache.exists() else {}
+            root=c.account(checkpoint_pda(prior))["data"].hex()
+            members=saved.get(root)
+            if members is None and os.getenv("EXIT_ANCHOR_WITNESS"):
+                anchor=read(Path(os.environ["EXIT_ANCHOR_WITNESS"]))
+                if committee(anchor["block"]["header"])==root:
+                    members=anchor["committee"]
+            if members is None:
+                members=[dict(row,active=True) for row in rpc(0,"validators")["validators"]]
+            w=public_checkpoint(rpc,latest,prior,block,members,read(CONFIG))
+        first=(w.get("finality_ancestry") or [w])[0]
+        save(cache,{committee(first["block"]["header"]):first["committee"],committee(block):w["committee"]})
         verify_endpoints(c, w, prior, block)
         submit(c, "checkpoint", w, work)
         latest, prior = light(c)
         require((latest, prior) == (block["height"], block["block_hash"]), "Checkpoint readback differs.")
+        prune_work(c,work)
+        raise CheckpointAdvanced()
     w = rpc(
         0,
         "pfusdc_egress_witness",
@@ -443,6 +501,12 @@ def process(burn, work, update):
         def paying():
             update("paying")
 
-        sig = submit(c, "withdrawal", w, work, owner, on_pay=paying)
-    require(signature(c, burn) == sig, "Waiting for finalized payout signature.")
-    update("paid", solana_tx=sig)
+        sent = submit(c, "withdrawal", w, work, owner, on_pay=paying, before_send=before_send)
+        sig = signature(c,burn,sent)
+    require(sig is not None,"Waiting for finalized payout marker.")
+    from live import save
+    # A withdrawal can itself advance the light client across a registry update.
+    if h >= latest:
+        save(work.parent/"committee.json",{committee(w["block"]["header"]):w["committee"]})
+    finish_payment(update,sig)
+    prune_work(c,work)
