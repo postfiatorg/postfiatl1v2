@@ -17,6 +17,22 @@ esac
 # This directory must contain only the worker journal and its proof artifacts.
 [[ -d "$state" && ! -L "$state" && "$(stat -c '%u:%a' "$state")" == "$(id -u):700" ]]
 [[ -f "$fee" && ! -L "$fee" && "$(stat -c '%u:%a' "$fee")" == "$(id -u):600" ]]
+if [[ ! -f "$identity" || -L "$identity" ]]; then
+    echo 'Expected a regular prover identity file' >&2
+    exit 1
+fi
+if [[ ! -f "$trust" || -L "$trust" ]]; then
+    echo 'Expected a regular prover-only known_hosts file' >&2
+    exit 1
+fi
+# Only a trust file dedicated to this endpoint may enter the sandbox. Permit
+# hashed OpenSSH host fields only if ssh-keygen matches every one to the prover.
+valid=$(awk 'NF && $1 !~ /^#/ { if ($1 != "[ssh8.vast.ai]:20628" && $1 !~ /^\|1\|/) exit 1; n++ } END {print n+0}' "$trust")
+matched=$(ssh-keygen -l -F '[ssh8.vast.ai]:20628' -f "$trust" | awk 'NF && $1 !~ /^#/ {n++} END {print n+0}')
+if (( valid == 0 || valid != matched )); then
+    echo 'Prover trust file must contain only the verified prover host' >&2
+    exit 1
+fi
 mounts=()
 while IFS= read -r file; do
     mounts+=(--ro-bind "$file" "$file")

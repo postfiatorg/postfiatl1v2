@@ -37,3 +37,39 @@ class OperatorReviewTest(unittest.TestCase):
         self.assertEqual(start[0][0], start[1][0])
         self.assertEqual([row[1] for row in start], ["self-test", "serve"])
         subprocess.run(["bash", "-n", HERE / "exit-sandbox.sh"], check=True)
+
+    def test_sandbox_never_binds_a_directory_as_a_credential(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = root / "ops/sol-live/exit-sandbox.sh"
+            script.parent.mkdir(parents=True)
+            script.write_bytes((HERE / script.name).read_bytes())
+            (root / "runtime-files").touch()
+            fee = root / ".config/postfiat/sol-bridge/exit-fee-payer.json"
+            fee.parent.mkdir(parents=True)
+            fee.touch(mode=0o600)
+            state = root / "state"
+            state.mkdir(mode=0o700)
+            trust = root / "known_hosts"
+            trust.touch()
+            env = dict(os.environ, HOME=tmp, EXIT_JOB_STATE=str(state),
+                       EXIT_PROVER_IDENTITY=str(root), EXIT_PROVER_KNOWN_HOSTS=str(trust))
+            result = subprocess.run(["bash", script, "self-test"], env=env, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b"Expected a regular prover identity file", result.stderr)
+
+    def test_unknown_port_status_cannot_provision_the_payer(self):
+        import os
+        import tempfile
+        block = DOC.split('fee="$HOME/.config/postfiat/sol-bridge/exit-fee-payer.json"')[1]
+        check = block.split('if sudo test -f')[0].split('test -f "$fee"')[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            ss = Path(tmp) / "ss"
+            for body in ("exit 1", "echo LISTEN"):
+                ss.write_text("#!/bin/sh\n"+body+"\n")
+                ss.chmod(0o755)
+                result = subprocess.run(["bash", "-ec", check],
+                                        env=dict(os.environ, PATH=tmp+":"+os.environ["PATH"]))
+                self.assertNotEqual(result.returncode, 0)
