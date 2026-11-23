@@ -14,7 +14,9 @@ import subprocess
 HOST = "root@ssh8.vast.ai"
 PORT = "20628"
 REMOTE = "/workspace/b23-withdraw-20261116"
-LOCAL = Path(os.getenv("EXIT_PROOF_HOME", Path.home() / "repos/b23-coord/evidence/withdraw"))
+LOCAL = Path(
+    os.getenv("EXIT_PROOF_HOME", Path.home() / "repos/b23-coord/evidence/withdraw")
+)
 SSH = [
     "ssh",
     "-oBatchMode=yes",
@@ -77,14 +79,18 @@ for file in public-values.bin proof-report.json proof-calldata.bin; do
     echo
 done
 """
-    command = "flock -E 75 -n /workspace/b23-gpu/prover.lock bash -c " + shlex.quote(script)
-    result = subprocess.run(SSH+[command],input=data,capture_output=True,timeout=1550)
+    command = "flock -E 75 -n /workspace/b23-gpu/prover.lock bash -c " + shlex.quote(
+        script
+    )
+    result = subprocess.run(
+        SSH + [command], input=data, capture_output=True, timeout=1550
+    )
     if result.returncode:
         raise RuntimeError("Withdrawal prover unavailable.")
-    lines=result.stdout.splitlines()
-    if len(lines)!=3:
+    lines = result.stdout.splitlines()
+    if len(lines) != 3:
         raise ValueError("Incomplete proof response.")
-    return [base64.b64decode(line,validate=True) for line in lines]
+    return [base64.b64decode(line, validate=True) for line in lines]
 
 
 def prove(kind, witness, directory):
@@ -92,7 +98,7 @@ def prove(kind, witness, directory):
         raise ValueError("unknown proof kind")
     verify_local_host()
     data = json.dumps(witness, separators=(",", ":")).encode()
-    if len(data)>24*1024*1024:
+    if len(data) > 24 * 1024 * 1024:
         raise ValueError("Witness exceeds the worker size limit.")
     work = directory / hashlib.sha256(data).hexdigest()
     work.mkdir(parents=True, exist_ok=True)
@@ -121,12 +127,20 @@ def prove(kind, witness, directory):
             raise RuntimeError(
                 "Proof host reserved for its scheduled job. Retry after 18:27 UTC."
             )
-        values, report, calldata = remote_proof(kind,data)
-        if values!=native or len(calldata)!=356 or not json.loads(report)["verified"]:
+        values, report, calldata = remote_proof(kind, data)
+        if (
+            values != native
+            or len(calldata) != 356
+            or not json.loads(report)["verified"]
+        ):
             raise ValueError("Unverified proof response.")
-        for name, contents in (("public-values.bin",values),("proof-report.json",report),("proof-calldata.bin",calldata)):
-            path=work/name
-            temp=path.with_suffix(".partial")
+        for name, contents in (
+            ("public-values.bin", values),
+            ("proof-report.json", report),
+            ("proof-calldata.bin", calldata),
+        ):
+            path = work / name
+            temp = path.with_suffix(".partial")
             temp.write_bytes(contents)
             temp.replace(path)
     if (

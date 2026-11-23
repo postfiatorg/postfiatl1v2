@@ -11,7 +11,10 @@ import time
 
 import requests
 from exit_setup import (
-    ASSET, ExitCluster, FEE_PAYER, VAULT,
+    ASSET,
+    ExitCluster,
+    FEE_PAYER,
+    VAULT,
     BUCKET,
     ROOT,
     SERIES,
@@ -38,33 +41,51 @@ def cluster():
 def expected_unsigned(fields):
     envelope = dict(fields)
     operation = envelope.pop("operation")
-    return dict(envelope, **operation, address_namespace="postfiat.address.v1",
-                transaction_kind=operation["operation"], signature_algorithm_id="ML-DSA-65")
+    return dict(
+        envelope,
+        **operation,
+        address_namespace="postfiat.address.v1",
+        transaction_kind=operation["operation"],
+        signature_algorithm_id="ML-DSA-65",
+    )
 
 
 def check_unsigned(unsigned, fields):
-    require(unsigned == expected_unsigned(fields), "Signed envelope differs from the reviewed quote.")
+    require(
+        unsigned == expected_unsigned(fields),
+        "Signed envelope differs from the reviewed quote.",
+    )
 
 
-def token_deltas(tx):
+def token_deltas(tx, owner=PHANTOM):
     meta = tx["meta"]
     require(meta["err"] is None, "Solana payout failed.")
     keys = tx["transaction"]["message"]["accountKeys"]
-    addresses = [pda(VAULT,b"custody"), pda(ATA,bytes(PHANTOM),bytes(TOKEN),bytes(MINT))]
+    addresses = [
+        pda(VAULT, b"custody"),
+        pda(ATA, bytes(owner), bytes(TOKEN), bytes(MINT)),
+    ]
     deltas = {}
-    for name, address in zip(("custody","recipient"), addresses):
+    for name, address in zip(("custody", "recipient"), addresses):
         index = keys.index(str(address))
         amounts = []
-        for phase in ("preTokenBalances","postTokenBalances"):
+        for phase in ("preTokenBalances", "postTokenBalances"):
             rows = [r for r in meta[phase] if r["accountIndex"] == index]
             if not rows and name == "recipient" and phase == "preTokenBalances":
                 amounts.append(0)
                 continue
-            require(len(rows)==1 and rows[0]["mint"] == str(MINT) and rows[0]["uiTokenAmount"]["decimals"]==6,
-                    "Missing USDC payout token balance.")
+            require(
+                len(rows) == 1
+                and rows[0]["mint"] == str(MINT)
+                and rows[0]["uiTokenAmount"]["decimals"] == 6,
+                "Missing USDC payout token balance.",
+            )
             amounts.append(int(rows[0]["uiTokenAmount"]["amount"]))
         deltas[name] = amounts[1] - amounts[0]
-    require(deltas == {"custody":-20000,"recipient":20000},"Canary transaction token deltas differ.")
+    require(
+        deltas == {"custody": -20000, "recipient": 20000},
+        "Canary transaction token deltas differ.",
+    )
     return deltas
 
 
@@ -153,12 +174,19 @@ def burn(out):
         check=True,
     )
     signed = read(out / "signed.json")
-    check_unsigned(signed["unsigned"],plan["fields"])
+    check_unsigned(signed["unsigned"], plan["fields"])
     public = bytes.fromhex(signed["public_key_hex"])
-    address = "pf" + hashlib.sha3_384(b"postfiat.address.v1\0"+public).hexdigest()[:40]
-    require(set(signed) == {"unsigned","algorithm_id","public_key_hex","signature_hex"}
-            and signed["algorithm_id"]=="ML-DSA-65" and len(public)==1952 and address==OWNER
-            and len(bytes.fromhex(signed["signature_hex"]))==3309,"Unexpected envelope signer.")
+    address = (
+        "pf" + hashlib.sha3_384(b"postfiat.address.v1\0" + public).hexdigest()[:40]
+    )
+    require(
+        set(signed) == {"unsigned", "algorithm_id", "public_key_hex", "signature_hex"}
+        and signed["algorithm_id"] == "ML-DSA-65"
+        and len(public) == 1952
+        and address == OWNER
+        and len(bytes.fromhex(signed["signature_hex"])) == 3309,
+        "Unexpected envelope signer.",
+    )
     head = plan["parent"]
     params = dict(
         signed_asset_transaction_json=json.dumps(signed, separators=(",", ":")),
@@ -223,11 +251,18 @@ def check(out):
             c = cluster()
             after = balances(c)
             before = plan["before"]
-            require(job["solana_tx"], "A finalized transaction signature is required for the canary.")
-            finalized=c.call("getTransaction",job["solana_tx"],dict(c.level,encoding="json",maxSupportedTransactionVersion=0))
-            deltas=token_deltas(finalized)
             require(
-                signature(c, tx) == job["solana_tx"]
+                job["solana_tx"],
+                "A finalized transaction signature is required for the canary.",
+            )
+            finalized = c.call(
+                "getTransaction",
+                job["solana_tx"],
+                dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
+            )
+            deltas = token_deltas(finalized)
+            require(
+                signature(c, tx, job["solana_tx"]) == job["solana_tx"]
                 and before["pfusdc_atoms"] - after["pfusdc_atoms"] == 20000,
                 "Canary balance or signature mismatch",
             )
@@ -237,7 +272,9 @@ def check(out):
                 solana_tx=job["solana_tx"],
                 before=before,
                 after=after,
-                token_deltas=deltas, finalized_slot=finalized["slot"],
+                token_deltas=deltas,
+                finalized_slot=finalized["slot"],
+                withdrawal_packet_hash=row["withdrawal_packet_hash"],
                 marker=str(marker(tx)),
                 recipient=str(PHANTOM),
             )

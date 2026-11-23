@@ -4,7 +4,6 @@ from contextlib import contextmanager
 import argparse
 import base64
 import hashlib
-import json
 from pathlib import Path
 import socket
 import subprocess
@@ -198,7 +197,12 @@ def main():
                         pass
                     time.sleep(0.5)
                 c = Cluster.__new__(Cluster)
-                c.rpc, c.http, c.payer, c.owner = url, requests.Session(), pk, pk.pubkey()
+                c.rpc, c.http, c.payer, c.owner = (
+                    url,
+                    requests.Session(),
+                    pk,
+                    pk.pubkey(),
+                )
                 c.genesis = c.call("getGenesisHash")
                 c.log = evidence / "bank-transactions.jsonl"
                 c.level = {"commitment": "finalized"}
@@ -213,7 +217,11 @@ def main():
                     patch.object(payout, "CONFIG", path / "config.json"),
                     patch.object(payout, "cluster", lambda: c),
                     patch.object(exit_service, "cluster", lambda: c),
-                    patch.object(exit_service,"service_readiness",return_value={"payout_ready":True}),
+                    patch.object(
+                        exit_service,
+                        "service_readiness",
+                        return_value={"payout_ready": True},
+                    ),
                 ):
                     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as http:
                         http.admissions = exit_service.Admissions()
@@ -261,15 +269,27 @@ def main():
                             and vault_after == 980000
                             and c.account(payout.marker(txid))["data"] == b"\x01"
                         )
-                        sig,expiry=http.journal.attempt(txid)
-                        assert sig==job["solana_tx"] and expiry>0
-                        finalized=c.call("getTransaction",sig,dict(c.level,encoding="json",maxSupportedTransactionVersion=0))
+                        sig, expiry = http.journal.attempt(txid)
+                        assert sig == job["solana_tx"] and expiry > 0
+                        finalized = c.call(
+                            "getTransaction",
+                            sig,
+                            dict(
+                                c.level,
+                                encoding="json",
+                                maxSupportedTransactionVersion=0,
+                            ),
+                        )
                         from exit_canary import token_deltas
-                        deltas=token_deltas(finalized)
+
+                        deltas = token_deltas(finalized, owner)
                         save(
                             evidence / "local-payout.json",
                             dict(
-                                job=job, token_deltas=deltas, attempted_signature=sig, last_valid_height=expiry,
+                                job=job,
+                                token_deltas=deltas,
+                                attempted_signature=sig,
+                                last_valid_height=expiry,
                                 ata=str(ata),
                                 before=0,
                                 after=after,

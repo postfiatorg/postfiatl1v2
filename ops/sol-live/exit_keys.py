@@ -1,4 +1,5 @@
 """Open an exit signer only after checking the opened descriptor."""
+
 import os
 import stat
 from pathlib import Path
@@ -10,8 +11,11 @@ def load(path):
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         info = os.fstat(fd)
-        if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600
-                or info.st_uid != os.geteuid()):
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or stat.S_IMODE(info.st_mode) != 0o600
+            or info.st_uid != os.geteuid()
+        ):
             raise ValueError("Signer must be an owned regular file with mode 0600.")
         with os.fdopen(fd, "r", closefd=False) as stream:
             return Keypair.from_json(stream.read())
@@ -22,6 +26,7 @@ def load(path):
 def create_key(path):
     # Publish a complete, durable key without overwriting any existing signer.
     import tempfile
+
     path = Path(path)
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False, mode="w") as tmp:
         try:

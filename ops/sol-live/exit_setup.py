@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 
-from live import ASSET, ROOT, STATE, fleet, read, rpc, save, six
+from live import ASSET, ROOT, fleet, read, rpc, save, six
 from bridge import (
     Cluster,
     DIRECTORY,
@@ -70,6 +70,18 @@ class ExitCluster(Cluster):
     def event(self, **record):
         # The journal records payout signatures. Never write a deployment key-directory log.
         pass
+
+
+def check_payout_authorities(c):
+    addresses=[str(pda(LOADER,bytes(program))) for program in (VAULT,VERIFIER)]
+    result=c.call("getMultipleAccounts",addresses,dict(commitment="finalized",encoding="base64",dataSlice={"offset":0,"length":45}))
+    require(len(result["value"])==2,"Program authorities unavailable.")
+    for account in result["value"]:
+        require(account and account["owner"]==str(LOADER),"Program authority unavailable.")
+        data=base64.b64decode(account["data"][0],validate=True)
+        require(len(data)==45 and data[:4]==(3).to_bytes(4,"little") and data[12] in (0,1)
+                and (not data[12] or data[13:45] not in (bytes(FEE_PAYER),bytes(PAUSE))),
+                "An exit credential controls a program upgrade.")
 
 
 def config_from_records(activation, profile, checkpoint, bucket):
@@ -202,15 +214,30 @@ def profile_code(c, key):
             "invalid program data",
         )
         if key in (VERIFIER, VAULT):
-            require(programdata["data"][12:45] == b"\x01" + bytes(MAINNET_PAYER)
-                    and MAINNET_PAYER not in (PAUSE, FEE_PAYER), "Unexpected program upgrade authority.")
+            require(
+                programdata["data"][12:45] == b"\x01" + bytes(MAINNET_PAYER)
+                and MAINNET_PAYER not in (PAUSE, FEE_PAYER),
+                "Unexpected program upgrade authority.",
+            )
         data = programdata["data"][45:]
     return "0x" + hashlib.sha256(data).hexdigest()
 
 
 def main():
-    from exit_precheck import (accounts, agreement, archive_cmd, bootstrap_history, bootstrap_state,
-                               check_certificate, committee, guest_segment, inspect_vault, records, signed_header)
+    from exit_precheck import (
+        accounts,
+        agreement,
+        archive_cmd,
+        bootstrap_history,
+        bootstrap_state,
+        check_certificate,
+        committee,
+        guest_segment,
+        inspect_vault,
+        records,
+        signed_header,
+    )
+
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument(
@@ -219,10 +246,23 @@ def main():
         help="orchestrator only, requires six governed series reads",
     )
     ap.add_argument("--binary", type=Path, required=True, help="reviewed replay binary")
-    ap.add_argument("--archive", type=Path, required=True, help="writable scratch archive at height 1753")
-    ap.add_argument("--witness-store", type=Path, help="refreshed scratch archive when RPC witness export is unavailable")
-    ap.add_argument("--integrity-file", type=Path, help="mount archive integrity file read-only")
-    ap.add_argument("--init-signature", help="finalized signature for historical recovery")
+    ap.add_argument(
+        "--archive",
+        type=Path,
+        required=True,
+        help="writable scratch archive at height 1753",
+    )
+    ap.add_argument(
+        "--witness-store",
+        type=Path,
+        help="refreshed scratch archive when RPC witness export is unavailable",
+    )
+    ap.add_argument(
+        "--integrity-file", type=Path, help="mount archive integrity file read-only"
+    )
+    ap.add_argument(
+        "--init-signature", help="finalized signature for historical recovery"
+    )
     args = ap.parse_args()
     c = ExitCluster(MAINNET_PAYER)
     profile = read(PROFILE)
@@ -236,25 +276,49 @@ def main():
     head = fleet()
     rows = six(trusted)
     anchor_row = agreement(rows)
-    cert = archive_cmd(args,args.archive,"verify-finalized-checkpoint")
-    check_certificate(cert, anchor_row, committee(signed_header(args, cert, anchor_row["parent"])))
+    cert = archive_cmd(args, args.archive, "verify-finalized-checkpoint")
+    check_certificate(
+        cert, anchor_row, committee(signed_header(args, cert, anchor_row["parent"]))
+    )
     inputs = six(records)
     agreed = agreement(inputs)
-    config = config_from_records(agreed["activation"], profile, anchor_row, agreed["bucket"])
-    guest = guest_segment(args, anchor_row, head["block_height"], args.output.parent/"guest")
+    config = config_from_records(
+        agreed["activation"], profile, anchor_row, agreed["bucket"]
+    )
+    guest = guest_segment(
+        args, anchor_row, head["block_height"], args.output.parent / "guest"
+    )
     ix = build_initialize(config, c.owner)
-    require(config == read(CONFIG) and hashlib.sha256(ix.data).hexdigest() ==
-            "bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4", "Unreviewed bootstrap bytes.")
+    require(
+        config == read(CONFIG)
+        and hashlib.sha256(ix.data).hexdigest()
+        == "bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4",
+        "Unreviewed bootstrap bytes.",
+    )
     anchor = ix.accounts[3].pubkey
-    evidence = dict(vault=vault, fleet_height=head["block_height"], anchors=rows, certificate=cert, inputs=inputs,
-                    guest=guest, config=config, accounts=[str(a.pubkey) for a in ix.accounts], instruction_hex=ix.data.hex())
+    evidence = dict(
+        vault=vault,
+        fleet_height=head["block_height"],
+        anchors=rows,
+        certificate=cert,
+        inputs=inputs,
+        guest=guest,
+        config=config,
+        accounts=[str(a.pubkey) for a in ix.accounts],
+        instruction_hex=ix.data.hex(),
+    )
+
     def recover(sig=None):
-        slot, current = accounts(c,[LIGHT,anchor])
-        if bootstrap_state(config,current) == "initialized":
-            history=bootstrap_history(c,ix,sig or args.init_signature)
-            save(args.output,dict(evidence,signature=history,finalized_readback=True,slot=slot))
+        slot, current = accounts(c, [LIGHT, anchor])
+        if bootstrap_state(config, current) == "initialized":
+            history = bootstrap_history(c, ix, sig or args.init_signature)
+            save(
+                args.output,
+                dict(evidence, signature=history, finalized_readback=True, slot=slot),
+            )
             return True
         return False
+
     if recover():
         print("Verified both initialized accounts and the finalized tag-3 transaction.")
         return
@@ -298,7 +362,10 @@ def main():
         governed = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
         require(
             all(
-                r["active"] and r.get("burns_open") is False and r["profile_hash"] == EXIT and r["profile"] == profile
+                r["active"]
+                and r.get("burns_open") is False
+                and r["profile_hash"] == EXIT
+                and r["profile"] == profile
                 for r in governed
             ),
             "waiting for governed series on six validators",
