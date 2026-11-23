@@ -2,7 +2,7 @@
 
 import argparse
 import fcntl
-import hashlib
+import re
 import json
 import os
 from pathlib import Path
@@ -158,7 +158,7 @@ def burn(out):
     plan = read(out / "plan.json")
     require(
         not (out / "sign-request.json").exists(),
-        "Signing already attempted. Use check with this output directory.",
+        "Signing already attempted. Use recover with this output directory.",
     )
     current = prepare(out)
     require(
@@ -176,23 +176,59 @@ def burn(out):
         ],
         check=True,
     )
-    signed = read(out / "signed.json")
-    check_unsigned(signed["unsigned"], plan["fields"])
-    public = bytes.fromhex(signed["public_key_hex"])
-    address = (
-        "pf" + hashlib.sha3_384(b"postfiat.address.v1\0" + public).hexdigest()[:40]
-    )
-    require(
-        set(signed) == {"unsigned", "algorithm_id", "public_key_hex", "signature_hex"}
-        and signed["algorithm_id"] == "ML-DSA-65"
-        and len(public) == 1952
-        and address == OWNER
-        and len(bytes.fromhex(signed["signature_hex"])) == 3309,
-        "Unexpected envelope signer.",
-    )
-    head = plan["parent"]
+    recover(out)
+
+
+def verified_burn_id(raw, fields):
+    signed = json.loads(raw)
+    check_unsigned(signed["unsigned"], fields)
+    op = fields["operation"]
+    require(set(signed) == {"unsigned", "algorithm_id", "public_key_hex", "signature_hex"}
+            and fields["source"] == op["owner"] == OWNER and op["asset_id"] == ASSET
+            and op["destination_ref"] == DEST and op["bucket_id"] == BUCKET
+            and op["amount_atoms"] == 20000, "Unexpected canary intent.")
+    result = subprocess.run(
+        [Path.home() / "repos/StakeHub/.venv/bin/python",
+         Path(__file__).with_name("verify_canary_envelope.py")],
+        input=raw, text=True, capture_output=True, check=True,
+    ).stdout.strip()
+    require(re.fullmatch("[a-f0-9]{96}", result), "Invalid signed burn ID.")
+    return result
+
+
+def recover(out):
+    plan = read(out / "plan.json")
+    require(read(out / "sign-request.json") == dict(kind="asset", fields=plan["fields"]),
+            "Original signing request and plan differ.")
+    with (out / "signed.json").open("rb") as f:
+        raw = f.read().decode()
+        os.fsync(f.fileno())
+    fd = os.open(out, os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    tx_id = verified_burn_id(raw, plan["fields"])
+
+    def status(i):
+        try:
+            return rpc(i, "tx", tx_id=tx_id)
+        except RuntimeError as err:
+            if "rpc_tx_not_found" not in str(err):
+                raise
+            return None
+
+    rows = six(status)
+    if any(row is not None for row in rows):
+        require(all(r and r.get("confirmed") and r["receipt"]["accepted"]
+                    and r["receipt"]["tx_id"] == tx_id for r in rows),
+                "Original burn is pending, rejected or validators disagree.")
+        return
+    current = prepare(out)
+    require(current["fields"] == plan["fields"], "Original envelope is no longer eligible.")
+    head = current["parent"]
     params = dict(
-        signed_asset_transaction_json=json.dumps(signed, separators=(",", ":")),
+        signed_asset_transaction_json=raw,
         proxy_required_current_height=head["block_height"],
         proxy_required_parent_hash=head["block_tip_hash"],
         proxy_required_state_root=head["state_root"],
@@ -209,7 +245,8 @@ def burn(out):
         save(out / "submission.json", result)
         require(
             result["finality"]["confirmed"]
-            and result["finality"]["receipt"]["accepted"],
+            and result["finality"]["receipt"]["accepted"]
+            and result["finality"]["receipt"]["tx_id"] == tx_id,
             "burn not accepted",
         )
         return
@@ -231,6 +268,8 @@ def check(out):
     require(len(rows) == 1, "Unique finalized canary burn not found")
     row = rows[0]
     tx = row["burn_tx_id"]
+    require(tx == verified_burn_id((out / "signed.json").read_text(), plan["fields"]),
+            "Finalized redemption differs from original signed envelope.")
     confirmations = six(lambda i: rpc(i, "tx", tx_id=tx))
     require(
         all(
@@ -290,7 +329,7 @@ def check(out):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action", choices=("prepare", "burn", "check"))
+    p.add_argument("action", choices=("prepare", "burn", "recover", "check"))
     p.add_argument("--output", type=Path, required=True)
     args = p.parse_args()
     os.umask(0o077)
@@ -306,6 +345,8 @@ def main():
             save(out / "plan.json", prepare(out))
         elif args.action == "burn":
             burn(out)
+        elif args.action == "recover":
+            recover(out)
         else:
             check(out)
 

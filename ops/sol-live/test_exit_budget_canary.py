@@ -126,3 +126,41 @@ class BudgetCanaryTest(unittest.TestCase):
         c.call.side_effect = call
         p.funded_send(c,"exit.checkpoint",[],rent=1200)
         c.confirm.assert_called_once()
+
+    def test_recover_resubmits_only_saved_envelope_after_six_status_checks(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        burn="ad"*48
+        head=dict(block_height=40,block_tip_hash="tip",state_root="root")
+        fields=dict(sequence=7)
+        plan=dict(parent=head,fields=fields)
+        with tempfile.TemporaryDirectory() as d:
+            out=Path(d)
+            canary.save(out/"plan.json",plan)
+            canary.save(out/"sign-request.json",dict(kind="asset",fields=fields))
+            raw=' { "example" : "original" }\n'
+            (out/"signed.json").write_text(raw)
+            seen=set()
+            accepted=False
+            def rpc(i,method,**params):
+                if method=="tx":
+                    self.assertEqual(params["tx_id"],burn)
+                    seen.add(i)
+                    if not accepted:
+                        raise RuntimeError("rpc_tx_not_found")
+                    return dict(confirmed=True,receipt=dict(tx_id=burn,accepted=True))
+                self.assertEqual(seen,set(range(6)))
+                self.assertEqual(params["signed_asset_transaction_json"],raw)
+                return dict(finality=dict(confirmed=True,receipt=dict(accepted=True,tx_id=burn)))
+            with patch.object(canary,"verified_burn_id",return_value=burn), patch.object(canary,"prepare",return_value=plan), patch.object(canary,"rpc",side_effect=rpc) as calls, patch.object(canary.subprocess,"run",side_effect=AssertionError("must not re-sign")):
+                canary.recover(out)
+                self.assertEqual(calls.call_count,7)
+                accepted=True
+                canary.recover(out)
+                self.assertEqual(calls.call_count,13)
+                calls.reset_mock()
+                canary.save(out/"sign-request.json",dict(kind="asset",fields=dict(sequence=8)))
+                with self.assertRaises(ValueError):
+                    canary.recover(out)
+                calls.assert_not_called()
