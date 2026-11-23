@@ -35,6 +35,8 @@ check_port() {
     [[ -z "$listeners" ]]
 }
 check_port
+install -d -m755 -o root -g root /var/log/pf-sol-exit
+install -m644 /dev/null /var/log/pf-sol-exit/self-test.log
 secrets=$operator_home/.config/postfiat/sol-bridge
 identity=$secrets/exit-prover-ssh
 trust=$secrets/exit-prover-known_hosts
@@ -104,8 +106,6 @@ fi
 chown "$account:$account" "$svc/fee-payer.json"
 (cd / && "${as_worker[@]}" -c 'from exit_setup import FEE_PAYER, load, require; import sys; require(load(sys.argv[1]).pubkey()==FEE_PAYER, "Wrong installed payer")' "$svc/fee-payer.json")
 echo 'Verified service-owned fee payer'
-install -d -m755 -o root -g root /var/log/pf-sol-exit
-install -m644 /dev/null /var/log/pf-sol-exit/self-test.log
 install -m644 "$ops/$unit" "$ops/pft-sol-exit-self-test.service" /etc/systemd/system/
 # Fixed arguments only. The rebuild runs as the service user with its normal key path.
 sudoers=$(mktemp /etc/sudoers.d/.pf-sol-exit.XXXXXXXX)

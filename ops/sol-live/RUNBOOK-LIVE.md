@@ -259,13 +259,10 @@ bash ops/sol-live/check-prover-host.sh "$KIT/prover-host-approved"
 install -m600 "$KIT/prover-host-approved" "$trust"
 ```
 
-Run these authorization commands **only on the prover endpoint** using the operator's existing prover administration access. They install a root-owned forced command and add the generated public key with shell, forwarding and PTY access restricted. A pre-existing authorization for the same public key with different options stops the command. The service uses only this dedicated private identity.
+From the reviewed checkout, run the following command with the operator's existing prover administration access. It connects only to `root@ssh8.vast.ai` on port 20628 to install a root-owned forced command and add the generated public key with shell, forwarding and PTY access restricted. A pre-existing authorization for the same public key with different options stops the command. The service uses only this dedicated private identity.
 
 ```bash
-prover_admin=(ssh -o ForwardAgent=no -o StrictHostKeyChecking=yes -o GlobalKnownHostsFile=/dev/null
-              -o "UserKnownHostsFile=$trust" -o UpdateHostKeys=no -p 20628 root@ssh8.vast.ai)
-"${prover_admin[@]}" 'set -eu; f=$(mktemp /usr/local/bin/.pf-sol-exit.XXXXXXXX); cat > "$f"; chmod 0755 "$f"; mv -T "$f" /usr/local/bin/pf-sol-exit-prove' < ops/sol-live/exit-prover-command.sh
-"${prover_admin[@]}" 'set -eu; umask 077; mkdir -p ~/.ssh; touch ~/.ssh/authorized_keys; exec 9>>~/.ssh/authorized_keys; flock -x 9; IFS= read -r pub; blob=$(printf "%s\n" "$pub" | cut -d" " -f2); line="restrict,command=\"/usr/local/bin/pf-sol-exit-prove\" $pub"; if grep -Fq " $blob" ~/.ssh/authorized_keys; then test "$(grep -F " $blob" ~/.ssh/authorized_keys)" = "$line"; else printf "\n%s\n" "$line" >&9; fi' < "$key.pub"
+bash ops/sol-live/authorize-exit-prover.sh
 ```
 
 Stage the pinned Python wheels without privilege. On this host the reviewed cache is already populated. For a new cache use `python3 -m pip download --only-binary=:all: --require-hashes -r ops/sol-live/exit-requirements.lock -d "$wheels"`. The installer uses the reviewed checkout and refuses a running or enabled worker and an occupied port. The original key must be on the service directory's filesystem for its atomic move. Retain this kit, its role record and its anchor witness on retries.

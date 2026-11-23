@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -85,3 +86,53 @@ class FifthReview(unittest.TestCase):
             capture_output=True,
         )
         self.assertEqual(result.returncode, 64)
+
+    def test_authorization_installs_one_restricted_key_only_on_the_prover(self):
+        import shutil
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            ops = tmp / "ops"
+            ops.mkdir()
+            for name in (
+                "authorize-exit-prover.sh",
+                "exit-prover-command.sh",
+                "check-prover-host.sh",
+                "check-prover-identity.sh",
+            ):
+                shutil.copy(HERE / name, ops / name)
+            config = tmp / ".config/postfiat/sol-bridge"
+            config.mkdir(parents=True)
+            key = config / "exit-prover-ssh"
+            subprocess.run(
+                ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key], check=True
+            )
+            fp = subprocess.check_output(
+                ["ssh-keygen", "-lf", str(key) + ".pub"], text=True
+            ).split()[1]
+            (ops / "exit-prover.fingerprint").write_text(fp + "\n")
+            pub = Path(str(key) + ".pub").read_text()
+            (config / "exit-prover-known_hosts").write_text(
+                "[ssh8.vast.ai]:20628 " + pub
+            )
+            # Run the actual remote shell fragments inside a disposable fake prover home.
+            shim = tmp / "ssh"
+            shim.write_text(
+                '#!/bin/bash\nset -eu\nargs=("$@"); [[ ${args[-2]} == root@ssh8.vast.ai && "$*" == *"-p 20628 "* ]]\n'
+                'cmd=${args[-1]}; cmd=${cmd//\\/usr\\/local\\/bin/$HOME}; bash -ec "$cmd"\n'
+            )
+            shim.chmod(0o755)
+            env = dict(os.environ, HOME=d, PATH=d + ":" + os.environ["PATH"])
+            for _ in range(2):
+                subprocess.run(
+                    ["bash", ops / "authorize-exit-prover.sh"],
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                )
+            keys = [
+                s for s in (tmp / ".ssh/authorized_keys").read_text().splitlines() if s
+            ]
+            self.assertEqual(
+                keys, [f'restrict,command="{tmp}/pf-sol-exit-prove" ' + pub.strip()]
+            )
