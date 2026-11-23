@@ -249,7 +249,7 @@ class BrowserWallet:
                 wire = base64.b64decode(json.loads(row["wire"])["body"])
                 payments.append(dict(intent=row["intent"], action_hash=action_hash, phase=phase,
                                      unresolved=attempt.get("unresolved", False), unknown_order=attempt.get("unknown_order", False), asset=wire[7:55].hex(), spend=wire[71] == 0))
-        return dict(payments=payments, issued_fee=fee, network=self.net, account=self.account, issue=self.issue,
+        return dict(quarantined=balance.get("quarantined"), payments=payments, issued_fee=fee, network=self.net, account=self.account, issue=self.issue,
                     address=local(self.home, "address")["address"], sequence=str(account["sequence"] + 1) if account else None,
                     public={NATIVE:str(account["balance"]), self.issue:str(sum(l["balance"] for l in lines))} if account else {},
                     private={k:str(v) for k,v in balance["finalized"].items()},

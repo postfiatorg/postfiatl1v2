@@ -102,6 +102,36 @@ struct Pending {
     #[serde(default)]
     order_id: Option<String>,
 }
+// This local record has no conversion to a submittable action.
+#[derive(Serialize, Deserialize)]
+struct RetiredPending {
+    payment: Value,
+    asset: String,
+    serials: [String; 2],
+    delta: i128,
+    #[serde(flatten)]
+    other: BTreeMap<String, Value>,
+}
+
+impl RetiredPending {
+    fn from_legacy(record: Value) -> Result<Self> {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        let pending: Self = serde_json::from_value(record)?;
+        let body = pending.payment["body"].as_str().ok_or("invalid legacy payment")?;
+        if body.len() > pq::ARCHIVE_LIMIT.div_ceil(3) * 4 {
+            return Err("oversize legacy payment".into());
+        }
+        let wire = STANDARD.decode(body)?;
+        if wire.len() < 72 || wire.len() > pq::ARCHIVE_LIMIT || &wire[..6] != b"PFPQ\x01\x01"
+            || !matches!(wire[6], 0 | 2) || wire[71] != 1 || wire[7..55] == [0;48]
+            || hex::encode(&wire[7..55]) != pending.asset {
+            return Err("invalid legacy payment".into());
+        }
+        for sn in &pending.serials { digest(sn)?; }
+        Ok(pending)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
     pub recovery: Recovery,
@@ -110,7 +140,9 @@ pub struct Wallet {
     notes: BTreeMap<String, Note>,
     // Old wallet file format. Imported conservatively on open.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pending: Option<Pending>,
+    pending: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    quarantined: Option<RetiredPending>,
     #[serde(default)]
     attempts: BTreeMap<String, Pending>,
     #[serde(default)]
@@ -176,6 +208,7 @@ impl Wallet {
             trees,
             notes: Default::default(),
             pending: None,
+            quarantined: None,
             attempts: BTreeMap::new(),
             latest: None,
         })
@@ -186,14 +219,25 @@ impl Wallet {
             &self.recovery.key(index)?.stealth_address(),
         )?)
     }
-    pub fn import_pending(&mut self) -> Result<()> {
-        if let Some(pending) = self.pending.take() {
+    pub fn import_pending(&mut self) -> Result<bool> {
+        if let Some(record) = &self.pending {
+            let pending: Pending = match serde_json::from_value(record.clone()) {
+                Ok(pending) => pending,
+                Err(_) if self.quarantined.is_none() => {
+                    self.quarantined = Some(RetiredPending::from_legacy(record.clone())?);
+                    self.pending = None;
+                    return Ok(true);
+                }
+                Err(error) => return Err(error.into()),
+            };
             let action = postfiat_types::ShieldedAction::PqPaymentV1(pending.payment.clone());
             let hash = postfiat_types::private_action_hash(&action)?;
             self.latest = Some(hash.clone());
             self.attempts.insert(hash, pending);
+            self.pending = None;
+            return Ok(true);
         }
-        Ok(())
+        Ok(false)
     }
     pub fn balance(&self) -> Value {
         let mut totals = BTreeMap::<&str, i128>::new();
@@ -211,7 +255,7 @@ impl Wallet {
             .map(|(id, p)| json!({"action_hash":id,"phase":p.phase,"asset":p.asset,
                 "unresolved":!p.conflict_final,"supersedes":p.supersedes,"unknown_order":!p.conflict_final && p.order_id.is_none() && p.payment.parts().is_ok_and(|parts| parts.0.mode != Mode::Shield)}))
             .collect();
-        json!({"attempts":attempts,"finalized":totals,"pending":delta,"height":self.point.height,"pairs":self.point.pairs,"keys":self.recovery.count})
+        json!({"quarantined":self.quarantined.as_ref().map(|p| json!({"asset":p.asset, "message":"Retired issued spend saved locally. Check finalized history and the original order before making another payment."})), "attempts":attempts,"finalized":totals,"pending":delta,"height":self.point.height,"pairs":self.point.pairs,"keys":self.recovery.count})
     }
     pub fn sync(&mut self, target: Point, rows: &Path) -> Result<Value> {
         self.import_pending()?;
@@ -455,6 +499,9 @@ impl Wallet {
             ))
         };
         if order_id.is_some() && !o.different_payment {
+            if self.quarantined.as_ref().is_some_and(|p| p.asset == o.asset && p.serials.iter().any(|sn| self.notes.contains_key(sn))) {
+                return Err("Retired issued spend is quarantined. Check its original order and confirm this is a different payment.".into());
+            }
             for (id, p) in &self.attempts {
                 if p.asset == o.asset && !p.conflict_final && p.order_id.is_none()
                     && p.payment.parts()?.0.mode != Mode::Shield
@@ -543,6 +590,7 @@ impl Wallet {
             let shared = required.iter().map(|sn| self.notes.get(sn).ok_or("replacement input is spent"))
                 .collect::<std::result::Result<Vec<_>,_>>()?;
             for (sn, n) in self.notes.iter().filter(|(_, n)| n.asset == o.asset) {
+                if self.quarantined.as_ref().is_some_and(|p| p.serials.contains(sn)) { continue; }
                 if required.contains(sn) {
                     groups.entry(n.epoch).or_default();
                 } else if !self.attempts.iter().any(|(id, p)| {

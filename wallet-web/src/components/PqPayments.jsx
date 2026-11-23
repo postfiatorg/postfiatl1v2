@@ -136,6 +136,7 @@ export default function PqPayments() {
     {error && <p role="alert" className="pq-warning">{error}</p>}
     {!wallet ? <section><h2>Connect your local wallet</h2><p>Start the <code>pq-wallet browser</code> command and open its owner-only pairing link.</p>
       <button onClick={() => work('Connecting', () => refresh())}>Reconnect</button></section> : <>
+    {wallet.quarantined && <p role="status">{wallet.quarantined.message}</p>}
     <div className="pq-grid"><div>
     {!migrating ? <section><div className="pq-heading"><h2>Payment</h2><label>Asset <select aria-label="Asset" disabled={!!busy} value={asset}
       onChange={e => change(() => {setAsset(e.target.value); setAlsoReplace(''); setDifferentPayment(false); setReplacement('');})}>
@@ -154,7 +155,7 @@ export default function PqPayments() {
         {wallet.payments.filter(p => p.unresolved && p.spend && p.asset === asset && p.action_hash !== replacement).map(p =>
           <option key={p.intent} value={p.action_hash}>Replace {p.intent.slice(0,16)} using a second shared note</option>)}
       </select></label>}
-      {mode !== 'Shield' && wallet.payments.some(p => p.unknown_order && p.asset === asset) &&
+      {mode !== 'Shield' && (wallet.quarantined?.asset === asset || wallet.payments.some(p => p.unknown_order && p.asset === asset)) &&
         <label><input type="checkbox" checked={differentPayment} onChange={e => change(() => setDifferentPayment(e.target.checked))}/>
           This is a different payment from the imported unresolved spend</label>}
       <label>Amount ({unit} atoms)<input inputMode="numeric" value={amount} disabled={!!busy}
