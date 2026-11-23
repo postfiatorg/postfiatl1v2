@@ -29,7 +29,7 @@ class FifthReview(unittest.TestCase):
             )
 
     def test_system_identity_proves_archive_before_funding_and_tag3(self):
-        install = BOOK.index("sudo bash ops/sol-live/install-exit-system.sh")
+        install = BOOK.index("sudo /usr/bin/env -i")
         test = BOOK.index(
             "sudo -n /usr/bin/systemctl start pft-sol-exit-self-test.service", install
         )

@@ -45,6 +45,9 @@ class RotationTest(unittest.TestCase):
                 gov.rotation_clearance(head)
             rows[5]["outstanding_signed_rotation_rounds"] = []
             self.assertEqual(gov.rotation_clearance(head), rows)
+            with patch.object(gov, "fleet", return_value=dict(head, block_height=2001)):
+                with self.assertRaises(gov.ParentChanged):
+                    gov.rotation_clearance(head)
             prefix = "epoch-3-" + "ab" * 48 + "-"
             for name in ("height-1800.json", prefix + "height-1800-view-0.timeout-vote.json"):
                 safety[0] = name

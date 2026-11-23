@@ -34,7 +34,7 @@ class OperatorReviewTest(unittest.TestCase):
             self.assertTrue(text in after.split("## 10.")[1], text)
 
     def test_port_and_restart_branch_precede_move(self):
-        before = (HERE/"install-exit-system.sh").read_text().split('mv -T "$fee"')[0]
+        before = (HERE/"install-exit-system.sh").read_text().split('stage_credential exit-fee-payer.json')[0]
         self.assertIn("sport = :18089", before)
         self.assertIn('if [[ -f "$svc/fee-payer.json"', before)
 

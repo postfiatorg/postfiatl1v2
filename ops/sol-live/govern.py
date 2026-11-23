@@ -112,7 +112,7 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
     head = fleet()
     if head["build_git_revision"] != (compatible or R6):
         raise RuntimeError("waiting for compatible six-validator release")
-    if kind == "exit-open":
+    if kind in ("exit-open", "exit-close", "exit-paid"):
         from exit_precheck import parent_of
 
         if parent_of(head) != qualified_parent:
@@ -276,7 +276,7 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         )
         return get(i, "auth")
 
-    if kind == "exit-open" and parent_of(fleet()) != qualified_parent:
+    if kind in ("exit-open", "exit-close", "exit-paid") and parent_of(fleet()) != qualified_parent:
         raise ParentChanged("Parent changed before signing.")
     with ThreadPoolExecutor(6) as pool:
         auth = list(pool.map(sign, range(6)))

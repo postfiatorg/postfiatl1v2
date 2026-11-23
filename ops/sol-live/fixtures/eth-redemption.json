@@ -1,0 +1,51 @@
+{
+  "report": {
+    "schema": "postfiat-vault-bridge-status-v1",
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "redemptions": [
+      {
+        "amount_atoms": 900581,
+        "bucket_id": "5d5abc049bd1545e0d552e4176047e39d2151868ad7287384cbaf8db792330add44f625cfc631c8204413deb3665c536",
+        "burn_tx_id": "4f939b3074e5dd7bdfaa9c33726f41a24d42c8c6b57a99ce5c6c048c87a6f7d3de473d12f4446bc7815cd4aa14d29be7",
+        "created_at_height": 465,
+        "destination_ref": "evm-erc20:1:0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+        "epoch": 17,
+        "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "owner": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "owner_sequence": 90,
+        "redemption_id": "034dd3e81b94018b751f6e0a70ea2fe377ebf2ba043f8a7ef101f6d93c750db320a762261be94c4a1c475e76dfe02dc0",
+        "reserve_packet_hash": "fa0acaff8b64f1d6636bdf0985ab8348979bd17bcaba10d843c1ba5fed7cc45e72db0c2693a0d956218d6f0939725943",
+        "settled_atoms": 900581,
+        "settlement_receipt_hash": "6552928d645759e0b1b94946e622716f50f0107ec61f812847a377ccd59a735b94cd1b8adda4fdbb2899303016fde253",
+        "state": "settled",
+        "withdrawal_evidence_root": "b4de6ebe11ce0c34758c79c878337a9bb71468c1164f72f61ee6e9645d9917263ce38b789962778049eba750980720e7",
+        "withdrawal_packet_evm_digest": "c7d701b07cac035af244a4b717704c2f08878feafb31cc20287b5b96a53fca39",
+        "withdrawal_packet_hash": "0a0ec23671bf1a60cf05725daa116673d4234023c9de10bd5d66f90eae81cf08c1eeaa414c5a4ffca607ac9cbcc2e933",
+        "withdrawal_recipient": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0"
+      }
+    ]
+  },
+  "transaction": {
+    "confirmed": true,
+    "receipt": {
+      "accepted": true,
+      "account_reserve": 10,
+      "code": "accepted",
+      "fee_burned": 23,
+      "fee_charged": 23,
+      "message": "asset transaction applied; fee burned",
+      "minimum_fee": 23,
+      "state_expansion_fee": 0,
+      "tx_id": "4f939b3074e5dd7bdfaa9c33726f41a24d42c8c6b57a99ce5c6c048c87a6f7d3de473d12f4446bc7815cd4aa14d29be7"
+    },
+    "block": {
+      "header": {
+        "height": 465,
+        "block_hash": "86c51d757efad37e3f09c3aac660dd1c2e0df6e60be6685bf4b1657321e7732859c4ff596edb9b86f2efbed61cbc7dbd",
+        "state_root": "cf0ab7016bf539fd829db3d1775e77e06ffafcca87f70f9c9b0e8ac627157b9ff357092d9f76b9ec56387cd3d23f9d78",
+        "batch_kind": "transparent",
+        "parent_hash": "423a6b4d1fc34de90ad6e9486e0a2f96dcbfe100a1ae169a0b726ef0698cbb917c75309bcbc309a2bc3cc568321bbb59"
+      }
+    }
+  }
+}

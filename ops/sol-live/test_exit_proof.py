@@ -35,3 +35,21 @@ echo -n proof > "$4/proof-calldata.bin"
                 with self.assertRaisesRegex(RuntimeError, "unavailable"):
                     exit_proof.remote_proof("checkpoint", b"{}")
                 self.assertEqual(list((path / "jobs").iterdir()), [])
+
+    def test_archive_marker_requires_local_verifier_acceptance(self):
+        import os
+        import subprocess
+        from exit_sandbox_check import proof
+        from exit_setup import CONFIG
+        from live import read
+        cfg = read(CONFIG)
+        parsed = dict(height=cfg["initial_height"], result=cfg["initial_checkpoint"],
+                      end=cfg["initial_committee"])
+        with (patch.dict(os.environ, EXIT_ANCHOR_WITNESS=str(CONFIG)),
+              patch.object(exit_proof, "prove", return_value=(b"native values", bytes(356))),
+              patch("exit_precheck.checkpoint_values", return_value=parsed),
+              patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "verifier")) as verify):
+            with self.assertRaises(subprocess.CalledProcessError):
+                proof(check_anchor=True)
+            self.assertEqual(verify.call_args.kwargs["input"], bytes(356) + b"native values")
+            self.assertTrue(verify.call_args.kwargs["check"])

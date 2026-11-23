@@ -276,9 +276,11 @@ class QualificationTest(unittest.TestCase):
             patch.object(g, "six", return_value=[route] * 6),
             patch.object(requests, "get", side_effect=get),
             patch.object(g, "verify_open_parent"),
+            patch.object(g, "rotation_clearance") as clearance,
             patch.object(g, "govern", return_value={"tx_id": "id"}) as submit,
         ):
             g.main()
+            clearance.assert_called_once_with(new)
             submit.assert_called_once_with(
                 "exit-open", compatible="rev", qualified_parent=pre.parent_of(new)
             )

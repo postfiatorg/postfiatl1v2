@@ -11,37 +11,30 @@ class FifthReview(unittest.TestCase):
     def test_paid_canary_survives_intervening_holder_credit(self):
         import exit_canary as c
 
-        burn = "ab" * 48
-        row = dict(
-            owner=c.OWNER,
-            owner_sequence=7,
-            bucket_id=c.BUCKET,
-            amount_atoms=20000,
-            destination_ref=c.DEST,
-            burn_tx_id=burn,
-            created_at_height=9,
-            withdrawal_packet_hash="cd" * 48,
-            asset_id=c.ASSET,
-        )
-        receipt = dict(tx_id=burn, accepted=True)
-        h = dict(
-            height=9, block_hash="ab" * 48, state_root="ef" * 48, batch_kind="asset"
-        )
+        capture = json.loads((Path(__file__).parent / "fixtures/eth-redemption.json").read_text())
+        report = capture["report"]
+        row = report["redemptions"][0]
+        burn = row["burn_tx_id"]
+        # Adapt only the intent to the as-yet unopened Solana canary.
+        row.update(owner=c.OWNER, bucket_id=c.BUCKET, destination_ref=c.DEST, amount_atoms=20000)
+        transaction = capture["transaction"]
+        receipt = transaction["receipt"]
 
         def rpc(i, method, **params):
             if method == "vault_bridge_status":
-                return dict(redemptions=[row])
+                return report
             self.assertEqual(method, "tx")
-            return dict(confirmed=True, receipt=receipt, block=dict(header=h))
+            return transaction
 
         response = Mock()
-        response.json.return_value = dict(stage="paid", solana_tx="sig")
+        job = c.read(Path(__file__).parent / "fixtures/agave-withdrawal.json")["job"]
+        response.json.return_value = dict(job, burn_tx_id=burn)
         with tempfile.TemporaryDirectory() as d, contextlib.ExitStack() as st:
             out = Path(d)
             (out / "signed.json").write_text("{}")
             (out / "plan.json").write_text(
                 json.dumps(
-                    dict(fields=dict(sequence=7), before=dict(pfusdc_atoms=20000))
+                    dict(fields=dict(sequence=row["owner_sequence"]), before=dict(pfusdc_atoms=20000))
                 )
             )
             st.enter_context(patch.object(c, "fleet"))
@@ -57,7 +50,7 @@ class FifthReview(unittest.TestCase):
             ).return_value.call.return_value = {"slot": 10}
             for name, val in [
                 ("token_deltas", {}),
-                ("signature", "sig"),
+                ("signature", job["solana_tx"]),
                 ("finalized_reference", {}),
             ]:
                 st.enter_context(patch.object(c, name, return_value=val))
@@ -68,4 +61,8 @@ class FifthReview(unittest.TestCase):
             self.assertEqual(len(paid["burn_receipts"]), 6)
             receipt["tx_id"] = "ff" * 48
             with self.assertRaises(ValueError):
+                c.check(out)
+            receipt["tx_id"] = burn
+            report["asset_id"] = "different"
+            with self.assertRaisesRegex(ValueError, "asset"):
                 c.check(out)

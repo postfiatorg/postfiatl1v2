@@ -9,16 +9,14 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
     *) exit 64;;
 esac
 cd /workspace/b23-withdraw-20261116
+mkdir -p jobs
+job=$(mktemp -d jobs/sol-exit-worker.XXXXXXXX)
+trap 'rm -rf -- "$job"' EXIT
+# Receive at most 24 MiB before reserving the shared device.
+timeout 30 head -c 25165825 > "$job/witness.json"
+test "$(wc -c < "$job/witness.json")" -le 25165824
 exec 9>/workspace/b23-gpu/prover.lock
 flock -E 75 -n 9
-job=jobs/sol-exit-worker
-mkdir -p jobs
-rm -rf -- "$job"
-mkdir "$job"
-trap 'rm -rf -- "$job"' EXIT
-# Accept at most the worker's 24 MiB witness limit.
-head -c 25165825 > "$job/witness.json"
-test "$(wc -c < "$job/witness.json")" -le 25165824
 SP1_PROVER=cuda RAYON_NUM_THREADS=4 timeout 1500 ./proof-host "$kind" egress.elf "$job/witness.json" "$job/proof" prove > "$job/prove.log" 2>&1
 for file in public-values.bin proof-report.json proof-calldata.bin; do
     test "$(wc -c < "$job/proof/$file")" -le 8192

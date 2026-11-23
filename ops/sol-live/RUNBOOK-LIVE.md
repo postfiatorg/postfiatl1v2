@@ -45,6 +45,11 @@ cargo build --locked --release -p postfiat-node --bin postfiat-node
 export B="$CARGO_TARGET_DIR/release/postfiat-node" KIT="$HOME/var/$REL"
 REV=$(git rev-parse --short=8 HEAD)
 export REV
+install -d -m700 "$HOME/.config/postfiat"
+oncall="$HOME/.config/postfiat/sol-exit-oncall.env"
+tmp=$(mktemp "${oncall}.XXXXXXXX")
+printf 'cd -- %q\nexport REV=%q H=%q KIT=%q\n' "$PWD" "$REV" "$H" "$KIT" > "$tmp"
+mv -T "$tmp" "$oncall"
 python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
 export ARCHIVE="$KIT/anchor-replay" INTEGRITY="$EXIT_WORK/replay/source/.integrity.key"
 export FAUCET="$EXIT_WORK/replay/source/faucet_account.json"
@@ -165,7 +170,7 @@ Require all six series RPCs to report the reviewed descriptor hash, `active=true
 
 Registration starts the chain-side hold on incompatible changes. Keep all six signer holds in force through the six accepted open receipts. After registration each validator operator inventories their resident signer outputs, outstanding authorizations (including partial or externally held signatures), governance coordinator queues and certified but uncommitted rotations. Resolve outstanding rounds or prove their signed slot expired. The ops gate separately checks the filenames in each resident consensus-v2 safety journal and refuses any round beyond the agreed tip. The operator inventory covers governance authorizations that have not entered consensus.
 
-On each authenticated validator host the operator publishes a root-owned `/etc/postfiat/sol-exit-rotation-clearance.json` recording `validator` (validator-N), `profile_hash` (the registered profile hash), `revision` (resident build), `parent` (block_height, block_tip_hash and state_root), `hold_through_open` (true) and `outstanding_signed_rotation_rounds` (the actual list). Missing evidence or any listed round blocks qualification. A changed parent requires a new inventory.
+On each authenticated validator host the operator publishes a root-owned `/etc/postfiat/sol-exit-rotation-clearance.json` recording `validator` (validator-N), `profile_hash` (the registered profile hash), `revision` (resident build), `parent` (block_height, block_tip_hash and state_root), `hold_through_open` (true) and `outstanding_signed_rotation_rounds` (the actual list). Missing evidence or any listed round blocks qualification. A changed parent requires a new inventory. Open reads each root-owned regular clearance file again for its candidate parent and rejects group or world write access.
 
 ## 4. Precheck the immutable binding
 
@@ -265,16 +270,32 @@ From the reviewed checkout, run the following command with the operator's existi
 bash ops/sol-live/authorize-exit-prover.sh
 ```
 
-Stage the pinned Python wheels without privilege. On this host the reviewed cache is already populated. For a new cache use `python3 -m pip download --only-binary=:all: --require-hashes -r ops/sol-live/exit-requirements.lock -d "$wheels"`. The installer uses the reviewed checkout and refuses a running or enabled worker and an occupied port. The original key must be on the service directory's filesystem for its atomic move. Retain this kit, its role record and its anchor witness on retries.
+On the orchestrator's trusted build account, use an independent, clean checkout of the approved full release commit. Keep this checkout, toolchain, build cache and GitHub publishing credential outside the relay operator's write access. Stage the reviewed public inputs under the builder's own KIT. Verify the role signatures, witness against the archived checkpoint and host fingerprint before packaging. Package the committed worker files, hash-pinned wheels, frozen proof host and ELF, verifier, public role record, witness and approved host trust. The two private credentials stay outside the tar. After publication, place a copy of the tar at an absolute path readable by `postfiat` on the relay host. Use a fresh output path on each build.
 
 ```bash
+set -euo pipefail
 wheels="$EXIT_WORK/target-ops/ops3/wheels"
-test -d "$wheels"
-# Machine owner, once, from the reviewed release checkout:
-sudo bash ops/sol-live/install-exit-system.sh "$KIT" "$wheels"
+test "$(git rev-parse HEAD)" = "${RELEASE_COMMIT:?approved full release commit}"
+test -z "$(git status --porcelain)"
+CARGO_TARGET_DIR=$(mktemp -d "$KIT/verifier-build.XXXXXXXX")
+export CARGO_TARGET_DIR
+bash ops/sol-live/build-exit-verifier.sh
+BUNDLE="$KIT/sol-exit-install.tar"
+python3 ops/sol-live/build-exit-bundle.py --kit "$KIT" --wheels "$wheels" \
+  --proof "$HOME/repos/b23-coord/evidence/withdraw" --verifier "$CARGO_TARGET_DIR/release/exit-verify-proof" \
+  --trust "$KIT/prover-host-approved" --output "$BUNDLE"
+sha256sum "$BUNDLE"
 ```
 
-**First orchestrator step after the owner returns.** Run the installed oneshot. Its systemd settings use the worker UID, dedicated prover identity, protected home, read-only runtime and writable jobs directory. It binds port 18089 briefly, checks the installed payer, six distinct validator tunnels and finalized Solana network, and obtains a fresh GPU proof for the archived checkpoint. Stop here on failure. Both funding and tag 3 independently verify the saved possession signatures and the root-owned self-test log before signing.
+Inspect the tar inventory and release inputs. In the **private GitHub repository**, the orchestrator commits the approved release revision, tar filename and SHA-256 and pushes that commit. The owner opens that exact commit through their own authenticated GitHub session, verifies its release identity, and supplies its 64 lowercase hex digits as `SHA256` and the absolute operator-readable tar path as `BUNDLE`. The following is the owner's single installation command.
+
+```bash
+sudo /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root /bin/bash -ceu 'cd /; [[ $1 =~ ^[0-9a-f]{64}$ && $2 == /* ]]; umask 077; d=$(mktemp -d /var/lib/pf-sol-install.XXXXXXXX); trap '\''rm -rf -- "$d"'\'' EXIT; cd "$d"; runuser -u postfiat -- /bin/cat -- "$2" > bundle.tar; printf "%s  bundle.tar\n" "$1" | sha256sum --strict -c -; umask 022; tar -xf bundle.tar --no-same-owner --no-same-permissions; /bin/bash ./install-exit-system.sh' _ "${SHA256:?digest from private GitHub commit}" "${BUNDLE:?absolute tar path}"
+```
+
+The installer checks the installed revision, disabled/stopped withdrawal unit, inactive self-test and free port before invalidating earlier proof. A same-revision reinstall keeps the installed payer inode. On first install it copies the two checked source descriptors into private staging, validates the staged identities under the worker UID, and publishes them. Retire the operator's original fee-payer copy under the owner's key-custody procedure before funding.
+
+**First orchestrator step after the owner returns.** Run the installed oneshot. Its systemd settings use the worker UID, dedicated prover identity, protected home, read-only runtime and writable jobs directory. It binds port 18089 briefly, checks the installed payer, six distinct validator tunnels and finalized Solana network, and verifies the returned proof and public values locally with the pinned Solana tag-7 verifier. Stop here on failure. Both funding and tag 3 independently verify the saved possession signatures and the root-owned self-test log before signing.
 
 ```bash
 sudo -n /usr/bin/systemctl start pft-sol-exit-self-test.service
@@ -282,7 +303,7 @@ cp /var/log/pf-sol-exit/self-test.log "$KIT/evidence/service-proof.log"
 python3 -c 'from exit_setup import CONFIG, read, require_installed_self_test; require_installed_self_test(read(CONFIG))'
 ```
 
-The owner script leaves the withdrawal unit disabled. It installs a sudoers rule for the `postfiat` orchestrator login with fixed commands for the self-test, enabling, starting, stopping and inspecting this one worker, and rebuilding its journal as the service account. The listed `sudo -n` invocations require no password or further owner session. A retry of the owner script invalidates the previous self-test log.
+The owner script leaves the withdrawal unit disabled. The operator may start the self-test and start, stop or inspect the withdrawal unit. The machine owner controls boot enablement and offline journal rebuild.
 
 Fund the dedicated fee payer once. Preserve the journal at `~/var/sol-exit/funding-attempt.json` through retries and releases. This command persists the signature, blockhash and expiry before sending 0.10 SOL. After a timeout rerun it with the same journal and an RPC serving finalized transaction history. A pending signature blocks a second transfer.
 
@@ -317,11 +338,11 @@ If the current checkpoint is already the agreed tip, wait for a newer finalized 
 
 ## 7. Start the installed payout service with burns closed
 
-After finalized initialization and tag-8 simulation, enable the staged worker. Check closed-route readiness on its loopback listener.
+After finalized initialization and tag-8 simulation, start the staged worker. The machine owner may separately enable it at boot after cutover. Check closed-route readiness on its loopback listener.
 
 ```bash
 export API=http://127.0.0.1:18089/solana/withdrawals
-sudo -n /usr/bin/systemctl enable --now pft-sol-mainnet-withdraw.service
+sudo -n /usr/bin/systemctl start pft-sol-mainnet-withdraw.service
 sudo -n /usr/bin/systemctl --no-pager status pft-sol-mainnet-withdraw.service
 timeout 610s python3 ops/sol-live/exit_cutover.py wait-closed --api "$API" --seconds 600 > "$KIT/evidence/closed-readiness.json"
 python3 ops/sol-live/exit_canary.py preflight --output "$KIT/canary"
@@ -340,7 +361,7 @@ Review the saved evidence for each completed step. Evaluate the final two checks
 - [ ] The pre-roll six-validator snapshot and tip-new.json agree on height, hash and state root. Use the saved pre-roll.json after registration.
 - [ ] deploy-v0 records both resident process hashes and manifest checks. All six rolled-vN.json files record restored watchdogs and convergence.
 - [ ] Registration is confirmed closed on all six. The integrated registration hold regression passed and operators cleared outstanding signed rotations before final qualification.
-- [ ] prove-roles verified both signatures before moving the fee key. The unsigned setup contains six current rotation clearances.
+- [ ] prove-roles verified both signatures before staging the fee key. The unsigned setup contains six current rotation clearances.
 - [ ] Readback confirms the exact finalized tag 3. Tag-8 simulation.json confirms both account bodies.
 - [ ] service-proof.log records a fresh verified proof under the installed identity. Require fresh closed payout readiness at /readiness/qualify.
 - [ ] The closed preflight confirms spendable fee reserve and 20,000 revision-8 atoms. The running flag is explicitly false and the authenticated public request returned the disabled response.
@@ -381,7 +402,7 @@ python3 ops/sol-live/exit_canary.py check --output "$KIT/canary"
 jq -e '.token_deltas=={"custody":-20000,"recipient":20000} and .withdrawal_packet_hash and .solana_tx' "$KIT/canary/paid.json"
 ```
 
-The checker compares the signed envelope including fee and sequence, the six finalized burn confirmations, the permanent Solana marker, the transaction-local custody debit and ATA credit, and the 20,000-atom debit recorded by that accepted L1 burn. Later wallet credits do not affect this check. After a signing or submission interruption run `python3 ops/sol-live/exit_canary.py recover --output "$KIT/canary"`, then `check`. Recovery verifies the saved ML-DSA envelope offline and looks up its exact ID on all six. If absent everywhere it submits those same bytes against a fresh, matching quote. Preserve the directory if the signed file is missing or incomplete. A paid marker with unavailable history proves payment; obtain the finalized transaction from an archival RPC before attesting settlement.
+The checker compares the signed envelope including fee and sequence, the six finalized burn confirmations, the permanent Solana marker, the transaction-local custody debit and ATA credit, and the 20,000-atom debit recorded by that accepted L1 burn. Later wallet credits do not affect this check. If a finalized burn already exists, rerun `check` in its original directory. After a signing or submission interruption run `python3 ops/sol-live/exit_canary.py recover --output "$KIT/canary"`, then `check`. Recovery verifies the saved ML-DSA envelope offline and looks up its exact ID on all six. If absent everywhere it submits those same bytes against a fresh, matching quote. Preserve the directory if the signed file is missing or incomplete. A paid marker with unavailable history proves payment; obtain the finalized transaction from an archival RPC before attesting settlement.
 
 Save the six-way accounting baseline before settlement.
 
@@ -419,6 +440,7 @@ After the finalized payout and its verified L1 settlement, enable admission usin
 On signer loss or a settlement backlog, disable public admission immediately by running `"$HOME/.local/bin/disable-sol-exit"` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Five validators can finalize direct burns. Direct burns remain possible until a unanimous close commits. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. With all six available, close direct L1 admission with a separate unanimous decision, pay and settle all pending claims using their original packets, and reconcile custody before considering a separate reopen. Preserve evidence and wait for six accepted receipts and six closed descriptors.
 
 ```bash
+source "$HOME/.config/postfiat/sol-exit-oncall.env"
 python3 ops/sol-live/exit_govern.py close --revision "$REV" --release-height "$H" --output "$KIT/evidence/close-accepted.json"
 ```
 
@@ -426,7 +448,8 @@ Disabling public admission or pausing Solana leaves finalized L1 burns pending. 
 
 ```bash
 sudo -n /usr/bin/systemctl stop pft-sol-mainnet-withdraw.service
-sudo -n -u pf-sol-exit /opt/postfiat/sol-exit/venv/bin/python -I /opt/postfiat/sol-exit/ops/sol-live/exit_rebuild.py
+# Machine owner, after the operator confirms the worker is stopped:
+sudo -u pf-sol-exit /opt/postfiat/sol-exit/venv/bin/python -I /opt/postfiat/sol-exit/ops/sol-live/exit_rebuild.py
 sudo -n /usr/bin/systemctl start pft-sol-mainnet-withdraw.service
 ```
 
