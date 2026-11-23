@@ -3262,7 +3262,7 @@ pub(super) fn verify_live_signed_governance_batch(
 ) -> io::Result<()> {
     for amendment in &batch.amendments {
         if let Some((_, message)) = crate::execution_actions::pq_governance_domain_rejection(amendment, Some(genesis)) {
-            return Err(invalid_data(message));
+            return Err(io::Error::new(io::ErrorKind::InvalidData, message));
         }
     }
     verify_storage_commitment_action_bindings(genesis, batch)?;
