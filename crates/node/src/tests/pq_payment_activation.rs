@@ -420,6 +420,75 @@ fn pq_replacement_fee_waits_for_activation_and_links_the_two_schedules() {
 }
 
 #[test]
+fn pq_fee_kinds_are_unknown_during_unrelated_governance_replay() {
+    let dir = unique_test_dir("pq-off-chain-governance");
+    let mut genesis = rehearsal_genesis(&dir);
+    // Keep the chain name. A different genesis alone must close the gate.
+    genesis.protocol_version += 1;
+    let disk = NodeStore::new(&dir);
+    let registry = read_validator_registry_file(&dir.join(VALIDATOR_REGISTRY_FILE)).unwrap();
+    let original = disk.read_governance().unwrap();
+    let mut governance = original.clone();
+    for kind in [
+        "pq_payment_rehearsal_v1:fee:6",
+        &format!("pq_private_fee_withdraw_v1:pf{}", "22".repeat(20)),
+    ] {
+        let mut a = amendment(&genesis, 10);
+        a.kind = kind.into();
+        let expected = format!("unsupported governance amendment kind `{kind}`");
+        let batch = GovernanceActionBatch::new("unrelated", vec![a]);
+        let entry = BatchArchiveEntry {
+            batch_kind: "governance".into(),
+            batch_id: batch.batch_id.clone(),
+            payload_hash: String::new(),
+            payload_json: serde_json::to_string(&batch).unwrap(),
+        };
+        let mut block = super::dummy_block_record(1);
+        block.header.batch_kind = "governance".into();
+        block.header.batch_id = batch.batch_id.clone();
+        let receipts = crate::execution_actions::execute_governance_batch(
+            &mut governance,
+            Some(&mut disk.read_ledger().unwrap()),
+            Some(&genesis),
+            &batch,
+            1,
+        );
+        assert!(!receipts[0].accepted);
+        assert_eq!(receipts[0].message, expected);
+        for error in [
+            verify_governance_amendment_evidence(&genesis, &batch.amendments[0]).unwrap_err(),
+            verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 1)
+                .unwrap_err(),
+            update_governance_for_certificate_replay(
+                &mut governance,
+                &registry,
+                &genesis,
+                &block,
+                &entry,
+            )
+            .unwrap_err(),
+            block_replay_wallet::replay_archived_payload(
+                &genesis,
+                &block,
+                &entry,
+                block_replay_wallet::ArchivedReplayState {
+                    governance: &mut governance,
+                    ledger: &mut disk.read_ledger().unwrap(),
+                    shielded: &mut disk.read_shielded().unwrap(),
+                    bridge: &mut disk.read_bridge().unwrap(),
+                    validator_registry: &registry,
+                },
+            )
+            .unwrap_err(),
+        ] {
+            assert_eq!(error.to_string(), expected);
+        }
+        assert_eq!(governance, original);
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn pq_governance_archive_requires_signatures_before_execution() {
     let dir = unique_test_dir("pq-governance-archive");
     let genesis = rehearsal_genesis(&dir);
