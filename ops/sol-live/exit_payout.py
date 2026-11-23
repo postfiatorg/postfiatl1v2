@@ -623,6 +623,7 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
     vals, proof = prove(kind, witness, work)
     require(0 < len(vals) <= 2048 and len(proof) == 356, "Invalid proof size.")
     balance(c)
+    check_custody(c)
     if on_pay:
         on_pay()
     signer = upload(c, vals, work)

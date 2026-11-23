@@ -63,3 +63,13 @@ class PayoutReviewTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     p.upload(c, values, work)
                 send.assert_not_called()
+
+    def test_coverage_is_refreshed_if_it_changes_during_proving(self):
+        c = Mock()
+        with (patch.object(p, "check_custody", side_effect=[True, ValueError("shortfall")]),
+              patch.object(p, "reclaim_completed"), patch.object(p, "check_work_capacity"),
+              patch.object(p, "prove", return_value=(b"val", bytes(356))),
+              patch.object(p, "balance"), patch.object(p, "upload") as upload):
+            with self.assertRaisesRegex(ValueError, "shortfall"):
+                p.submit(c, "checkpoint", {}, Path("unused"))
+            upload.assert_not_called()

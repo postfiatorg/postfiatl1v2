@@ -307,6 +307,7 @@ class JobsTest(unittest.TestCase):
 
         with (
             tempfile.TemporaryDirectory() as directory,
+            patch.object(payout, "check_custody"),
             patch.object(payout, "prove", return_value=(bytes(8), bytes(356))),
             patch.object(payout, "balance"),
             patch.object(payout, "funded_send", side_effect=send),
@@ -344,13 +345,18 @@ class JobsTest(unittest.TestCase):
         c.rent.return_value = 1
         with (
             tempfile.TemporaryDirectory() as directory,
+            patch.object(p, "check_custody"),
             patch.object(p, "prove", return_value=(b"test", bytes(356))) as proof,
             patch.object(p, "upload", return_value=Keypair()),
             patch.object(p, "balance"),
             patch.object(p, "funded_send", return_value="ok"),
         ):
             work = Path(directory)
-            with self.assertRaisesRegex(ValueError, "delegate"):
+            self.assertEqual(p.submit(c, "withdrawal", w, work, PHANTOM), "ok")
+            proof.assert_called_once()
+            proof.reset_mock()
+            d[108] = 2
+            with self.assertRaisesRegex(ValueError, "state"):
                 p.submit(c, "withdrawal", w, work, PHANTOM)
             proof.assert_not_called()
             c.account.reset_mock()
