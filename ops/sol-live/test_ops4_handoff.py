@@ -12,14 +12,23 @@ class OperatorReviewTest(unittest.TestCase):
         for text in ("settlement on-call", "restore rehearsal", "each of the six"):
             self.assertIn(text, pre.lower().split("## 7.")[1][:12000])
         recovery = DOC.split("## Recovery")[1].lower()
-        for text in ("disable public admission immediately", "direct burns remain possible",
-                     "sixth signer", "pending claims"):
+        for text in (
+            "disable public admission immediately",
+            "direct burns remain possible",
+            "sixth signer",
+            "pending claims",
+        ):
             self.assertIn(text, recovery)
 
     def test_reviewed_relay_and_gateway_precede_tag3_and_match_paid_job(self):
         before, after = DOC.split('exit_setup.py "${setup_args[@]}" --execute')
-        for text in ("wallet/solana-withdraw", "56dbebb4672172c9f336dc95b831deb8281e3fd7",
-                     "relay-disabled", "withdrawal-routes.test.mjs", "RELAY_COOKIE_FILE"):
+        for text in (
+            "wallet/solana-withdraw",
+            "56dbebb4672172c9f336dc95b831deb8281e3fd7",
+            "relay-disabled",
+            "withdrawal-routes.test.mjs",
+            "RELAY_COOKIE_FILE",
+        ):
             self.assertTrue(text in before, text)
         for text in ("relay-enabled", ".burn_tx_id==$burn", ".solana_tx==$sig"):
             self.assertTrue(text in after.split("## 10.")[1], text)
@@ -31,8 +40,11 @@ class OperatorReviewTest(unittest.TestCase):
 
     def test_default_user_unit_runs_same_sandbox_for_preflight_and_service(self):
         unit = (HERE / "pft-sol-mainnet-withdraw-user.service").read_text()
-        start = [line.split("=",1)[1].rsplit(" ",1) for line in unit.splitlines()
-                 if line.startswith(("ExecStartPre=", "ExecStart="))]
+        start = [
+            line.split("=", 1)[1].rsplit(" ", 1)
+            for line in unit.splitlines()
+            if line.startswith(("ExecStartPre=", "ExecStart="))
+        ]
         self.assertEqual(len(start), 2)
         self.assertEqual(start[0][0], start[1][0])
         self.assertEqual([row[1] for row in start], ["self-test", "serve"])
@@ -41,6 +53,7 @@ class OperatorReviewTest(unittest.TestCase):
     def test_sandbox_never_binds_a_directory_as_a_credential(self):
         import os
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             script = root / "ops/sol-live/exit-sandbox.sh"
@@ -54,22 +67,63 @@ class OperatorReviewTest(unittest.TestCase):
             state.mkdir(mode=0o700)
             trust = root / "known_hosts"
             trust.touch()
-            env = dict(os.environ, HOME=tmp, EXIT_JOB_STATE=str(state),
-                       EXIT_PROVER_IDENTITY=str(root), EXIT_PROVER_KNOWN_HOSTS=str(trust))
-            result = subprocess.run(["bash", script, "self-test"], env=env, capture_output=True)
+            env = dict(
+                os.environ,
+                HOME=tmp,
+                EXIT_JOB_STATE=str(state),
+                EXIT_PROVER_IDENTITY=str(root),
+                EXIT_PROVER_KNOWN_HOSTS=str(trust),
+            )
+            result = subprocess.run(
+                ["bash", script, "self-test"], env=env, capture_output=True
+            )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(b"Expected a regular prover identity file", result.stderr)
 
     def test_unknown_port_status_cannot_provision_the_payer(self):
         import os
         import tempfile
-        block = DOC.split('fee="$HOME/.config/postfiat/sol-bridge/exit-fee-payer.json"')[1]
-        check = block.split('if sudo test -f')[0].split('test -f "$fee"')[0]
+
+        block = DOC.split(
+            'fee="$HOME/.config/postfiat/sol-bridge/exit-fee-payer.json"'
+        )[1]
+        check = block.split("if sudo test -f")[0].split('test -f "$fee"')[0]
         with tempfile.TemporaryDirectory() as tmp:
             ss = Path(tmp) / "ss"
             for body in ("exit 1", "echo LISTEN"):
-                ss.write_text("#!/bin/sh\n"+body+"\n")
+                ss.write_text("#!/bin/sh\n" + body + "\n")
                 ss.chmod(0o755)
-                result = subprocess.run(["bash", "-ec", check],
-                                        env=dict(os.environ, PATH=tmp+":"+os.environ["PATH"]))
+                result = subprocess.run(
+                    ["bash", "-ec", check],
+                    env=dict(os.environ, PATH=tmp + ":" + os.environ["PATH"]),
+                )
                 self.assertNotEqual(result.returncode, 0)
+
+    def test_tunnel_probe_verifies_all_six_networks_while_the_tip_moves(self):
+        from unittest.mock import patch
+        from contextlib import redirect_stdout
+        import io
+        import exit_sandbox_check as check
+        from route_binding import CHAIN, PFTL_GENESIS
+
+        def status(i, method):
+            self.assertEqual(method, "status")
+            return dict(
+                chain_id=CHAIN.decode(),
+                genesis_hash=PFTL_GENESIS.hex(),
+                block_height=41 + i % 2,
+            )
+
+        with (
+            patch("live.rpc", side_effect=status) as rpc,
+            redirect_stdout(io.StringIO()),
+        ):
+            check.check_tunnels()
+            self.assertEqual(
+                sorted(call.args[0] for call in rpc.call_args_list), list(range(6))
+            )
+            rpc.side_effect = lambda i, method: dict(
+                status(i, method), chain_id="other"
+            )
+            with self.assertRaises(ValueError):
+                check.check_tunnels()

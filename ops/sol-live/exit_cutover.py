@@ -7,7 +7,6 @@ import subprocess
 import time
 import requests
 
-
 WITHDRAW_REV = "56dbebb4672172c9f336dc95b831deb8281e3fd7"
 
 
@@ -15,8 +14,11 @@ def relay_flag(entries, enabled=False):
     flags = [e for e in entries if e.startswith(b"L1_SOLANA_WITHDRAWALS_ENABLED=")]
     expected = b"true" if enabled else b"false"
     if flags != [b"L1_SOLANA_WITHDRAWALS_ENABLED=" + expected]:
-        raise ValueError("The running relay must explicitly " +
-                         ("enable" if enabled else "disable") + " Solana withdrawals.")
+        raise ValueError(
+            "The running relay must explicitly "
+            + ("enable" if enabled else "disable")
+            + " Solana withdrawals."
+        )
     if enabled:
         urls = [e for e in entries if e.startswith(b"L1_SOLANA_WITHDRAW_SERVICE_URL=")]
         if urls != [b"L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089"]:
@@ -24,7 +26,10 @@ def relay_flag(entries, enabled=False):
 
 
 def relay_entry(cwd, args, release):
-    if len(args) != 2 or (cwd / args[1]).resolve() != release.resolve() / "server/l1/relay.js":
+    if (
+        len(args) != 2
+        or (cwd / args[1]).resolve() != release.resolve() / "server/l1/relay.js"
+    ):
         raise ValueError("Relay is not executing the reviewed release entry point.")
 
 
@@ -54,10 +59,14 @@ def relay(unit, user=False, *, release=None, enabled=False):
     if release is not None:
         args = (proc / "cmdline").read_text().rstrip("\0").split("\0")
         relay_entry((proc / "cwd").resolve(), args, release)
-        revision = subprocess.check_output(["git", "-C", release, "rev-parse", "HEAD"], text=True)
+        revision = subprocess.check_output(
+            ["git", "-C", release, "rev-parse", "HEAD"], text=True
+        )
         if revision.strip() != WITHDRAW_REV:
             raise ValueError("Different relay release revision.")
-        subprocess.run(["git", "-C", release, "diff", "--quiet", WITHDRAW_REV, "--"], check=True)
+        subprocess.run(
+            ["git", "-C", release, "diff", "--quiet", WITHDRAW_REV, "--"], check=True
+        )
     relay_flag((proc / "environ").read_bytes().split(b"\0"), enabled=enabled)
     if pid() != proc:
         raise ValueError("Relay restarted during inspection.")
