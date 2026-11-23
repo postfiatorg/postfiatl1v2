@@ -270,16 +270,28 @@ From the reviewed checkout, run the following command with the operator's existi
 bash ops/sol-live/authorize-exit-prover.sh
 ```
 
-Stage the pinned Python wheels without privilege. On this host the reviewed cache is already populated. For a new cache use `python3 -m pip download --only-binary=:all: --require-hashes -r ops/sol-live/exit-requirements.lock -d "$wheels"`. The installer uses the reviewed checkout and refuses a running or enabled worker and an occupied port. The original key must be on the service directory's filesystem for its atomic move. Retain this kit, its role record and its anchor witness on retries.
+As the orchestrator, build the host verifier from the same reviewed release checkout. Package the committed worker files, hash-pinned wheels, frozen proof host and ELF, verifier, public role record, witness and approved host trust. The two private credentials stay outside the tar. Keep the tar at an absolute path readable by `postfiat`. Use a fresh output path on each build.
 
 ```bash
 wheels="$EXIT_WORK/target-ops/ops3/wheels"
-test -d "$wheels"
-# Machine owner, once, from the reviewed release checkout:
-sudo bash ops/sol-live/install-exit-system.sh "$KIT" "$wheels"
+git diff --exit-code HEAD -- ops/sol-live solana/pfusdc-egress-verifier
+bash ops/sol-live/build-exit-verifier.sh
+BUNDLE="$KIT/sol-exit-install.tar"
+python3 ops/sol-live/build-exit-bundle.py --kit "$KIT" --wheels "$wheels" \
+  --proof "$HOME/repos/b23-coord/evidence/withdraw" --verifier "$CARGO_TARGET_DIR/release/exit-verify-proof" \
+  --trust "$KIT/prover-host-approved" --output "$BUNDLE"
+sha256sum "$BUNDLE"
 ```
 
-**First orchestrator step after the owner returns.** Run the installed oneshot. Its systemd settings use the worker UID, dedicated prover identity, protected home, read-only runtime and writable jobs directory. It binds port 18089 briefly, checks the installed payer, six distinct validator tunnels and finalized Solana network, and obtains a fresh GPU proof for the archived checkpoint. Stop here on failure. Both funding and tag 3 independently verify the saved possession signatures and the root-owned self-test log before signing.
+Inspect the tar inventory and release inputs. In the **private GitHub repository**, the orchestrator commits the approved release revision, tar filename and SHA-256 and pushes that commit. The owner opens that exact commit through their own authenticated GitHub session, verifies its release identity, and supplies its 64 lowercase hex digits as `SHA256` and the absolute operator-readable tar path as `BUNDLE`. The following is the owner's single installation command.
+
+```bash
+sudo /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root /bin/bash -ceu 'cd /; [[ $1 =~ ^[0-9a-f]{64}$ && $2 == /* ]]; umask 077; d=$(mktemp -d /var/lib/pf-sol-install.XXXXXXXX); trap '\''rm -rf -- "$d"'\'' EXIT; cd "$d"; runuser -u postfiat -- /bin/cat -- "$2" > bundle.tar; printf "%s  bundle.tar\n" "$1" | sha256sum --strict -c -; umask 022; tar -xf bundle.tar --no-same-owner --no-same-permissions; /bin/bash ./install-exit-system.sh' _ "${SHA256:?digest from private GitHub commit}" "${BUNDLE:?absolute tar path}"
+```
+
+The installer checks the installed revision, disabled/stopped withdrawal unit, inactive self-test and free port before invalidating earlier proof. A same-revision reinstall keeps the installed payer inode. On first install it copies the two checked source descriptors into private staging, validates the staged identities under the worker UID, and publishes them. Retire the operator's original fee-payer copy under the owner's key-custody procedure before funding.
+
+**First orchestrator step after the owner returns.** Run the installed oneshot. Its systemd settings use the worker UID, dedicated prover identity, protected home, read-only runtime and writable jobs directory. It binds port 18089 briefly, checks the installed payer, six distinct validator tunnels and finalized Solana network, and verifies the returned proof and public values locally with the pinned Solana tag-7 verifier. Stop here on failure. Both funding and tag 3 independently verify the saved possession signatures and the root-owned self-test log before signing.
 
 ```bash
 sudo -n /usr/bin/systemctl start pft-sol-exit-self-test.service
@@ -287,7 +299,7 @@ cp /var/log/pf-sol-exit/self-test.log "$KIT/evidence/service-proof.log"
 python3 -c 'from exit_setup import CONFIG, read, require_installed_self_test; require_installed_self_test(read(CONFIG))'
 ```
 
-The owner script leaves the withdrawal unit disabled. It installs a sudoers rule for the `postfiat` orchestrator login with fixed commands for the self-test, enabling, starting, stopping and inspecting this one worker, and rebuilding its journal as the service account. The listed `sudo -n` invocations require no password or further owner session. A retry of the owner script invalidates the previous self-test log.
+The owner script leaves the withdrawal unit disabled. The operator may start the self-test and start, stop or inspect the withdrawal unit. The machine owner controls boot enablement and offline journal rebuild.
 
 Fund the dedicated fee payer once. Preserve the journal at `~/var/sol-exit/funding-attempt.json` through retries and releases. This command persists the signature, blockhash and expiry before sending 0.10 SOL. After a timeout rerun it with the same journal and an RPC serving finalized transaction history. A pending signature blocks a second transfer.
 
@@ -322,11 +334,11 @@ If the current checkpoint is already the agreed tip, wait for a newer finalized 
 
 ## 7. Start the installed payout service with burns closed
 
-After finalized initialization and tag-8 simulation, enable the staged worker. Check closed-route readiness on its loopback listener.
+After finalized initialization and tag-8 simulation, start the staged worker. The machine owner may separately enable it at boot after cutover. Check closed-route readiness on its loopback listener.
 
 ```bash
 export API=http://127.0.0.1:18089/solana/withdrawals
-sudo -n /usr/bin/systemctl enable --now pft-sol-mainnet-withdraw.service
+sudo -n /usr/bin/systemctl start pft-sol-mainnet-withdraw.service
 sudo -n /usr/bin/systemctl --no-pager status pft-sol-mainnet-withdraw.service
 timeout 610s python3 ops/sol-live/exit_cutover.py wait-closed --api "$API" --seconds 600 > "$KIT/evidence/closed-readiness.json"
 python3 ops/sol-live/exit_canary.py preflight --output "$KIT/canary"
@@ -345,7 +357,7 @@ Review the saved evidence for each completed step. Evaluate the final two checks
 - [ ] The pre-roll six-validator snapshot and tip-new.json agree on height, hash and state root. Use the saved pre-roll.json after registration.
 - [ ] deploy-v0 records both resident process hashes and manifest checks. All six rolled-vN.json files record restored watchdogs and convergence.
 - [ ] Registration is confirmed closed on all six. The integrated registration hold regression passed and operators cleared outstanding signed rotations before final qualification.
-- [ ] prove-roles verified both signatures before moving the fee key. The unsigned setup contains six current rotation clearances.
+- [ ] prove-roles verified both signatures before staging the fee key. The unsigned setup contains six current rotation clearances.
 - [ ] Readback confirms the exact finalized tag 3. Tag-8 simulation.json confirms both account bodies.
 - [ ] service-proof.log records a fresh verified proof under the installed identity. Require fresh closed payout readiness at /readiness/qualify.
 - [ ] The closed preflight confirms spendable fee reserve and 20,000 revision-8 atoms. The running flag is explicitly false and the authenticated public request returned the disabled response.
@@ -432,7 +444,8 @@ Disabling public admission or pausing Solana leaves finalized L1 burns pending. 
 
 ```bash
 sudo -n /usr/bin/systemctl stop pft-sol-mainnet-withdraw.service
-sudo -n -u pf-sol-exit /opt/postfiat/sol-exit/venv/bin/python -I /opt/postfiat/sol-exit/ops/sol-live/exit_rebuild.py
+# Machine owner, after the operator confirms the worker is stopped:
+sudo -u pf-sol-exit /opt/postfiat/sol-exit/venv/bin/python -I /opt/postfiat/sol-exit/ops/sol-live/exit_rebuild.py
 sudo -n /usr/bin/systemctl start pft-sol-mainnet-withdraw.service
 ```
 
