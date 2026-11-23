@@ -103,13 +103,12 @@ s=p.read_text()
 assert s.count(marker)==1
 p.write_text(s.replace(marker,"Some(1760), // Archived interlock regression"))
 HEIGHT
-  CARGO_TARGET_DIR="$KIT/interlock-target" cargo test --locked --release -p postfiat-node --lib --no-run --message-format=json > "$KIT/evidence/interlock-build.jsonl"
+  python3 ops/sol-live/exit_review_gate.py packages "$scratch" > "$KIT/evidence/interlock-packages.txt"
+  packages=()
+  while read -r package; do packages+=(-p "$package"); done < "$KIT/evidence/interlock-packages.txt"
+  CARGO_TARGET_DIR="$KIT/interlock-target" cargo test --locked --release "${packages[@]}" --lib --no-run --message-format=json > "$KIT/evidence/interlock-build.jsonl"
 )
-testbin=$(jq -r 'select(.target.name=="postfiat_node" and .executable)|.executable' "$KIT/evidence/interlock-build.jsonl")
-python3 ops/sol-live/exit_review_gate.py "$KIT/evidence" \
-  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges -u "$(id -u):$(id -g)" \
-    -v "$ARCHIVE:/var/lib/postfiat/validator-3" -v "$FAUCET:/var/lib/postfiat/validator-3/faucet_account.json:ro" -v "$INTEGRITY:/var/lib/postfiat/validator-3/.integrity.key:ro" \
-    -v "$testbin:/opt/test:ro" ubuntu:24.04 /opt/test | tee "$KIT/evidence/exit-review-count.log"
+python3 ops/sol-live/exit_review_gate.py run "$scratch" "$KIT/evidence" "$ARCHIVE" "$INTEGRITY" "$FAUCET" | tee "$KIT/evidence/exit-review-count.log"
 ```
 
 ## 2. Roll validator 0, then the other five
