@@ -2452,3 +2452,101 @@
             "solana_exit_issuer_payment_disabled"
         );
     }
+
+    #[test]
+    #[ignore = "release rehearsal at height 1760"]
+    fn exit_review6_unregistered_series_refuses_unmatched_destruction_at_release() {
+        use postfiat_types::{solana_exit, IssuedPaymentV2Operation};
+        let mut g = Genesis::new_with_validator_count("postfiat-wan-devnet-2", 6);
+        g.consensus_v2_activation_height = Some(1);
+        let issuer_key = ml_dsa_65_keygen().unwrap();
+        let holder_key = ml_dsa_65_keygen().unwrap();
+        let issuer = address_from_public_key(&issuer_key.public_key);
+        let holder = address_from_public_key(&holder_key.public_key);
+        // A local issuer with clawback enabled exercises even the permissioned path.
+        let mut family = AssetDefinition::new(&g.chain_id, &issuer, "PFUSDC", 1, 6).unwrap();
+        family.clawback_enabled = true;
+        let series = AssetDefinition::new_source_series(
+            &family,
+            solana_exit::SERIES,
+            solana_exit::BUCKET,
+            "Solana pfUSDC",
+        )
+        .unwrap();
+        let mut line = TrustLine::new(&holder, &issuer, &series.asset_id, 10, 0).unwrap();
+        line.balance = 10;
+        line.authorized = true;
+        let ledger = LedgerState::new_with_assets(
+            vec![
+                Account::new(&issuer, 1_000_000, None),
+                Account::new(&holder, 1_000_000, None),
+            ],
+            vec![family, series],
+            vec![line],
+        );
+        let compat = AssetExecutionCompatibility::strict()
+            .with_require_memo_activation_height(Some(1))
+            .with_governed_solana_exit(&g, &postfiat_types::GovernanceState::new(6));
+        let pay = IssuedPaymentV2Operation {
+            from: holder.clone(),
+            to: issuer.clone(),
+            issuer: issuer.clone(),
+            asset_id: solana_exit::SERIES.into(),
+            amount: 1,
+            memos: vec![],
+        };
+        for (key, operation) in [
+            (
+                &holder_key,
+                AssetTransactionOperation::IssuedPayment(pay.payment()),
+            ),
+            (&holder_key, AssetTransactionOperation::IssuedPaymentV2(pay)),
+            (
+                &holder_key,
+                AssetTransactionOperation::AssetBurn(AssetBurnOperation {
+                    owner: holder.clone(),
+                    issuer: issuer.clone(),
+                    asset_id: solana_exit::SERIES.into(),
+                    amount: 1,
+                }),
+            ),
+            (
+                &issuer_key,
+                AssetTransactionOperation::AssetClawback(AssetClawbackOperation {
+                    owner: holder.clone(),
+                    issuer: issuer.clone(),
+                    asset_id: solana_exit::SERIES.into(),
+                    amount: 1,
+                }),
+            ),
+        ] {
+            let kind = operation.transaction_kind();
+            let tx = signed_asset_transaction_with_minimum_fee(&g, &ledger, key, kind, 1, operation);
+            let mut before_release = ledger.clone();
+            let receipt = execute_asset_transaction_with_compatibility(
+                &g,
+                &mut before_release,
+                &tx,
+                1759,
+                compat,
+            );
+            assert!(receipt.accepted, "{kind}: {}", receipt.message);
+            assert_eq!(before_release.trustlines[0].balance, 9);
+            for height in [1760, 1761] {
+                let mut after_release = ledger.clone();
+                let refusal = execute_asset_transaction_with_compatibility(
+                    &g,
+                    &mut after_release,
+                    &tx,
+                    height,
+                    compat,
+                );
+                assert_eq!(
+                    refusal.code, "solana_exit_unmatched_supply_change",
+                    "{kind}: {}",
+                    refusal.message
+                );
+                assert!(after_release == ledger, "{kind} mutated the ledger");
+            }
+        }
+    }
