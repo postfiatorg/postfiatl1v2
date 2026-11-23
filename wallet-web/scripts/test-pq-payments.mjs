@@ -51,6 +51,8 @@ async function exercise() {
   const shots = [];
   const tokenFile = {};
   const nodePorts = [];
+  const taps = [];
+  const validatorReads = {alice:[], bob:[]};
   const port = async () => {
     const s = net.createServer(); s.listen(0,'127.0.0.1'); await once(s,'listening');
     const p = s.address().port; await new Promise(r=>s.close(r)); return p;
@@ -89,7 +91,7 @@ async function exercise() {
   async function startBridge(w) {
     const pair = path.join(scratch,w+'.pair');
     fs.rmSync(pair,{force:true});
-    const trusted = w === 'bob' ? ['--validator-endpoint','127.0.0.1:'+nodePorts[1]] : [];
+    const trusted = ['--validator-endpoint','127.0.0.1:'+taps[w === 'alice' ? 0 : 1].address().port];
     bridges[w] = start('python3',[...cliArgs(w),...trusted,'browser','--dist',dist,
       '--port',String(ports[w]),'--pair-file',pair,'--gateway',gatewayOrigin,
       '--gateway-token-file',tokenFile[w],'--payer',addresses[w],'--account-key',env['PQ_'+w.toUpperCase()+'_KEY'],
@@ -208,8 +210,14 @@ async function exercise() {
     await click(p,mode);
     await p.getByLabel(/^Amount \(/).fill(String(amount));
     if(to) await p.getByLabel(mode==='Pay'?'Recipient receive address':'Public exit account',{exact:true}).fill(to);
+    const start = validatorReads[w].length;
     await walletCall(p,'review','Review payment');
     await check(w,await prove(w),name);
+    if (mode !== 'Shield') {
+      const reads = validatorReads[w].slice(start);
+      for (const method of ['private_pool_snapshot','receipts','blocks']) assert.ok(reads.includes(method), method);
+      assert.ok(!reads.includes('public-account'), 'private spend disclosed an account');
+    }
   }
   try {
     fs.mkdirSync(frames);
@@ -219,6 +227,25 @@ async function exercise() {
       start(node,['rpc-serve','--unsafe-devnet-json-storage','--data-dir',dir,'--bind-host','127.0.0.1','--port',String(tcp),
         '--ready-file',ready,'--max-requests','3000','--allow-private-action-admission','--finality-topology',topology,'--finality-key-file',path.join(dir,'validator_keys.json')]);
       await until(()=>fs.existsSync(ready),'validator RPC');
+      // Observe only bridge -> trusted validator traffic. The fixture also has
+      // independent supply-check queries, which use the original node ports.
+      const reads = validatorReads[i === 0 ? 'alice' : 'bob'];
+      const tap = net.createServer({allowHalfOpen:true}, client => {
+        const upstream = net.connect({port:tcp, host:'127.0.0.1', allowHalfOpen:true});
+        const chunks = [];
+        client.on('data', chunk => {
+          chunks.push(chunk);
+          if (!chunk.includes(10)) return;
+          const request = JSON.parse(Buffer.concat(chunks));
+          reads.push(request.method);
+          if (['account','account_lines','private_account_lines'].includes(request.method)
+              || Object.values(addresses).some(address => JSON.stringify(request.params).includes(address))) {
+            reads.push('public-account');
+          }
+        });
+        client.pipe(upstream).pipe(client);
+      });
+      tap.listen(0,'127.0.0.1'); await once(tap,'listening'); taps.push(tap);
     }
     const domain=await rpc(nodePorts[0],'private_pool_snapshot',{pool_id:'PFT-PQ-SHIELDED-POOL-V1'});
     const birthday = await rpc(nodePorts[0],'private_pool_snapshot',{pool_id:'asset-orchard-v1'});
@@ -328,6 +355,7 @@ async function exercise() {
     assert.equal((await sync('bob')).private[issue],'25');
     await transfer('bob',issue,'Pay',5,receive.alice,'pfusdc-03-bob-second-spend');
     await transfer('bob',issue,'Unshield',14,addresses.bob,'pfusdc-04-bob-exit');
+    await click(a,'Orchard migration');
     const before=await sync('alice'); assert.deepEqual(before.private,{[native]:'78',[issue]:'57'});
     assert.deepEqual((await sync('bob')).private,{});
     await migrationSupply('Before migration',9,57);
@@ -374,6 +402,7 @@ async function exercise() {
     console.log('Two isolated browser sessions, changed signer terms, partial sync, disconnected daemon and restart passed. '+shots.length+' PNGs.');
   } finally {
     if(browser) await browser.close();
+    for (const tap of taps) await new Promise(done => tap.close(done));
     if(audit) await new Promise(r=>audit.close(r));
     for(const p of [...children].reverse()) await stop(p);
     fs.rmSync(scratch,{recursive:true,force:true});

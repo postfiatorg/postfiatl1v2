@@ -67,8 +67,8 @@ export default function PqPayments() {
       if (label === 'Syncing' || /sync|disconnected|connection|unavailable/i.test(err.message)) setWallet(w => w && ({ ...w, synced: false }));
     } finally { setBusy(''); setProgress(''); }
   }
-  async function refresh(command = 'status') {
-    const next = await call(command);
+  async function refresh(command = 'status', publicBalances = false) {
+    const next = await call(command, { public: publicBalances });
     setWallet(next);
     return next;
   }
@@ -88,9 +88,11 @@ export default function PqPayments() {
   }, [busy]);
 
   function change(action) { setReview(null); setResult(null); action(); }
+  const governed = mode !== 'Shield' && asset !== NATIVE;
+  const paymentFee = governed ? wallet?.issued_fee : fee;
   async function requestReview(isMigration = false) {
     const terms = isMigration ? { mode:'Shield', asset:migration.asset_id, amount:String(migration.amount),
-      recipient:null, fee, migration:true } : { mode, asset, amount, fee, recipient:mode === 'Shield' ? null : recipient, migration:false };
+      recipient:null, fee, migration:true } : { mode, asset, amount, fee:paymentFee, recipient:mode === 'Shield' ? null : recipient, migration:false };
     if (terms.mode === 'Internal') (await initWasm()).pq_check_address(wallet.network.chain_id, wallet.network.genesis_hash, recipient);
     const r = await call('review', terms);
     for (const k of Object.keys(terms)) if (r.terms[k] !== terms[k]) throw Error('Review changed.');
@@ -103,9 +105,12 @@ export default function PqPayments() {
     const prepared = await call('prove', review);
     checkPublicTerms(JSON.parse(wasm.pq_review_payment(prepared.action_json)), terms, prepared.action_hash);
     setResult({ intent:prepared.intent, state:'prepared' });
-    const sent = await call('submit', { intent:prepared.intent, action_hash:prepared.action_hash });
-    setResult(sent);
-    await refresh();
+    try {
+      setResult(await call('submit', { intent:prepared.intent, action_hash:prepared.action_hash }));
+    } catch (err) {
+      setResult(null);
+      throw err;
+    } finally { await refresh(); }
   }
   async function checkReceipt(intent) {
     const r = await call('receipt', { intent });
@@ -125,7 +130,7 @@ export default function PqPayments() {
       <button onClick={() => work('Connecting', () => refresh())}>Reconnect</button></section> : <>
     <div className="pq-grid"><div>
     {!migrating ? <section><div className="pq-heading"><h2>Payment</h2><label>Asset <select aria-label="Asset" disabled={!!busy} value={asset}
-      onChange={e => change(() => {setAsset(e.target.value); setFee(e.target.value === NATIVE ? '1' : '3');})}>
+      onChange={e => change(() => setAsset(e.target.value))}>
       <option value={NATIVE}>PFT</option><option value={wallet.issue}>pfUSDC</option></select></label></div>
       <div className="pq-actions">{Object.entries(modes).map(([m,name]) => <button key={m} disabled={!!busy}
         aria-pressed={mode === m} onClick={() => change(() => setMode(m))}>{name}</button>)}</div>
@@ -133,9 +138,9 @@ export default function PqPayments() {
         onChange={e => change(() => setAmount(e.target.value))}/></label>
       {mode !== 'Shield' && <label>{mode === 'Exit' ? 'Public exit account' : 'Recipient receive address'}
         <input value={recipient} disabled={!!busy} onChange={e => change(() => setRecipient(e.target.value))}/></label>}
-      <label>Fee ({mode === 'Shield' ? 'PFT' : unit} atoms)<input value={fee} inputMode="numeric" disabled={!!busy} onChange={e => change(() => setFee(e.target.value))}/></label>
+      <label>Fee ({mode === 'Shield' ? 'PFT' : unit} atoms)<input value={paymentFee ?? ''} inputMode="numeric" readOnly={governed} disabled={!!busy} onChange={e => change(() => setFee(e.target.value))}/></label>
       {mode === 'Shield' && <Field label="Public deposit account">{wallet.account || 'Configure a deposit signer to shield'}</Field>}
-      <button className="pq-primary" disabled={!canReview || !amount || (mode === 'Shield' && !wallet.account)} onClick={() => work('Reviewing', () => requestReview())}>Review payment</button>
+      <button className="pq-primary" disabled={!canReview || !amount || !paymentFee || (mode === 'Shield' && !wallet.account)} onClick={() => work('Reviewing', () => requestReview())}>Review payment</button>
     </section> : <section><h2>Orchard → Public account → PQ</h2>
       {!migration ? <p>Prepare a policy-permitted Orchard private exit with your Orchard wallet. Open its public batch using the local bridge’s Orchard exit option.</p> : <>
       <h3 data-testid="migration-state">{migration.state}</h3>
@@ -168,7 +173,7 @@ export default function PqPayments() {
       <button disabled={!!busy} onClick={() => work('Checking finality', () => checkReceipt(selectedIntent))}>Check finality</button>
     </section>}
     </div><aside><section><div className="pq-heading"><h2>Balances</h2><button disabled={!!busy}
-      onClick={() => work('Syncing', () => refresh('sync'))}>Sync</button></div>
+      onClick={() => work('Syncing', () => refresh('sync', migrating || mode === 'Shield'))}>Sync</button></div>
       <table><thead><tr><th>Atoms</th><th>Public</th><th>Private</th></tr></thead><tbody>{[NATIVE,wallet.issue].map(a =>
         <tr key={a}><th>{a === NATIVE ? 'PFT' : 'pfUSDC'}</th><td>{wallet.public[a] ?? '—'}</td><td>{wallet.private[a] || '0'}</td></tr>)}</tbody></table>
       {wallet.account && <Field label="Public account">{wallet.account}</Field>}

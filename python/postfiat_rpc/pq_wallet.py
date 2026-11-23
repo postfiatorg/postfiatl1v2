@@ -1,5 +1,6 @@
 """Command-line client for the owner-local PFSH02 service and a trusted finalized node."""
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,18 @@ import time
 
 from .client import (Endpoint, PostFiatRpcClient, PQ_POOL_ID, PqCursorExpired,
                      RpcClientError, RpcError, pq_public_pages, private_action_hash, private_action_intent_id)
+
+
+PRIVATE_SPEND_SCOPE = "pq-private-spend"
+
+
+def issued_fee(snap, asset):
+    terms = snap.get("pq_issued_fee")
+    if (not isinstance(terms, list) or len(terms) != 2 or terms[0] != asset
+            or not isinstance(terms[1], str) or not terms[1].isascii() or not terms[1].isdigit()
+            or not 0 < int(terms[1]) < 2**64 or str(int(terms[1])) != terms[1]):
+        raise ValueError("No active fee schedule for this issued asset.")
+    return int(terms[1])
 
 
 class WalletBusy(ValueError):
@@ -119,13 +132,15 @@ def submit(home, client, scope, expected_hash=None):
     action_hash = private_action_hash(wire)
     if expected_hash is not None and action_hash != expected_hash:
         raise ValueError("pending payment changed")
+    if base64.b64decode(action["body"], validate=True)[5] == 2:
+        scope = PRIVATE_SPEND_SCOPE
     try:
         report = client.private_action_submit(**net, pool_id=PQ_POOL_ID, session_scope=scope,
                                               intent_id=intent, action_json=wire, action_hash=action_hash)
     except RpcError as err:
         # These are explicit settlement refusals before the validator reserves
         # the action. A transport failure has an unknown outcome and stays pending.
-        if err.error.get("code") in {"pq_source_authorization", "pq_minimum_fee", "pq_unknown_anchor",
+        if err.error.get("code") in {"pq_fee_mismatch", "pq_source_authorization", "pq_minimum_fee", "pq_unknown_anchor",
                                     "pq_unfunded_source", "pq_fee_unconfigured", "pq_issue_disabled", "pq_insufficient_issued_balance",
                                     "pq_recipient_policy", "pq_recipient_reserve", "pq_missing_trustline"}:
             if client.private_action_receipt(intent)["state"] == "pending_unknown":
@@ -174,7 +189,7 @@ def parser():
         c = cmds.add_parser(name)
         c.add_argument("--asset", required=True, help="PFT or the exact pfUSDC issue ID")
         c.add_argument("--amount", type=int, required=True, help="integer asset atoms")
-        c.add_argument("--fee", type=int, required=True, help="PFT atoms for deposits, otherwise atoms of the selected asset")
+        c.add_argument("--fee", type=int, required=name == "shield", help="PFT fee in atoms. Issued spends use the governed fee.")
         if name != "shield":
             c.add_argument("--to", required=True)
         else:
@@ -237,15 +252,21 @@ def run(args):
         return {"intent_id": r["intent_id"], "state": r["state"], "outcome": outcome}
     if cmd == "submit-pending":
         return submit(home, client, args.scope)
+    issued_spend = cmd != "shield" and args.asset not in ("PFT", "00"*48)
+    if issued_spend and args.fee is not None:
+        raise ValueError("Issued payments use the governed fee. Omit --fee.")
+    if not issued_spend and args.fee is None:
+        raise ValueError("Supply --fee in PFT atoms.")
     sync(home, client, validator)
+    fee = issued_fee(validator.private_pool_snapshot(PQ_POOL_ID), args.asset) if issued_spend else args.fee
     mode = {"shield": "Shield", "pay": "Internal", "unshield": "Exit"}[cmd]
     order = dict(mode=mode, asset="00"*48 if args.asset == "PFT" else args.asset,
-                 amount=args.amount, fee=args.fee,
+                 amount=args.amount, fee=fee,
                  recipient=getattr(args, "to", None))
     if mode == "Shield":
         order.update(payer=args.payer, sequence=args.sequence, account_key=str(args.account_key.absolute()))
     unit = "PFT" if mode == "Shield" else args.asset
-    print(f"{cmd} {args.amount} {args.asset} atoms, fee {args.fee} {unit} atoms", file=sys.stderr, flush=True)
+    print(f"{cmd} {args.amount} {args.asset} atoms, fee {fee} {unit} atoms", file=sys.stderr, flush=True)
     metrics = local(home, "prove", order=order)
     return {**metrics, **submit(home, client, args.scope, metrics["action_hash"])}
 

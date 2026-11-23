@@ -29,23 +29,55 @@ class PqIssuedFee(unittest.TestCase):
         browser = object.__new__(BrowserWallet)
         browser.issue = "cd" * 48
         browser.account = "pf" + "11" * 20
-        browser.overview = lambda db: dict(synced=True, pending=None, sequence="7")
+        browser.overview = lambda db, *, public: dict(synced=True, pending=None, sequence="7", issued_fee="7")
         vectors = ROOT / "tools/pft-binius-shielded-pq/l1-vectors"
         for command, mode, recipient, vector in [
             ("pay", "Internal", "x" * 2241, "pfusdc-pay.bin"),
             ("unshield", "Exit", "pf" + "22" * 20, "pfusdc-exit.bin"),
         ]:
             args = parser().parse_args(["--wallet", ".", command, "--asset", browser.issue,
-                                        "--amount", "5", "--fee", "3", "--to", recipient])
+                                        "--amount", "5", "--to", recipient])
             self.assertTrue({"payer", "account_key", "sequence"}.isdisjoint(vars(args)))
-            order = dict(mode=mode, asset=browser.issue, amount="5", fee="3",
+            order = dict(mode=mode, asset=browser.issue, amount="5", fee="7",
                          recipient=recipient, migration=False)
+            with self.assertRaisesRegex(ValueError, "fee changed"):
+                browser.dispatch(None, "review", {**order, "fee":"3"})
             terms = browser.dispatch(None, "review", order)["terms"]
             self.assertIsNone(terms["payer"])
             self.assertIsNone(terms["sequence"])
             action = dict(kind="pq_payment_v1", body=base64.b64encode((vectors / vector).read_bytes()).decode())
             request = browser.request(dict(pool=PQ_POOL_ID, intent="example", wire=json.dumps(action)))
             self.assertIsNone(request["address"])
+
+
+    def test_only_confirmed_pre_reservation_refusal_releases_pending_payment(self):
+        import sqlite3
+        from unittest.mock import Mock, patch
+        from postfiat_rpc.pq_browser import BrowserWallet, AdmissionRefused, PQ_POOL_ID
+        from postfiat_rpc.client import private_action_hash
+
+        vector = ROOT / "tools/pft-binius-shielded-pq/l1-vectors/pfusdc-pay.bin"
+        wire = json.dumps(dict(kind="pq_payment_v1", body=base64.b64encode(vector.read_bytes()).decode()))
+        row = dict(intent="test", phase="prepared", wire=wire, pool=PQ_POOL_ID)
+        wallet = object.__new__(BrowserWallet)
+        wallet.account, wallet.home = "pf" + "11"*20, Path(".")
+        wallet.gateway = Mock()
+        with contextlib.closing(sqlite3.connect(":memory:")) as db:
+            db.execute("CREATE TABLE payments (intent,phase)")
+            for exc in [ConnectionResetError(), AdmissionRefused("pq_fee_mismatch")]:
+                db.execute("DELETE FROM payments")
+                db.execute("INSERT INTO payments VALUES ('test', 'prepared')")
+                wallet.gateway.call.side_effect = exc
+                with patch("postfiat_rpc.pq_browser.local") as daemon:
+                    with self.assertRaises((ConnectionResetError, ValueError)):
+                        wallet.send(db, row)
+                    saved = db.execute("SELECT phase FROM payments").fetchone()
+                    if isinstance(exc, ConnectionResetError):
+                        daemon.assert_not_called()
+                        self.assertEqual(saved, ("submitted",))
+                    else:
+                        daemon.assert_called_once_with(Path("."), "rejected", action_hash=private_action_hash(wire))
+                        self.assertIsNone(saved)
 
 
 class PqWalletMerge(unittest.TestCase):
@@ -182,7 +214,8 @@ def exercise(root, stack):
         return ["--payer", env[f"PQ_{who}"], "--account-key", env[f"PQ_{who}_KEY"], "--sequence", seq]
 
     def pay(w, mode, asset, amount, *more):
-        r = cli(w, mode, "--asset", asset, "--amount", amount, "--fee", 1 if asset=="PFT" else 3, *more)
+        fee_args = ["--fee", 1] if asset == "PFT" or mode == "shield" else []
+        r = cli(w, mode, "--asset", asset, "--amount", amount, *fee_args, *more)
         assert r["state"] == "accepted"
         assert cli(w, "receipt", r["intent_id"])["outcome"]["accepted"]
         metrics.append((r["prove_seconds"],r["worker_peak_rss_kib"]))
@@ -253,6 +286,11 @@ def exercise(root, stack):
         known.add(bytes.fromhex(json.loads(Path(env[f"PQ_{who}_KEY"]).read_bytes())["private_key_hex"]))
     wires = [base64.b64decode(json.loads(req["params"]["action_json"])["body"], validate=True)
              for req in map(json.loads,packets) if req["method"]=="private_action_submit"]
+    for request in map(json.loads, packets):
+        if request["method"] == "private_action_submit":
+            params = request["params"]
+            if base64.b64decode(json.loads(params["action_json"])["body"])[5] == 2:
+                assert params["session_scope"] == "pq-private-spend"
     for stop in stop_daemons:
         stop()
     traffic = b"\n".join(packets+transcript+wires)

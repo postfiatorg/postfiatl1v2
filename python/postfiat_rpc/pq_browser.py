@@ -17,7 +17,7 @@ import threading
 from urllib.parse import urlsplit
 
 from .client import Endpoint, PostFiatRpcClient, PQ_POOL_ID, private_action_hash, private_action_intent_id
-from .pq_wallet import local, snapshot, sync
+from .pq_wallet import issued_fee, local, snapshot, sync
 
 NATIVE = "00" * 48
 ORCHARD = "asset-orchard-v1"
@@ -44,6 +44,10 @@ def atomic_number(value):
     return int(value)
 
 
+class AdmissionRefused(ValueError):
+    """The authority confirmed the submitted intent has no reservation."""
+
+
 class Gateway:
     def __init__(self, url, token_file, origin):
         self.url = urlsplit(url)
@@ -65,6 +69,11 @@ class Gateway:
             response = conn.getresponse()
             raw = response.read(MAX_RESPONSE + 1)
             check(len(raw) <= MAX_RESPONSE, "Gateway response exceeded its size limit.")
+            if response.status == 409 and route == "submit":
+                error = json.loads(raw)
+                if (error.get("schema") == SCHEMA and error.get("reserved") is False
+                        and re.fullmatch("[a-z0-9_]{1,64}", str(error.get("code", "")))):
+                    raise AdmissionRefused(error["code"])
             check(response.status in (200, 202), f"Gateway refused {route} (HTTP {response.status}).")
             return json.loads(raw)
 
@@ -140,7 +149,13 @@ class BrowserWallet:
         changed = db.execute("UPDATE payments SET phase='submitted' WHERE intent=? AND phase='prepared'",
                              (row["intent"],)).rowcount
         check(changed == 1, "Already submitted. Check finality.")
-        r = self.gateway.call("submit", self.request(row), row["pool"])
+        try:
+            r = self.gateway.call("submit", self.request(row), row["pool"])
+        except AdmissionRefused as exc:
+            if row["pool"] == PQ_POOL_ID:
+                local(self.home, "rejected", action_hash=private_action_hash(row["wire"]))
+                db.execute("DELETE FROM payments WHERE intent=?", (row["intent"],))
+            raise ValueError(f"Validator refused payment ({exc}). Review again.") from exc
         check(r["schema"] == SCHEMA and r["intent_id"] == row["intent"]
               and r["action_hash"] == private_action_hash(row["wire"]), "Admission returned different bytes.")
         if row["pool"] == PQ_POOL_ID:
@@ -193,18 +208,21 @@ class BrowserWallet:
         current = shield or exit_row
         return dict(**data, state=state, exit_intent=exit_id, intent=current["intent"] if current else None)
 
-    def overview(self, db):
+    def overview(self, db, *, public=False):
         balance = local(self.home, "balance")
         checkpoint = local(self.home, "checkpoint")
         tip = self.gateway.call("snapshot", {})
         check(all(tip[k] == v for k, v in self.net.items()) and tip["pool_id"] == PQ_POOL_ID,
               "Gateway snapshot is on a different network.")
         trusted = self.validator.private_pool_snapshot(PQ_POOL_ID)
-        account = self.validator.account(self.account) if self.account else None
-        lines = self.validator.account_lines(self.account, asset_id=self.issue)["lines"] if self.account else []
+        account = self.validator.account(self.account) if public and self.account else None
+        lines = self.validator.account_lines(self.account, asset_id=self.issue)["lines"] if public and self.account else []
         last = db.execute("SELECT intent,phase FROM payments WHERE network=? ORDER BY rowid DESC LIMIT 1",
                           (compact(self.net),)).fetchone()
-        return dict(network=self.net, account=self.account, issue=self.issue,
+        fee = None
+        if trusted.get("pq_issued_fee"):
+            fee = str(issued_fee(trusted, self.issue))
+        return dict(issued_fee=fee, network=self.net, account=self.account, issue=self.issue,
                     address=local(self.home, "address")["address"], sequence=str(account["sequence"] + 1) if account else None,
                     public={NATIVE:str(account["balance"]), self.issue:str(sum(l["balance"] for l in lines))} if account else {},
                     private={k:str(v) for k,v in balance["finalized"].items()},
@@ -230,13 +248,13 @@ class BrowserWallet:
 
     def dispatch(self, db, cmd, body):
         if cmd == "status":
-            return self.overview(db)
+            return self.overview(db, public=body.get("public") is True)
         if cmd == "sync":
             self.synced = False
             self.reviewed = None
             result = sync(self.home, self.gateway, self.validator)
             self.synced = result["sync_lag_blocks"] == 0
-            return self.overview(db)
+            return self.overview(db, public=body.get("public") is True)
         if cmd == "activity":
             asset, mode = body["asset"], body["mode"]
             check(asset in (NATIVE, self.issue) and mode in MODES, "Unknown issue or route.")
@@ -256,12 +274,16 @@ class BrowserWallet:
             return self.send(db, self.action_row(db, self.exit_action, ORCHARD, self.exit_id()))
         if cmd == "review":
             self.reviewed = None
-            state = self.overview(db)
+            state = self.overview(db, public=body.get("mode") == "Shield")
             check(state["synced"] and state["pending"] is None, "Sync the wallet and resolve pending payments first.")
             check(set(body) == {"mode","asset","amount","fee","recipient","migration"}, "Unexpected payment field.")
             mode, asset = body["mode"], body["asset"]
             check(mode in MODES and asset in (NATIVE, self.issue), "Unknown payment mode or issue.")
-            amount, fee = atomic_number(body["amount"]), atomic_number(body["fee"])
+            atomic_number(body["amount"])
+            if mode != "Shield" and asset != NATIVE:
+                check(state["issued_fee"] is not None and body["fee"] == state["issued_fee"],
+                      "Issued fee changed or unavailable. Sync and review again.")
+            atomic_number(body["fee"])
             recipient = body["recipient"]
             check((mode == "Shield" and recipient is None) or
                   (mode == "Exit" and isinstance(recipient, str) and re.fullmatch(r"pf[0-9a-f]{40}", recipient)) or
@@ -272,7 +294,7 @@ class BrowserWallet:
                 migration = state["migration"]
                 check(migration and migration["state"] == "Exit final — review new shield"
                       and self.receipt(db, self.exit_id())["state"] == "final"
-                      and mode == "Shield" and str(amount) == migration["amount"] and asset == migration["asset_id"],
+                      and mode == "Shield" and body["amount"] == migration["amount"] and asset == migration["asset_id"],
                       "Confirm the exact Orchard exit before shielding.")
             public = mode == "Shield"
             check(not public or self.account, "Configure a deposit account to shield funds.")
@@ -286,7 +308,9 @@ class BrowserWallet:
             self.reviewed = None
             check(review and body == dict(review=review[0], terms=review[1]), "Reviewed terms changed or expired.")
             terms = review[1]
-            current = self.overview(db)
+            current = self.overview(db, public=terms["mode"] == "Shield")
+            if terms["mode"] != "Shield" and terms["asset"] != NATIVE:
+                check(terms["fee"] == current["issued_fee"], "Issued fee changed. Sync and review again.")
             check(current["synced"], "Sync again before signing.")
             check(not terms["payer"] or terms["sequence"] == current["sequence"],
                   "Public account sequence changed. Review the payment again.")
