@@ -63,14 +63,6 @@ Restarting with the encrypted wallet file preserves attempts. A seed-only recove
 
 The browser keeps the reviewed terms, saved wire and random receipt capability in its owner-local SQLite database. Treat that file as private wallet data. Before sending proof bytes, the wallet posts the intent ID and capability hash to the authenticated PQ `authorize` route. Registration is local and idempotent. A submit cannot register itself. The gateway checks the saved commitment before upstream reads and resubmissions. Its per-action upstream scope binds the capability hash to the node reservation. A missing local record cannot serve a receipt. Restore the intents and capability bindings together before reopening a recovered gateway. A submitted wallet row uses its original capability and identical bytes. If both gateway copies are lost, sync against the chain or explicitly replace the spend. A legacy payerless record without a capability cannot be claimed by presenting its wire or logging in again. Use finalized wallet sync or the node receipt RPC to reconcile it. Deposits continue to use their original login and address.
 
-## Before live activation
-
-- Provide a single-writer wallet handoff or a coordinated attempt journal. Explain the limits of birthday and stale full-wallet backups during restore. Rehearse with one current spending copy. After a lost reply, retry by saved action hash across finality.
-- Enforce a wind-down for route retirement, scheduled expiry and successors, including empty blocks. Close new issued deposits while preserving redemption against the original backing and collector withdrawals. Define how dust, unavailable holders and native users are handled. Rehearse restart, archived replay and supply conservation with custody outstanding.
-- Use a fee-carrying pause during rehearsal wind-down. Decide whether priced custody retains its governance floor across bare pauses, restarts and shadowing amendments. Enforce any deployment quorum stricter than the runtime BFT floor.
-- Inventory retained archives for retired profile-1 issued spends and intermediate fee, quorum and atomicity rules. Replay those exact archives or define the cutover. Qualify registry rotation at fee governance boundaries.
-- Bound durable storage for unfinished relay registrations and reclaim unused entries without losing admitted or uncertain bindings. If node-level receipt confidentiality is required, restrict lookup by intent ID. Complete the external cryptography review described below.
-
 **Reference material.** Wire, relations, R0–R6, rollover, measured costs and security dependencies are in the
 [PFSH02 specification](../security/peel-binius-shielded-pq-payments.md) and
 [replay tool](../../tools/pft-binius-shielded-pq/README.md). Compare
@@ -83,6 +75,14 @@ Merge milestones in order. M2–M4 can merge with production activation absent a
 directly in local-chain tests.
 
 Original milestone measurements below cover the standalone fixture and L1 profile 1. Issued-spend measurements from that period include public PFT payer authorization.
+
+## Before live activation
+
+- Provide a single-writer wallet handoff or a coordinated attempt journal. Explain the limits of birthday and stale full-wallet backups during restore. Rehearse with one current spending copy. After a lost reply, retry by saved action hash across finality.
+- Enforce a wind-down for route retirement, scheduled expiry and successors, including empty blocks. Close new issued deposits while preserving redemption against the original backing and collector withdrawals. Define how dust, unavailable holders and native users are handled. Rehearse restart, archived replay and supply conservation with custody outstanding.
+- Use a fee-carrying pause during rehearsal wind-down. Decide whether priced custody retains its governance floor across bare pauses, restarts and shadowing amendments. Enforce any deployment quorum stricter than the runtime BFT floor.
+- Inventory retained archives for retired profile-1 issued spends and intermediate fee, quorum and atomicity rules. Replay those exact archives or define the cutover. Qualify registry rotation at fee governance boundaries.
+- Bound durable storage for unfinished relay registrations and reclaim unused entries without losing admitted or uncertain bindings. If node-level receipt confidentiality is required, restrict lookup by intent ID. Complete the external cryptography review described below.
 
 ## M1. Finalize one real transfer on a disposable chain · 3–5 days
 
