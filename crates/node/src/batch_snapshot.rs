@@ -1790,6 +1790,16 @@ fn export_snapshot_with_basis(
     options: SnapshotExportOptions,
     basis: SnapshotVerificationBasis,
 ) -> io::Result<SnapshotManifest> {
+    let dest = &options.snapshot_dir;
+    if dest.join(".integrity.key").try_exists()?
+        || (dest.join(GENESIS_FILE).try_exists()?
+            && !dest.join(SNAPSHOT_MANIFEST_FILE).try_exists()?)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "snapshot export destination contains node state",
+        ));
+    }
     let report = status(NodeOptions {
         data_dir: options.data_dir.clone(),
     })?;
