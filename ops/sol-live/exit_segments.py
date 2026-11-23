@@ -20,8 +20,9 @@ def checkpoint_target(latest, blocks):
     return None
 
 
-def select_target(latest, fetch):
-    end = latest + 65
+def select_target(latest, fetch, *, end=None):
+    if end is None:
+        end = latest + 65
     while end > latest:
         start = max(latest + 1, end - 3)
         blocks = fetch(0, "blocks", from_height=start, limit=end - start + 2)

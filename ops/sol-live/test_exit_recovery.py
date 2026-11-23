@@ -261,3 +261,38 @@ class RecoveryTest(unittest.TestCase):
             with patch.object(svc.time, "time", return_value=205):
                 j.enqueue("bc" * 48)
                 self.assertEqual(j.pending(), BURN)
+
+    def test_pending_job_reclaims_only_confirmed_checkpoint_buffers_before_cap(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            raws = [bytes([i]) for i in range(4)]
+            keys = [root/(hashlib.sha256(raw).hexdigest()+".key") for raw in raws]
+            for key in keys:
+                key.touch()
+            c = Mock()
+            signers = {key: Mock() for key in keys}
+            buffers = {s.pubkey():raw for s,raw in zip(signers.values(),raws)}
+            result = "ea"*48
+            def account(key):
+                if key == p.checkpoint_pda(result):
+                    return dict(owner=str(p.VERIFIER), data=bytes(48))
+                if key in buffers:
+                    return dict(owner=str(p.VERIFIER), data=buffers[key])
+            c.account.side_effect = account
+            def reclaim(cluster, label, ix, signer):
+                buffers.pop(signer.pubkey())
+            def decode(raw):
+                if raw == raws[0]:
+                    raise ValueError("unfinished upload")
+                return dict(result=result, end="00"*48)
+            c.owner = p.FEE_PAYER
+            with patch.object(p,"load",side_effect=signers.get), patch("exit_precheck.checkpoint_values",side_effect=decode), patch.object(p,"funded_send",side_effect=reclaim):
+                from solders.keypair import Keypair
+                buffers.clear()
+                for signer,raw in zip(signers.values(),raws):
+                    signer.pubkey.return_value=Keypair().pubkey()
+                    buffers[signer.pubkey()]=raw
+                p.reclaim_completed(c,root)
+                p.check_work_capacity(root)
+            self.assertEqual(list(root.glob("*.key")),keys[:1])

@@ -103,12 +103,10 @@ def funded_send(c, label, instructions, *signers, rent=0, before_send=None):
     balance(c, rent + fee)
     if before_send is None:
         require(label != "exit.withdrawal", "Withdrawal journal is required.")
-        return c.send(label, instructions, *signers)
-    tx = Transaction.new_signed_with_payer(
-        instructions, c.owner, [c.payer, *signers], block
-    )
+    tx = Transaction([c.payer, *signers], message, block)
     sig = str(tx.signatures[0])
-    before_send(sig, recent["lastValidBlockHeight"])
+    if before_send is not None:
+        before_send(sig, recent["lastValidBlockHeight"])
     result = c.call(
         "sendTransaction",
         base64.b64encode(bytes(tx)).decode(),
@@ -158,9 +156,17 @@ def shared_liabilities(buckets, domain):
     return total
 
 
-def payout_budget(c, distance):
-    # Even if committee changes shorten each checkpoint to one block, admission covers the full path.
-    proofs = 1 + max(0, distance - 65)
+def proof_count(latest, burn_height, finalized):
+    count = 1
+    while burn_height - latest > 65:
+        target = select_target(latest, rpc, end=min(latest + 65, finalized - 1))
+        require(latest < target["height"] <= latest + 65, "Invalid checkpoint selection.")
+        latest = target["height"]
+        count += 1
+    return count
+
+
+def payout_budget(c, proofs):
     block = Hash.from_string(
         c.call("getLatestBlockhash", c.level)["value"]["blockhash"]
     )
@@ -172,7 +178,7 @@ def payout_budget(c, distance):
     ]
     require(isinstance(fee, int) and fee > 0, "Solana fee quote unavailable.")
     # Allocate, upload up to three chunks, consume and reclaim. Charge two signatures throughout.
-    return proofs * (6 * fee + c.rent(48) + c.rent(2048)) + c.rent(1) + c.rent(165)
+    return proofs * (6 * fee + c.rent(48)) + c.rent(2048) + c.rent(1) + c.rent(165)
 
 
 ROTATIONS = RotationScan()
@@ -195,7 +201,8 @@ def readiness():
         c = cluster()
         latest, anchor = light(c)
         message = "Relayer cannot fund the payout above its balance floor."
-        budget = payout_budget(c, max(r["current_height"] for r in routes) + 1 - latest)
+        tip = max(r["current_height"] for r in routes)
+        budget = payout_budget(c, proof_count(latest, tip + 1, tip))
         lamports = balance(c, budget)
         message = "Withdrawal prover unavailable."
         available()
@@ -412,7 +419,44 @@ def check_work_capacity(work):
     )
 
 
+def rent_shortfall(c, account, size, owner):
+    if account is None:
+        return c.rent(size)
+    require(not account["executable"], "Unexpected executable account.")
+    if account["owner"] == str(SYSTEM) and not account["data"]:
+        return max(0, c.rent(size) - account["lamports"])
+    require(account["owner"] == str(owner) and len(account["data"]) == size,
+            "Unexpected allocated account.")
+    return 0
+
+
+def reclaim_completed(c, work):
+    from exit_precheck import checkpoint_values
+
+    for path in work.glob("*.key"):
+        signer = load(path)
+        account = c.account(signer.pubkey())
+        if not account or account["owner"] != str(VERIFIER):
+            continue
+        raw = account["data"]
+        if hashlib.sha256(raw).hexdigest() != path.stem:
+            continue
+        try:
+            values = checkpoint_values(raw)
+        except ValueError:
+            continue
+        result = c.account(checkpoint_pda(values["result"]))
+        if not result or result["owner"] != str(VERIFIER) or result["data"].hex() != values["end"]:
+            continue
+        funded_send(c, "exit.reclaim", [
+            Instruction(VERIFIER, b"\x06", [rw(signer.pubkey(), True), rw(c.owner)])
+        ], signer)
+        if c.account(signer.pubkey()) is None:
+            path.unlink()
+
+
 def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
+    reclaim_completed(c, work)
     check_work_capacity(work)
     vals, proof = prove(kind, witness, work)
     require(0 < len(vals) <= 2048 and len(proof) == 356, "Invalid proof size.")
@@ -431,13 +475,15 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
         ro(buf),
         ro(SYSTEM),
     ]
-    rent = 0 if c.account(result) else c.rent(48)
+    rent = rent_shortfall(c, c.account(result), 48, VERIFIER)
     ixs = [set_compute_unit_limit(400_000)]
     if owner is not None:
         ata = pda(ATA, bytes(owner), bytes(TOKEN), bytes(MINT))
         destination = c.account(ata)
         token_atoms(destination, owner, allow_empty=True)
-        rent += c.rent(1) + (0 if destination else c.rent(165))
+        burn_marker = marker(witness["receipt"]["tx_id"])
+        rent += rent_shortfall(c, c.account(burn_marker), 1, VERIFIER)
+        rent += rent_shortfall(c, destination, 165, TOKEN)
         ixs.append(
             Instruction(
                 ATA,
@@ -454,7 +500,7 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
         )
         accounts.extend(
             [
-                rw(marker(witness["receipt"]["tx_id"])),
+                rw(burn_marker),
                 ro(VAULT),
                 ro(pda(VERIFIER, b"egress-release", bytes(VAULT))),
                 ro(pda(VAULT, b"config")),
