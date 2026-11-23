@@ -18,7 +18,14 @@ use std::{
 #[test]
 fn pq_inactive_snapshot_accepts_explicit_heights() {
     let f = Fixture::new();
-    let mut snap = crate::asset_orchard_pricing_reads::read_finalized_pair_snapshot(&f.dir).unwrap();
+    let store = NodeStore::new(&f.dir);
+    let mut snap = FinalizedPairSnapshot {
+        genesis: f.genesis.clone(),
+        ledger: store.read_ledger().unwrap(),
+        governance: store.read_governance().unwrap(),
+        tip: storage_commit::reconstruct_chain_tip_for_genesis(&store, &f.genesis).unwrap(),
+        shielded: store.read_shielded().unwrap(),
+    };
     snap.genesis.chain_id = "unrelated-chain".into();
     for height in [0, snap.tip.height + 2] {
         let report = private_pool_snapshot_from(PrivatePoolSnapshotOptions {

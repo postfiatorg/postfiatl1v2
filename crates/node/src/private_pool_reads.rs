@@ -525,7 +525,13 @@ pub(super) fn private_pool_snapshot_from(
     let pool = snapshot_pool(&snapshot, &options.pool_id);
     let next_height = snapshot.tip.height.saturating_add(1);
     let inclusion_height = options.inclusion_height.unwrap_or(next_height);
-    if options.pool_id == postfiat_types::pq_payment::POOL_ID && inclusion_height != next_height {
+    let genesis_digest = genesis_hash(&snapshot.genesis);
+    let quoted_pool = options.pool_id == postfiat_types::pq_payment::POOL_ID
+        && postfiat_types::pq_rehearsal_domain(&snapshot.genesis.chain_id, &genesis_digest)
+        && snapshot.governance.pq_rehearsal_active(
+            &snapshot.genesis.chain_id, &genesis_digest, snapshot.genesis.protocol_version, next_height)
+        && snapshot.governance.pq_fee_schedule_in_force(next_height);
+    if quoted_pool && inclusion_height != next_height {
         return Err(invalid_input(
             "PQ fee quotes require finalized height plus one",
         ));
@@ -623,17 +629,14 @@ pub(super) fn private_pool_snapshot_from(
         };
     }
     Ok(PrivatePoolSnapshotReport {
-        pq_issued_fee: if pq_read && genesis_hash(&snapshot.genesis) == pq_payment_fixture::GENESIS_HASH
-            && snapshot.governance.pq_rehearsal_active(&snapshot.genesis.chain_id,
-                pq_payment_fixture::GENESIS_HASH, snapshot.genesis.protocol_version, inclusion_height)
-        {
+        pq_issued_fee: if quoted_pool {
             snapshot.governance.pq_issued_fee(postfiat_types::PQ_REHEARSAL_ISSUE, inclusion_height)
                 .map(|fee| (postfiat_types::PQ_REHEARSAL_ISSUE.to_owned(), fee.to_string()))
         } else { None },
         pq_last_page: pq_read.then(|| pq_head.map_or(String::new(), |h| h.last_page.clone())),
         schema: PRIVATE_POOL_SNAPSHOT_SCHEMA.to_string(),
         chain_id: snapshot.genesis.chain_id.clone(),
-        genesis_hash: genesis_hash(&snapshot.genesis),
+        genesis_hash: genesis_digest,
         protocol_version: snapshot.genesis.protocol_version,
         address: options.address,
         snapshot_token: SnapshotToken::of(&snapshot, &options.pool_id).encode(),

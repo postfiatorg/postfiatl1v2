@@ -189,7 +189,7 @@ pub(super) fn withdraw_fees(
     height: u64,
 ) -> Result<(), &'static str> {
     let digest = genesis_hash(genesis);
-    if digest != pq_payment_fixture::GENESIS_HASH
+    if !postfiat_types::pq_rehearsal_domain(&genesis.chain_id, &digest)
         || !governance.pq_rehearsal_active(
             &genesis.chain_id,
             &digest,
@@ -246,7 +246,7 @@ pub(super) fn apply(
     governance: &GovernanceState,
     policies: &AssetOrchardEgressPolicyRegistry,
 ) -> Result<Receipt, &'static str> {
-    if genesis_digest != pq_payment_fixture::GENESIS_HASH
+    if !postfiat_types::pq_rehearsal_domain(&genesis.chain_id, genesis_digest)
         || !governance.pq_rehearsal_active(
             &genesis.chain_id,
             genesis_digest,
