@@ -50,6 +50,14 @@ class PqIssuedFee(unittest.TestCase):
             self.assertIsNone(request["address"])
 
 
+    def test_cli_refuses_a_caller_selected_issued_fee(self):
+        from postfiat_rpc.pq_wallet import parser, run
+        for command in ("pay", "unshield"):
+            args = parser().parse_args(["--wallet", ".", "--endpoint", "127.0.0.1:1",
+                command, "--asset", "cd"*48, "--amount", "1", "--fee", "2", "--to", "unused"])
+            with self.assertRaisesRegex(ValueError, "Omit --fee"):
+                run(args)
+
     def test_only_confirmed_pre_reservation_refusal_releases_pending_payment(self):
         import sqlite3
         from unittest.mock import Mock, patch

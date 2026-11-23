@@ -6,6 +6,12 @@ use std::process::Command;
 #[test]
 fn two_browser_wallets_and_orchard_migration() {
     let f = Fixture::new();
+    let disk = NodeStore::new(&f.dir);
+    let mut governance = disk.read_governance().unwrap();
+    let mut schedule = crate::tests::pq_payment_activation::amendment(&f.genesis, 1);
+    schedule.kind = "pq_payment_rehearsal_v1:fee:2".into();
+    governance.apply(schedule);
+    disk.write_governance(&governance).unwrap();
     let key = |name: &str, seed| {
         let path = f.dir.join(name);
         let key = write_test_master_key(&path, seed);
@@ -52,7 +58,6 @@ fn two_browser_wallets_and_orchard_migration() {
     })
     .unwrap();
     assert_eq!(historical.counts.outputs, 1);
-    let disk = NodeStore::new(&f.dir);
     assert!(disk.read_shielded().unwrap().pq_pool_v1.is_none());
     let note = f.dir.join("recovered.note");
     let scan = asset_orchard_scan(AssetOrchardScanOptions {

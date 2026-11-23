@@ -155,7 +155,7 @@ async function exercise() {
     const pq=poolState.reserve;
     const {asset}=await rpc(nodePorts[0],'asset_info',{asset_id:issue});
     const collected=asset.collected_private_fees;
-    assert.equal(collected,9);
+    assert.equal(collected,6);
     let publicAtoms=0;
     for(const account of Object.values(addresses)) {
       const {lines}=await rpc(nodePorts[0],'account_lines',{account,asset_id:issue});
@@ -211,6 +211,11 @@ async function exercise() {
     await click(p,mode);
     await p.getByLabel(/^Amount \(/).fill(String(amount));
     if(to) await p.getByLabel(mode==='Pay'?'Recipient receive address':'Public exit account',{exact:true}).fill(to);
+    if (asset === issue && mode !== 'Shield') {
+      const fee = p.getByLabel('Fee (pfUSDC atoms)',{exact:true});
+      assert.equal(await fee.inputValue(), '2');
+      assert.equal(await fee.isEditable(), false);
+    }
     const start = validatorReads[w].length;
     await walletCall(p,'review','Review payment');
     if (refuseNextSpend) {
@@ -371,11 +376,11 @@ async function exercise() {
     await transfer('alice',issue,'Pay',25,receive.bob,'pfusdc-02-alice-pay');
     assert.equal((await sync('bob')).private[issue],'25');
     await transfer('bob',issue,'Pay',5,receive.alice,'pfusdc-03-bob-second-spend');
-    await transfer('bob',issue,'Unshield',14,addresses.bob,'pfusdc-04-bob-exit');
+    await transfer('bob',issue,'Unshield',16,addresses.bob,'pfusdc-04-bob-exit');
     await click(a,'Orchard migration');
-    const before=await sync('alice'); assert.deepEqual(before.private,{[native]:'78',[issue]:'57'});
+    const before=await sync('alice'); assert.deepEqual(before.private,{[native]:'78',[issue]:'58'});
     assert.deepEqual((await sync('bob')).private,{});
-    await migrationSupply('Before migration',9,57);
+    await migrationSupply('Before migration',9,58);
     await click(a,'Orchard migration'); await capture(a,'migration-01-review-exit');
     const exit=await walletCall(a,'exit','Authorize Orchard exit');
     await a.getByText('Awaiting Orchard finality',{exact:true}).waitFor();
@@ -386,7 +391,7 @@ async function exercise() {
     const exitReceipt=await finalize(exit.intent);
     await startDaemon('alice'); await startBridge('alice'); await click(a,'Orchard migration');
     await check('alice',exit.intent,'migration-03-final-exit-after-restart',exitReceipt);
-    await migrationSupply('After Orchard exit',0,57);
+    await migrationSupply('After Orchard exit',0,58);
     const afterExit=await sync('alice'); assert.equal(BigInt(afterExit.public[issue]),BigInt(before.public[issue])+9n);
     await a.getByLabel('New shield fee (PFT atoms)').fill('3');
     await walletCall(a,'review','Review new PQ shield');
@@ -399,9 +404,9 @@ async function exercise() {
     assert.equal((await walletCall(a,'receipt','Check finality')).state,'queued');
     await capture(a,'migration-04b-await-shield-finality');
     await check('alice',shieldIntent,'migration-05-final-shield');
-    await migrationSupply('After fresh PQ shield',0,66);
+    await migrationSupply('After fresh PQ shield',0,67);
     const after=await sync('alice'); assert.equal(after.migration.state,'Migration final');
-    assert.equal(after.public[issue],before.public[issue]); assert.equal(after.private[issue],'66');
+    assert.equal(after.public[issue],before.public[issue]); assert.equal(after.private[issue],'67');
     await stop(wallets.bob); await click(b,'Sync'); await b.getByRole('alert').filter({hasText:'Disconnected'}).waitFor();
     assert.ok(await b.getByRole('button',{name:'Review payment'}).isDisabled());
     assert.deepEqual(await legacyPage(),historic);
