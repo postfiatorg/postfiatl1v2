@@ -100,6 +100,26 @@ fn pq_pair_window_and_historical_witness_match_the_reference() {
 }
 
 #[test]
+fn pq_spent_or_stale_payment_is_refused_before_its_proof_is_verified() {
+    let shield = vector("l1-vectors", "pft-shield");
+    let (pool, _) = prepare_pair(&PqPool::default(), &shield, chain(), 5).unwrap();
+    crate::pq_payment_actions::clear_verified();
+    let before = crate::pq_payment_actions::proof_verifications();
+    // Spent nullifiers: the same deposit again.
+    assert_eq!(
+        prepare_pair(&pool, &shield, chain(), 6).unwrap_err(),
+        "pq_spent_serial"
+    );
+    // A root the pfUSDC tree has never had.
+    assert_eq!(
+        prepare_pair(&PqPool::default(), &vector("l1-vectors", "pfusdc-pay"), chain(), 5)
+            .unwrap_err(),
+        "pq_unknown_anchor"
+    );
+    assert_eq!(crate::pq_payment_actions::proof_verifications(), before);
+}
+
+#[test]
 fn pq_global_uniqueness_and_checked_public_flows_are_atomic() {
     let pft = vector("l1-vectors", "pft-shield");
     let (pool, _) = prepare_pair(&PqPool::default(), &pft, chain(), 5).unwrap();

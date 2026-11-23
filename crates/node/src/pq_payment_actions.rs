@@ -55,6 +55,8 @@ pub(super) fn verify_statement(
             return Ok(entry.4.clone());
         }
         let _slot = VerificationSlot::acquire();
+        #[cfg(test)]
+        PROOF_VERIFICATIONS.with(|n| n.set(n.get() + 1));
         let statement = postfiat_privacy_binius::verify_l1(payment, chain)?;
         if entries.len() == postfiat_types::PQ_REHEARSAL_PROOFS {
             entries.pop_front();
@@ -73,6 +75,17 @@ pub(super) fn verify_statement(
 #[cfg(test)]
 pub(super) fn clear_verified() {
     VERIFIED.with_borrow_mut(|entries| entries.clear());
+}
+
+#[cfg(test)]
+thread_local! {
+    static PROOF_VERIFICATIONS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Uncached proof verifications on this thread.
+#[cfg(test)]
+pub(super) fn proof_verifications() -> u64 {
+    PROOF_VERIFICATIONS.with(std::cell::Cell::get)
 }
 
 fn enabled_issue<'a>(
