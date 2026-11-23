@@ -113,7 +113,35 @@ def light(c):
     ].hex()
 
 
+def shared_liabilities(buckets, domain):
+    # Count each bucket once. Paid-but-unsettled queues remain reserved until L1 retires them.
+    total = 0
+    seen = set()
+    for bucket in buckets:
+        if bucket["source_domain"] != domain:
+            continue
+        if "bucket_id" in bucket:
+            require(bucket["bucket_id"] not in seen, "Duplicate custody bucket.")
+            seen.add(bucket["bucket_id"])
+        allocations = sum(bucket[k] for k in ("outstanding_vault_bridge_atoms","redemption_queue_atoms",
+                                               "other_allocations_atoms","nav_subscription_allocations_atoms"))
+        total += max(allocations,bucket["counted_value_atoms"])
+    return total
+
+
+def payout_budget(c, distance):
+    # Even if committee changes shorten each checkpoint to one block, admission covers the full path.
+    proofs = 1 + max(0, distance - 65)
+    block=Hash.from_string(c.call("getLatestBlockhash",c.level)["value"]["blockhash"])
+    msg=Message.new_with_blockhash([Instruction(VERIFIER,b"",[ro(MINT,True)])],c.owner,block)
+    fee=c.call("getFeeForMessage",base64.b64encode(bytes(msg)).decode(),c.level)["value"]
+    require(isinstance(fee,int) and fee>0,"Solana fee quote unavailable.")
+    # Allocate, upload up to three chunks, consume and reclaim. Charge two signatures throughout.
+    return proofs * (6*fee+c.rent(48)+c.rent(2048)) + c.rent(1) + c.rent(165)
+
+
 def readiness():
+    message = "Waiting for the governed Solana descriptor on six validators."
     try:
         routes = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
         require(
@@ -125,10 +153,15 @@ def readiness():
             ),
             "Waiting for the Solana series exit on all six validators.",
         )
+        message = "Solana verifier or relayer unavailable."
         c = cluster()
-        light(c)
-        lamports = balance(c)
+        latest, _ = light(c)
+        message = "Relayer cannot fund the payout above its balance floor."
+        budget = payout_budget(c,max(r["current_height"] for r in routes)+1-latest)
+        lamports = balance(c,budget)
+        message = "Withdrawal prover unavailable."
         available()
+        message = "Vault custody or shared-bucket accounting unavailable."
         s = rpc(0, "vault_bridge_status", asset_id=ASSET)
         b = next((b for b in s["buckets"] if b["bucket_id"] == BUCKET), None)
         require(
@@ -138,18 +171,23 @@ def readiness():
             and b["status"] == "active",
             "Solana source bucket is unavailable.",
         )
+        required_atoms = shared_liabilities(s["buckets"],b["source_domain"])
         custody = c.account(pda(VAULT, b"custody"))
         require(
             custody
             and custody["owner"] == str(TOKEN)
             and custody["data"][:32] == bytes(MINT)
             and int.from_bytes(custody["data"][64:72], "little")
-            >= b["outstanding_vault_bridge_atoms"],
+            >= required_atoms,
             "Vault custody does not cover the offered series.",
         )
         return dict(
             ok=True,
-            ready=True,
+            ready=all(r.get("burns_open") is True for r in routes),
+            payout_ready=True,
+            burns_open=all(r.get("burns_open") is True for r in routes),
+            required_custody_atoms=str(required_atoms),
+            payout_budget_lamports=budget,
             asset_id=ASSET,
             series_asset_id=SERIES,
             bucket_id=BUCKET,
@@ -163,10 +201,8 @@ def readiness():
             relayer_lamports=lamports,
             relayer_floor_lamports=FLOOR,
         )
-    except Exception as error:
-        return dict(
-            ok=True, ready=False, message=str(error)[:300] or type(error).__name__
-        )
+    except Exception:
+        return dict(ok=True, ready=False, payout_ready=False, message=message)
 
 
 def signature(c, burn):

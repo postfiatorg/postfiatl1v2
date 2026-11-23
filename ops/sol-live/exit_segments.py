@@ -31,7 +31,7 @@ def select_target(latest, fetch):
 
 
 def validate_segment(witness, prior, target, start_root):
-    headers = [step["block"]["header"] for step in witness["finality_ancestry"]]
+    headers = [step["block"]["header"] for step in witness.get("finality_ancestry", [])]
     headers.append(witness["block"]["header"])
     require(witness["prior_checkpoint_block_id"] == prior and headers[0]["parent_hash"] == prior
             and committee(headers[0]) == start_root and len(headers) <= 65

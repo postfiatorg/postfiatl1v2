@@ -68,7 +68,7 @@ def records(i):
     activation, = [a for a in json.loads(batch["payload_json"])["vault_bridge_route_profile_activations"]
                    if a["amendment"]["amendment_id"] == INGRESS_TX]
     profile = activation["profile"]
-    require(profile_hash(profile) == POLICY and activation["amendment"]["kind"] == "vault_bridge_route_profile_activation:"+POLICY,
+    require(profile_hash(profile) == POLICY and activation["amendment"]["kind"] == f"vault_bridge_route_v1:{ASSET}:{POLICY}",
             "Wrong ingress policy.")
     bucket, = [b for b in rpc(i, "vault_bridge_status", asset_id=ASSET)["buckets"] if b["bucket_id"] == BUCKET]
     return dict(activation=dict(profile=profile,profile_hash=POLICY),bucket=bucket)

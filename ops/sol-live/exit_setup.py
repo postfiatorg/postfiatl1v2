@@ -298,7 +298,7 @@ def main():
         governed = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
         require(
             all(
-                r["profile_hash"] == EXIT and r["profile"] == profile
+                r["active"] and r.get("burns_open") is False and r["profile_hash"] == EXIT and r["profile"] == profile
                 for r in governed
             ),
             "waiting for governed series on six validators",
