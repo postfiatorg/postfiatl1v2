@@ -466,6 +466,22 @@ The separate portable validator benchmark still had shared-host timing outliers 
   `docs/quantum/wallet-implications.md` and `docs/wallets/shielded-wallet.md`. Once the CLI, interface and
   release evidence agree, retire the completed implementation journal under `docs/plans/completed/`.
 
+- [x] Rehearse the candidate on six validators through H=6, a full four-proof block, a signed pause,
+  snapshot import, wallet recovery and complete replay. Check the untouched 1,734-block R64 archive
+  with the M5 script. [Rehearsal and supply record](../evidence/pq-private-payments-m8/rehearsal-record.md).
+- [x] Prepare the [external review package](../evidence/pq-private-payments-m8/external-review-package.md)
+  and update the five operator and wallet pages with the measured behavior.
+- [ ] Resolve pre-H compatibility. The M4 binary rejects the new signed amendment in block 2 of the
+  disposable chain before payment inclusion starts at 6. The stored block rows agree.
+  The old binary fails to validate this prefix independently.
+- [x] Repeat all seven independent verification stages, M1–M7 regression selections and the affected
+  Orchard replay. Recover both assets using the Python CLI and browser.
+- [ ] Obtain a green workspace release gate. Three external-lane fee assertions and the default RPC
+  signer-unit digest failed on both the candidate and the retained M7 test binary.
+- [ ] Qualify portable settlement latency. The first run reached 50.23 ms per action and the pinned
+  rerun reached 55.32 ms against the 50 ms engineering gate.
+- [ ] Obtain independent reviews and a founder activation decision. The journal stays open.
+
 ### What remains unproven
 
 - The concrete quantum extraction bound depends on the unreviewed compressed-oracle bridge in Appendix A.3.

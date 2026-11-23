@@ -26,6 +26,10 @@ private-egress batch with `--orchard-exit-batch`. Authorize its exit, check fina
 a separate PQ shield. The public account and amounts link the two transactions. The wallet remembers
 the exit across restarts and waits for a fresh shield approval.
 
+## Recovery during a PQ pause
+
+Use **Sync** and **Check finality** against your trusted validator to recover outputs and confirm a payment already included. A paused validator refuses new PQ payments. Check the original intent and certified receipt before retrying an uncertain submission. M8 restored a signed snapshot taken during the pause and recovered an unspent output in each rehearsal asset. Both PQ reserves and the final state root survived the import. [Rehearsal record](../evidence/pq-private-payments-m8/rehearsal-record.md).
+
 ## Orchard commands
 
 - `orchard-keygen`;
