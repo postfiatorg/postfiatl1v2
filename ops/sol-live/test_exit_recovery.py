@@ -296,3 +296,36 @@ class RecoveryTest(unittest.TestCase):
                 p.reclaim_completed(c,root)
                 p.check_work_capacity(root)
             self.assertEqual(list(root.glob("*.key")),keys[:1])
+
+    def test_paid_polling_caches_marker_and_limits_history_reads(self):
+        with tempfile.TemporaryDirectory() as d:
+            j=svc.Journal(Path(d)/"db")
+            j.enqueue(BURN)
+            j.update(BURN,"paid",solana_tx="missing")
+            c=Mock()
+            c.account.return_value=dict(owner=str(p.VERIFIER),data=b"\1")
+            history=[dict(signature=str(i),err=None) for i in range(100)]
+            def call(method,*args):
+                if method=="getSignaturesForAddress":
+                    return history
+                self.assertEqual(method,"getTransaction")
+                return None
+            c.call.side_effect=call
+            with patch.object(svc,"cluster",return_value=c):
+                for _ in range(20):
+                    self.assertIsNone(svc.checked_row(j,BURN)["solana_tx"])
+            self.assertLessEqual(sum(call.args[0]=="getTransaction" for call in c.call.call_args_list),5)
+            c.account.assert_called_once()
+
+    def test_queue_capacity_overrides_cached_readiness(self):
+        import threading
+        with tempfile.TemporaryDirectory() as d:
+            j=svc.Journal(Path(d)/"db")
+            server=Mock(journal=j,ready_lock=threading.Lock(),valid_until=float("inf"),
+                        ready=dict(ready=True,payout_ready=True))
+            server.thread.is_alive.return_value=True
+            self.assertTrue(svc.service_readiness(server)["ready"])
+            for i in range(32):
+                j.enqueue(f"{i:096x}")
+            self.assertFalse(svc.service_readiness(server)["ready"])
+            self.assertFalse(svc.service_readiness(server)["payout_ready"])

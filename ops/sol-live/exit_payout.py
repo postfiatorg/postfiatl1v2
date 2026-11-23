@@ -318,7 +318,7 @@ def matches_payout(c, key, sig):
     )
 
 
-def signature(c, burn, known=None):
+def signature(c, burn, known=None, *, history_limit=100):
     key = marker(burn)
     account = c.account(key)
     if not account or (account["owner"] == str(SYSTEM) and not account["data"]):
@@ -331,8 +331,8 @@ def signature(c, burn, known=None):
     try:
         if known and matches_payout(c, key, known):
             return known
-        history = c.call("getSignaturesForAddress", str(key), dict(c.level, limit=100))
-        for row in history:
+        history = c.call("getSignaturesForAddress", str(key), dict(c.level, limit=history_limit))
+        for row in history[:history_limit]:
             if row["err"] is None and matches_payout(c, key, row["signature"]):
                 return row["signature"]
     except (RuntimeError, OSError, KeyError, ValueError, TypeError):
