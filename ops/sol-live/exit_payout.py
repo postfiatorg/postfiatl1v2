@@ -50,7 +50,7 @@ from exit_segments import (
     validate_segment,
     committee,
 )
-from exit_precheck import inspect_vault
+from exit_precheck import inspect_vault, token_atoms
 from exit_proof import available, prove
 
 ATA = pk("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
@@ -435,7 +435,9 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
     ixs = [set_compute_unit_limit(400_000)]
     if owner is not None:
         ata = pda(ATA, bytes(owner), bytes(TOKEN), bytes(MINT))
-        rent += c.rent(1) + (0 if c.account(ata) else c.rent(165))
+        destination = c.account(ata)
+        token_atoms(destination, owner, allow_empty=True)
+        rent += c.rent(1) + (0 if destination else c.rent(165))
         ixs.append(
             Instruction(
                 ATA,

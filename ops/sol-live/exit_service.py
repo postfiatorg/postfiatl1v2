@@ -508,9 +508,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(
                     429, dict(error="Withdrawal admission rate exceeded.")
                 )
-            status = service_readiness(self.server)
-            if not status.get("accepting_jobs", status.get("payout_ready")):
-                return self.reply(503, dict(error="Withdrawal worker unavailable."))
             red = next(
                 (
                     r

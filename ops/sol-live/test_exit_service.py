@@ -176,9 +176,6 @@ class JobsTest(unittest.TestCase):
                     raw,
                     dict(hdr, **{"Content-Length": str(len(raw))}),
                 )
-                self.assertEqual(request(*post_args)[0], 503)
-                self.assertIsNone(server.journal.get(burn))
-                ready.return_value = {"payout_ready": True}
                 with patch("exit_service.redemptions", return_value=[]):
                     self.assertEqual(request(*post_args)[0], 404)
                     self.assertIsNone(server.journal.get(burn))
@@ -189,6 +186,7 @@ class JobsTest(unittest.TestCase):
                     (code, row["stage"], row["burn_height"]), (202, "queued", None)
                 )
                 self.assertEqual(request("GET", BASE + "/" + burn), (200, row))
+                ready.assert_not_called()
             finally:
                 server.shutdown()
 

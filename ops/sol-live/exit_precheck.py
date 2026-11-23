@@ -51,15 +51,39 @@ def accounts(c, addresses):
     return reply["context"]["slot"], rows
 
 
-def inspect_vault(c):
+def token_atoms(acc, owner, *, allow_empty=False):
+    if allow_empty and (acc is None or (
+        not acc["executable"] and acc["owner"] == str(SYSTEM) and not acc["data"]
+    )):
+        return 0
+    require(
+        acc
+        and not acc["executable"]
+        and acc["owner"] == str(TOKEN)
+        and len(acc["data"]) == 165,
+        "Token account owner or layout mismatch.",
+    )
+    d = acc["data"]
+    require(
+        d[:64] == bytes(MINT) + bytes(owner)
+        and d[108] == 1
+        and all(d[start : start + 4] == bytes(4) for start in (72, 109, 129)),
+        "Token authority, delegate, close authority or state mismatch.",
+    )
+    return int.from_bytes(d[64:72], "little")
+
+
+def inspect_vault(c, recipient=None):
     config = pda(VAULT, b"config")
     keys = [
         config,
         pda(VAULT, b"custody"),
         MINT,
-        pda(ATA_PROGRAM, bytes(PHANTOM), bytes(TOKEN), bytes(MINT)),
     ]
-    slot, (cfg, custody, mint, ata) = accounts(c, keys)
+    if recipient is not None:
+        keys.append(pda(ATA_PROGRAM, bytes(recipient), bytes(TOKEN), bytes(MINT)))
+    slot, rows = accounts(c, keys)
+    cfg, custody, mint = rows[:3]
     route = route_binding(GENESIS, VAULT)
     require(
         cfg
@@ -69,23 +93,9 @@ def inspect_vault(c):
         and cfg["data"][:64] == bytes(MINT) + route,
         "Vault route or mint mismatch.",
     )
-    for acc, owner in [(custody, config), (ata, PHANTOM)]:
-        if acc is None and owner == PHANTOM:
-            continue  # The payout creates the canonical ATA idempotently.
-        require(
-            acc
-            and not acc["executable"]
-            and acc["owner"] == str(TOKEN)
-            and len(acc["data"]) == 165,
-            "Token account owner or layout mismatch.",
-        )
-        d = acc["data"]
-        require(
-            d[:64] == bytes(MINT) + bytes(owner)
-            and d[108] == 1
-            and all(d[start : start + 4] == bytes(4) for start in (72, 109, 129)),
-            "Token authority, delegate, close authority or state mismatch.",
-        )
+    token_atoms(custody, config)
+    if recipient is not None:
+        token_atoms(rows[3], recipient, allow_empty=True)
     require(
         mint
         and not mint["executable"]
@@ -101,7 +111,7 @@ def inspect_vault(c):
         route=route.hex(),
         decimals=6,
         custody_atoms=int.from_bytes(custody["data"][64:72], "little"),
-        ata_exists=bool(ata),
+        **({"ata_exists": bool(rows[3] and rows[3]["data"])} if recipient is not None else {}),
         mint_authority=str(MINT_AUTH),
         freeze_authority=str(FREEZE_AUTH),
     )

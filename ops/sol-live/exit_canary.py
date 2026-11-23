@@ -90,15 +90,18 @@ def token_deltas(tx, owner=PHANTOM):
 
 
 def balances(c):
+    from exit_precheck import token_atoms
+
     addr = pda(ATA, bytes(PHANTOM), bytes(TOKEN), bytes(MINT))
     acc = c.account(addr)
     line = rpc(0, "account_assets", account=OWNER, asset_id=SERIES, limit=1)["assets"]
     require(
-        len(line) == 1 and line[0]["source_bucket_id"] == BUCKET, "missing test series"
+        len(line) == 1 and line[0]["source_bucket_id"] == BUCKET
+        and line[0]["authorized"] and not line[0]["frozen"], "missing test series"
     )
     return dict(
         ata=str(addr),
-        usdc_atoms=0 if not acc else int.from_bytes(acc["data"][64:72], "little"),
+        usdc_atoms=token_atoms(acc, PHANTOM, allow_empty=True),
         pfusdc_atoms=int(line[0]["balance"]),
     )
 

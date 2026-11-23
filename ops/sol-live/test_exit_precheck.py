@@ -45,9 +45,12 @@ class BootstrapTests(unittest.TestCase):
             altered[idx] = acc(altered[idx]["owner"], data)
             c.call.return_value = dict(context={"slot": 42}, value=altered)
             with self.assertRaises(ValueError):
-                inspect_vault(c)
+                inspect_vault(c, PHANTOM)
         c.call.return_value = dict(context={"slot": 43}, value=rows)
-        self.assertEqual(inspect_vault(c)["slot"], 43)
+        self.assertEqual(inspect_vault(c, PHANTOM)["slot"], 43)
+        c.call.return_value = dict(context={"slot": 44}, value=rows[:3])
+        self.assertEqual(inspect_vault(c)["slot"], 44)
+        self.assertEqual(len(c.call.call_args.args[1]), 3)
         self.assertEqual(c.call.call_args.args[2]["commitment"], "finalized")
 
     def test_six_way_and_archive_committee_gate(self):
