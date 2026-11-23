@@ -733,6 +733,8 @@ fn print_usage() {
   postfiat-node ratify-require-memo-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-orchard-aware-bridge-claim-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-pfusdc-source-series-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
+  postfiat-node ratify-solana-exit-open [--data-dir PATH] --validators CSV --height H --amendment-file PATH
+  postfiat-node ratify-solana-exit-paid [--data-dir PATH] --validators CSV --height H --packet-hash HEX --solana-slot SLOT --payout-index N --signature-hex HEX --amendment-file PATH
   postfiat-node ratify-solana-bridge-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-shielded-atomic-batch-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-asset-orchard-pricing-enforcement-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
