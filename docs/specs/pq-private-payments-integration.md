@@ -250,14 +250,14 @@ at 110 units. Issuance at the cap failed with 100 units in PQ custody. Productio
 
 ## M5. Enforce activation, resource limits and public admission · 5–8 days
 
-- [ ] In `crates/types/src/shielded_bridge_governance.rs` define a chain/genesis-bound amendment with earliest
+- [x] In `crates/types/src/shielded_bridge_governance.rs` define a chain/genesis-bound amendment with earliest
   inclusion height H, allowed profile/assets, fee schedule and block limits. Unconfigured means inactive.
   Check presence of the kind and limits *before* execution in
   `crates/node/src/{consensus_artifacts,mempool_proposals,execution_actions,block_replay_wallet}.rs`. Apply at
   the candidate height in proposer, validator vote/acceptance and replay. Before H reject the **whole block**
   carrying the variant, even a non-atomic batch with a rejected receipt. Keep the upgrade opt-in until
   validators and archive readers support its wire version.
-- [ ] Charge deterministic proof and byte units for every attempted PQ action in every batch in the block.
+- [x] Charge deterministic proof and byte units for every attempted PQ action in every batch in the block.
   Start rehearsal at four proofs and 596,520 archived payment bytes per block, subject also to the chain's
   smaller applicable byte limits. Four units reserve up to 200 ms of one core against a 50 ms/action
   engineering budget. Set the release cap from the measured consensus round headroom including ordinary
@@ -269,7 +269,7 @@ at 110 units. Issuance at the cap failed with 100 units in PQ custody. Productio
   recorded run. A one-off check of the existing binaries during this design also took 34.56 ms in Rust and
   52.00 ms in accelerated Go for the same hop. These untuned fixture runs did not measure validator
   settlement.
-- [ ] Extend
+- [x] Extend
   `crates/node/src/{private_action_admission,private_action_rpc,rpc_dispatch,rpc_cli,atomic_swap_rpc_server,shielded_batch_actions}.rs`.
   Scope the public allowlist by pool and caller. Cover `private_action_submit`, the queue service's persisted
   records on startup and immediately before dispatch, direct `shield_batch_finality`, proposal/peer round
@@ -279,20 +279,70 @@ at 110 units. Issuance at the cap failed with 100 units in PQ custody. Productio
   per-peer attempts, global queued bytes, concurrent verification and replay work before acquiring the ledger
   write lock. Verify against a pinned view outside the admission lock. Recheck tip and conflicting
   reservations in one short durable transaction.
-- [ ] Reserve a hash of the **canonical public statement and unsigned economic terms** independent of proof
+- [x] Reserve a hash of the **canonical public statement and unsigned economic terms** independent of proof
   randomness, ML-DSA randomness, client intent ID or JSON spelling. Also reserve each nullifier, each output
   and applicable public account/sequence. Conflicting statements sharing even one nullifier cannot both queue.
   Same statement returns the existing record after caller checks. Consensus checks spent keys again
   independent of local queues. Recover reservations and final receipts after crashes, release them on
   expiration/abandonment, and distinguish transient rejection from an accepted spend. Check chain inclusion
   before retrying an ambiguous dispatch.
-- [ ] **Merge test.** In `crates/node/src/tests/private_action_admission_tests.rs`, new
+- [x] **Merge test.** In `crates/node/src/tests/private_action_admission_tests.rs`, new
   `crates/node/src/tests/pq_payment_activation.rs`, and `crates/node/tests/private_actions_gateway.rs`, test
   every route at H−1, H, H+1 and without an amendment, including mixed and non-atomic blocks, stale queued
   records and a direct peer proposal. Stress two simultaneous reproves of the same statement, different
   statements sharing one serial, JSON aliases, timeout/restart, stale tip, pause/lift and limit+1 spread over
   several batches. Confirm exactly one final spend, deterministic rejection at all validators and continued
   service for valid traffic.
+
+**M5 rehearsal measurements.** AMD EPYC x86-64 KVM guest, 32 MiB L3, Rust 1.95.0, Cargo release defaults
+with no extra target flags. The accelerated and portable Rust builds ran on logical CPUs 25 and 3. Each cell
+gives median / p95 / maximum milliseconds over 21 single-core samples. Each sample decodes the batch and
+checks its identity, proof, applicable ML-DSA signature, account effects, pool append and replicated roots
+against a history with 1,024 unrelated pairs. The verifier cache is cleared between samples. Cold samples
+sweep a 128 MiB eviction buffer before timing. Rejection occurs after proof verification, with the last
+payment failing in the four-action case.
+
+| Asset | Actions | Outcome | Accelerated warm | Accelerated cold | Portable warm | Portable cold |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| PFT | 1 | Accepted | 24.73 / 28.94 / 29.85 | 24.08 / 30.38 / 31.25 | 36.38 / 37.13 / 37.31 | 36.50 / 37.23 / 37.43 |
+| PFT | 1 | Rejected | 23.84 / 24.21 / 24.23 | 24.96 / 33.75 / 35.98 | 36.21 / 37.15 / 37.38 | 36.55 / 38.11 / 41.87 |
+| PFT | 4 | Accepted | 92.08 / 104.62 / 110.53 | 92.37 / 103.66 / 116.60 | 142.56 / 144.88 / 145.20 | 144.14 / 160.44 / 172.26 |
+| PFT | 4 | Rejected | 92.42 / 96.56 / 102.21 | 92.67 / 104.29 / 109.64 | 147.39 / 154.24 / 154.77 | 147.49 / 154.02 / 155.19 |
+| pfUSDC | 1 | Accepted | 24.10 / 27.90 / 27.98 | 24.44 / 28.26 / 28.40 | 37.07 / 42.77 / 44.60 | 38.17 / 44.51 / 45.31 |
+| pfUSDC | 1 | Rejected | 23.92 / 27.67 / 27.79 | 29.64 / 40.11 / 40.25 | 36.62 / 42.10 / 43.95 | 37.29 / 42.64 / 44.31 |
+| pfUSDC | 4 | Accepted | 141.92 / 144.69 / 147.18 | 141.35 / 156.30 / 156.74 | 149.25 / 155.12 / 155.47 | 151.80 / 158.13 / 160.37 |
+| pfUSDC | 4 | Rejected | 146.27 / 169.02 / 169.61 | 147.94 / 156.79 / 157.29 | 151.60 / 155.30 / 155.46 | 143.58 / 151.75 / 152.27 |
+
+Eight durable commits took 45.45 / 48.89 / 48.89 ms accelerated and 44.87 / 48.65 / 48.65 ms portable
+(median / p95 / maximum). Whole-process peak RSS was 658,980 and 658,476 KiB respectively, including test
+proving and cache eviction. In separate fresh `shield-batch-simulate` processes without the prover or
+eviction buffer, the accelerated CLI accepted one and four actions at peaks of 16,532 and 18,196 KiB. Run
+`tests::pq_payment_accounting::` with `PQ_VALIDATOR_BENCH=1`, `RAYON_NUM_THREADS=1` and `taskset -c <idle
+core>` to repeat. Build the portable node test with `--features postfiat-privacy-binius/portable`.
+
+The six-validator ordinary round took 305.82 ms. A four-proof round after ordinary traffic took 1,034.87 ms
+including certification and persistence, within the 20,000 ms vote-phase deadline. Rehearsal uses four
+proofs and 596,520 charged archive bytes. Production activation and qualification on additional hardware
+belong to M8.
+
+**Shared-host timing.** Before the portable arithmetic change, warm native-asset verification took 53.43 /
+57.28 / 57.55 ms. The first optimized portable run on CPU 23 took 36.46 / 38.78 / 57.03 ms. On CPU 3 under
+load it took 64.16 / 89.21 / 129.47 ms. The final pinned rerun in the table reached a single-action maximum
+of 45.31 ms across both assets, compared with 40.25 ms accelerated. Both standalone replay runs passed all
+seven original gates, on CPUs 17 and 29. The independent Go full-tree parse and verify took 49.50 ms on the
+latter run.
+
+**Compatibility and admission.** The current block header certifies one batch. The shared meter also
+processes multiple batches in one call, including non-atomic attempts. The signed rehearsal amendment
+enables the pinned disposable genesis only. Its version fixes the L1 profile, native and issued settlement
+terms and a minimum fee of one PFT base unit. The published M2 archive-only issue retains its
+post-activation non-atomic rejection receipt. An absent or paused amendment prevents inclusion of
+`pq_payment_v1`. The gateway uses its first configured validator to resolve a retry to its original record
+before relay. Unconfirmed PQ reservations expire after 64 blocks. Receipts can be queried during a pause.
+
+All six validators refused the mixed non-atomic proposal before H and without the amendment. At H and H+1
+they certified the deposit and one private spend. M4 supply reconciled at every one of its eight blocks, and
+all 1,734 R64 block hashes and roots matched on replay.
 
 ## M6. Recover notes and pay from the Python CLI · 6–10 days
 
