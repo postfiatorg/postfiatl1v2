@@ -127,9 +127,8 @@ def rotation_clearance(head):
             and row["outstanding_signed_rotation_rounds"] == [],
             f"Missing, stale or outstanding rotation clearance on validator-{i}.",
         )
-    require(
-        parent_of(fleet()) == parent_of(head), "Tip advanced during rotation checks."
-    )
+    if parent_of(fleet()) != parent_of(head):
+        raise ParentChanged("Tip advanced during rotation checks.")
     return rows
 
 
