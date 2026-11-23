@@ -109,8 +109,15 @@ export default function PqPayments() {
     const terms = review.terms;
     setReview(null);
     const wasm = await initWasm();
-    const prepared = await call('prove', review);
-    checkPublicTerms(JSON.parse(wasm.pq_review_payment(prepared.action_json)), terms, prepared.action_hash);
+    const prepared = review.action_json ? review : await call('prove', review);
+    try {
+      const comparison = JSON.parse(wasm.pq_review_payment(prepared.action_json));
+      checkPublicTerms(comparison, terms, prepared.action_hash);
+      await call('complete_review', {intent:prepared.intent, terms, comparison});
+    } catch (err) {
+      await refresh();
+      throw err;
+    }
     setReplacement(''); setAlsoReplace('');
     setResult({ intent:prepared.intent, state:'prepared' });
     try {
@@ -191,15 +198,18 @@ export default function PqPayments() {
       <Field label="Fee">{review.terms.fee} {review.terms.mode === 'Shield' || review.terms.asset === NATIVE ? 'PFT' : 'pfUSDC'} atoms · {review.terms.mode !== 'Shield' ? 'paid from private notes' : review.terms.asset === NATIVE ? 'deducted from deposit' : 'paid by depositor'}</Field>
       {review.terms.payer && <Field label="Depositor">{review.terms.payer}</Field>}
       {review.terms.sequence && <Field label="Account sequence">{review.terms.sequence}</Field>}
-      <button className="pq-primary" disabled={!!busy} onClick={() => work('Proving locally', confirm)}>Confirm and prove locally</button>
+      <button className="pq-primary" disabled={!!busy} onClick={() => work('Proving locally', confirm)}>{review.action_json ? 'Confirm saved payment and send' : 'Confirm and prove locally'}</button>
     </section>}
     {!migrating && wallet.payments.length > 0 && <section><h2>Saved payments</h2>{wallet.payments.map(p =>
       <div key={p.intent}><Field label={p.phase}>{p.intent}</Field>
+        {!p.reviewed ? <button disabled={!!busy} onClick={() => work('Reviewing', async () => {
+          setReview(await call('resume_review', {intent:p.intent}));
+        })}>Resume signer review</button> :
         <button disabled={!!busy} onClick={() => work('Submitting', async () => {
           try { setResult(await call('submit', {intent:p.intent, action_hash:p.action_hash})); }
           finally { await refresh(); }
-        })}>Send identical bytes</button>
-        <button disabled={!!busy} onClick={() => work('Checking finality', () => checkReceipt(p.intent))}>Poll payment</button>
+        })}>Send identical bytes</button>}
+        <button disabled={!!busy || !p.reviewed || p.phase === 'prepared'} onClick={() => work('Checking finality', () => checkReceipt(p.intent))}>Poll payment</button>
       </div>)}</section>}
     {busy && <p role="status">{busy} {progress}</p>}
     {selectedIntent && <section><div className="pq-heading"><h2>Validator receipt</h2><b data-testid="receipt-state">{result?.state || 'Check finality'}</b></div>

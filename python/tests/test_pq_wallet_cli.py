@@ -57,6 +57,64 @@ class PqIssuedFee(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Omit --fee"):
                 run(args)
 
+    def browser_fixture(self, stack, attempts):
+        from unittest.mock import patch, Mock
+        from types import SimpleNamespace
+        from postfiat_rpc.pq_browser import BrowserWallet, compact
+        from postfiat_rpc.client import private_action_hash
+        root = Path(stack.enter_context(tempfile.TemporaryDirectory()))
+        token = root / "token"
+        token.write_text("fixture")
+        args = SimpleNamespace(wallet=root, endpoint="127.0.0.1:1", validator_endpoint=None,
+            gateway="http://127.0.0.1:1", gateway_token_file=token, payer=None, account_key=None,
+            issue="aa"*48, orchard_exit_batch=None)
+        net = dict(chain_id="browser", genesis_hash="12"*48, protocol_version=1)
+        raw = (ROOT / "tools/pft-binius-shielded-pq/l1-vectors/pfusdc-exit.bin").read_bytes()
+        action = dict(kind="pq_payment_v1",body=base64.b64encode(raw).decode())
+        key = private_action_hash(compact(action))
+        terms = dict(asset=raw[7:55].hex(), mode="Exit", amount="1", fee="3", payer=None,
+                     sequence=None, recipient="pf"+"22"*20, migration=False)
+        def daemon(_, op, **fields):
+            if op == "checkpoint": return {"network":net}
+            if op == "balance": return {"attempts":[dict(action_hash=key, phase="prepared", unresolved=True)] if attempts else []}
+            if op == "saved_review": return dict(action=action, terms=terms, statement_id="ab"*48, migration=None)
+            raise AssertionError(op)
+        stack.enter_context(patch("postfiat_rpc.pq_browser.local", side_effect=daemon))
+        def open_wallet():
+            w = BrowserWallet(args, "http://localhost")
+            w.gateway = Mock()
+            return w
+        return open_wallet, action, key, terms
+
+    def test_first_send_requires_durable_review(self):
+        from postfiat_rpc.pq_browser import PQ_POOL_ID
+        with contextlib.ExitStack() as stack:
+            open_wallet, action, key, terms = self.browser_fixture(stack, False)
+            w = open_wallet()
+            with contextlib.closing(w.connection()) as db:
+                row = w.action_row(db, action, PQ_POOL_ID, statement_id="ab"*48)
+                with self.assertRaisesRegex(ValueError, "signer review"):
+                    w.send(db, row)
+                w.gateway.call.assert_not_called()
+
+    def test_startup_recovers_daemon_only_proof_once(self):
+        with contextlib.ExitStack() as stack:
+            open_wallet, action, key, terms = self.browser_fixture(stack, True)
+            cap = None
+            for _ in range(2):
+                w = open_wallet()
+                with contextlib.closing(w.connection()) as db:
+                    rows = db.execute("SELECT * FROM payments").fetchall()
+                    self.assertEqual(len(rows), 1)
+                    row = rows[0]
+                    self.assertEqual(json.loads(row["wire"]), action)
+                    self.assertEqual(json.loads(row["terms"]), terms)
+                    self.assertIsNone(row["review_hash"])
+                    self.assertRegex(row["capability"], "^[a-f0-9]{64}$")
+                    if cap: self.assertEqual(row["capability"], cap)
+                    cap = row["capability"]
+                    w.gateway.call.assert_not_called()
+
     def test_lost_or_refused_submission_retains_identical_bytes(self):
         import sqlite3
         from http.client import RemoteDisconnected
@@ -71,6 +129,8 @@ class PqIssuedFee(unittest.TestCase):
         wallet = object.__new__(BrowserWallet)
         wallet.account, wallet.home = "pf" + "11"*20, Path(".")
         action_hash = private_action_hash(wire)
+        row.update(network="test", terms="{}")
+        row["review_hash"] = wallet.review_hash(row)
 
         class Response(BaseHTTPRequestHandler):
             def log_message(self, *_):

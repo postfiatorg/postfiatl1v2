@@ -117,6 +117,10 @@ class BrowserWallet:
                 db.execute("ALTER TABLE payments ADD COLUMN statement_id TEXT")
             if "capability" not in {r["name"] for r in db.execute("PRAGMA table_info(payments)")}:
                 db.execute("ALTER TABLE payments ADD COLUMN capability TEXT")
+            columns = {r["name"] for r in db.execute("PRAGMA table_info(payments)")}
+            for column in ("terms", "review_hash"):
+                if column not in columns:
+                    db.execute(f"ALTER TABLE payments ADD COLUMN {column} TEXT")
             db.execute("CREATE UNIQUE INDEX IF NOT EXISTS migration_step ON payments(migration,network) "
                        "WHERE migration IS NOT NULL")
 
@@ -133,13 +137,14 @@ class BrowserWallet:
         check(row is not None, "Unknown wallet payment.")
         return row
 
-    def action_row(self, db, action, pool, migration=None, statement_id=None):
+    def action_row(self, db, action, pool, migration=None, statement_id=None, terms=None):
         wire = compact(action)
         intent = private_action_intent_id(**self.net, action_json=wire)
         payerless = pool == PQ_POOL_ID and base64.b64decode(action["body"], validate=True)[71] == 0
-        db.execute("INSERT INTO payments (intent,pool,wire,phase,migration,network,statement_id,capability) "
-                   "VALUES (?,?,?,?,?,?,?,?)", (intent, pool, wire, "prepared", migration,
-                   compact(self.net), statement_id, secrets.token_hex(32) if payerless else None))
+        db.execute("INSERT INTO payments (intent,pool,wire,phase,migration,network,statement_id,capability,terms) "
+                   "VALUES (?,?,?,?,?,?,?,?,?)", (intent, pool, wire, "prepared", migration,
+                   compact(self.net), statement_id, secrets.token_hex(32) if payerless else None,
+                   compact(terms) if terms else None))
         return self.row(db, intent)
 
     def request(self, row):
@@ -150,7 +155,17 @@ class BrowserWallet:
             body["capability"] = row["capability"]
         return body
 
+    @staticmethod
+    def review_hash(row):
+        return hashlib.sha384(compact([row["network"], row["wire"], row["terms"]]).encode()).hexdigest()
+
+    def require_review(self, row):
+        if row["pool"] == PQ_POOL_ID:
+            check(row["terms"] and row["review_hash"] == self.review_hash(row),
+                  "Complete signer review of the saved payment first.")
+
     def send(self, db, row):
+        self.require_review(row)
         request = self.request(row)
         if row["phase"] == "prepared" and "capability" in request:
             # Bind the hash before disclosing the proof. A lost authorization
@@ -178,6 +193,8 @@ class BrowserWallet:
 
     def receipt(self, db, intent):
         row = self.row(db, intent)
+        self.require_review(row)
+        check(row["phase"] != "prepared", "Send the reviewed payment before polling.")
         r = self.gateway.call("receipt", self.request(row), row["pool"])
         check(r["schema"] == SCHEMA and r["intent_id"] == intent and r["action_hash"] == private_action_hash(row["wire"]),
               "Receipt identity mismatch.")
@@ -247,7 +264,7 @@ class BrowserWallet:
                 db.execute("UPDATE payments SET phase=? WHERE intent=?", (phase, row["intent"]))
             if phase in ("prepared", "submitted", "replaced"):
                 wire = base64.b64decode(json.loads(row["wire"])["body"])
-                payments.append(dict(intent=row["intent"], action_hash=action_hash, phase=phase,
+                payments.append(dict(reviewed=bool(row["terms"] and row["review_hash"] == self.review_hash(row)), intent=row["intent"], action_hash=action_hash, phase=phase,
                                      unresolved=attempt.get("unresolved", False), unknown_order=attempt.get("unknown_order", False), asset=wire[7:55].hex(), spend=wire[71] == 0))
         return dict(quarantined=balance.get("quarantined"), payments=payments, issued_fee=fee, network=self.net, account=self.account, issue=self.issue,
                     address=local(self.home, "address")["address"], sequence=str(account["sequence"] + 1) if account else None,
@@ -354,8 +371,25 @@ class BrowserWallet:
             action = dict(kind=action["kind"], body=action["body"])
             check(private_action_hash(compact(action)) == metrics["action_hash"], "Prepared payment changed.")
             migration = self.exit_id() + "/shield" if terms["migration"] else None
-            row = self.action_row(db, action, PQ_POOL_ID, migration, metrics["statement_id"])
+            row = self.action_row(db, action, PQ_POOL_ID, migration, metrics["statement_id"], terms)
             return dict(intent=row["intent"], action_json=row["wire"], action_hash=metrics["action_hash"])
+        if cmd in ("resume_review", "complete_review"):
+            row = self.row(db, body["intent"])
+            check(row["pool"] == PQ_POOL_ID and row["phase"] != "final", "No pending PQ payment.")
+            check(row["terms"], "Original terms unavailable. Enter the intended terms to review this saved payment.")
+            terms = json.loads(row["terms"])
+            action_hash = private_action_hash(row["wire"])
+            if cmd == "resume_review":
+                return dict(intent=row["intent"], terms=terms, action_json=row["wire"], action_hash=action_hash)
+            expected = dict(mode=terms["mode"], asset=terms["asset"], fee=terms["fee"],
+                payer=terms["payer"], sequence=terms["sequence"], action_hash=action_hash,
+                mint=terms["amount"] if terms["mode"] == "Shield" else "0",
+                exit=terms["amount"] if terms["mode"] == "Exit" else "0",
+                recipient=terms["recipient"] if terms["mode"] == "Exit" else None)
+            check(body.get("terms") == terms and body.get("comparison") == expected,
+                  "Signer review differs from the saved terms or payment.")
+            db.execute("UPDATE payments SET review_hash=? WHERE intent=?", (self.review_hash(row), row["intent"]))
+            return dict(reviewed=True)
         if cmd == "submit":
             row = self.row(db, body["intent"])
             check(row["pool"] == PQ_POOL_ID and body["action_hash"] == private_action_hash(row["wire"]),
