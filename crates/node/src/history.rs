@@ -1745,6 +1745,7 @@ fn build_history_checkpoint_state_from_sources(
                 ),
             ));
         };
+        let parent_numbered_count = crate::solana_exit_governance::numbered_parent_count(&governance);
         activate_validator_registry_updates_for_height(
             &genesis,
             &mut validator_registry,
@@ -1765,6 +1766,7 @@ fn build_history_checkpoint_state_from_sources(
             block,
             archive_entry,
             ArchivedReplayState {
+                parent_numbered_count,
                 governance: &mut governance,
                 ledger: &mut ledger,
                 shielded: &mut shielded,

@@ -43,7 +43,10 @@ pub(super) fn needs_signatures(
         .iter()
         .any(|a| solana_exit::is_decision(&a.kind))
         || ((!batch.validator_registry_updates.is_empty()
-            || batch.amendments.iter().any(changes_numbered_set)
+            || batch
+                .amendments
+                .iter()
+                .any(|a| a.kind == GOVERNANCE_KIND_VALIDATOR_SET)
             || registers_descriptor(batch))
             && solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
                 .is_some_and(|h| h <= height))
@@ -144,9 +147,23 @@ pub(super) fn apply_decision(
     )
 }
 
+/// A numbered amendment clears explicit membership. It preserves the parent IDs
+/// only if those IDs are already exactly the requested numbered set.
+pub(super) fn numbered_parent_count(governance: &GovernanceState) -> Option<u32> {
+    let count = governance.active_validator_count;
+    let ids = &governance.active_validators;
+    (ids.is_empty()
+        || (ids.len() == count as usize
+            && ids
+                .iter()
+                .enumerate()
+                .all(|(i, id)| *id == format!("validator-{i}"))))
+    .then_some(count)
+}
+
 /// Ordinary validator-set amendments replace the members with the numbered local set.
 /// A real membership change has no registry transition witness for the frozen checker.
-fn changes_numbered_set(a: &GovernanceAmendment) -> bool {
+fn changes_declared_numbered_set(a: &GovernanceAmendment) -> bool {
     a.kind == GOVERNANCE_KIND_VALIDATOR_SET
         && (a.value as usize != a.validators.len()
             || local_validator_ids(a.value).is_ok_and(|ids| ids != a.validators))
@@ -207,7 +224,7 @@ fn verify_open_history(governance: &GovernanceState) -> Result<(), String> {
                 .amendments
                 .iter()
                 .find(|a| a.amendment_id == record.amendment_id)
-                .is_none_or(changes_numbered_set)
+                .is_none_or(changes_declared_numbered_set)
         {
             return Err(format!(
                 "Solana exit checker cannot cross validator-set amendment at height {}",
@@ -224,11 +241,15 @@ pub(super) fn verify_rotation_interlock(
     genesis: &Genesis,
     governance: &GovernanceState,
     ledger: &LedgerState,
+    parent_numbered_count: Option<u32>,
     batch: &GovernanceActionBatch,
     height: u64,
 ) -> io::Result<()> {
     let updates = &batch.validator_registry_updates;
-    let changes_set = batch.amendments.iter().any(changes_numbered_set);
+    let changes_set = batch
+        .amendments
+        .iter()
+        .any(|a| a.kind == GOVERNANCE_KIND_VALIDATOR_SET && Some(a.value) != parent_numbered_count);
     if (updates.is_empty() && !changes_set)
         || solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
             .is_none_or(|h| height < h)

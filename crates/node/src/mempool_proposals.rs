@@ -3351,6 +3351,7 @@ fn build_governance_batch_proposal(
         .checked_add(1)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
     let parent_hash = chain_tip.block_hash.clone();
+    let parent_numbered_count = crate::solana_exit_governance::numbered_parent_count(&governance);
     let due_activations = activate_due_validator_registry_updates_for_commit(
         store,
         &genesis,
@@ -3362,7 +3363,9 @@ fn build_governance_batch_proposal(
         .unwrap_or(read_validator_registry_file(
             &store.data_dir().join(VALIDATOR_REGISTRY_FILE),
         )?);
-    crate::solana_exit_governance::verify_rotation_interlock(&genesis, &governance, &ledger, &batch, block_height)?;
+    crate::solana_exit_governance::verify_rotation_interlock(
+        &genesis, &governance, &ledger, parent_numbered_count, &batch, block_height,
+    )?;
     verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, block_height)?;
 
     verify_storage_commitment_action_readiness(store, &genesis, &batch, &chain_tip)?;

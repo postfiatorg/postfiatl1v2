@@ -1930,6 +1930,7 @@ pub(super) fn verify_replayed_blocks_with_exports(
                 ),
             ));
         };
+        let parent_numbered_count = crate::solana_exit_governance::numbered_parent_count(&governance);
         activate_validator_registry_updates_for_height(
             genesis,
             &mut validator_registry,
@@ -1950,6 +1951,7 @@ pub(super) fn verify_replayed_blocks_with_exports(
             block,
             archive_entry,
             ArchivedReplayState {
+                parent_numbered_count,
                 governance: &mut governance,
                 ledger: &mut ledger,
                 shielded: &mut shielded,
@@ -3052,6 +3054,7 @@ pub(super) fn replayed_receipt_matches_persisted(
 }
 
 pub(super) struct ArchivedReplayState<'a> {
+    pub(super) parent_numbered_count: Option<u32>,
     pub(super) governance: &'a mut GovernanceState,
     pub(super) ledger: &'a mut LedgerState,
     pub(super) shielded: &'a mut ShieldedState,
@@ -3088,7 +3091,9 @@ pub(super) fn replay_archived_payload(
         }
         "governance" => {
             let batch: GovernanceActionBatch = parse_archived_payload(block, archive_entry)?;
-            crate::solana_exit_governance::verify_rotation_interlock(genesis, state.governance, state.ledger, &batch, block.header.height)?;
+            crate::solana_exit_governance::verify_rotation_interlock(
+                genesis, state.governance, state.ledger, state.parent_numbered_count, &batch, block.header.height,
+            )?;
             let has_v2_authorization = batch
                 .amendments
                 .iter()

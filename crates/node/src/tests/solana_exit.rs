@@ -771,6 +771,7 @@ fn certified_fork(output: Option<&Path>) {
             &block,
             &entry,
             crate::block_replay_wallet::ArchivedReplayState {
+                parent_numbered_count: crate::solana_exit_governance::numbered_parent_count(&gov),
                 governance: &mut gov,
                 ledger: &mut ledger,
                 shielded: &mut shielded,
@@ -1121,6 +1122,7 @@ fn exit_review_close_drain_rotate_and_reopen() {
             &block,
             &entry,
             crate::block_replay_wallet::ArchivedReplayState {
+                parent_numbered_count: crate::solana_exit_governance::numbered_parent_count(gov),
                 governance: &mut rotated,
                 ledger: &mut ledger.clone(),
                 shielded: &mut source.read_shielded().unwrap(),
@@ -1264,4 +1266,71 @@ fn exit_review_route_waits_for_committed_close() {
     );
     reader.join().unwrap();
     fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review_numbered_set_uses_parent_membership() {
+    let (g, gov, ledger) = scheduled_parent(true);
+    let parent = active_validator_ids(&gov).unwrap();
+    assert_eq!(parent.len(), 6);
+    let five = local_validator_ids(5).unwrap();
+    let amendment = ratify_governance_amendment_with_lifecycle(
+        &cobalt_domain(&g),
+        &EssentialSubsetConfig::all_of(five.clone()),
+        GOVERNANCE_KIND_VALIDATOR_SET,
+        5,
+        five,
+        GovernanceAmendmentLifecycle {
+            activation_height: H + 1,
+            veto_until_height: 0,
+            paused: false,
+        },
+    )
+    .unwrap();
+    let batch = build_governance_action_batch(&g, vec![amendment], vec![]).unwrap();
+    assert!(crate::solana_exit_governance::needs_signatures(
+        &g,
+        &batch,
+        H + 1
+    ));
+    assert!(crate::solana_exit_governance::verify_rotation_interlock(
+        &g,
+        &gov,
+        &ledger,
+        crate::solana_exit_governance::numbered_parent_count(&gov),
+        &batch,
+        H + 1,
+    )
+    .is_err());
+    let committee = LocalCommittee::new(&parent);
+    assert!(
+        verify_live_signed_governance_batch(&g, &gov, &committee.registry, &batch, H + 1).is_err()
+    );
+    let mut same = ratify_governance_amendment_with_lifecycle(
+        &cobalt_domain(&g),
+        &EssentialSubsetConfig::all_of(parent.clone()),
+        GOVERNANCE_KIND_VALIDATOR_SET,
+        6,
+        parent,
+        GovernanceAmendmentLifecycle {
+            activation_height: H + 1,
+            veto_until_height: 0,
+            paused: false,
+        },
+    )
+    .unwrap();
+    let unsigned = build_governance_action_batch(&g, vec![same.clone()], vec![]).unwrap();
+    assert!(crate::solana_exit_governance::needs_signatures(
+        &g,
+        &unsigned,
+        H + 1
+    ));
+    assert!(
+        verify_live_signed_governance_batch(&g, &gov, &committee.registry, &unsigned, H + 1)
+            .is_err()
+    );
+    committee.sign(&gov, &mut same, H + 1);
+    let signed = build_governance_action_batch(&g, vec![same], vec![]).unwrap();
+    verify_live_signed_governance_batch(&g, &gov, &committee.registry, &signed, H + 1).unwrap();
 }
