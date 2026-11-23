@@ -51,7 +51,7 @@ from exit_segments import (
     validate_segment,
     committee,
 )
-from exit_precheck import inspect_vault, token_atoms, parent_of, qualify_path
+from exit_precheck import inspect_vault, recipient_atoms, parent_of, qualify_path
 from exit_proof import available, prove
 
 ATA = pk("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
@@ -603,7 +603,7 @@ def reclaim_completed(c, work):
 def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
     if owner is not None:
         ata = pda(ATA, bytes(owner), bytes(TOKEN), bytes(MINT))
-        token_atoms(c.account(ata), owner, allow_empty=True)
+        recipient_atoms(ata, c.account(ata), owner)
     reclaim_completed(c, work)
     check_work_capacity(work)
     vals, proof = prove(kind, witness, work)
@@ -627,7 +627,7 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
     ixs = [set_compute_unit_limit(400_000)]
     if owner is not None:
         destination = c.account(ata)
-        token_atoms(destination, owner, allow_empty=True)
+        recipient_atoms(ata, destination, owner)
         burn_marker = marker(witness["receipt"]["tx_id"])
         rent += rent_shortfall(c, c.account(burn_marker), 1, VERIFIER)
         rent += rent_shortfall(c, destination, 165, TOKEN)

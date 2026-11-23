@@ -92,7 +92,7 @@ def token_deltas(tx, owner=PHANTOM):
 
 
 def balances(c):
-    from exit_precheck import token_atoms
+    from exit_precheck import recipient_atoms
 
     addr = pda(ATA, bytes(PHANTOM), bytes(TOKEN), bytes(MINT))
     acc = c.account(addr)
@@ -106,7 +106,7 @@ def balances(c):
     )
     return dict(
         ata=str(addr),
-        usdc_atoms=token_atoms(acc, PHANTOM, allow_empty=True),
+        usdc_atoms=recipient_atoms(addr, acc, PHANTOM),
         pfusdc_atoms=int(line[0]["balance"]),
     )
 
