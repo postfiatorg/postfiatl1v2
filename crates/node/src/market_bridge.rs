@@ -1315,6 +1315,34 @@ pub(super) fn vault_bridge_route_at_height(
         &record.profile_hash,
         u64::from(route.route_epoch),
     )?;
+    let policy_hash = if profile.vault_bridge_route_policy_hash.is_empty() {
+        &profile.valuation_policy_hash
+    } else {
+        &profile.vault_bridge_route_policy_hash
+    };
+    let (nav, trust_class) = if is_solana {
+        let bucket = bucket.ok_or_else(|| deny("Solana source bucket is missing".into()))?;
+        (VaultBridgeNavReport::SolanaExit {
+            family_nav_profile: FamilyNavProfileReport {
+                id: profile.profile_id.clone(),
+                source_class: profile.source_class.clone(),
+                verifier_kind: profile.verifier_kind.clone(),
+                policy_hash: policy_hash.clone(),
+            },
+            source_backing: SolanaSourceBackingReport {
+                revision: route.route_epoch,
+                bucket_id: bucket.bucket_id.clone(),
+                policy_hash: bucket.policy_hash.clone(),
+            },
+        }, postfiat_types::solana_exit::SETTLEMENT_TRUST_CLASS)
+    } else {
+        (VaultBridgeNavReport::Route {
+            nav_profile_id: profile.profile_id.clone(),
+            nav_profile_source_class: profile.source_class.clone(),
+            nav_profile_verifier_kind: profile.verifier_kind.clone(),
+            nav_profile_policy_hash: policy_hash.clone(),
+        }, route.route_trust_class())
+    };
     Ok(VaultBridgeRouteReport {
         beacon_finality_anchor,
         burns_open: is_solana.then(|| {
@@ -1331,15 +1359,8 @@ pub(super) fn vault_bridge_route_at_height(
         governance_amendment_id: amendment.amendment_id.clone(),
         governance_activation_height: amendment.activation_height,
         governance_route_epoch: amendment.value,
-        nav_profile_id: profile.profile_id.clone(),
-        nav_profile_source_class: profile.source_class.clone(),
-        nav_profile_verifier_kind: profile.verifier_kind.clone(),
-        nav_profile_policy_hash: if profile.vault_bridge_route_policy_hash.is_empty() {
-            profile.valuation_policy_hash.clone()
-        } else {
-            profile.vault_bridge_route_policy_hash.clone()
-        },
-        route_trust_class: route.route_trust_class().to_string(),
+        nav,
+        route_trust_class: trust_class.to_string(),
         live_value_enabled: route.live_value_enabled(),
         active: true,
     })

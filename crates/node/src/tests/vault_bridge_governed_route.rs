@@ -1670,7 +1670,7 @@ fn route_discovery_promotes_verifier_without_changing_api_or_accounting() {
     assert_eq!(profile, report.profile);
     assert_eq!(
         NAV_PROFILE_VERIFIER_SP1_GROTH16,
-        report.nav_profile_verifier_kind
+        serde_json::to_value(&report).unwrap()["nav_profile_verifier_kind"]
     );
     assert_eq!(
         postfiat_types::VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN,

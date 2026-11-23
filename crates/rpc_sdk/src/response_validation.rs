@@ -1774,22 +1774,43 @@ fn validate_vault_bridge_route_result(result: &Value) -> Result<(), RpcResponseV
         ));
     }
 
-    clean_string_field(result, "nav_profile_id")?;
-    clean_string_field_allow_empty(result, "nav_profile_source_class")?;
-    clean_string_field(result, "nav_profile_verifier_kind")?;
-    let policy_hash = clean_string_field_allow_empty(result, "nav_profile_policy_hash")?;
+    use postfiat_types::solana_exit;
+    let is_solana_exit = profile_hash == solana_exit::PROFILE_HASH;
+    let (policy_hash, expected_trust_class) = if is_solana_exit {
+        if serde_json::from_value::<postfiat_types::VaultBridgeRouteProfileV1>(profile.clone()).ok()
+            != Some(solana_exit::descriptor())
+        {
+            return Err(invalid_result("profile", "expected the pinned revision-8 descriptor"));
+        }
+        let backing = field(result, "source_backing")?;
+        if u64_field(backing, "revision")? != u64::from(route_epoch) {
+            return Err(invalid_result("source_backing.revision", "expected the source revision"));
+        }
+        expect_string_eq(backing, "bucket_id", solana_exit::BUCKET)?;
+        expect_string_eq(backing, "policy_hash", solana_exit::POLICY)?;
+        bool_field(result, "burns_open")?;
+        let family = field(result, "family_nav_profile")?;
+        clean_string_field(family, "id")?;
+        clean_string_field_allow_empty(family, "source_class")?;
+        clean_string_field(family, "verifier_kind")?;
+        (clean_string_field_allow_empty(family, "policy_hash")?, solana_exit::SETTLEMENT_TRUST_CLASS)
+    } else {
+        clean_string_field(result, "nav_profile_id")?;
+        clean_string_field_allow_empty(result, "nav_profile_source_class")?;
+        clean_string_field(result, "nav_profile_verifier_kind")?;
+        let trust_class = if evidence_tier == postfiat_types::VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN {
+            postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_TRUSTLESS_FINALITY
+        } else {
+            postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_CONTROLLED
+        };
+        (clean_string_field_allow_empty(result, "nav_profile_policy_hash")?, trust_class)
+    };
     if !policy_hash.is_empty() && !is_lower_hex(policy_hash) {
         return Err(invalid_result(
-            "nav_profile_policy_hash",
+            if is_solana_exit { "family_nav_profile.policy_hash" } else { "nav_profile_policy_hash" },
             "expected empty or lowercase hex characters",
         ));
     }
-
-    let expected_trust_class = if evidence_tier == postfiat_types::VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN {
-        postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_TRUSTLESS_FINALITY
-    } else {
-        postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_CONTROLLED
-    };
     expect_string_eq(result, "route_trust_class", expected_trust_class)?;
     bool_field(result, "live_value_enabled")?;
     expect_bool_eq(result, "active", true)?;

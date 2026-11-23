@@ -66,6 +66,7 @@ pub fn active(
 }
 
 pub const OPEN: &str = "solana_exit_r8_open";
+pub const SETTLEMENT_TRUST_CLASS: &str = "VALIDATOR_ATTESTED_SETTLEMENT";
 pub const CLOSE: &str = "solana_exit_r8_close";
 /// The frozen revision-8 tag-3 binding uses the finalized WAN block at 1753.
 /// The route profile's activation height is a different field.

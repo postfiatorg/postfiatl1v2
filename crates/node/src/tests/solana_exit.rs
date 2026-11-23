@@ -306,7 +306,10 @@ fn ethereum_series_selects_bucket_policy_across_epochs() {
     let series = lookup(&id.asset_id);
     assert_eq!(series.profile.route_epoch, 10);
     assert_eq!(series.profile_hash, bucket.policy_hash);
-    assert_eq!(series.nav_profile_policy_hash, bucket.policy_hash);
+    assert_eq!(
+        serde_json::to_value(series).unwrap()["nav_profile_policy_hash"],
+        bucket.policy_hash
+    );
     assert_eq!(lookup(solana_exit::FAMILY).profile_hash, ETH_HASH);
 }
 
@@ -960,6 +963,17 @@ fn exit_review_route_distinguishes_family_nav_and_settlement() {
     assert_eq!(sol["source_backing"]["bucket_id"], solana_exit::BUCKET);
     assert_eq!(sol["source_backing"]["policy_hash"], solana_exit::POLICY);
     assert_eq!(family["route_trust_class"], "TRUSTLESS_FINALITY");
+    use postfiat_rpc_sdk::{success_response, validate_health_response, RpcResponseKind};
+    let validate = |report| {
+        validate_health_response(
+            &success_response("route", report, vec![]).unwrap(),
+            RpcResponseKind::VaultBridgeRoute,
+        )
+    };
+    validate(&sol).unwrap();
+    let mut misleading = sol.clone();
+    misleading["route_trust_class"] = "TRUSTLESS_FINALITY".into();
+    assert!(validate(&misleading).is_err());
 }
 
 #[test]
