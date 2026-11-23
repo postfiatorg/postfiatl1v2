@@ -98,7 +98,7 @@ block; the metadata is written last, so reads use the archive scan until then.
 Index schema `postfiat-account-tx-index-v5` (disk index
 `postfiat-account-tx-disk-index-v5`, account files
 `postfiat-account-tx-account-head-v5` and `postfiat-account-tx-account-chunk-v5`)
-uses the chunked layout and includes public PQ deposits, exit credits and fee sponsorship. v4 rows differ from v3 only in the
+uses the chunked layout and includes public PQ deposits and exit credits. v4 rows differ from v3 only in the
 `escrow_finish` row, whose `from` is now the recipient who signed and paid it
 (v3 named the owner). Schema v3 introduced the chunked layout; v2 added
 `payment_v2` memo contents and shielded-withdrawal rows. After installing a binary with a new schema, run

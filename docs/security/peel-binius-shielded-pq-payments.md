@@ -23,6 +23,13 @@ ceiling and < 50 ms single-core validator settlement budget without fixed small
 rings, interactive recipient rounds, transparent deposit-opening trapdoors, or
 on-chain signatures on shielded-to-shielded transfers.
 
+For L1 settlement, the issued-asset payment and exit profile uses the existing
+public inner fee in atoms of the source series. The transcript binds the asset,
+tree epoch and unsigned outer fields to the inner header. The collector receives
+those atoms outside the pool. Only a deposit includes an account signature.
+A deposit or exit shows its public account and amount. A payment shows its
+asset, fee, inclusion time and tree and omits the sender account.
+
 Core architectural, cryptographic, and empirical contributions:
   1. Unified ZK-Shielded Lifecycle Over a Depth-24 Global Accumulator
      (2^24 = 16,777,216 Coin Leaves):

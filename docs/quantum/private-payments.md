@@ -18,12 +18,11 @@ Neither has a known quantum attack beyond the generic speed-up that larger param
 
 A PFSH02 payment spends two private notes and creates two new ones. The chain sees:
 
-- that a payment happened, its fee and the time it was included;
+- the exact asset, fee, inclusion time and tree anchor;
 - two nullifiers, which stop the same note being spent twice without saying which note it was;
 - two new note commitments and two encrypted envelopes, one for the recipient and one for change.
 
-The chain does not see the sender, the recipient or any amount. All notes share one pool, so a spent note could be
-any earlier note of the same asset. Deposits into the pool and exits out of it show their public account and
+The payment carries no public sender account, key, sequence or signature. The transferred amount and recipient stay inside the notes. Each source series has its own tree. Deposits into the pool and exits out of it show their public account and
 amount, as any bridge between public and private balances must.
 
 The recipient finds their payment by trial-decrypting envelopes with their own ML-KEM key. Nobody else can tell

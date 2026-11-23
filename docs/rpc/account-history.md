@@ -78,15 +78,14 @@ the archived block payload, so they are available for every finalized
 
 ## PQ payments on the disposable development chain
 
-Accepted `pq_payment_v1` actions report the following public effects. Amounts are in units of the selected issue or native PFT. Fees are always in PFT atoms.
+Accepted `pq_payment_v1` actions expose the public deposit or exit account and the amount in atoms of the selected asset.
 
 | Account history role | Amount | Fee and sequence |
 | --- | --- | --- |
 | `shielded_deposit` | Exact public debit into the pool | The native fee comes from the deposited value. A pfUSDC depositor pays the PFT fee separately. The row records the depositor's sequence. |
-| `shielded_fee` | Zero | A public sponsor pays the pfUSDC payment or exit fee at the recorded sequence. |
-| `shielded_withdrawal` | Exact credit from the pool | The native fee comes from the private balance. A pfUSDC exit has a separate sponsor row. The credit uses sequence zero. |
+| `shielded_withdrawal` | Exact credit from the pool | Private notes pay the fee in atoms of the selected asset. The credit uses sequence zero. |
 
-A native internal payment has no public account row. The receipt records its PFT burn. Account history exposes no note owner.
+Internal payments have no account history row. Their asset, fee, inclusion time and tree are public. The PQ pair records the fee. Native fees burn and issued fees enter the series collector. The receipt's chain-wide burn fields count PFT only.
 
 ## Shielded Withdrawals
 

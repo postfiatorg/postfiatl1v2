@@ -21,7 +21,7 @@ effective policy from finalized state. A public pool selector reveals the asset 
 Bob receives and exits the same issue Alice deposited. Mixing assets inside one anonymity set or exchanging
 pfUSDC backings would need a different relation and accounting review.
 
-**Two proof profiles.** Keep the published stand-alone bytes and transcript as the M1 compatibility vector.
+**Proof profiles.** Keep the published stand-alone bytes and transcript as the M1 compatibility vector.
 For settlement use the same PFSH02 header and circuit with a separately identified L1 transcript profile. Keep
 the spec's `tx_ctx = SHA-384("PFT-SH-TXCTX-V2" || header)`. For the L1 profile feed a new domain-separated
 SHA-384 digest of the canonical L1 context and `tx_ctx` into the statement's 48-byte context slot before
@@ -31,13 +31,11 @@ fixed-width or length-prefixed canonical bytes for every field. A signed outer w
 ordinary private spend free of this binding. Give the L1 profile fresh Rust and Go vectors and review the
 changed transcript before enabling it. Raw M1 proofs stay confined to the fixture chain.
 
-**Fee unit.** PFT fees burn. For a native payment the circuit fee is PFT taken from its note balance,
-including on deposit. For pfUSDC set the circuit fee to zero. Charge the network's minimum PFT fee or more to
-one explicit public payer in the *same* atomic action. On a pfUSDC deposit the depositor also pays, using one
-account signature. On a private transfer or exit a relayer can pay using a fee-only ML-DSA-65 authorization
-tied to the statement, fee and next sequence. That signature authorizes only the PFT fee. The proof authorizes
-the spend. Show who pays before proving. A user paying their own fee exposes their public account. This design
-avoids a second proof and keeps pfUSDC reserves in pfUSDC units.
+**Fee unit.** The depositor signs a shield. For an issued deposit the depositor pays PFT publicly and the full issued amount enters the pool. Internal payments and exits pay the proved inner fee from notes of the selected asset. The public PFT fee field is zero and the wire omits the entire authorization block. PFT fees burn. Issued fees move from the private reserve to the public `collected_private_fees` balance of the exact source series.
+
+The signed rehearsal kind `pq_payment_rehearsal_v1:fee:<atoms>` sets a positive minimum for its pinned source series. Its amendment value still specifies the activation height. A payment may pay more. The bare activation kind leaves issued payments and exits disabled. Governance can withdraw collected atoms with `pq_private_fee_withdraw_v1:<recipient>`, using the amendment value as the amount. The recipient needs an eligible trustline. The series and family supply include collector custody throughout.
+
+A deposit reveals the depositor and amount. An exit reveals the destination and amount. A payment reveals the asset, fee, inclusion time and tree. It carries no sender account or public signing key. Observers can still correlate timing and public edges.
 
 **Reference material.** Wire, relations, R0–R6, rollover, measured costs and security dependencies are in the
 [PFSH02 specification](../security/peel-binius-shielded-pq-payments.md) and
@@ -127,7 +125,7 @@ directly in local-chain tests.
 
 The outer wire is `PFPQ`, one-byte version, profile and mode, 48-byte asset ID (zero for PFT,
 otherwise the source-series digest), LE u64 input epoch and public PFT fee, then a one-byte
-authorization flag. When set, it carries the 20-byte payer, LE u64 sequence, 1,952-byte public
+authorization flag. Profile 2 applies only to issued payments and exits. All deposits and native payments and exits use profile 1. Only deposits set the authorization flag. When set, it carries the 20-byte payer, LE u64 sequence, 1,952-byte public
 key and 3,309-byte signature. The exact PFSH02 inner record follows. The eight
 [`l1-vectors`](../../tools/pft-binius-shielded-pq/l1-vectors) cover both assets and a funded top-up.
 At M2, validators verified the L1 profile on the pinned disposable genesis and returned
@@ -210,13 +208,12 @@ replay agreed at the certified tip. The exact R64 replay matched all 1,734 archi
   defines this extended preimage identically for signer and verifier. The raw context already binds both
   output commitments and both envelopes. The signer builds or independently checks those commitments against
   the locally intended recipient and amount before releasing the signature. Signatures, proof bytes and
-  transaction IDs are outside their own preimage. Give fee-only sponsorship its own signing domain. A signed
+  transaction IDs are outside their own preimage. A signed
   shield authorization has no ordinary burn, transfer or legacy-ingress interpretation.
 - [x] For each accepted action update the live reserve by `+v_mint − v_unshield − inner_fee` using checked
   wide intermediates. Shield debits the signed source by exactly the mint amount. Internal payments have no
   public recipient. Exit credits the named public recipient by exactly the exit amount. On native PFT require
-  the active minimum fee and book the inner fee once to the chain's fee burn accounting. For pfUSDC burn the
-  separately signed PFT fee and preserve total issued units. Charge and advance an authorizing account once.
+  the active minimum fee and book the inner fee once to the chain's fee burn accounting. For pfUSDC burn the public PFT fee on deposit. On pay and exit, credit the inner fee to the series collector. Only deposits advance an account sequence.
   Validate total available funds including minimum balance, applicable fees, trustline restrictions and
   account creation rules before applying any change. Use the normal native recipient-creation cost where
   supported and refuse an unfundable fresh recipient. Require an eligible existing account and authorized line
@@ -236,11 +233,11 @@ replay agreed at the certified tip. The exact R64 replay matched all 1,734 archi
   closed native fixture, public PFT plus live PQ PFT plus cumulative burned PFT must equal starting supply.
   Test unfunded or unsigned mint, reused sequence, substituted outputs/envelopes, standalone burn replay,
   sibling issue, wrong recipient, underflow, overflow, frozen/unauthorized/full line, required disclosure and
-  exhausted sponsor. Failed actions and failed atomic batches leave fees, balances, keys, sequence, PQ state
+  an unconfigured or insufficient fee. Failed actions and failed atomic batches leave fees, balances, keys, sequence, PQ state
   and history consistent. Include a cap-at-limit issuance attempt with most units already in the PQ pool.
 
 M4 reuses the M2 signing bytes. The raw header digest binds the mint, inner fee, output commitments and
-envelopes. The length-framed L1 context binds the source's next sequence and public PFT fee. The signer
+envelopes. On shield, the length-framed L1 context also binds the depositor's next sequence and public PFT fee. The signer
 recomputes the two intended commitments and checks its locally sealed envelopes before signing.
 
 Settlement is enabled on the pinned disposable genesis for native PFT and one governed pfUSDC source series.
@@ -335,7 +332,7 @@ latter run.
 **Compatibility and admission.** The current block header certifies one batch. The shared meter also
 processes multiple batches in one call, including non-atomic attempts. The signed rehearsal amendment
 enables the pinned disposable genesis only. Its version fixes the L1 profile, native and issued settlement
-terms and a minimum fee of one PFT base unit. The published M2 archive-only issue retains its
+terms. The optional signed fee suffix sets the minimum issued spend fee in source-series atoms. The published M2 archive-only issue retains its
 post-activation non-atomic rejection receipt. An absent or paused amendment prevents inclusion of
 `pq_payment_v1`. The gateway uses its first configured validator to resolve a retry to its original record
 before relay. Unconfirmed PQ reservations expire after 64 blocks. Receipts can be queried during a pause.
@@ -410,9 +407,9 @@ rerun on CPU 12 took 36.41 ms for that check and passed all seven original gates
   canonical statement vectors as Rust and Python. Build the browser's local, authenticated wallet-daemon
   connection with origin and session checks. Keep witnesses and recipient scanning on the user device. WASM
   can encode/check addresses and review/sign exact account terms locally. A hosted proxy never receives the
-  wallet seed. Show public and private balances per issue, fee payer, proof progress, finality and the three
+  wallet seed. Show public and private balances per issue, fee denomination, proof progress, finality and the three
   actions **Shield**, **Pay**, **Unshield**.
-- [x] Show the asset/issue, fees, public deposit or exit account and amount, and any sponsor. The submission
+- [x] Show the asset/issue, fees, and public deposit or exit account and amount. The submission
   service can observe the caller and timing. Use measured activity for the selected issue and route when
   applying the [observer model](../privacy/observer-inference-model.md) and
   [privacy floors](../privacy/floor-calibration.md). Show “hidden, small pool” where appropriate. A large

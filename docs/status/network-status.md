@@ -15,6 +15,8 @@ open, and the software has not been externally audited. Do not put real value
 on it. See [Security](../security/index.md) for the audit and release-gate
 position.
 
+The PFSH02 branch allows activation only on its disposable rehearsal genesis. In this design deposits and exits expose the public account and amount. A payment exposes its asset, fee, inclusion time and tree. Its sender account stays off the wire. [Private payments](../quantum/private-payments.md).
+
 ## Network facts
 
 | Item | Value | Source |

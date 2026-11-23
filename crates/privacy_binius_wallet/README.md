@@ -16,7 +16,7 @@ The validator must have the M5 rehearsal amendment and private-action admission 
 3. Run `shield --asset PFT --amount 100 --fee 1 --payer ACCOUNT --account-key /secure/account.json
    --sequence NEXT`. Amounts and fees are integer atoms. The wallet checks the named public
    payer against the local ML-DSA-65 account key file. For pfUSDC use the exact governed
-   source-series ID and supply the public PFT fee payer, signing key and next sequence for all modes.
+   source-series ID. Only a shield needs the deposit account, signing key and next sequence. A payment or exit selects notes covering amount plus fee in that same series.
 4. Run `pay --asset PFT --amount 30 --fee 1 --to RECEIVE_ADDRESS`, or `unshield --asset PFT
    --amount 18 --fee 1 --to PUBLIC_ACCOUNT`. The client prints the fee source before proving.
    It returns the intent ID, proof time and prover peak RSS. `receipt INTENT_ID` reads admission

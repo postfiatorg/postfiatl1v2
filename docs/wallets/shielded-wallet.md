@@ -17,8 +17,7 @@ PYTHONPATH=python python3 -m postfiat_rpc pq-wallet --wallet "$wallet_dir" --end
 ```
 
 Open the link in the pairing file, select **Sync**, then choose **Shield**, **Pay** or **Unshield**.
-The signer review shows the issue, amount, recipient and PFT fee source. The daemon proves and signs
-on your device. **Check finality** verifies the receipt against your trusted validator. The privacy
+For a wallet used only to pay or unshield, omit `--payer` and `--account-key`. Review shows the issue, amount, recipient and fee unit. A deposit needs a signature and pays PFT. A payment or exit pays from notes of its own asset. The daemon proves locally. **Check finality** verifies the receipt against your trusted validator. The privacy
 panel counts recent payments for the selected issue and action. The gateway can observe the caller and timing.
 
 To migrate a policy-permitted issued-asset note, supply the existing Orchard wallet’s public
