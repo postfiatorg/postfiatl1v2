@@ -1,10 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 umask 0022
-if [[ ${1:-} == --probe ]]; then
-  mkdir "$2/bin"
-  exit
-fi
 if [[ ${1:-} == --help ]]; then
   echo 'Usage: install-exit-runtime.sh APP PROOF_DIR ANCHOR_WITNESS < reviewed-code.tar'
   exit
