@@ -145,6 +145,7 @@ def prepare(out, *, allow_closed=False):
         and q["genesis_hash"] == head["genesis_hash"],
         "Unexpected fee quote",
     )
+    require(q.get("sender_meets_reserve_after_fee") is True, "Insufficient native reserve after fee.")
     return dict(
         before=before,
         parent=head,

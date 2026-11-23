@@ -49,6 +49,7 @@ class HandoffTest(unittest.TestCase):
                     source=source,
                     protocol_version=1,
                     minimum_fee=1,
+                    sender_meets_reserve_after_fee=True,
                     sequence=2,
                     chain_id="test",
                     genesis_hash="00" * 48,

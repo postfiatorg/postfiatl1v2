@@ -162,20 +162,10 @@ Setup re-verifies the archived certificate and compares the authenticated commit
 
 The tag-3 instruction is 317 bytes. Its SHA-256 is `bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4`. The dedicated pause authority is `ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx`. Its signing file stays offline from the payout service. Review the instruction, ordered accounts and simulated bindings in `unsigned.json`.
 
-Fund the dedicated fee payer once. This orchestrator command sends **0.10 SOL**. Check the finalized balance first to recover a lost funding response. The checkout and precheck do not fund it.
+Fund the dedicated fee payer once. Preserve the journal at `~/var/sol-exit/funding-attempt.json` through retries and releases. This command persists the signature, blockhash and expiry before sending 0.10 SOL. After a timeout rerun it with the same journal and an RPC serving finalized transaction history. A pending signature blocks a second transfer.
 
 ```bash
-python3 - <<'PY'
-from exit_setup import DIRECTORY, ExitCluster, FEE_PAYER, MAINNET_PAYER, check_payout_authorities, prove_roles, read, CONFIG, require
-from solders.system_program import transfer
-prove_roles(read(CONFIG))
-c=ExitCluster(MAINNET_PAYER)
-check_payout_authorities(c)
-require(c.call("getBalance",str(FEE_PAYER),c.level)["value"]==0,"Fee payer already funded; reconcile first.")
-c.unlock(DIRECTORY/"mainnet-payer.json")
-ix=transfer(dict(from_pubkey=c.owner,to_pubkey=FEE_PAYER,lamports=100_000_000))
-print(c.send("exit.fund",[ix]))
-PY
+python3 ops/sol-live/exit_fund.py --execute
 ```
 
 The funding recipient is the operational fee payer `8EiSLnZQv23HtA5adokE6xfKyCK6mf4HGkpxSPpop1fs`. Only the pause authority is encoded in tag 3. Both role-specific signatures cover the reviewed instruction digest and a fresh random challenge. Readiness quotes peak proof-buffer, checkpoint, marker and ATA rents and transaction fees above the 20,000,000-lamport floor. All Solana buckets sharing this custody must remain covered, including queued redemptions pending L1 settlement.
