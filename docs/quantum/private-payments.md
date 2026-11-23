@@ -32,7 +32,7 @@ which envelope is theirs. The sender does not need the recipient to be online.
 ## What works today
 
 The protocol runs as a standalone tool in
-[`tools/pft-binius-shielded-pq`](../../tools/pft-binius-shielded-pq/README.md). It has a Rust prover and verifier
+[`tools/pft-binius-shielded-pq`](https://github.com/postfiatorg/postfiatl1v2/tree/feat/peel-binius-shielded-pq/tools/pft-binius-shielded-pq). It has a Rust prover and verifier
 and a second verifier written separately in Go. The Go verifier uses only the standard library except for
 ML-DSA-65 deposit signatures, which come from Cloudflare's CIRCL library (Go's standard library has no ML-DSA yet).
 Four sample transactions cover a deposit, a two-input payment, a one-input payment and a payment that spends a note created 25 deposits earlier and
@@ -64,8 +64,10 @@ sha256sum -c SHA256SUMS
 
 ## What is missing
 
-PFSH02 is not yet usable on the chain. On a disposable six-validator test chain, validators now verify, finalize and
-replay a real PFSH02 payment (M1). There is no production ledger pool, deposit path or wallet yet. The build plan is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
+PFSH02 is not yet switched on for any public chain. On local test chains everything a user needs now works:
+validators verify and settle payments, the pool keeps its own ledger, and a command-line wallet and the browser wallet
+shield, pay and exit for PFT and pfUSDC. What remains is a full upgrade rehearsal on six validators and an external
+review of the cryptography (M8). Only after both does a signed amendment choose an activation height. The build plan is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
 It has eight milestones, each tested and merged on its own:
 
 | Milestone | Delivers | Status |
@@ -76,8 +78,8 @@ It has eight milestones, each tested and merged on its own:
 | M4 | Deposits signed by the account's ML-DSA-65 key, payments and exits, for PFT and pfUSDC | Done 22 Nov on a test chain: deposit, private payment, partial and full exit for PFT and pfUSDC; supply reconciles at every block (public + private pool + burned fees = 1,000,000,000 PFT) |
 | M5 | Activation height, per-block verification limits, every public submission path | Done 23 Nov in rehearsal: off unless a signed amendment sets a height; blocks before it are invalid; at most 4 payments per block; 25 to 36 ms per payment inside a validator; a six-validator round takes 0.51 to 0.57 s with one payment (0.31 s without) |
 | M6 | A wallet that scans for its notes, recovers from backup and pays from the command line | Done 23 Nov on a local chain: two wallets shield, pay and unshield PFT and pfUSDC from the Python CLI; Bob restores from backup and spends across a tree rollover; no secrets in 89 RPC requests or logs; a payment takes about 25 s to prove on one core (585 MB) |
-| M7 | The browser wallet flow; moving funds from the old Orchard pool | Next |
-| M8 | Upgrade rehearsal on a six-validator chain and external review before activation | Planned |
+| M7 | The browser wallet flow; moving funds from the old Orchard pool | Done 23 Nov on a local chain: Alice and Bob, in two browser sessions, shield, pay, spend a received note and exit for PFT and pfUSDC, checked against 10 validator receipts; Orchard funds move out in two approved steps (exit to the public account, then a fresh PQ deposit) and survive a restart at either step; keys and proving stay on the user's machine; the old Orchard wallet still works. [Screenshots](../evidence/pq-private-payments-m7/) |
+| M8 | Upgrade rehearsal on a six-validator chain and external review before activation | Next |
 
 Closed on 22 November in the standalone tool:
 
