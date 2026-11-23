@@ -113,12 +113,8 @@ class BrowserWallet:
         with contextlib.closing(self.connection()) as db:
             db.execute("CREATE TABLE IF NOT EXISTS payments "
                        "(intent TEXT PRIMARY KEY, pool TEXT, wire TEXT, phase TEXT, migration TEXT, network TEXT, statement_id TEXT)")
-            if "statement_id" not in {r["name"] for r in db.execute("PRAGMA table_info(payments)")}:
-                db.execute("ALTER TABLE payments ADD COLUMN statement_id TEXT")
-            if "capability" not in {r["name"] for r in db.execute("PRAGMA table_info(payments)")}:
-                db.execute("ALTER TABLE payments ADD COLUMN capability TEXT")
             columns = {r["name"] for r in db.execute("PRAGMA table_info(payments)")}
-            for column in ("terms", "review_hash"):
+            for column in ("statement_id", "capability", "terms", "review_hash"):
                 if column not in columns:
                     db.execute(f"ALTER TABLE payments ADD COLUMN {column} TEXT")
             db.execute("CREATE UNIQUE INDEX IF NOT EXISTS migration_step ON payments(migration,network) "
@@ -352,6 +348,9 @@ class BrowserWallet:
             check(set(body) - {"replace", "also_replace", "different_payment"} == {"mode","asset","amount","fee","recipient","migration"}, "Unexpected payment field.")
             mode, asset = body["mode"], body["asset"]
             check(mode in MODES and asset in (NATIVE, self.issue), "Unknown payment mode or issue.")
+            if mode != "Shield" and not body.get("replace") and not body.get("different_payment"):
+                if any(p.get("unknown_order") and p["asset"] == asset for p in state.get("payments", [])):
+                    raise ValueError("Imported spend is unresolved. Retry its bytes, replace it using a shared input, or confirm this is a different payment.")
             atomic_number(body["amount"])
             if mode != "Shield" and asset != NATIVE:
                 check(state["issued_fee"] is not None and body["fee"] == state["issued_fee"],
