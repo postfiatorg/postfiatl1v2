@@ -248,7 +248,7 @@ class BrowserWallet:
             if phase in ("prepared", "submitted", "replaced"):
                 wire = base64.b64decode(json.loads(row["wire"])["body"])
                 payments.append(dict(intent=row["intent"], action_hash=action_hash, phase=phase,
-                                     unknown_order=attempt.get("unknown_order", False), asset=wire[7:55].hex(), spend=wire[71] == 0))
+                                     unresolved=attempt.get("unresolved", False), unknown_order=attempt.get("unknown_order", False), asset=wire[7:55].hex(), spend=wire[71] == 0))
         return dict(payments=payments, issued_fee=fee, network=self.net, account=self.account, issue=self.issue,
                     address=local(self.home, "address")["address"], sequence=str(account["sequence"] + 1) if account else None,
                     public={NATIVE:str(account["balance"]), self.issue:str(sum(l["balance"] for l in lines))} if account else {},
@@ -303,12 +303,11 @@ class BrowserWallet:
             self.reviewed = None
             state = self.overview(db, public=body.get("mode") == "Shield")
             check(state["synced"], "Sync the wallet first.")
-            replacement = body.get("replace")
-            if replacement:
+            for replacement in filter(None, (body.get("replace"), body.get("also_replace"))):
                 check(any(p["action_hash"] == replacement and p["asset"] == body["asset"] and p["spend"]
-                          and p["phase"] == "submitted" for p in state["payments"])
-                      and body["mode"] != "Shield", "Select a submitted payment of the same asset.")
-            check(set(body) - {"replace", "different_payment"} == {"mode","asset","amount","fee","recipient","migration"}, "Unexpected payment field.")
+                          and p["unresolved"] for p in state["payments"])
+                      and body["mode"] != "Shield", "Select an unresolved payment of the same asset.")
+            check(set(body) - {"replace", "also_replace", "different_payment"} == {"mode","asset","amount","fee","recipient","migration"}, "Unexpected payment field.")
             mode, asset = body["mode"], body["asset"]
             check(mode in MODES and asset in (NATIVE, self.issue), "Unknown payment mode or issue.")
             atomic_number(body["amount"])

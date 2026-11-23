@@ -96,6 +96,10 @@ struct Pending {
     #[serde(default)]
     shared_input: Option<String>,
     #[serde(default)]
+    other_shared_input: Option<String>,
+    #[serde(default)]
+    supersedes: Vec<String>,
+    #[serde(default)]
     order_id: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
@@ -205,7 +209,7 @@ impl Wallet {
             .attempts
             .iter()
             .map(|(id, p)| json!({"action_hash":id,"phase":p.phase,"asset":p.asset,
-                "unknown_order":!p.conflict_final && p.order_id.is_none() && p.payment.parts().is_ok_and(|parts| parts.0.mode != Mode::Shield)}))
+                "unresolved":!p.conflict_final,"supersedes":p.supersedes,"unknown_order":!p.conflict_final && p.order_id.is_none() && p.payment.parts().is_ok_and(|parts| parts.0.mode != Mode::Shield)}))
             .collect();
         json!({"attempts":attempts,"finalized":totals,"pending":delta,"height":self.point.height,"pairs":self.point.pairs,"keys":self.recovery.count})
     }
@@ -391,6 +395,8 @@ pub struct Order {
     pub replace: Option<String>,
     #[serde(default)]
     pub different_payment: bool,
+    #[serde(default)]
+    pub also_replace: Option<String>,
     pub mode: Mode,
     pub asset: String,
     pub amount: u64,
@@ -408,20 +414,35 @@ struct SigningKey {
 impl Wallet {
     pub fn prove(&mut self, o: Order) -> Result<Value> {
         self.import_pending()?;
-        let parent = o
-            .replace
-            .as_ref()
-            .map(|id| self.attempts.get(id).ok_or("unknown replacement payment"))
-            .transpose()?;
-        if let Some(p) = parent {
-            if o.mode == Mode::Shield
-                || p.payment.parts()?.0.mode == Mode::Shield
-                || p.phase != Phase::Submitted
-                || p.asset != o.asset
-            {
-                return Err("replacement requires a submitted spend of the same asset".into());
-            }
+        if o.also_replace.is_some() && (o.replace.is_none() || o.also_replace == o.replace) {
+            return Err("select two distinct payments for joint recovery".into());
         }
+        let supersedes: Vec<_> = o.replace.iter().chain(&o.also_replace).cloned().collect();
+        let mut required = Vec::new();
+        let mut parent_inputs = Vec::new();
+        for id in &supersedes {
+            let p = self.attempts.get(id).ok_or("unknown replacement payment")?;
+            if o.mode == Mode::Shield || p.payment.parts()?.0.mode == Mode::Shield
+                || p.conflict_final || p.asset != o.asset {
+                return Err("replacement requires an unresolved spend of the same asset".into());
+            }
+            let mut pins: Vec<_> = p.shared_input.iter().chain(&p.other_shared_input).cloned().collect();
+            if pins.is_empty() {
+                let sn = p.serials.iter().filter_map(|sn| self.notes.get(sn).map(|n| (n.value,sn)))
+                    .max_by_key(|(value, _)| *value).ok_or("replacement input is spent")?.1;
+                pins.push(sn.clone());
+            }
+            for sn in &pins {
+                if !required.contains(sn) { required.push(sn.clone()); }
+            }
+            parent_inputs.push(pins);
+        }
+        if required.len() > 2 {
+            return Err("these groups require more than two distinct inputs".into());
+        }
+        let conflicts = |id: &String, p: &Pending| {
+            supersedes.contains(id) || p.serials.iter().any(|sn| required.contains(sn))
+        };
         // Retrying the same CLI command after a lost reply must not silently
         // create a second transfer from other funded notes.
         let order_id = if o.mode == Mode::Shield {
@@ -437,8 +458,7 @@ impl Wallet {
             for (id, p) in &self.attempts {
                 if p.asset == o.asset && !p.conflict_final && p.order_id.is_none()
                     && p.payment.parts()?.0.mode != Mode::Shield
-                    && Some(id) != o.replace.as_ref()
-                    && !parent.is_some_and(|parent| parent.shared_input.is_some() && parent.shared_input == p.shared_input)
+                    && !conflicts(id, p)
                 {
                     return Err(format!("Imported spend {id} is unresolved. Retry its bytes, select it for a replacement sharing an input, or confirm this is a different payment.").into());
                 }
@@ -448,10 +468,7 @@ impl Wallet {
             order_id.is_some()
                 && attempt.order_id == order_id
                 && !attempt.conflict_final
-                && Some(*id) != o.replace.as_ref()
-                && !parent.is_some_and(|p| {
-                    p.shared_input.is_some() && p.shared_input == attempt.shared_input
-                })
+                && !conflicts(id, attempt)
         }) {
             return Err(format!(
                 "matching payment {id} is unresolved; retry its bytes or select it for replacement"
@@ -523,47 +540,24 @@ impl Wallet {
         let mut epoch = self.point.assets.get(&o.asset).map_or(0, |a| a.epoch);
         if spend > 0 {
             let mut groups = BTreeMap::<u64, Vec<&Note>>::new();
-            let required = parent
-                .map(|p| {
-                    p.shared_input
-                        .as_deref()
-                        .or_else(|| {
-                            p.serials
-                                .iter()
-                                .filter_map(|sn| self.notes.get(sn).map(|n| (n.value, sn.as_str())))
-                                .max_by_key(|(value, _)| *value)
-                                .map(|(_, sn)| sn)
-                        })
-                        .ok_or("replacement input is spent")
-                })
-                .transpose()?;
-            let mut shared = None;
+            let shared = required.iter().map(|sn| self.notes.get(sn).ok_or("replacement input is spent"))
+                .collect::<std::result::Result<Vec<_>,_>>()?;
             for (sn, n) in self.notes.iter().filter(|(_, n)| n.asset == o.asset) {
-                if required == Some(sn.as_str()) {
-                    shared = Some(n);
+                if required.contains(sn) {
+                    groups.entry(n.epoch).or_default();
                 } else if !self.attempts.iter().any(|(id, p)| {
-                    !p.conflict_final
-                        && Some(id) != o.replace.as_ref()
-                        && !(required.is_some() && p.shared_input.as_deref() == required)
-                        && p.serials.contains(sn)
+                    !p.conflict_final && !conflicts(id, p) && p.serials.contains(sn)
                 }) {
                     groups.entry(n.epoch).or_default().push(n);
                 }
             }
-            if let Some(n) = shared {
-                groups.entry(n.epoch).or_default();
-            }
             for (e, mut notes) in groups {
+                if shared.iter().any(|n| n.epoch != e) { continue; }
                 notes.sort_by_key(|n| std::cmp::Reverse(n.value));
-                if required.is_some() {
-                    let Some(n) = shared.filter(|n| n.epoch == e) else {
-                        continue;
-                    };
-                    notes.insert(0, n);
-                }
+                notes.splice(0..0, shared.iter().copied());
                 notes.truncate(2);
                 if notes.iter().map(|n| u128::from(n.value)).sum::<u128>() >= u128::from(spend) {
-                    if notes[0].value >= spend {
+                    if required.len() < 2 && notes[0].value >= spend {
                         notes.truncate(1);
                     }
                     selected = notes;
@@ -687,24 +681,14 @@ impl Wallet {
         )?;
         let statement_id = hex::encode(terms.statement_context(chain, tx.statement().tx_ctx));
         let serials = [hex::encode(tx.sn0), hex::encode(tx.sn1)];
-        let mut shared_input = None;
-        if let Some(parent_id) = o.replace {
-            let parent = self.attempts.get_mut(&parent_id).ok_or("unknown payment")?;
-            let common = serials
-                .iter()
-                .find(|sn| {
-                    parent.serials.contains(sn)
-                        && self.notes.contains_key(*sn)
-                        && parent
-                            .shared_input
-                            .as_ref()
-                            .is_none_or(|fixed| fixed == *sn)
-                })
-                .ok_or("replacement has no common input")?
-                .clone();
-            parent.shared_input = Some(common.clone());
+        if !required.iter().all(|sn| serials.contains(sn)) {
+            return Err("replacement lacks a required shared input".into());
+        }
+        for (id, pins) in supersedes.iter().zip(parent_inputs) {
+            let parent = self.attempts.get_mut(id).expect("validated replacement");
+            parent.shared_input = pins.first().cloned();
+            parent.other_shared_input = pins.get(1).cloned();
             parent.phase = Phase::Replaced;
-            shared_input = Some(common);
         }
         self.latest = Some(hash.clone());
         self.attempts.insert(
@@ -712,7 +696,9 @@ impl Wallet {
             Pending {
                 phase: Phase::Prepared,
                 conflict_final: false,
-                shared_input,
+                shared_input: required.first().cloned(),
+                other_shared_input: required.get(1).cloned(),
+                supersedes,
                 order_id,
                 payment,
                 asset: o.asset,
@@ -871,6 +857,7 @@ mod fee_tests {
                 format!("pf{}", "33".repeat(20))
             };
             let order = |fee| Order {
+                also_replace: None,
                 different_payment: false,
                 replace: None,
                 mode,
@@ -923,6 +910,7 @@ mod fee_tests {
         wallet.notes.retain(|_, note| note.value == 2);
         let metrics = wallet
             .prove(Order {
+                also_replace: None,
                 different_payment: false,
                 replace: None,
                 mode: Mode::Exit,
