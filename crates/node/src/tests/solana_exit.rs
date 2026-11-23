@@ -1882,3 +1882,76 @@ fn exit_review5_batch_builder_and_committed_route_include_orchard() {
     assert_eq!(route()["source_backing"]["series_supply_atoms"], 1_630_000);
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review6_registration_reconciles_public_and_orchard_claims() {
+    let (g, mut gov, mut ledger) = archived_parent();
+    let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
+    let registration = committee.registration(&g, &gov, H);
+    let (owner, public, private) = funded_holder(&mut ledger);
+    let burn = postfiat_types::AssetBurnOperation {
+        owner: owner.clone(),
+        issuer: ledger.asset_definition(SERIES).unwrap().issuer.clone(),
+        asset_id: SERIES.into(),
+        amount: 1,
+    };
+    let tx = signed_asset_transaction_for_test(
+        &g,
+        &ledger,
+        &owner,
+        &public,
+        &private,
+        postfiat_types::ASSET_BURN_TRANSACTION_KIND,
+        1,
+        AssetTransactionOperation::AssetBurn(burn),
+    );
+    let receipt = block_burn(&g, &gov, &mut ledger, &tx, H - 1);
+    assert!(receipt.accepted, "{}", receipt.message);
+    let parent = gov.clone();
+    let after_burn = ledger.clone();
+    let register = |gov: &mut GovernanceState,
+                    ledger: &mut LedgerState,
+                    balances: &[postfiat_types::AssetOrchardAssetBalance]| {
+        crate::execution_actions::execute_governance_batch_with_replay(
+            gov,
+            Some(ledger),
+            Some(&g),
+            &registration,
+            H,
+            false,
+            balances,
+        )
+        .remove(0)
+    };
+    let refusal = register(&mut gov, &mut ledger, &[]);
+    assert!(!refusal.accepted, "registered after a one-atom holder burn");
+    assert_eq!(
+        refusal.message,
+        "revision-8 series supply 1629999 differs from bucket outstanding 1630000"
+    );
+    assert!(gov == parent && ledger == after_burn);
+
+    // The same transparent balance is reconciled if the atom is in Orchard.
+    let orchard = [postfiat_types::AssetOrchardAssetBalance {
+        asset_id: SERIES.into(),
+        ingress_total: 1,
+        egress_total: 0,
+        live_total: 1,
+    }];
+    let excess = [postfiat_types::AssetOrchardAssetBalance {
+        ingress_total: 2,
+        live_total: 2,
+        ..orchard[0].clone()
+    }];
+    let refusal = register(&mut gov, &mut ledger, &excess);
+    assert!(!refusal.accepted);
+    assert_eq!(
+        refusal.message,
+        "revision-8 series supply 1630001 differs from bucket outstanding 1630000"
+    );
+    assert!(gov == parent && ledger == after_burn);
+    let accepted = register(&mut gov, &mut ledger, &orchard);
+    assert!(accepted.accepted, "{}", accepted.message);
+    assert!(solana_exit::registered(&gov).is_some());
+}

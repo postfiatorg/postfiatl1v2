@@ -119,6 +119,19 @@ pub(super) fn validate_decision(
     Ok(())
 }
 
+pub(super) fn require_reconciled_bucket(
+    ledger: &LedgerState,
+    orchard_balances: &[postfiat_types::AssetOrchardAssetBalance],
+) -> Result<(), String> {
+    ledger
+        .vault_bridge_bucket(solana_exit::BUCKET)
+        .filter(|b| solana_exit::matches_bucket(b))
+        .ok_or("missing governed Solana source bucket")?;
+    postfiat_execution::SolanaExitAccounting::read(ledger, orchard_balances)
+        .and_then(|claims| claims.require_reconciled())
+        .map_err(|(_, message)| message)
+}
+
 pub(super) fn apply_decision(
     genesis: Option<&Genesis>,
     governance: &GovernanceState,
@@ -131,13 +144,7 @@ pub(super) fn apply_decision(
     validate_decision(genesis, governance, amendment, height)?;
     if amendment.kind == solana_exit::OPEN {
         let ledger = ledger.ok_or("opening Solana burns requires the committed ledger")?;
-        ledger
-            .vault_bridge_bucket(solana_exit::BUCKET)
-            .filter(|b| solana_exit::matches_bucket(b))
-            .ok_or("missing governed Solana source bucket")?;
-        return postfiat_execution::SolanaExitAccounting::read(ledger, orchard_balances)
-            .and_then(|claims| claims.require_reconciled())
-            .map_err(|(_, message)| message);
+        return require_reconciled_bucket(ledger, orchard_balances);
     }
     if amendment.kind == solana_exit::RETIRE {
         let ledger = ledger.ok_or("Solana exit retirement requires canonical ledger")?;

@@ -1888,11 +1888,7 @@ pub(super) fn execute_governance_batch_with_replay(
                     amendment,
                     &active_validator_ids(governance).map_err(|e| e.to_string())?,
                 )?;
-                if !ledger.as_deref().is_some_and(|l| {
-                    l.vault_bridge_bucket_states
-                        .iter()
-                        .any(postfiat_types::solana_exit::matches_bucket)
-                }) || activation.beacon_finality_bootstrap.is_some()
+                if activation.beacon_finality_bootstrap.is_some()
                     || postfiat_types::solana_exit::registered(governance).is_some()
                 {
                     return Err(
@@ -1901,6 +1897,10 @@ pub(super) fn execute_governance_batch_with_replay(
                     );
                 }
                 crate::solana_exit_governance::verify_checkpoint_history(genesis, governance)?;
+                crate::solana_exit_governance::require_reconciled_bucket(
+                    ledger.as_deref().ok_or("Solana exit registration requires the committed ledger")?,
+                    orchard_balances,
+                )?;
                 return postfiat_types::VaultBridgeRouteProfileRecordV1::new(
                     activation,
                     block_height,
