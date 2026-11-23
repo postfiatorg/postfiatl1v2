@@ -1764,8 +1764,11 @@ pub(super) fn check_pq_block<'a>(
                     "pq_settlement_inactive",
                 ));
             }
-            if !batch.atomic {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_atomic_batch_required"));
+            if !batch.atomic && governance.pq_fee_schedule_in_force(height) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "pq_atomic_batch_required",
+                ));
             }
             proofs += 1;
             if proofs > postfiat_types::PQ_REHEARSAL_PROOFS {
@@ -3237,8 +3240,18 @@ pub(super) fn verify_external_lane_amendment_admission(
 }
 
 pub(super) fn requires_signed_pq_governance(amendment: &GovernanceAmendment) -> bool {
-    postfiat_types::is_pq_rehearsal_kind(&amendment.kind)
+    postfiat_types::pq_rehearsal_fee(&amendment.kind).is_some()
         || postfiat_types::pq_fee_withdraw_recipient(&amendment.kind).is_some()
+}
+
+pub(super) fn requires_pq_registry(
+    amendment: &GovernanceAmendment,
+    governance: &GovernanceState,
+    height: u64,
+) -> bool {
+    requires_signed_pq_governance(amendment)
+        || (amendment.kind == postfiat_types::PQ_REHEARSAL_V1
+            && governance.pq_fee_schedule_in_force(height))
 }
 
 pub(super) fn verify_live_signed_governance_batch(
@@ -3286,7 +3299,7 @@ pub(super) fn verify_live_signed_governance_batch(
         .filter(|update| update.activation_height < proposal_slot)
         .count() as u64;
     for amendment in &batch.amendments {
-        if requires_signed_pq_governance(amendment) {
+        if requires_pq_registry(amendment, governance, proposal_slot) {
             validate_governance_genesis_quorum(amendment.quorum, validators.len())?;
         }
         verify_external_lane_amendment_admission(

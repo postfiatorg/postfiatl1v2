@@ -1277,8 +1277,18 @@ pub(super) fn update_governance_for_certificate_replay(
         return Ok(());
     }
     let batch: GovernanceActionBatch = parse_archived_payload(block, archive_entry)?;
-    if batch.amendments.iter().any(consensus_artifacts::requires_signed_pq_governance) {
-        verify_live_signed_governance_batch(genesis, governance, registry, &batch, block.header.height)?;
+    if batch
+        .amendments
+        .iter()
+        .any(|a| consensus_artifacts::requires_pq_registry(a, governance, block.header.height))
+    {
+        verify_live_signed_governance_batch(
+            genesis,
+            governance,
+            registry,
+            &batch,
+            block.header.height,
+        )?;
     }
     // Without a ledger a committee move is refused here
     // (`external_lane_committee_ledger_unavailable`), so this certificate copy
@@ -3125,7 +3135,15 @@ pub(super) fn replay_archived_payload(
                     .vault_bridge_route_profile_activations
                     .iter()
                     .any(|activation| !activation.amendment.signed_authorizations.is_empty());
-            if has_v2_authorization || batch.amendments.iter().any(consensus_artifacts::requires_signed_pq_governance) {
+            if has_v2_authorization
+                || batch.amendments.iter().any(|a| {
+                    consensus_artifacts::requires_pq_registry(
+                        a,
+                        state.governance,
+                        block.header.height,
+                    )
+                })
+            {
                 verify_live_signed_governance_batch(
                     genesis,
                     state.governance,

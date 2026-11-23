@@ -72,7 +72,12 @@ fn candidate_height_and_limits_cover_every_batch_and_non_atomic_attempt() {
     assert!(check(&g, 6, &[&batch]).is_err());
     g.apply(amendment(&genesis, 6));
     assert!(check(&g, 5, &[&batch, &mixed]).is_err());
-    for h in [6, 7] {
+    check(&g, 6, &[&mixed]).expect("base accepts non-atomic PQ under a bare schedule");
+    let mut future = amendment(&genesis, 8);
+    future.kind = "pq_payment_rehearsal_v1:fee:2".into();
+    g.apply(future);
+    check(&g, 7, &[&mixed]).unwrap();
+    for h in [8, 9] {
         assert_eq!(
             check(&g, h, &[&mixed]).unwrap_err().to_string(),
             "pq_atomic_batch_required"
@@ -89,6 +94,10 @@ fn candidate_height_and_limits_cover_every_batch_and_non_atomic_attempt() {
     assert!(check(&g, 7, &[&batch]).is_err());
     g.apply(amendment(&genesis, 9));
     check(&g, 9, &[&batch]).unwrap();
+    // The base shadows the earlier bare schedule immediately, even when its
+    // bare replacement names a future height.
+    g.apply(amendment(&genesis, 11));
+    assert!(check(&g, 9, &[&mixed]).is_err());
     let disk = NodeStore::new(&dir);
     let mut atomic = amendment(&genesis, 1);
     atomic.kind = GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT.into();
@@ -144,7 +153,9 @@ fn replay_rejects_preactivation_non_atomic_body_before_receipts() {
         for h in [5, 6, 7] {
             let mut governance = disk.read_governance().unwrap();
             if configured {
-                governance.apply(amendment(&genesis, 6));
+                let mut schedule = amendment(&genesis, 6);
+                schedule.kind = "pq_payment_rehearsal_v1:fee:2".into();
+                governance.apply(schedule);
             }
             let mut ledger = disk.read_ledger().unwrap();
             let mut shielded = disk.read_shielded().unwrap();
@@ -342,6 +353,23 @@ fn pq_registry_threshold_applies_to_signed_schedule_and_withdrawal() {
             .unwrap();
         amendment.signed_authorizations.push(authorization);
         let batch = GovernanceActionBatch::new("test", vec![amendment]);
+        if kind == postfiat_types::PQ_REHEARSAL_V1 {
+            verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 1)
+                .expect("the base accepts the signed declared quorum");
+            for value in [0, 1] {
+                let mut priced = governance.clone();
+                let mut schedule = super::pq_payment_activation::amendment(&genesis, value);
+                schedule.kind = "pq_payment_rehearsal_v1:fee:1".into();
+                priced.apply(schedule);
+                let error =
+                    verify_live_signed_governance_batch(&genesis, &priced, &registry, &batch, 1)
+                        .expect_err(
+                            "bare amendments governed by a fee kind need the registry floor",
+                        );
+                assert!(error.to_string().contains("BFT threshold"), "{error}");
+            }
+            continue;
+        }
         let error =
             verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 1)
                 .expect_err("one signature cannot authorize PQ governance");
@@ -448,5 +476,59 @@ fn pq_governance_archive_requires_signatures_before_execution() {
         );
     }
     assert_eq!(governance, disk.read_governance().unwrap());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn pq_base_history_non_atomic_issued_shield() {
+    let dir = unique_test_dir("pq-bare-history");
+    let genesis = rehearsal_genesis(&dir);
+    let disk = NodeStore::new(&dir);
+    let registry = read_validator_registry_file(&dir.join(VALIDATOR_REGISTRY_FILE)).unwrap();
+    let batch = build_shielded_action_batch(
+        &genesis,
+        vec![ShieldedAction::PqPaymentV1(payment("pfusdc-shield"))],
+    )
+    .unwrap();
+    let entry = BatchArchiveEntry {
+        batch_kind: "shielded".into(),
+        batch_id: batch.batch_id.clone(),
+        payload_hash: String::new(),
+        payload_json: serde_json::to_string(&batch).unwrap(),
+    };
+    let mut block = super::dummy_block_record(2);
+    block.header.batch_kind = "shielded".into();
+    block.header.batch_id = batch.batch_id.clone();
+    let mut governance = disk.read_governance().unwrap();
+    assert_eq!(
+        consensus_artifacts::check_pq_block(&genesis, &governance, 2, [&batch])
+            .unwrap_err()
+            .to_string(),
+        "pq_settlement_inactive"
+    );
+    governance.apply(amendment(&genesis, 2));
+    consensus_artifacts::check_pq_block(&genesis, &governance, 2, [&batch]).unwrap();
+    let mut ledger = disk.read_ledger().unwrap();
+    let mut shielded = disk.read_shielded().unwrap();
+    let receipts = block_replay_wallet::replay_archived_payload(
+        &genesis,
+        &block,
+        &entry,
+        block_replay_wallet::ArchivedReplayState {
+            governance: &mut governance,
+            ledger: &mut ledger,
+            shielded: &mut shielded,
+            bridge: &mut disk.read_bridge().unwrap(),
+            validator_registry: &registry,
+        },
+    )
+    .unwrap();
+    assert!(!receipts[0].accepted);
+    println!(
+        "Base history receipt {}",
+        serde_json::to_string(&receipts).unwrap()
+    );
+    assert_eq!(ledger, disk.read_ledger().unwrap());
+    assert_eq!(shielded, disk.read_shielded().unwrap());
     fs::remove_dir_all(dir).unwrap();
 }

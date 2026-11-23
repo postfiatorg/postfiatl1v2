@@ -1269,8 +1269,9 @@ fn execute_governance_batch_with_replay(
                 code,
                 message,
             ));
-        } else if amendment.kind == postfiat_types::PQ_REHEARSAL_V1 && amendment.value != 0
-            && governance.amendments.iter().any(|a| postfiat_types::pq_rehearsal_fee(&a.kind).is_some())
+        } else if amendment.kind == postfiat_types::PQ_REHEARSAL_V1
+            && amendment.value != 0
+            && governance.pq_fee_schedule_in_force(block_height)
         {
             receipts.push(Receipt::rejected(amendment.amendment_id.clone(), "pq_fee_unconfigured",
                 "Supply the replacement fee or explicitly pause the pool with value zero"));

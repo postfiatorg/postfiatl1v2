@@ -1846,8 +1846,17 @@ impl GovernanceState {
     }
 
     fn pq_schedule_at(&self, height: u64) -> Option<&GovernanceAmendment> {
-        self.amendments.iter().rev().find(|a| is_pq_rehearsal_kind(&a.kind)
-            && height >= a.activation_height && height >= u64::from(a.value))
+        self.amendments.iter().rev().find(|a| {
+            is_pq_rehearsal_kind(&a.kind)
+                && (a.kind == PQ_REHEARSAL_V1
+                    || (height >= a.activation_height && height >= u64::from(a.value)))
+        })
+    }
+
+    /// A fee-carrying pause still authenticates the next PQ governance change.
+    pub fn pq_fee_schedule_in_force(&self, height: u64) -> bool {
+        self.pq_schedule_at(height)
+            .is_some_and(|s| pq_rehearsal_fee(&s.kind).is_some())
     }
 
     /// For the candidate height, after checking the network and pool activation.
@@ -1866,8 +1875,13 @@ impl GovernanceState {
         &self, chain: &str, genesis: &str, protocol: u32, height: u64,
     ) -> bool {
         self.pq_schedule_at(height).is_some_and(|a| {
-            a.chain_id == chain && a.genesis_hash == genesis && a.protocol_version == protocol
-                && !a.paused && a.value != 0
+            a.chain_id == chain
+                && a.genesis_hash == genesis
+                && a.protocol_version == protocol
+                && !a.paused
+                && a.value != 0
+                && height >= a.activation_height
+                && height >= u64::from(a.value)
         })
     }
 

@@ -243,9 +243,21 @@ pub fn create_shielded_atomic_batch(
         ));
     }
 
+    let priced = genesis_hash(&genesis) == pq_payment_fixture::GENESIS_HASH
+        && governance.pq_fee_schedule_in_force(execution_height);
     let mut actions = Vec::with_capacity(options.source_batch_files.len());
     for source_path in &options.source_batch_files {
         let source = read_shielded_action_batch_file(source_path)?;
+        // The priced atomic rule applies to the assembled candidate. Before
+        // that era keep the base checks on each unassembled source as well.
+        if !priced {
+            consensus_artifacts::check_pq_block(
+                &genesis,
+                &governance,
+                execution_height,
+                [&source],
+            )?;
+        }
         verify_shielded_action_batch_id(&genesis, &source)?;
         if source.atomic {
             return Err(io::Error::new(
