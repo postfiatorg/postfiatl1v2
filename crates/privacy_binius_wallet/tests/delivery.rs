@@ -38,3 +38,28 @@ fn independent_delivery_cases() {
     let bytes = [coin.as_slice(), &valid, &false_opening].concat();
     assert!(include_bytes!("../vectors/delivery.bin").as_slice() == bytes);
 }
+
+#[test]
+fn scan_a_page_of_nonmatching_outputs_on_one_key() {
+    use pft_binius_shielded::payment::ShieldedWallet;
+    let mut rng = ChaCha20Rng::from_seed([71; 32]);
+    let other = ShieldedWallet::from_seed(&mut rng);
+    let scanning = ShieldedWallet::from_seed(&mut rng);
+    let mut page = Vec::new();
+    for value in 1..=256 {
+        let coin = coin_commit(&other.addr, value, &[3; 78]);
+        let env = seal_stealth_envelope(&other.ek_bytes, &coin, value, &[3; 78], &mut rng).unwrap();
+        page.push((coin, env));
+    }
+    let start = std::time::Instant::now();
+    for _ in 0..16 {
+        for (coin, env) in &page {
+            assert!(scanning.try_scan_output(coin, env).is_none());
+        }
+    }
+    let time = start.elapsed().as_secs_f64();
+    println!(
+        "4096 nonmatching output trials, 1 key, {time:.6} s, {:.0} outputs/s",
+        4096.0 / time
+    );
+}

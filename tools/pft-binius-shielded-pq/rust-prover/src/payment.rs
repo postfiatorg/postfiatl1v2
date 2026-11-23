@@ -220,8 +220,21 @@ pub fn create_shielded_tx(
     )
 }
 
+/// A wallet may have joined at a certified frontier and hold only later leaves.
+pub type Opening = ([u8; MERKLE_DEPTH], [[u8; NODE_BYTES]; MERKLE_DEPTH]);
+pub trait PaymentTree {
+    fn root(&self) -> [u8; NODE_BYTES];
+    fn opening(&self, index: usize, coin: &[u8; COIN_BYTES]) -> Option<Opening>;
+}
+impl PaymentTree for MerkleTree24 {
+    fn root(&self) -> [u8; NODE_BYTES] { self.root() }
+    fn opening(&self, index: usize, coin: &[u8; COIN_BYTES]) -> Option<Opening> {
+        (self.leaves.get(index) == Some(coin)).then(|| self.auth_path(index))
+    }
+}
+
 pub fn create_profiled_tx(
-    tree: &MerkleTree24,
+    tree: &impl PaymentTree,
     in0: SpendInput,
     in1: SpendInput,
     out0_dest: &StealthAddress,
@@ -275,15 +288,11 @@ pub fn create_profiled_tx(
                 value,
                 r_blind,
             } => {
-                if leaf_index >= tree.len() {
-                    return Err(format!("leaf_index {} out of range", leaf_index));
+                let coin = coin_commit(&owner_addr(&spend_secret), value, &r_blind);
+                let (dirs, sibs) = tree.opening(leaf_index, &coin).ok_or("input opening unavailable")?;
+                if !MerkleTree24::verify_path(&coin, &dirs, &sibs, &anchor) {
+                    return Err("input does not open at selected anchor".into());
                 }
-                let a = owner_addr(&spend_secret);
-                let coin = coin_commit(&a, value, &r_blind);
-                if tree.leaves[leaf_index] != coin {
-                    return Err("input coin does not match Merkle tree leaf".into());
-                }
-                let (dirs, sibs) = tree.auth_path(leaf_index);
                 let sn = nullifier(&spend_secret, &coin);
                 Ok((false, dirs, sibs, spend_secret, value, r_blind, sn))
             }

@@ -72,3 +72,15 @@ zeroize = { workspace = true }
 orchard = { workspace = true }
 rand = "0.8.6"
 pft-binius-shielded = { path = "../../tools/pft-binius-shielded-pq/rust-prover", features = ["prover"] }
+
+[features]
+pq-wallet = ["dep:postfiat-privacy-binius-wallet"]
+
+[dependencies.postfiat-privacy-binius-wallet]
+path = "../privacy_binius_wallet"
+optional = true
+
+[[bin]]
+name = "pftl-pq-walletd"
+path = "src/bin/pftl_pq_walletd.rs"
+required-features = ["pq-wallet"]

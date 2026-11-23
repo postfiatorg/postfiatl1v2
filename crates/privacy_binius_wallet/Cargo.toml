@@ -15,6 +15,7 @@ pft-binius-shielded = {path = "../../tools/pft-binius-shielded-pq/rust-prover", 
 postfiat-crypto-provider = {path = "../crypto_provider"}
 postfiat-privacy-binius = {path = "../privacy_binius"}
 postfiat-types = {path = "../types"}
+postfiat-rpc-sdk = {path = "../rpc_sdk"}
 rand = "0.8"
 serde.workspace = true
 serde_json.workspace = true

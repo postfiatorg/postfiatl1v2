@@ -890,3 +890,7 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
     assert_eq!(before, after.rows);
     fs::remove_dir_all(&f.dir).unwrap();
 }
+
+#[cfg(feature = "pq-wallet")]
+#[path = "pq_wallet_merge.rs"]
+mod wallet_cli;
