@@ -1,0 +1,28 @@
+import contextlib
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import Mock, patch
+
+HERE = Path(__file__).resolve().parent
+BOOK = (HERE / "RUNBOOK-LIVE.md").read_text()
+
+
+class FifthReview(unittest.TestCase):
+    def test_all_six_routes_reconcile_supply_before_open(self):
+        from exit_payout import reconcile_supply, BUCKET, POLICY
+        backing = dict(bucket_id=BUCKET, policy_hash=POLICY, revision=8,
+                       series_supply_atoms=1610000, outstanding_vault_bridge_atoms=1610000)
+        rows = [dict(source_backing=backing) for _ in range(6)]
+        self.assertEqual(reconcile_supply(rows, 1610000), 1610000)
+        for altered in (dict(backing, series_supply_atoms=1630000),
+                        dict(backing, outstanding_vault_bridge_atoms=1630000),
+                        dict(backing, bucket_id="other"), {}, dict(backing, series_supply_atoms=True)):
+            with self.assertRaises(ValueError):
+                reconcile_supply(rows[:-1] + [dict(source_backing=altered)], 1610000)
+        with self.assertRaises(ValueError):
+            reconcile_supply(rows, 1630000)

@@ -219,6 +219,8 @@ class JobsTest(unittest.TestCase):
             active=True,
             profile_hash=payout.EXIT,
             profile={"route_epoch": 8},
+            source_backing=dict(revision=8, bucket_id=BUCKET, policy_hash=payout.POLICY,
+                                series_supply_atoms=40000, outstanding_vault_bridge_atoms=40000),
             current_height=1755,
             burns_open=True,
         )
@@ -265,6 +267,10 @@ class JobsTest(unittest.TestCase):
                 ),
                 (payout.SERIES, BUCKET, PREFIX),
             )
+            route["source_backing"]["series_supply_atoms"] += 20000
+            value = payout.readiness()
+            self.assertFalse(value["payout_ready"])
+            self.assertIn("supply", value["message"])
             b["outstanding_vault_bridge_atoms"] += 1
             self.assertIn("custody", payout.readiness()["message"])
             route["active"] = False

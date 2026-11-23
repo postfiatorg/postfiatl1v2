@@ -283,9 +283,26 @@ def check_custody(c):
     return s, b, required_atoms
 
 
+def reconcile_supply(routes, outstanding):
+    require(len(routes) == 6, "Missing validator supply report.")
+    for route in routes:
+        backing = route.get("source_backing") or {}
+        supply = backing.get("series_supply_atoms")
+        reported = backing.get("outstanding_vault_bridge_atoms")
+        require(
+            (backing.get("revision"), backing.get("bucket_id"), backing.get("policy_hash"))
+            == (8, BUCKET, POLICY)
+            and type(supply) is int and type(reported) is int
+            and type(outstanding) is int and 0 <= supply == reported == outstanding,
+            "Revision-8 series supply and bucket outstanding must reconcile on all six validators.",
+        )
+    return outstanding
+
+
 def readiness():
     message = "Waiting for the governed Solana descriptor on six validators."
     try:
+        head = fleet()
         routes = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
         require(
             all(
@@ -300,7 +317,6 @@ def readiness():
         c = cluster()
         latest, anchor = light(c)
         message = "Relayer cannot fund the payout above its balance floor."
-        head = fleet()
         tip = head["block_height"]
         require(
             all(r["current_height"] == tip for r in routes),
@@ -312,7 +328,11 @@ def readiness():
         available()
         message = "Vault custody or shared-bucket accounting unavailable."
         s, b, required_atoms = check_custody(c)
-        burns_open = all(r.get("burns_open") is True for r in routes)
+        message = "Revision-8 supply or bucket outstanding differs at the qualified parent."
+        supply = reconcile_supply(routes, b["outstanding_vault_bridge_atoms"])
+        burns_open = routes[0].get("burns_open")
+        require(type(burns_open) is bool and all(r.get("burns_open") is burns_open for r in routes),
+                "Mixed burn admission status.")
         message = "Waiting for a compatible finalized committee path."
         qualified = FINALIZED_PATH.check(head)
         check_light_path(c, latest, anchor, tip)
@@ -333,6 +353,7 @@ def readiness():
             issuer=s["issuer"],
             epoch=s["finalized_epoch"],
             reserve_packet_hash=s["finalized_reserve_packet_hash"],
+            series_supply_atoms=str(supply),
             bucket_outstanding_atoms=str(b["outstanding_vault_bridge_atoms"]),
             current_height=routes[0]["current_height"],
             destination_prefix=PREFIX,
