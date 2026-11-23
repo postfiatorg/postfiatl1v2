@@ -124,3 +124,79 @@ def public_checkpoint(fetch, height, prior, target, members, domain):
         w["finality_ancestry"] = steps
     validate_segment(w, prior, target, committee(blocks[0]["header"]))
     return w
+
+
+class RotationScan:
+    """Check bounded pages of finalized governance payloads before advertising a new burn."""
+
+    def __init__(self):
+        self.anchor = None
+        self.height = 0
+        self.tip = None
+        self.blocked = False
+
+    def check(self, fetch, latest, anchor, target):
+        import json
+
+        if self.anchor != anchor:
+            self.anchor, self.height, self.tip, self.blocked = (
+                anchor,
+                latest - 1,
+                None,
+                False,
+            )
+        if self.blocked or target < self.height:
+            return False
+        count = min(8, target - self.height)
+        if count == 0:
+            return True
+        page = fetch(0, "blocks", from_height=self.height + 1, limit=count)
+        require(len(page) == count, "Incomplete committee history.")
+        for block in page:
+            h = block["header"]
+            require(
+                h["height"] == self.height + 1
+                and (
+                    h["parent_hash"] == self.tip
+                    if self.tip
+                    else h["block_hash"] == anchor
+                ),
+                "Committee history differs from the stored checkpoint.",
+            )
+            if h["batch_kind"] == "governance":
+                (batch,) = fetch(
+                    0,
+                    "batch_archive",
+                    batch_kind="governance",
+                    batch_id=h["batch_id"],
+                    limit=1,
+                )
+                require(batch["batch_id"] == h["batch_id"], "Wrong governance batch.")
+                payload = json.loads(batch["payload_json"])
+                updates = payload.get("validator_registry_updates", [])
+                if updates:
+                    u = updates[0]
+                    signed = len(u.get("signed_authorizations", []))
+                    # The frozen native verifier requires V2 old-quorum signatures and a single update.
+                    if (
+                        h["height"] == latest
+                        or len(updates) != 1
+                        or u["activation_height"] != h["height"]
+                        or signed < (2 * len(u["validators"])) // 3 + 1
+                        or signed != len(u["votes"])
+                        or signed != len(u["support"])
+                        or any(
+                            payload.get(k)
+                            for k in (
+                                "amendments",
+                                "governance_agent_dry_runs",
+                                "fastswap_bootstraps",
+                                "fastpay_recovery_bootstraps",
+                                "vault_bridge_route_profile_activations",
+                            )
+                        )
+                    ):
+                        self.blocked = True
+                        return False
+            self.height, self.tip = h["height"], h["block_hash"]
+        return self.height == target

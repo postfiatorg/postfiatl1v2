@@ -61,13 +61,13 @@ class RecoveryTest(unittest.TestCase):
     def test_transient_job_retries_without_leaking_errors(self):
         with tempfile.TemporaryDirectory() as d:
             j = svc.Journal(Path(d) / "db")
-            j.enqueue(BURN)
             with (
                 patch.object(
                     svc, "process", side_effect=TimeoutError("root@secret:/private")
                 ),
                 patch.object(svc.time, "time", return_value=1000),
             ):
+                j.enqueue(BURN)
                 self.assertTrue(svc.process_next(j, Path(d)))
                 self.assertIsNone(j.pending())
             r = j.get(BURN)
@@ -195,9 +195,7 @@ class RecoveryTest(unittest.TestCase):
             ):
                 svc.rebuild(state)
             self.assertEqual(svc.Journal(path).get(BURN)["stage"], "paid")
-            self.assertEqual(
-                next(state.glob("*.damaged-*")).read_bytes(), b"damaged sqlite fixture"
-            )
+            self.assertEqual(path.read_bytes(), b"damaged sqlite fixture")
 
     def test_rebuild_waits_out_unknown_inflight_signatures(self):
         with tempfile.TemporaryDirectory() as d:
@@ -231,7 +229,35 @@ class RecoveryTest(unittest.TestCase):
 
     def test_terminal_history_cannot_fill_database_without_limit(self):
         with tempfile.TemporaryDirectory() as d:
-            j=svc.Journal(Path(d)/'db')
+            j = svc.Journal(Path(d) / "db")
             with j.connect() as db:
-                db.executemany("INSERT INTO jobs(burn_tx_id,stage) VALUES(?,'paid')",[(f'{i:096x}',) for i in range(1280)])
-            with self.assertRaises(OverflowError):j.enqueue('ab'*48)
+                db.executemany(
+                    "INSERT INTO jobs(burn_tx_id,stage) VALUES(?,'paid')",
+                    [(f"{i:096x}",) for i in range(1280)],
+                )
+            with self.assertRaises(OverflowError):
+                j.enqueue("ab" * 48)
+
+    def test_rebuild_preserves_hot_journal_and_selects_new_database(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "jobs.sqlite").write_bytes(b"damaged")
+            sidecar = root / "jobs.sqlite-wal"
+            sidecar.write_bytes(b"forensic evidence")
+            with patch.object(svc, "redemptions", return_value=[]):
+                svc.rebuild(root)
+            self.assertEqual(sidecar.read_bytes(), b"forensic evidence")
+            self.assertIsNone(svc.Journal(root / "jobs.sqlite").pending())
+            self.assertNotEqual(
+                svc.Journal(root / "jobs.sqlite").path, root / "jobs.sqlite"
+            )
+
+    def test_later_admissions_do_not_starve_a_due_checkpoint(self):
+        with tempfile.TemporaryDirectory() as d:
+            j = svc.Journal(Path(d) / "db")
+            with patch.object(svc.time, "time", return_value=200):
+                j.enqueue(BURN)
+                j.defer(BURN, progress=True)
+            with patch.object(svc.time, "time", return_value=205):
+                j.enqueue("bc" * 48)
+                self.assertEqual(j.pending(), BURN)

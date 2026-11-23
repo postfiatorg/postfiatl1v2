@@ -13,6 +13,7 @@ import subprocess
 
 HOST = "root@ssh8.vast.ai"
 PORT = "20628"
+GPU_LOCK = "/workspace/b23-gpu/prover.lock"
 REMOTE = "/workspace/b23-withdraw-20261116"
 LOCAL = Path(
     os.getenv("EXIT_PROOF_HOME", Path.home() / "repos/b23-coord/evidence/withdraw")
@@ -79,9 +80,7 @@ for file in public-values.bin proof-report.json proof-calldata.bin; do
     echo
 done
 """
-    command = "flock -E 75 -n /workspace/b23-gpu/prover.lock bash -c " + shlex.quote(
-        script
-    )
+    command = f"flock -E 75 -n {shlex.quote(GPU_LOCK)} bash -c " + shlex.quote(script)
     result = subprocess.run(
         SSH + [command], input=data, capture_output=True, timeout=1550
     )

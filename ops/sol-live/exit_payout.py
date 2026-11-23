@@ -43,7 +43,13 @@ from exit_setup import (
     rw,
     six,
 )
-from exit_segments import public_checkpoint, select_target, validate_segment, committee
+from exit_segments import (
+    RotationScan,
+    public_checkpoint,
+    select_target,
+    validate_segment,
+    committee,
+)
 from exit_precheck import inspect_vault
 from exit_proof import available, prove
 
@@ -169,6 +175,9 @@ def payout_budget(c, distance):
     return proofs * (6 * fee + c.rent(48) + c.rent(2048)) + c.rent(1) + c.rent(165)
 
 
+ROTATIONS = RotationScan()
+
+
 def readiness():
     message = "Waiting for the governed Solana descriptor on six validators."
     try:
@@ -184,7 +193,7 @@ def readiness():
         )
         message = "Solana verifier or relayer unavailable."
         c = cluster()
-        latest, _ = light(c)
+        latest, anchor = light(c)
         message = "Relayer cannot fund the payout above its balance floor."
         budget = payout_budget(c, max(r["current_height"] for r in routes) + 1 - latest)
         lamports = balance(c, budget)
@@ -210,11 +219,18 @@ def readiness():
             snapshot["custody_atoms"] >= required_atoms,
             "Shared custody is insufficient.",
         )
+        burns_open = all(r.get("burns_open") is True for r in routes)
+        message = "Waiting for a compatible finalized committee path."
+        compatible = ROTATIONS.check(
+            rpc, latest, anchor, max(r["current_height"] for r in routes)
+        )
         return dict(
             ok=True,
-            ready=all(r.get("burns_open") is True for r in routes),
-            payout_ready=True,
-            burns_open=all(r.get("burns_open") is True for r in routes),
+            ready=compatible and burns_open,
+            payout_ready=compatible,
+            accepting_jobs=True,
+            message=None if compatible else message,
+            burns_open=burns_open,
             required_custody_atoms=str(required_atoms),
             payout_budget_lamports=budget,
             asset_id=ASSET,

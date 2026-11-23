@@ -45,7 +45,17 @@ def parse_request(data):
 
 class Journal:
     def __init__(self, path):
-        self.path = path
+        self.path = Path(path)
+        pointer = self.path.with_name("jobs.current")
+        if self.path.name == "jobs.sqlite" and pointer.exists():
+            name = json.loads(pointer.read_text())
+            if not isinstance(name, str) or not re.fullmatch(
+                r"jobs-recovered-[0-9]+\.sqlite", name
+            ):
+                raise ValueError("Invalid journal generation. Rebuild required.")
+            self.path = self.path.with_name(name)
+            if not self.path.is_file():
+                raise ValueError("Missing journal generation. Rebuild required.")
         self.worker_ok = True
         self.last_prune = 0
         with closing(self.connect()) as db:
@@ -132,6 +142,8 @@ class Journal:
             return public_row(row) if row else None
 
     def enqueue(self, burn, *, rebuilding=False):
+        if not BURN.fullmatch(burn):
+            raise ValueError("Invalid burn ID.")
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(
@@ -142,12 +154,12 @@ class Journal:
                     "SELECT count(*) FROM jobs WHERE stage NOT IN ('paid','failed')"
                 ).fetchone()[0]
                 total = db.execute("SELECT count(*) FROM jobs").fetchone()[0]
-                if not rebuilding and (active >= 32 or (row is None and total>=1280)):
+                if not rebuilding and (active >= 32 or (row is None and total >= 1280)):
                     raise OverflowError("withdrawal queue is full")
                 db.execute(
-                    """INSERT INTO jobs(burn_tx_id,stage) VALUES(?,'queued')
-                    ON CONFLICT(burn_tx_id) DO UPDATE SET stage='queued', error=NULL, detail=NULL""",
-                    (burn,),
+                    """INSERT INTO jobs(burn_tx_id,stage,due) VALUES(?,'queued',?)
+                    ON CONFLICT(burn_tx_id) DO UPDATE SET stage='queued', error=NULL, detail=NULL, due=excluded.due""",
+                    (burn, int(time.time())),
                 )
             return public_row(
                 db.execute("SELECT * FROM jobs WHERE burn_tx_id=?", (burn,)).fetchone()
@@ -248,7 +260,9 @@ def restore_redemption(journal, row):
 def rebuild(state):
     import tempfile
 
-    target = state / "jobs.sqlite"
+    from live import save
+
+    generation = "jobs-recovered-" + str(time.time_ns()) + ".sqlite"
     with tempfile.TemporaryDirectory(dir=state) as tmp:
         path = Path(tmp) / "recovered.sqlite"
         journal = Journal(path)
@@ -264,16 +278,15 @@ def rebuild(state):
                 db.execute("INSERT INTO recovery VALUES(?)", (expiry,))
             if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise ValueError("Recovery integrity check failed.")
-        if target.exists():
-            # Keep the original inode for offline recovery of any in-flight signatures.
-            if any(
-                Path(str(target) + ext).exists() for ext in ("-wal", "-journal", "-shm")
-            ):
-                raise ValueError(
-                    "SQLite sidecar present. Preserve the database set together before rebuilding."
-                )
-            os.link(target, state / ("jobs.sqlite.damaged-" + str(time.time_ns())))
-        os.replace(path, target)
+        # SQLite sidecars belong to a specific database. Keep every old generation
+        # intact and select a separately fsynced database with a single atomic rename.
+        os.rename(path, state / generation)
+        directory_fd = os.open(state, os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        save(state / "jobs.current", generation)
         fd = os.open(state, os.O_DIRECTORY)
         try:
             os.fsync(fd)
@@ -283,6 +296,8 @@ def rebuild(state):
 
 def process_next(journal, directory):
     burn = journal.pending()
+    if burn is not None and not BURN.fullmatch(burn):
+        raise ValueError("Invalid journal entry. Rebuild required.")
     if burn is None or journal.waiting_for_expiry():
         return False
     try:
@@ -318,6 +333,8 @@ def prune_terminal(journal, directory, retain=1024):
                 prune_work(cluster(), path, reclaim=True)
             break
     for burn, stage in burns.items():
+        if not BURN.fullmatch(burn):
+            raise ValueError("Invalid journal entry. Rebuild required.")
         result = chain_payment(burn)
         if result is None and stage == "paid":
             journal.update(burn, "queued", solana_tx=None, detail=None, error=None)
@@ -491,7 +508,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(
                     429, dict(error="Withdrawal admission rate exceeded.")
                 )
-            if not service_readiness(self.server).get("payout_ready"):
+            status = service_readiness(self.server)
+            if not status.get("accepting_jobs", status.get("payout_ready")):
                 return self.reply(503, dict(error="Withdrawal worker unavailable."))
             red = next(
                 (
