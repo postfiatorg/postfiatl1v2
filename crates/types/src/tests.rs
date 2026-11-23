@@ -3880,4 +3880,24 @@ fn vault_bridge_solana_destination_binds_the_bucket_genesis_and_full_owner() {
         "44".repeat(20)
     );
     assert!(solana_packet_destination(&evm_source, &destination).is_err());
+    let error = VaultBridgeRedemption::new(
+        "test-chain",
+        "holder",
+        "issuer",
+        "11".repeat(48),
+        "22".repeat(48),
+        evm_source,
+        1,
+        20_000,
+        1,
+        "33".repeat(48),
+        destination,
+        "44".repeat(48),
+        1755,
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("destination_ref") && error.contains("evm"),
+        "{error}"
+    );
 }
