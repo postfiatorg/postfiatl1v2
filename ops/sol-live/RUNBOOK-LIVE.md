@@ -190,53 +190,45 @@ The reviewed withdrawal route is draft PR #429, branch `wallet/solana-withdraw`,
 TN_REVIEW=56dbebb4672172c9f336dc95b831deb8281e3fd7
 TN_RELAY="$KIT/tasknode-relay"
 git -C "$EXIT_WORK/tasknode-withdraw" worktree add --detach "$TN_RELAY" "$TN_REVIEW"
-(cd "$TN_RELAY" && npm ci && node --test server/l1/withdrawal-routes.test.mjs)
 RELAY_UNIT=${RELAY_UNIT:-navcoin-relay.service}
+relay_pid=$(systemctl --user show "$RELAY_UNIT" -p MainPID --value)
+test "$relay_pid" -gt 1
+NODE=$(readlink -e "/proc/$relay_pid/exe")
+"$NODE" -e 'const [major,minor]=process.versions.node.split(".").map(Number); if(major!==24||minor<21)process.exit(1)'
+node_bin=$(dirname "$NODE")
+export PATH="$node_bin:$PATH"
+test "$(command -v node)" = "$NODE"
+(cd "$TN_RELAY" && "$NODE" "$node_bin/npm" ci && "$NODE" --test server/l1/withdrawal-routes.test.mjs)
+```
+
+Use the resident Node executable for all three steps. The reviewed engine range is 24.21 through 24.x. The resident executable at review was 24.22.1. Deploy the approved gateway, confirm the running digest on every instance, and take its build ID from the deployment record. Set GATEWAY to the wallet page's HTTPS origin and RELAY_COOKIE_FILE to the path of the existing authenticated cookie jar. On the relay host install the control command and its configuration under the on-call login. Keep those paths and the release directory accessible across logins.
+
+```bash
+GATEWAY=${GATEWAY:?set the public wallet origin}
+GATEWAY_BUILD=${GATEWAY_BUILD:?set the approved deployed gateway build ID}
+RELAY_COOKIE_FILE=${RELAY_COOKIE_FILE:?set the absolute session cookie jar path}
+test -r "$RELAY_COOKIE_FILE"
+control="$HOME/.local/lib/pf-sol-exit-relay"
+install -d -m700 "$control" "$HOME/.local/bin"
+install -m644 ops/sol-live/{exit_cutover.py,exit-relay-probe.cjs} "$control/"
+install -m755 ops/sol-live/exit_relay.py "$control/"
+ln -sfn "$control/exit_relay.py" "$HOME/.local/bin/disable-sol-exit"
 release_env="$KIT/withdraw-relay.env"
-write_relay_flag() {
-  [[ "$1" == true || "$1" == false ]] || return 1
-  local staged
-  staged=$(mktemp "$release_env.XXXXXXXX") || return 1
-  printf 'L1_SOLANA_WITHDRAWALS_ENABLED=%s\nL1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089\n' "$1" > "$staged" &&
-    mv -T "$staged" "$release_env"
-}
-write_relay_flag false
+"$control/exit_relay.py" configure --unit "$RELAY_UNIT" --release "$TN_RELAY" --node "$NODE" \
+  --probe-module "$control/exit-relay-probe.cjs" --flag-file "$release_env" \
+  --gateway "$GATEWAY" --build "$GATEWAY_BUILD" --cookie-file "$RELAY_COOKIE_FILE"
 dropin="$HOME/.config/systemd/user/$RELAY_UNIT.d"
 install -d -m700 "$dropin"
 printf '%s\n' '[Service]' "WorkingDirectory=$TN_RELAY" 'ExecStart=' \
-  'ExecStart=/usr/bin/node server/l1/relay.js' > "$dropin/99-solana-exit.conf"
-printf 'EnvironmentFile=%s\n' "$release_env" >> "$dropin/99-solana-exit.conf"
+  "ExecStart=\"$NODE\" --require \"$control/exit-relay-probe.cjs\" server/l1/relay.js" \
+  "EnvironmentFile=$release_env" > "$dropin/99-solana-exit.conf"
 systemctl --user daemon-reload
-systemctl --user restart "$RELAY_UNIT"
+env -i HOME="$HOME" USER="$USER" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+  DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus" /bin/bash -lc '"$HOME/.local/bin/disable-sol-exit"' \
+  | tee "$KIT/evidence/fresh-login-disable.log"
 ```
 
-Deploy the approved gateway image with its build ID and reviewed route. Verify the running image digest in the deployment manager and enter that image's build ID below. A health response alone cannot identify the deployed bytes.
-
-```bash
-GATEWAY=${GATEWAY:?set the authenticated public gateway HTTPS origin}
-GATEWAY_BUILD=${GATEWAY_BUILD:?set build ID from the reviewed deployed gateway image}
-RELAY_COOKIE_FILE=${RELAY_COOKIE_FILE:?set the existing session cookie jar path}
-RELAY_UNIT=${RELAY_UNIT:-navcoin-relay.service}
-test -r "$RELAY_COOKIE_FILE"
-verify_disabled() {
-  python3 ops/sol-live/exit_cutover.py relay-disabled --user --unit "$RELAY_UNIT" --release "$TN_RELAY" || return 1
-  curl -fsS --max-time 30 "$GATEWAY/health" |
-    jq -e --arg build "$GATEWAY_BUILD" '.ok and .buildId==$build' || return 1
-  local prefix="$GATEWAY/api/l1/bridge/solana/withdrawals" probe code
-  curl -fsS --max-time 30 -b "$RELAY_COOKIE_FILE" "$prefix/readiness" |
-    jq -e '.ok and .ready==false and .message=="Solana withdrawals are not available yet"' || return 1
-  probe=$(printf '%096d' 0)
-  code=$(curl -sS --max-time 30 -b "$RELAY_COOKIE_FILE" -o "$KIT/evidence/disabled-job.json" \
-    -w '%{http_code}' "$prefix/$probe") || return 1
-  test "$code" = 503 && jq -e '.ok==false and .code=="solana_withdrawals_unavailable"' "$KIT/evidence/disabled-job.json"
-}
-disable_public() {
-  write_relay_flag false && systemctl --user restart "$RELAY_UNIT" && verify_disabled
-}
-verify_disabled
-```
-
-The authenticated job GET distinguishes the reviewed disabled route from a masked upstream 404. It creates no job. Keep the flag false through the paid canary and settlement.
+The drill restarts the one relay with admission disabled, verifies its actual executable, entry point, revision and flag, then checks an authenticated public job GET. A random 96-hex request ID must appear with a 503 in that unit's journal through the installed Node HTTP diagnostics hook. The hook logs only the probe ID. Keep the cookie jar current and repeat the drill before opening.
 
 ### Stage the worker and run its isolation test before funding or initialization
 
@@ -390,7 +382,7 @@ python3 ops/sol-live/exit_canary.py preflight --output "$KIT/canary"
 Repeat the disabled relay checks from step 4 against the same deployed gateway and relay. Freeze both deployments through settlement.
 
 ```bash
-verify_disabled
+"$HOME/.local/lib/pf-sol-exit-relay/exit_relay.py" verify-disabled
 ```
 
 Review the saved evidence for each completed step. Evaluate the final two checks at steps 8 and 9.
@@ -466,29 +458,15 @@ Require six accepted settlement receipts. On each validator verify that the orig
 
 Assign the settlement duty to the bridge operations on-call and the six resident validator signers before enabling public admission. The on-call reconciles each paid marker and pending L1 packet, obtains six independent attestations and verifies the queue, reserves and supply after every settlement. Use the paid CLI above only for the pinned canary. For other holders validators must independently check the actual owner, ATA, amount and ordinal and draft the corresponding paid amendment on their resident binary. Keep public admission disabled unless this duty is staffed and exercised for the expected traffic. The archived excess custody was 60,003 atoms. Four unsettled 20,000-atom payouts exceed it. On a backlog or missing signer follow Recovery immediately.
 
-After the canary's finalized payout and verified L1 settlement, set `L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089` and `L1_SOLANA_WITHDRAWALS_ENABLED=true` in the final EnvironmentFile at `$release_env` and restart that unit. Check its actual MainPID and the authenticated public job. Disable admission immediately if either check fails.
+After the finalized payout and its verified L1 settlement, enable admission using the saved configuration. This command sets L1_SOLANA_WITHDRAWALS_ENABLED=true, restarts the reviewed unit and verifies its process settings. An authenticated GET and a JSON POST from the wallet's browser origin must each return HTTP 200, the original paid burn ID and the original finalized signature. Failure triggers the standalone disable procedure. If that procedure fails, block the public withdrawal path at the gateway and verify denial.
 
 ```bash
-burn=$(jq -er '.burn_tx_id | select(test("^[0-9a-f]{96}$"))' "$KIT/canary/paid.json")
-sig=$(jq -er '.solana_tx | select(type=="string" and length>0)' "$KIT/canary/paid.json")
-verify_public_payment() {
-  local prefix="$GATEWAY/api/l1/bridge/solana/withdrawals"
-  python3 ops/sol-live/exit_cutover.py relay-enabled --user --unit "$RELAY_UNIT" --release "$TN_RELAY" || return 1
-  curl -fsS --max-time 60 -b "$RELAY_COOKIE_FILE" "$prefix/readiness" | jq -e '.ok and .ready' || return 1
-  curl -fsS --max-time 60 -b "$RELAY_COOKIE_FILE" "$prefix/$burn" |
-    tee "$KIT/evidence/public-paid-job.json" |
-    jq -e --arg burn "$burn" --arg sig "$sig" '.stage=="paid" and .burn_tx_id==$burn and .solana_tx==$sig'
-}
-write_relay_flag true
-if ! systemctl --user restart "$RELAY_UNIT" || ! verify_public_payment; then
-  disable_public
-  exit 1
-fi
+"$HOME/.local/lib/pf-sol-exit-relay/exit_relay.py" enable "$KIT/canary/paid.json" | tee "$KIT/evidence/public-paid-job.log"
 ```
 
 ## Recovery
 
-On signer loss or a settlement backlog, disable public admission immediately by running `disable_public` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Five validators can finalize direct burns. Direct burns remain possible until a unanimous close commits. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. With all six available, close direct L1 admission with a separate unanimous decision, pay and settle all pending claims using their original packets, and reconcile custody before considering a separate reopen. Preserve evidence and wait for six accepted receipts and six closed descriptors.
+On signer loss or a settlement backlog, disable public admission immediately by running `"$HOME/.local/bin/disable-sol-exit"` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Five validators can finalize direct burns. Direct burns remain possible until a unanimous close commits. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. With all six available, close direct L1 admission with a separate unanimous decision, pay and settle all pending claims using their original packets, and reconcile custody before considering a separate reopen. Preserve evidence and wait for six accepted receipts and six closed descriptors.
 
 ```bash
 python3 ops/sol-live/exit_govern.py close --revision "$REV" --release-height "$H" --output "$KIT/evidence/close-accepted.json"

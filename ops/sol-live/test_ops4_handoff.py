@@ -25,12 +25,12 @@ class OperatorReviewTest(unittest.TestCase):
         for text in (
             "wallet/solana-withdraw",
             "56dbebb4672172c9f336dc95b831deb8281e3fd7",
-            "relay-disabled",
+            "disable-sol-exit",
             "withdrawal-routes.test.mjs",
             "RELAY_COOKIE_FILE",
         ):
             self.assertTrue(text in before, text)
-        for text in ("relay-enabled", ".burn_tx_id==$burn", ".solana_tx==$sig"):
+        for text in ("exit_relay.py", 'enable "$KIT/canary/paid.json"', "original finalized signature"):
             self.assertTrue(text in after.split("## 10.")[1], text)
 
     def test_port_and_restart_branch_precede_move(self):

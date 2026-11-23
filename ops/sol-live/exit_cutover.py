@@ -33,7 +33,7 @@ def relay_entry(cwd, args, release):
         raise ValueError("Relay is not executing the reviewed release entry point.")
 
 
-def relay(unit, user=False, *, release=None, enabled=False):
+def relay(unit, user=False, *, release=None, enabled=False, node=None, probe_module=None):
     def pid():
         process = subprocess.check_output(
             [
@@ -58,6 +58,10 @@ def relay(unit, user=False, *, release=None, enabled=False):
         raise ValueError("MainPID does not run the configured relay entry point.")
     if release is not None:
         args = (proc / "cmdline").read_text().rstrip("\0").split("\0")
+        if node is not None:
+            if not (proc / "exe").samefile(node) or args[1:3] != ["--require", str(probe_module)]:
+                raise ValueError("Relay runtime or disabled-probe module differs.")
+            args = args[:1] + args[3:]
         relay_entry((proc / "cwd").resolve(), args, release)
         revision = subprocess.check_output(
             ["git", "-C", release, "rev-parse", "HEAD"], text=True
