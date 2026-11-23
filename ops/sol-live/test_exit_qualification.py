@@ -247,7 +247,9 @@ class QualificationTest(unittest.TestCase):
             build_git_revision="rev",
         )
         new = dict(old, block_height=9, block_tip_hash="new", state_root="b")
-        route = dict(active=True, burns_open=True, profile_hash=setup.EXIT)
+        route = dict(active=True, burns_open=True, profile_hash=setup.EXIT, current_height=9,
+                     source_backing=dict(revision=8, bucket_id=setup.BUCKET, policy_hash=setup.POLICY,
+                                         series_supply_atoms=100, outstanding_vault_bridge_atoms=100))
         responses = [Mock(), Mock()]
         responses[0].json.return_value = dict(payout_ready=False)
         responses[1].json.return_value = dict(
@@ -255,6 +257,7 @@ class QualificationTest(unittest.TestCase):
             burns_open=False,
             bucket_id=setup.BUCKET,
             qualified_parent=pre.parent_of(new),
+            series_supply_atoms="100", bucket_outstanding_atoms="100",
         )
         current = [old]
 

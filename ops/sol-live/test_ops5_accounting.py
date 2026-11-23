@@ -26,3 +26,17 @@ class FifthReview(unittest.TestCase):
                 reconcile_supply(rows[:-1] + [dict(source_backing=altered)], 1610000)
         with self.assertRaises(ValueError):
             reconcile_supply(rows, 1630000)
+
+    def test_open_refuses_stale_service_missing_supply_evidence(self):
+        from exit_govern import require_open_accounting
+        from exit_setup import BUCKET, POLICY
+        backing = dict(revision=8, bucket_id=BUCKET, policy_hash=POLICY,
+                       series_supply_atoms=1610000, outstanding_vault_bridge_atoms=1610000)
+        routes = [dict(current_height=9, source_backing=backing)]*6
+        good = dict(series_supply_atoms="1610000", bucket_outstanding_atoms="1610000")
+        require_open_accounting(routes, good, 9)
+        for state in ({}, dict(good, series_supply_atoms="1630000")):
+            with self.assertRaises(ValueError):
+                require_open_accounting(routes, state, 9)
+        with self.assertRaises(ValueError):
+            require_open_accounting(routes, good, 10)
