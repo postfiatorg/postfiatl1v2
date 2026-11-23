@@ -1,0 +1,33 @@
+{
+  "account_reserve": 10,
+  "asset_weight_bytes": 11619,
+  "base_asset_fee": 23,
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "mempool_pending_for_sender": 0,
+  "minimum_fee": 23,
+  "operation": {
+    "amount_atoms": 20000,
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "bucket_id": "4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc",
+    "destination_ref": "solana-spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:acf030ed30d35fcfccfbc9e88da2f1cf72f5e5d1b311b0c6ad8d737ac50532c3",
+    "epoch": 158,
+    "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "operation": "vault_bridge_burn_to_redeem",
+    "owner": "pf5c266a1bdb18320e140961411a8c4d8383eaafb2",
+    "reserve_packet_hash": "56f497ba147896daf5e238a886ad7dbe4e6bfa485aa2ea75d9bbe31fb852d0c97504a2afedd9bfebaa7b279b56f4ce82"
+  },
+  "protocol_version": 1,
+  "schema": "postfiat-asset-fee-quote-v1",
+  "sender_balance": 5009742,
+  "sender_balance_after_fee": 5009719,
+  "sender_meets_reserve_after_fee": true,
+  "sender_sequence": 11,
+  "sequence": 12,
+  "sequence_source": "ledger_mempool",
+  "source": "pf5c266a1bdb18320e140961411a8c4d8383eaafb2",
+  "state_expansion_fee": 0,
+  "transaction_kind": "vault_bridge_burn_to_redeem",
+  "transfer_fee_byte_quantum": 512,
+  "transfer_fee_per_quantum": 1
+}

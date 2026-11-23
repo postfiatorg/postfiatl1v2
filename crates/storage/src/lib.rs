@@ -372,6 +372,13 @@ impl NodeStore {
     pub fn init(&self, genesis: &Genesis, node_state: &NodeState) -> io::Result<()> {
         self.ensure_writable()?;
         fs::create_dir_all(&self.data_dir)?;
+        let _lock = self.lock_ordered_commit()?;
+        if self.data_dir.join(GENESIS_FILE).try_exists()? {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "node already initialized",
+            ));
+        }
         self.write_genesis(genesis)?;
         self.write_node_state(node_state)?;
         self.write_governance(&GovernanceState::new(genesis.validator_count))?;

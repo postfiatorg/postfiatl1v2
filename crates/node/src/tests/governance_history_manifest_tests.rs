@@ -181,6 +181,42 @@
             update_file: update_file.clone(),
         })
         .expect("create registry update");
+        let offline = unique_test_dir("offline-registry-output");
+        fs::create_dir_all(&offline).unwrap();
+        let apply = |output_registry_file| {
+            apply_validator_registry_update(ValidatorRegistryUpdateApplyOptions {
+                data_dir: data_dir.clone(),
+                update_file: update_file.clone(),
+                current_height: 4,
+                previous_registry_file: Some(previous_registry_file.clone()),
+                output_registry_file,
+            })
+        };
+        let resident = data_dir.join(VALIDATOR_REGISTRY_FILE);
+        let original = fs::read(&resident).unwrap();
+        let governance_before = store.read_governance().unwrap();
+        assert!(apply(None).is_err(), "implicit resident write");
+        assert!(apply(Some(resident.clone())).is_err(), "explicit resident write");
+        #[cfg(unix)]
+        {
+            let alias = offline.join("linked-data");
+            std::os::unix::fs::symlink(&data_dir, &alias).unwrap();
+            assert!(apply(Some(alias.join(VALIDATOR_REGISTRY_FILE))).is_err());
+            assert!(apply(Some(alias.join("new.json"))).is_err());
+            let link = offline.join("aliased-output");
+            std::os::unix::fs::symlink(&resident, &link).unwrap();
+            assert!(apply(Some(link)).is_err());
+            let hardlink = offline.join("hard-linked-output");
+            fs::hard_link(&resident, &hardlink).unwrap();
+            assert!(apply(Some(hardlink)).is_err());
+        }
+        let projected = offline.join("next.json");
+        apply(Some(projected.clone())).unwrap();
+        assert!(read_validator_registry_file(&projected).unwrap() == new_registry);
+        assert!(apply(Some(projected)).is_err());
+        assert!(fs::read(&resident).unwrap() == original);
+        assert!(store.read_governance().unwrap() == governance_before);
+        fs::remove_dir_all(offline).unwrap();
         let governance_batch_file = data_dir.join("governance-batch.json");
         let batch = create_governance_batch(GovernanceBatchOptions {
             data_dir: data_dir.clone(),
@@ -270,6 +306,10 @@
             validator_count: 5,
         })
         .expect("init governance amendment replay bundle test");
+        // The later amendment admits validator-5. Provision its fixture key
+        // while the five-validator chain is still at genesis.
+        crate::storage_commit::ensure_validator_keys(&NodeStore::new(&data_dir), 6)
+            .expect("provision the future validator at genesis");
         let validators = local_validator_ids(5).expect("validators");
 
         let apply_governance_file = |label: &str, amendment_file: PathBuf| {
@@ -3947,4 +3987,76 @@
 
         fs::remove_dir_all(data_dir).expect("cleanup retained migration source");
         fs::remove_dir_all(output_dir).expect("cleanup retained migration generation");
+    }
+
+    #[test]
+    fn exit_review5_init_preserves_initialized_committee() {
+        let dir = unique_test_dir("resident-init");
+        let setup = |n| {
+            init(InitOptions {
+                data_dir: dir.clone(),
+                chain_id: "resident-test".into(),
+                node_id: "validator-0".into(),
+                validator_count: n,
+            })
+        };
+        setup(1).unwrap();
+        let old_genesis = NodeStore::new(&dir).read_genesis().unwrap();
+        assert!(setup(2).is_err(), "init reset an initialized node");
+        assert_eq!(NodeStore::new(&dir).read_genesis().unwrap(), old_genesis);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn exit_review5_local_key_generation_preserves_committed_registry() {
+        let dir = unique_test_dir("resident-keygen");
+        init(InitOptions {
+            data_dir: dir.clone(),
+            chain_id: "resident-test".into(),
+            node_id: "validator-0".into(),
+            validator_count: 1,
+        })
+        .unwrap();
+        let store = NodeStore::new(&dir);
+        let g = store.read_genesis().unwrap();
+        let mut tip = read_chain_tip_or_reconstruct_for_genesis(&store, &g).unwrap();
+        tip.height = 1;
+        tip.ordered_batch_count = 1;
+        store.write_chain_tip(&tip).unwrap();
+        let path = dir.join(VALIDATOR_REGISTRY_FILE);
+        let original = read_validator_registry_file(&path).unwrap();
+        assert!(
+            crate::storage_commit::ensure_validator_keys(&store, 2).is_err(),
+            "local bootstrap extended a committed committee"
+        );
+        assert!(read_validator_registry_file(&path).unwrap() == original);
+        fs::remove_file(&path).unwrap();
+        assert!(crate::storage_commit::ensure_validator_keys(&store, 1).is_err());
+        assert!(!path.exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn exit_review5_snapshot_export_preserves_resident_registry() {
+        let root = unique_test_dir("snapshot-output");
+        let source = root.join("source");
+        let resident = root.join("resident");
+        for dir in [&source, &resident] {
+            init(InitOptions {
+                data_dir: dir.clone(),
+                chain_id: "snapshot-test".into(),
+                node_id: "validator-0".into(),
+                validator_count: 1,
+            })
+            .unwrap();
+        }
+        let path = resident.join(VALIDATOR_REGISTRY_FILE);
+        let original = read_validator_registry_file(&path).unwrap();
+        assert!(export_snapshot(SnapshotExportOptions {
+            data_dir: source,
+            snapshot_dir: resident
+        })
+        .is_err());
+        assert!(read_validator_registry_file(&path).unwrap() == original);
+        fs::remove_dir_all(root).unwrap();
     }

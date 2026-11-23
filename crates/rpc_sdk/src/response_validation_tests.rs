@@ -4194,9 +4194,7 @@
 
     fn vault_route_report() -> serde_json::Value {
         let route_epoch = 3_u32;
-        let binding = postfiat_types::vault_bridge_route_binding(ROUTE_PROFILE_HASH, route_epoch)
-            .expect("route binding");
-        json!({
+        let mut report = json!({
             "schema": VAULT_BRIDGE_ROUTE_REPORT_SCHEMA,
             "chain_id": "postfiat-local",
             "genesis_hash": ROUTE_HEX96,
@@ -4228,8 +4226,6 @@
                 "activation_height": 100,
                 "expires_at_height": 1_000
             },
-            "profile_hash": ROUTE_PROFILE_HASH,
-            "route_binding": binding,
             "governance_amendment_id": ROUTE_HEX96,
             "governance_activation_height": 100,
             "governance_route_epoch": route_epoch,
@@ -4240,7 +4236,51 @@
             "route_trust_class": postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_CONTROLLED,
             "live_value_enabled": false,
             "active": true
-        })
+        });
+        let profile: postfiat_types::VaultBridgeRouteProfileV1 =
+            serde_json::from_value(report["profile"].clone()).unwrap();
+        let hash = profile.profile_hash().unwrap();
+        report["route_binding"] = json!(postfiat_types::vault_bridge_route_binding(&hash, route_epoch).unwrap());
+        report["profile_hash"] = json!(hash);
+        report
+    }
+
+    #[test]
+    fn solana_route_requires_unsigned_supply_and_outstanding() {
+        let mut report: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../ops/sol-live/fixtures/fork-open-route.json"
+        )).unwrap();
+        fn validate(report: &serde_json::Value) -> Result<(), RpcResponseValidationError> {
+            let response = success_response("route", report, vec![]).unwrap();
+            validate_health_response(&response, RpcResponseKind::VaultBridgeRoute)
+        }
+        report["source_backing"]["series_supply_atoms"] = json!(0);
+        validate(&report).expect("unequal numeric totals remain reportable");
+        for key in ["series_supply_atoms", "outstanding_vault_bridge_atoms"] {
+            let mut invalid = report.clone();
+            invalid["source_backing"].as_object_mut().unwrap().remove(key);
+            assert!(validate(&invalid).unwrap_err().to_string().contains(key));
+            for value in [json!("1"), json!(-1), json!(1.5), json!(true), json!(null)] {
+                invalid["source_backing"][key] = value;
+                assert!(validate(&invalid).unwrap_err().to_string().contains(key));
+            }
+        }
+    }
+
+    #[test]
+    fn vault_bridge_route_rejects_substituted_descriptor_hash_and_binding() {
+        let mut report = vault_route_report();
+        let profile = postfiat_types::solana_exit::descriptor();
+        report["current_height"] = json!(profile.activation_height);
+        report["governance_activation_height"] = json!(profile.activation_height);
+        report["governance_route_epoch"] = json!(profile.route_epoch);
+        report["route_binding"] = json!(postfiat_types::vault_bridge_route_binding(ROUTE_PROFILE_HASH, profile.route_epoch).unwrap());
+        report["profile_hash"] = json!(ROUTE_PROFILE_HASH);
+        report["route_trust_class"] = json!(postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_TRUSTLESS_FINALITY);
+        report["profile"] = json!(profile);
+        let response = success_response("route", &report, vec![]).unwrap();
+        let error = validate_health_response(&response, RpcResponseKind::VaultBridgeRoute).expect_err("profile hash mismatch");
+        assert!(error.to_string().contains("profile_hash"));
     }
 
     #[test]

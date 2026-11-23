@@ -624,6 +624,8 @@ pub struct AssetExecutionCompatibility {
     pub allow_legacy_base_only_vault_reserve_supply: bool,
     pub bridge_verification_activation_height: Option<u64>,
     pub orchard_aware_bridge_claim_activation_height: Option<u64>,
+    pub(crate) solana_exit_open_height: Option<u64>,
+    pub(crate) solana_exit_heights: Option<(u64, u64)>,
     pub pfusdc_source_series_activation_height: Option<u64>,
     pub atomic_swap_activation_height: Option<u64>,
     pub atomic_swap_paused: bool,
@@ -715,6 +717,8 @@ impl AssetExecutionCompatibility {
             allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
+            solana_exit_heights: None,
+            solana_exit_open_height: None,
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: Some(0),
             atomic_swap_paused: false,
@@ -744,6 +748,8 @@ impl AssetExecutionCompatibility {
             allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
+            solana_exit_heights: None,
+            solana_exit_open_height: None,
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -773,6 +779,8 @@ impl AssetExecutionCompatibility {
             allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
+            solana_exit_heights: None,
+            solana_exit_open_height: None,
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -802,6 +810,8 @@ impl AssetExecutionCompatibility {
             allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
+            solana_exit_heights: None,
+            solana_exit_open_height: None,
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -831,6 +841,8 @@ impl AssetExecutionCompatibility {
             allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
+            solana_exit_heights: None,
+            solana_exit_open_height: None,
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -866,6 +878,20 @@ impl AssetExecutionCompatibility {
     pub fn orchard_aware_bridge_claim_active(&self, block_height: u64) -> bool {
         self.orchard_aware_bridge_claim_activation_height
             .is_some_and(|activation_height| block_height >= activation_height)
+    }
+
+    pub fn with_governed_solana_exit(
+        mut self,
+        genesis: &Genesis,
+        governance: &postfiat_types::GovernanceState,
+    ) -> Self {
+        self.solana_exit_open_height = postfiat_types::solana_exit::open_height(governance);
+        self.solana_exit_heights = postfiat_types::solana_exit::registered(governance)
+            .filter(|(_, a)| {
+                a.chain_id == genesis.chain_id && a.genesis_hash == genesis_hash(genesis)
+            })
+            .map(|(record, _)| (record.authorized_height, record.profile.expires_at_height));
+        self
     }
 
     pub const fn with_pfusdc_source_series_activation_height(
@@ -1193,7 +1219,7 @@ fn apply_asset_operation(
             // `issued_payment` cannot carry a memo, so it never reaches an
             // account that requires one once the gate is active.
             require_destination_memo(ledger, &operation.to, 0, compatibility, block_height)?;
-            apply_issued_payment(ledger, operation, block_height, compatibility)
+            apply_issued_payment(genesis, ledger, operation, block_height, compatibility)
         }
         AssetTransactionOperation::IssuedPaymentV2(operation) => {
             if transaction.unsigned.transaction_kind
@@ -1217,7 +1243,13 @@ fn apply_asset_operation(
                 compatibility,
                 block_height,
             )?;
-            apply_issued_payment(ledger, &operation.payment(), block_height, compatibility)
+            apply_issued_payment(
+                genesis,
+                ledger,
+                &operation.payment(),
+                block_height,
+                compatibility,
+            )
         }
         AssetTransactionOperation::AccountSet(operation) => {
             if transaction.unsigned.transaction_kind != postfiat_types::ACCOUNT_SET_TRANSACTION_KIND
@@ -2946,6 +2978,7 @@ fn apply_asset_operation(
                 operation,
                 block_height,
                 compatibility,
+                orchard_balances,
             )
         }
         AssetTransactionOperation::VaultBridgeRedeemSettle(operation) => {

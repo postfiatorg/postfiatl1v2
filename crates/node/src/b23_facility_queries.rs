@@ -320,8 +320,14 @@ pub fn b23_facility_offer_preview(
         .checked_add(1)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height exhausted"))?;
     let compatibility = asset_execution_compatibility_from_store(&store)?;
-    let mut candidate =
-        ledger_after_executable_mempool(&genesis, ledger, &mempool, height, compatibility)?;
+    let mut candidate = ledger_after_executable_mempool(
+        &genesis,
+        ledger,
+        &mempool,
+        height,
+        compatibility,
+        &crate::mempool_proposals::pending_asset_orchard_balances(&store, &mempool)?,
+    )?;
     Ok(execute_offer_transaction(
         &genesis,
         &mut candidate,

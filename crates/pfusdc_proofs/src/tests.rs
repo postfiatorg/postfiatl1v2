@@ -898,3 +898,14 @@ fn finalized_governance_block_proves_committee_rotation() {
         .push(' ');
     assert!(verify_egress_witness_v1(&witness).is_err());
 }
+
+/// Verify the certified block exported by the normal L1 execution path.
+#[test]
+#[ignore = "requires the copied-state Solana burn rehearsal"]
+fn certify_rehearsal_burn_for_local_solana() {
+    let dir = std::path::PathBuf::from(std::env::var_os("SOL_EXIT_EVIDENCE").unwrap());
+    let witness: PfUsdcEgressProofWitnessV1 =
+        serde_json::from_slice(&std::fs::read(dir.join("local-witness.json")).unwrap()).unwrap();
+    assert_eq!(witness.block.header.batch_kind, "transparent");
+    verify_egress_witness_v1(&witness).unwrap();
+}
