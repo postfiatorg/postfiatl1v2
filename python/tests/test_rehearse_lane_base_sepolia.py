@@ -152,7 +152,7 @@ class ProgramIdentityTests(unittest.TestCase):
 
     def test_non_fork_mode_takes_the_committed_identity(self):
         identity = dry_run.load_program_identity(fork=False, override=None, worktree_clean=True, head="abc")
-        self.assertEqual(identity["elf_sha256"], "cdaf391297e05a1547334505dcf388545ab148ddacbc7a136eeef3ba0fbbfd58")
+        self.assertEqual(identity["elf_sha256"], "3d7c7171fe38ff8500ce5201aba33e87d103a81f50e72d1cb93e602b1e229fd0")
         self.assertEqual(identity["checked_out_commit"], "abc")
         self.assertEqual(len(identity["runs"]), 2)
 
@@ -164,7 +164,7 @@ class ProgramIdentityTests(unittest.TestCase):
     def test_fork_mode_accepts_an_override(self):
         identity = dry_run.load_program_identity(fork=True, override=dry_run.PROGRAM_INFO, worktree_clean=False,
                                                  head="abc")
-        self.assertEqual(identity["program_vkey"][:6], "0x005a")
+        self.assertEqual(identity["program_vkey"][:6], "0x0072")
 
 
 class FakeChain:

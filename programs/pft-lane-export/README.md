@@ -8,10 +8,12 @@ It has its own key. The pfUSDC egress program (`programs/pfusdc-egress`) binds a
 
 `elf/pft-lane-export-program` and `program-info.json` are the program's identity:
 
-- ELF sha256: `cdaf391297e05a1547334505dcf388545ab148ddacbc7a136eeef3ba0fbbfd58`
-- Verifying key: `0x005a9f57832e55110036d86cebd66e1c6714b3dddca916580efae1913ae07829`
+- ELF sha256: `3d7c7171fe38ff8500ce5201aba33e87d103a81f50e72d1cb93e602b1e229fd0`
+- Verifying key: `0x0072067d6631fa839079b1ccd5779588a806cb33e5cb76f36126d333eb76d6ff`
 
 `releases.json` records how they were produced, the latest release last:
+
+- **23 November:** `pft-lane-export-identity` run 45145886648 at `d70614c2e`. The guest source did not change; the Solana work changed `crates/types`, which the guest links, so the ELF and key moved. The 19 November identity (`cdaf3912…`, key `0x005a9f57…07829`) is pinned by no verifier on any network. No proof has been generated and no verifier constructed with any of these keys.
 
 - **Joined line, 19 November:** `pft-lane-export-identity` runs 44420993427 at `8016e9cdc` and 44427701299 at `489e11707`. The guest source did not change; the B24 merge changed crates it links, so the ELF and key moved. No proof has been generated and no verifier constructed with any of these keys.
 

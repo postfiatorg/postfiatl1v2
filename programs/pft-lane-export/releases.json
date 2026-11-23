@@ -90,6 +90,27 @@
       "program_vkey": "0x005a9f57832e55110036d86cebd66e1c6714b3dddca916580efae1913ae07829",
       "cargo_lock_sha256": "d34ce6ca28550ab6caa959a0827c30587ead1614ec73026476a35103724938f7",
       "expected": "programs/pft-lane-export/program-info.json"
+    },
+    {
+      "id": "pft-lane-export-v1-20261123",
+      "build_mode": "docker",
+      "build_command": "cargo prove build --docker --tag v6.3.1 --locked --workspace-directory <checkout> --output-directory elf",
+      "source_commit": "d70614c2eab955f73f6d466ff2dee7d527e3d017",
+      "workflow": ".github/workflows/pft-lane-export-identity.yml",
+      "reason": "rebuilt after the Solana work changed crates/types, which the guest links (solana-epoch-schedule and the Solana route and receipt types); the guest and prover lock files gained the new packages in d70614c2e; guest source unchanged",
+      "runs": [
+        {
+          "run_id": 45145886648,
+          "attempt": 1,
+          "builds": 2,
+          "clean_source_trees": 2,
+          "note": "pull request merge build of d70614c2e (pull request 216); two clean trees gave byte-identical ELFs. The push run 45092321911 on main at 65a769c0d built the same ELF but stopped at the stale prover lock before deriving the key, so it is not counted"
+        }
+      ],
+      "elf_sha256": "3d7c7171fe38ff8500ce5201aba33e87d103a81f50e72d1cb93e602b1e229fd0",
+      "program_vkey": "0x0072067d6631fa839079b1ccd5779588a806cb33e5cb76f36126d333eb76d6ff",
+      "cargo_lock_sha256": "5860d55d8cddbb717733f7d121eb7582510f3897025e239b05af8bcd4848dbe8",
+      "expected": "programs/pft-lane-export/program-info.json"
     }
   ]
 }
