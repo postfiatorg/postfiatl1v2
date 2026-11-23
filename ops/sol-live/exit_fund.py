@@ -17,20 +17,24 @@ JOURNAL = Path.home() / "var/sol-exit/funding-attempt.json"
 def fund(c, path):
     with path.with_suffix(".lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        level = dict(c.level)
         if path.exists():
             attempt = read(path)
             sig = attempt["signature"]
             # Query history after the finalized expiry read, including on ambiguous sends.
-            height = c.call("getBlockHeight", c.level)
-            status = c.call("getSignatureStatuses", [sig], {"searchTransactionHistory": True})["value"][0]
+            epoch = c.call("getEpochInfo", c.level)
+            level["minContextSlot"] = epoch["absoluteSlot"]
+            history = c.call("getSignatureStatuses", [sig], {"searchTransactionHistory": True})
+            require(history["context"]["slot"] >= epoch["absoluteSlot"], "Signature history is behind finalized expiry observation.")
+            status = history["value"][0]
             if status and status["confirmationStatus"] == "finalized" and status["err"] is None:
                 return sig
-            require(height > attempt["lastValidBlockHeight"] and
+            require(epoch["blockHeight"] > attempt["lastValidBlockHeight"] and
                     (status is None or status["confirmationStatus"] == "finalized"),
                     "Funding transaction pending. Reconcile again later.")
-        require(c.call("getBalance", str(FEE_PAYER), c.level)["value"] == 0,
+        require(c.call("getBalance", str(FEE_PAYER), level)["value"] == 0,
                 "Existing recipient balance. Reconcile the prior transfer.")
-        recent = c.call("getLatestBlockhash", c.level)["value"]
+        recent = c.call("getLatestBlockhash", level)["value"]
         ix = transfer(dict(from_pubkey=c.owner, to_pubkey=FEE_PAYER, lamports=100_000_000))
         tx = Transaction.new_signed_with_payer([ix], c.owner, [c.payer], Hash.from_string(recent["blockhash"]))
         sig = str(tx.signatures[0])

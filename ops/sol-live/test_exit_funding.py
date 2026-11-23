@@ -17,10 +17,13 @@ class FundingTest(unittest.TestCase):
             path = Path(d)/"funding.json"
             sends = []
             height, status = 50, None
+            history_slot = 200
             def call(method, *args):
                 if method == "getSignatureStatuses":
                     self.assertTrue(args[1]["searchTransactionHistory"])
-                    return {"context":{"slot":200}, "value":[status]}
+                    return {"context":{"slot":history_slot}, "value":[status]}
+                if method == "getEpochInfo":
+                    return dict(absoluteSlot=200,blockHeight=height)
                 if method == "getBlockHeight":
                     return height
                 if method == "getBalance":
@@ -44,6 +47,10 @@ class FundingTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"pending"):
                 fund(c,path)
             status = None
+            history_slot = 150
+            with self.assertRaisesRegex(ValueError,"behind"):
+                fund(c,path)
+            history_slot = 200
             with self.assertRaises(TimeoutError):
                 fund(c,path)
             self.assertEqual(len(set(sends)),2)
