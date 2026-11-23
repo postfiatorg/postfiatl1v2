@@ -224,9 +224,7 @@ class JobsTest(unittest.TestCase):
 
     def test_fees_and_rent_cannot_take_the_relayer_below_its_floor(self):
         from unittest.mock import Mock
-        from solders.hash import Hash
-        from solders.keypair import Keypair
-        from exit_payout import FLOOR, funded_send
+        from exit_payout import FLOOR, Hash, Keypair, funded_send
 
         c = Mock()
         c.owner = Keypair().pubkey()

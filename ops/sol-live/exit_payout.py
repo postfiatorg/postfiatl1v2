@@ -32,6 +32,7 @@ from exit_setup import (
     Instruction,
     checkpoint_pda,
     expected_light,
+    load,
     pk,
     pda,
     read,
@@ -231,8 +232,6 @@ def submit(c, kind, witness, work, owner=None, on_pay=None):
         import json
 
         save(path, json.loads(Keypair().to_json()))
-    from keys import load
-
     signer = load(path)
     buf = signer.pubkey()
     if not c.account(buf):
