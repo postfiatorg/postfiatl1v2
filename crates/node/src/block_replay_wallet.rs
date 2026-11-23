@@ -3193,6 +3193,13 @@ pub(super) fn replay_archived_payload(
                 &state.governance,
                 true,
             );
+            if genesis_hash(genesis) == pq_payment_fixture::GENESIS_HASH
+                && state
+                    .governance
+                    .pq_fee_schedule_in_force(block.header.height)
+            {
+                ensure_atomic_shielded_batch_accepted(&batch, &receipts)?;
+            }
             pq_payment_fixture::ensure_valid(&batch, &receipts)?;
             Ok(receipts)
         }

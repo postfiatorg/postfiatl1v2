@@ -480,6 +480,58 @@ fn pq_governance_archive_requires_signatures_before_execution() {
 }
 
 #[test]
+fn pq_failed_atomic_replay_uses_the_schedule_at_inclusion() {
+    let dir = unique_test_dir("pq-atomic-replay-era");
+    let genesis = rehearsal_genesis(&dir);
+    let disk = NodeStore::new(&dir);
+    let registry = read_validator_registry_file(&dir.join(VALIDATOR_REGISTRY_FILE)).unwrap();
+    let batch = build_atomic_shielded_action_batch(
+        &genesis,
+        vec![ShieldedAction::PqPaymentV1(payment("pft-pay"))],
+    )
+    .unwrap();
+    let entry = BatchArchiveEntry {
+        batch_kind: "shielded".into(),
+        batch_id: batch.batch_id.clone(),
+        payload_hash: String::new(),
+        payload_json: serde_json::to_string(&batch).unwrap(),
+    };
+    let mut block = super::dummy_block_record(3);
+    block.header.batch_kind = "shielded".into();
+    block.header.batch_id = batch.batch_id.clone();
+    for priced in [false, true] {
+        let mut governance = disk.read_governance().unwrap();
+        let mut schedule = amendment(&genesis, 2);
+        if priced {
+            schedule.kind = "pq_payment_rehearsal_v1:fee:1".into();
+        }
+        governance.apply(schedule);
+        let mut atomic = amendment(&genesis, 1);
+        atomic.kind = GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT.into();
+        governance.apply(atomic);
+        consensus_artifacts::check_pq_block(&genesis, &governance, 3, [&batch]).unwrap();
+        let result = block_replay_wallet::replay_archived_payload(
+            &genesis,
+            &block,
+            &entry,
+            block_replay_wallet::ArchivedReplayState {
+                governance: &mut governance,
+                ledger: &mut disk.read_ledger().unwrap(),
+                shielded: &mut disk.read_shielded().unwrap(),
+                bridge: &mut disk.read_bridge().unwrap(),
+                validator_registry: &registry,
+            },
+        );
+        if priced {
+            assert!(result.is_err(), "priced replay accepted a failed batch");
+        } else {
+            assert!(!result.unwrap()[0].accepted);
+        }
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn pq_base_history_non_atomic_issued_shield() {
     let dir = unique_test_dir("pq-bare-history");
     let genesis = rehearsal_genesis(&dir);
