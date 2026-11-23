@@ -346,13 +346,13 @@ all 1,734 R64 block hashes and roots matched on replay.
 
 ## M6. Recover notes and pay from the Python CLI · 6–10 days
 
-- [ ] Add `crates/node/src/bin/pftl_pq_walletd.rs` as a user-owned native prover/scanner accessed over an
+- [x] Add `crates/node/src/bin/pftl_pq_walletd.rs` as a user-owned native prover/scanner accessed over an
   owner-only local socket. It uses `rust-prover/src/payment.rs` and the L1 prover profile for both
   construction and verification before submission. The prototype recorded 2.9 s median on 16 cores/32 threads,
   26.7 s on one core, about 562 MiB peak RSS. Limit concurrency and expose progress and cancellation.
   Benchmark on a supported laptop. Browser proving would need its own memory, thread, randomness and
   portability measurements.
-- [ ] Add `crates/privacy_binius_wallet/src/{lib,keys}.rs` and its manifest. Start from high-entropy wallet
+- [x] Add `crates/privacy_binius_wallet/src/{lib,keys}.rs` and its manifest. Start from high-entropy wallet
   seed material. Specify HKDF-Extract/Expand with HMAC-SHA-384, a fixed versioned protocol salt and
   length-framed info including genesis/network, account index and address index. Publish the exact salt,
   integer widths and byte order with cross-language derivation vectors. Use separate fixed versioned labels
@@ -362,7 +362,7 @@ all 1,734 R64 block hashes and roots matched on replay.
   blinders, encapsulation, proof and dummy inputs. Encode a checksummed network/version receive address
   carrying the 1,568-byte encapsulation key and 48-byte owner commitment. Recovery records carry version,
   account/index range and birthday. Fresh entropy is required after an old seed disclosure.
-- [ ] Extend `crates/node/src/{private_pool_reads,private_pool_snapshot_points}.rs` and
+- [x] Extend `crates/node/src/{private_pool_reads,private_pool_snapshot_points}.rs` and
   `crates/rpc_sdk/src/{protocol_requests,response_validation}.rs` with bounded finalized pages of PQ
   commitments, envelopes, serials, retained anchors and epochs. Pin all pages to one certified (height, block
   hash, state root), verify authenticated page coverage or reconstruct and compare roots before spending.
@@ -372,19 +372,36 @@ all 1,734 R64 block hashes and roots matched on replay.
   Record opening, leaf and epoch in encrypted local storage. Derive serials locally and remove spent matches.
   Never send a private note index, scan/spend key or witness to a gateway. A rejected or undecryptable
   individual record cannot break another payment's recovery.
-- [ ] A measured 4,722 nonmatching outputs/s/core is about 37 s/core for 172,800 outputs (one day at one tx/s,
+- [x] A measured 4,722 nonmatching outputs/s/core is about 37 s/core for 172,800 outputs (one day at one tx/s,
   two outputs per tx, one scan key). Track keys, pages and sync lag separately. Choose the latest finalized
   eligible anchor, randomize payment/change slot, and preserve the old tree terminal witness through rollover.
   Add `python/postfiat_rpc/pq_wallet.py` with dispatch in `__main__.py` and transport in `client.py`. Expose
   address, sync, balance per asset/issue, shield, pay, unshield, status/receipt and restore. Show pending and
   finalized balances separately. Use owner-only encrypted files, atomic writes and distinct paths for secrets
   and shareable artifacts.
-- [ ] **Merge test.** Add `python/tests/test_pq_wallet_cli.py` and wallet-crate vectors. Two clean wallet
+- [x] **Merge test.** Add `python/tests/test_pq_wallet_cli.py` and wallet-crate vectors. Two clean wallet
   directories run the CLI against a local chain for both assets. Restore Bob from backup, rescan from birthday
   across an epoch, find only his funds and spend them. Compare Rust and Go trial-decryption results, including
   corrupted envelope, wrong key and authentic ciphertext with the wrong opening. Check distinct
   network/role/index derivations, deterministic recovery, no secrets in RPC/logs, path-collision rejection and
   cancel/restart without duplicate spend.
+
+The [wallet guide](../../crates/privacy_binius_wallet/README.md) gives the CLI commands, encrypted
+backup procedure and published derivation vectors. The wallet pins its checkpoint to an operator-trusted
+validator and can download the public payment pages from a separate server.
+
+The [CLI merge test](../../python/tests/test_pq_wallet_cli.py) starts four leaves short of the depth-24
+limit using a checked pre-birthday frontier. Bob restored 30 PFT and 25 pfUSDC atoms at height 4, then
+spent 10 PFT using the terminal epoch-0 root with outputs in epoch 1. All eight blocks reconciled supply.
+Cancellation and retry preserved one intent. The test checked 89 RPC requests, signed bodies and process
+output for secret leakage. A separate run through the shipping RPC server finalized shield, pay and
+unshield for both assets. Archived replay matched all 1,734 block hashes and state roots.
+
+**Measurement deviation.** The requested pinned Linux AMD EPYC host supplied the measurements. A supported
+laptop remains unmeasured. Eight one-core daemon proofs took 25.783 s median and 28.222 s maximum, with
+584,608 KiB peak worker RSS. One scan key tried 4,096 nonmatching outputs at 6,683 outputs/s. On the
+shared host the standalone Go mint check took 52.37 ms on CPU 15 against its 50 ms gate. The full pinned
+rerun on CPU 12 took 36.41 ms for that check and passed all seven original gates.
 
 ## M7. Expose the wallet flow and keep Orchard usable · 3–6 days
 
