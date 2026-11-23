@@ -899,73 +899,13 @@ fn finalized_governance_block_proves_committee_rotation() {
     assert!(verify_egress_witness_v1(&witness).is_err());
 }
 
-/// Certify the receipt and exit leaf produced by the scheduled local execution
-/// rehearsal with an isolated committee. This chain cannot authorize a live payout.
+/// Verify the certified block exported by the normal L1 execution path.
 #[test]
 #[ignore = "requires the copied-state Solana burn rehearsal"]
 fn certify_rehearsal_burn_for_local_solana() {
     let dir = std::path::PathBuf::from(std::env::var_os("SOL_EXIT_EVIDENCE").unwrap());
-    let burn: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(dir.join("local-burn.json")).unwrap()).unwrap();
-    let red: VaultBridgeRedemption = serde_json::from_value(burn["redemption"].clone()).unwrap();
-    let receipt: Receipt = serde_json::from_value(burn["receipt"].clone()).unwrap();
-    let leaf: BridgeExitLeafV1 = serde_json::from_value(burn["leaf"].clone()).unwrap();
-    let profile = serde_json::from_value(burn["profile"].clone()).unwrap();
-    let (validators, keys) = committee();
-    let mut w = fixture();
-    w.chain_id = burn["chain_id"].as_str().unwrap().to_owned();
-    w.genesis_hash = burn["genesis_hash"].as_str().unwrap().to_owned();
-    w.protocol_version = burn["protocol_version"].as_u64().unwrap() as u32;
-    w.bridge_exit_root_activation_height = burn["bridge_exit_root_activation_height"].as_u64().unwrap();
-    let domain = consensus_v2_domain(
-        w.chain_id.clone(),
-        w.genesis_hash.clone(),
-        w.protocol_version,
-        w.committee_epoch,
-        &validators,
-    );
-    let leaves = [leaf];
-    let parent = signed_block_record(
-        &domain,
-        &validators,
-        &keys,
-        red.created_at_height - 1,
-        burn["prior"].as_str().unwrap().to_owned(),
-        "21".repeat(48),
-        burn["parent_state_root"].as_str().unwrap().to_owned(),
-        None,
-        "governance",
-        "56".repeat(48),
-        vec![],
-    );
-    let block = signed_block_record(
-        &domain,
-        &validators,
-        &keys,
-        red.created_at_height,
-        parent.header.block_hash.clone(),
-        "33".repeat(48),
-        burn["state_root"].as_str().unwrap().to_owned(),
-        Some(bridge_exit_merkle_root_v1(&leaves).unwrap()),
-        "transactions",
-        "34".repeat(48),
-        vec![receipt.tx_id.clone()],
-    );
-    std::fs::write(dir.join("local-blocks.json"), serde_json::to_vec(&BlockLog {
-        blocks: vec![parent.clone(), block.clone()]
-    }).unwrap()).unwrap();
-    w.block = block;
-    w.prior_checkpoint_block_id = parent.header.block_hash;
-    w.receipt = receipt;
-    w.withdrawal_packet = red.withdrawal_packet;
-    w.withdrawal_packet_hash = red.withdrawal_packet_hash;
-    w.withdrawal_packet_evm_digest = red.withdrawal_packet_evm_digest;
-    w.route_profile = profile;
-    w.merkle_proof = bridge_exit_merkle_proof_v1(&leaves, 0).unwrap();
-    verify_egress_witness_v1(&w).unwrap();
-    std::fs::write(
-        dir.join("local-witness.json"),
-        serde_json::to_vec(&w).unwrap(),
-    )
-    .unwrap();
+    let witness: PfUsdcEgressProofWitnessV1 =
+        serde_json::from_slice(&std::fs::read(dir.join("local-witness.json")).unwrap()).unwrap();
+    assert_eq!(witness.block.header.batch_kind, "transparent");
+    verify_egress_witness_v1(&witness).unwrap();
 }
