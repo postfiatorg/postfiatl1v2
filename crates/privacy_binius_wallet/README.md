@@ -23,13 +23,15 @@ The validator must have the M5 rehearsal amendment and private-action admission 
    and inclusion status. Run `sync` to recover finalized notes, then `balance` to see per-issue
    finalized atoms and the separate pending change. `status` shows the current job and elapsed time.
 5. Use `cancel` to interrupt a job. An interrupted submission can already have reached admission.
-   Run `sync`, then `submit-pending` to retry the saved action if still pending. One outstanding
-   action per wallet prevents spending the same notes while its outcome is unknown.
+   Run `sync`. The `attempts` list in `status` or `balance` gives the action hash and phase.
+   Retry with `submit-pending --action-hash HASH` or use `pay --replace HASH` or `unshield --replace HASH` with the new terms.
+   All replacements share a real input. Other notes remain available for separate payments.
+   A refusal leaves the earlier bytes usable if their fee and anchor become eligible again.
 6. In a fresh wallet directory, start the daemon with the original wrapping key, run
    `restore --file /secure/birthday.backup` and `sync`. Recovered witnesses use the birthday
    frontier plus public commitments through the latest finalized eligible root, including the
    terminal root of a closed epoch. To combine funds across epochs, first pay yourself from an
-   older epoch and sync after finality.
+   older epoch and sync after finality. The birthday backup recovers confirmed funds. Keep the current encrypted wallet and browser database to preserve unconfirmed proofs, reservations and receipt capabilities.
 
 ## Derivation and encodings
 
@@ -90,7 +92,7 @@ shows the shareable PQ address. Choose **Shield**, **Pay** or **Unshield**, ente
 the exact issue, recipient and fee source, then confirm. The daemon proves and signs locally. The UI
 checks the signed public terms in WASM before submitting the public action to the gateway. **Check
 finality** compares the gateway receipt with the corresponding certified block at your trusted
-validator. A pending change becomes spendable after a finalized sync.
+validator. Use **Send identical bytes** for an uncertain submission, or choose the earlier spend under **Payment inputs** to review a replacement. A pending change becomes spendable after a finalized sync.
 
 For migration, prepare a private-egress batch with the existing Orchard wallet. Pass its public batch
 file via `--orchard-exit-batch` when starting the bridge. The exit must pay the configured account

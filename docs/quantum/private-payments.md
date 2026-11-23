@@ -25,9 +25,9 @@ A PFSH02 payment spends two private notes and creates two new ones. The chain se
 The payment carries no public sender account, key, sequence or signature. The transferred amount and recipient stay inside the notes. Each source series has its own tree. Deposits into the pool and exits out of it show their public account and
 amount, as any bridge between public and private balances must.
 
-Issued payments and exits use L1 profile 2. Both wallets read the exact fee for the next inclusion height from finalized pool state. The proposed starting fee is 1 atom (0.000001 pfUSDC), equal in atom count to PFT's minimum. The gateway sees the caller's network address and timing. Validators see the relay address and timing, or the wallet's network address on direct requests. Issued spends use a shared admission scope.
+Issued payments and exits use L1 profile 2. Both wallets read the exact fee for the next inclusion height from finalized pool state. The proposed starting fee is 1 atom (0.000001 pfUSDC), equal in atom count to PFT's minimum. The gateway sees the caller's network address and timing. Validators see the relay address and timing, or the wallet's network address on direct requests. The gateway uses an independent receipt capability for each payerless spend. The direct CLI uses a common admission scope. A node admission receipt is readable with the intent ID.
 
-Archives from rehearsal builds before this change that contain issued private spends cannot be replayed; no live chain is affected.
+Replaying a rehearsal archive that contains an issued payment or exit in the original public-payer format requires its original decoder.
 
 The recipient finds their payment by trial-decrypting envelopes with their own ML-KEM key. Nobody else can tell
 which envelope is theirs. The sender does not need the recipient to be online.

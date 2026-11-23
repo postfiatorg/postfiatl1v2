@@ -1,6 +1,6 @@
 # Network Status
 
-**Rehearsal archive compatibility.** Archives from rehearsal builds before this change that contain issued private spends cannot be replayed; no live chain is affected. The decoder refuses the original public-payer format for issued payments and exits.
+**Rehearsal archive compatibility.** Rehearsal archives containing public-payer issued Internal or Exit actions require their original decoder. This includes rejected and mixed batches, historical commits and snapshot replay. Bare-schedule native payments and issued deposits retain base validation. The integration specification lists the affected relay and wallet records.
 
 **Guidance reviewed 2026-11-06; latest fleet observation 2026-11-19.**
 This page summarizes recorded observations and separately labels newer source
