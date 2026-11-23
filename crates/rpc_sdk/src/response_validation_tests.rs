@@ -4194,9 +4194,7 @@
 
     fn vault_route_report() -> serde_json::Value {
         let route_epoch = 3_u32;
-        let binding = postfiat_types::vault_bridge_route_binding(ROUTE_PROFILE_HASH, route_epoch)
-            .expect("route binding");
-        json!({
+        let mut report = json!({
             "schema": VAULT_BRIDGE_ROUTE_REPORT_SCHEMA,
             "chain_id": "postfiat-local",
             "genesis_hash": ROUTE_HEX96,
@@ -4228,8 +4226,6 @@
                 "activation_height": 100,
                 "expires_at_height": 1_000
             },
-            "profile_hash": ROUTE_PROFILE_HASH,
-            "route_binding": binding,
             "governance_amendment_id": ROUTE_HEX96,
             "governance_activation_height": 100,
             "governance_route_epoch": route_epoch,
@@ -4240,7 +4236,29 @@
             "route_trust_class": postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_CONTROLLED,
             "live_value_enabled": false,
             "active": true
-        })
+        });
+        let profile: postfiat_types::VaultBridgeRouteProfileV1 =
+            serde_json::from_value(report["profile"].clone()).unwrap();
+        let hash = profile.profile_hash().unwrap();
+        report["route_binding"] = json!(postfiat_types::vault_bridge_route_binding(&hash, route_epoch).unwrap());
+        report["profile_hash"] = json!(hash);
+        report
+    }
+
+    #[test]
+    fn vault_bridge_route_rejects_substituted_descriptor_hash_and_binding() {
+        let mut report = vault_route_report();
+        let profile = postfiat_types::solana_exit::descriptor();
+        report["current_height"] = json!(profile.activation_height);
+        report["governance_activation_height"] = json!(profile.activation_height);
+        report["governance_route_epoch"] = json!(profile.route_epoch);
+        report["route_binding"] = json!(postfiat_types::vault_bridge_route_binding(ROUTE_PROFILE_HASH, profile.route_epoch).unwrap());
+        report["profile_hash"] = json!(ROUTE_PROFILE_HASH);
+        report["route_trust_class"] = json!(postfiat_types::VAULT_BRIDGE_ROUTE_TRUST_CLASS_TRUSTLESS_FINALITY);
+        report["profile"] = json!(profile);
+        let response = success_response("route", &report, vec![]).unwrap();
+        let error = validate_health_response(&response, RpcResponseKind::VaultBridgeRoute).expect_err("profile hash mismatch");
+        assert!(error.to_string().contains("profile_hash"));
     }
 
     #[test]

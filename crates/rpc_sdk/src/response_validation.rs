@@ -1753,8 +1753,11 @@ fn validate_vault_bridge_route_result(result: &Value) -> Result<(), RpcResponseV
     }
 
     lower_hex_field(result, "profile_hash", postfiat_types::VAULT_BRIDGE_HEX_HASH_LEN)?;
-    let profile_hash = string_field(result, "profile_hash")?;
-    let expected_binding = postfiat_types::vault_bridge_route_binding(profile_hash, route_epoch)
+    let decoded: postfiat_types::VaultBridgeRouteProfileV1 = serde_json::from_value(profile.clone())
+        .map_err(|error| invalid_result("profile", error.to_string()))?;
+    let profile_hash = decoded.profile_hash().map_err(|error| invalid_result("profile", error))?;
+    expect_string_eq(result, "profile_hash", &profile_hash)?;
+    let expected_binding = postfiat_types::vault_bridge_route_binding(&profile_hash, route_epoch)
         .map_err(|error| invalid_result("route_binding", error))?;
     expect_string_eq(result, "route_binding", &expected_binding)?;
 
@@ -1777,8 +1780,7 @@ fn validate_vault_bridge_route_result(result: &Value) -> Result<(), RpcResponseV
     use postfiat_types::solana_exit;
     let is_solana_exit = profile_hash == solana_exit::PROFILE_HASH;
     let (policy_hash, expected_trust_class) = if is_solana_exit {
-        if serde_json::from_value::<postfiat_types::VaultBridgeRouteProfileV1>(profile.clone()).ok()
-            != Some(solana_exit::descriptor())
+        if decoded != solana_exit::descriptor()
         {
             return Err(invalid_result("profile", "expected the pinned revision-8 descriptor"));
         }
