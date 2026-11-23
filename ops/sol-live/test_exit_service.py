@@ -316,3 +316,46 @@ class JobsTest(unittest.TestCase):
                 payout.submit(c, "checkpoint", w, Path(directory)), "finalized"
             )
             self.assertEqual(len(list(Path(directory).glob("*.key"))), 1)
+
+    def test_payment_checks_only_its_destination_before_proving(self):
+        from unittest.mock import Mock, patch
+        import exit_payout as p
+        from exit_precheck import PHANTOM
+        from solders.keypair import Keypair
+
+        other = Keypair().pubkey()
+        w = {
+            "prior_checkpoint_block_id": "11" * 48,
+            "block": {"header": {"block_hash": "22" * 48}},
+            "receipt": {"tx_id": "33" * 48},
+        }
+        c = Mock(owner=p.FEE_PAYER)
+        delegated = p.pda(p.ATA, bytes(PHANTOM), bytes(p.TOKEN), bytes(p.MINT))
+        clean = p.pda(p.ATA, bytes(other), bytes(p.TOKEN), bytes(p.MINT))
+        d = bytearray(165)
+        d[:64] = bytes(p.MINT) + bytes(PHANTOM)
+        d[108] = d[72] = 1
+
+        def account(key):
+            if key == delegated:
+                return dict(owner=str(p.TOKEN), executable=False, data=bytes(d))
+
+        c.account.side_effect = account
+        c.rent.return_value = 1
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(p, "prove", return_value=(b"test", bytes(356))) as proof,
+            patch.object(p, "upload", return_value=Keypair()),
+            patch.object(p, "balance"),
+            patch.object(p, "funded_send", return_value="ok"),
+        ):
+            work = Path(directory)
+            with self.assertRaisesRegex(ValueError, "delegate"):
+                p.submit(c, "withdrawal", w, work, PHANTOM)
+            proof.assert_not_called()
+            c.account.reset_mock()
+            self.assertEqual(p.submit(c, "withdrawal", w, work, other), "ok")
+            self.assertIn(clean, [call.args[0] for call in c.account.call_args_list])
+            self.assertNotIn(
+                delegated, [call.args[0] for call in c.account.call_args_list]
+            )
