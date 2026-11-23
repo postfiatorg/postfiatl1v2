@@ -49,6 +49,7 @@ class HandoffTest(unittest.TestCase):
                     source=source,
                     protocol_version=1,
                     minimum_fee=1,
+                    sender_meets_reserve_after_fee=True,
                     sequence=2,
                     chain_id="test",
                     genesis_hash="00" * 48,
@@ -93,7 +94,14 @@ class HandoffTest(unittest.TestCase):
                 "deploy_host.sh",
                 "restore-watchdog.sh",
             ):
-                (old / name).write_text(f"source {old}/env\n")
+                (old / name).write_text(
+                    f"source {old}/env\n"
+                    + (
+                        '$SSH "systemctl restart validator"\n$SSH "systemctl restart rpc"\n'
+                        if name == "deploy_host.sh"
+                        else ""
+                    )
+                )
             binary = base / "binary"
             binary.write_bytes(b"rehearsal")
             with (

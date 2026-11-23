@@ -41,7 +41,7 @@ class RecoveryTest(unittest.TestCase):
                 raise TimeoutError()
 
             c.call.side_effect = call
-            with self.assertRaises(TimeoutError):
+            with patch.object(p, "check_custody"), self.assertRaises(TimeoutError):
                 p.funded_send(
                     c,
                     "exit.withdrawal",

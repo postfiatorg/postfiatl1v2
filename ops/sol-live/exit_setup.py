@@ -319,6 +319,11 @@ def main():
         save(parser.parse_args(sys.argv[2:]).output, prove_roles(read(CONFIG)))
         return
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--qualify",
+        action="store_true",
+        help="require registered descriptor and six rotation clearances",
+    )
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument(
         "--execute",
@@ -336,6 +341,9 @@ def main():
         "--integrity-file", type=Path, help="mount archive integrity file read-only"
     )
     ap.add_argument(
+        "--faucet-file", type=Path, help="mount original faucet record read-only"
+    )
+    ap.add_argument(
         "--init-signature", help="finalized signature for historical recovery"
     )
     args = ap.parse_args()
@@ -349,6 +357,9 @@ def main():
     )
     vault = inspect_vault(c)
     head = fleet()
+    from exit_govern import rotation_clearance
+
+    clearances = rotation_clearance(head) if args.qualify or args.execute else None
     rows = six(trusted)
     anchor_row = agreement(rows)
     cert = archive_cmd(args, args.archive, "verify-finalized-checkpoint")
@@ -384,6 +395,7 @@ def main():
         vault=vault,
         fleet_height=head["block_height"],
         qualified_parent=path["qualified_parent"],
+        rotation_clearances=clearances,
         segments=path["segments"],
         anchors=rows,
         certificate=cert,

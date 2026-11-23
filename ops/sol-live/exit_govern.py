@@ -1,6 +1,8 @@
 """Prepare the six-validator governance envelope or submit it during the reviewed roll."""
 
 import argparse
+import json
+import re
 import subprocess
 from pathlib import Path
 from exit_setup import (
@@ -50,6 +52,57 @@ def require_closed(rows):
     )
 
 
+def rotation_clearance(head):
+    """Read the independent inventories over the six authenticated host connections."""
+    from govern import remote
+
+    require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
+
+    def inspect(i):
+        directory = f"/var/lib/postfiat/validator-{i}/consensus-v2-safety"
+        files = remote(
+            i,
+            [
+                "find",
+                directory,
+                "-maxdepth",
+                "1",
+                "-type",
+                "f",
+                "-name",
+                "*.json",
+                "-printf",
+                "%f\\n",
+            ],
+        ).splitlines()
+        require(files, f"Missing resident signing history on validator-{i}.")
+        for name in files:
+            match = re.fullmatch(r"epoch-\d+-[a-f0-9]{96}-height-(\d+)\.json", name)
+            require(
+                match and int(match[1]) <= head["block_height"],
+                f"Unknown or uncommitted signing round on validator-{i}.",
+            )
+        return json.loads(
+            remote(i, ["cat", "/etc/postfiat/sol-exit-rotation-clearance.json"])
+        )
+
+    rows = six(inspect)
+    for i, row in enumerate(rows):
+        require(
+            row["validator"] == f"validator-{i}"
+            and row["parent"] == parent_of(head)
+            and row["revision"] == head["build_git_revision"]
+            and row["profile_hash"] == EXIT
+            and row["hold_through_open"] is True
+            and row["outstanding_signed_rotation_rounds"] == [],
+            f"Missing, stale or outstanding rotation clearance on validator-{i}.",
+        )
+    require(
+        parent_of(fleet()) == parent_of(head), "Tip advanced during rotation checks."
+    )
+    return rows
+
+
 def verify_open_parent(rows, tx_id, parent):
     require(
         len(rows) == 6
@@ -73,8 +126,12 @@ def main():
     p.add_argument("--binary", required=True, type=Path)
     p.add_argument("--copied-store", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
-    for name in ("submit", "open"):
+    for name in ("submit", "open", "close", "paid"):
         p = subs.add_parser(name)
+        if name == "paid":
+            p.add_argument("--paid", required=True, type=Path)
+        if name in ("close", "paid"):
+            p.add_argument("--output", required=True, type=Path)
         if name == "open":
             p.add_argument("--output", type=Path)
         p.add_argument("--revision", required=True)
@@ -165,6 +222,15 @@ def main():
                 args.output,
                 dict(accepted, qualified_parent=state["qualified_parent"], routes=rows),
             )
+    elif args.action == "paid":
+        from exit_canary import review_paid
+
+        ref = review_paid(read(args.paid))
+        save(args.output, govern("exit-paid", compatible=args.revision, payout=ref))
+    elif args.action == "close":
+        result = govern("exit-close", compatible=args.revision)
+        require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
+        save(args.output, result)
     else:
         govern("route", read(PROFILE), compatible=args.revision)
         require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))

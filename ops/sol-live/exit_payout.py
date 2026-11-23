@@ -104,6 +104,8 @@ def funded_send(c, label, instructions, *signers, rent=0, before_send=None):
     balance(c, rent + fee)
     if before_send is None:
         require(label != "exit.withdrawal", "Withdrawal journal is required.")
+    if label == "exit.withdrawal":
+        check_custody(c)
     tx = Transaction([c.payer, *signers], message, block)
     sig = str(tx.signatures[0])
     if before_send is not None:
@@ -258,6 +260,29 @@ def check_light_path(c, height, block, tip):
         )
 
 
+def check_custody(c):
+    s = rpc(0, "vault_bridge_status", asset_id=ASSET)
+    b = next((b for b in s["buckets"] if b["bucket_id"] == BUCKET), None)
+    require(
+        b is not None
+        and b["policy_hash"] == POLICY
+        and b["source_series_id"] == SERIES
+        and b["status"] == "active"
+        and b["redeemable_at_par"] is True
+        and b["impairment_factor_bps"] == 10000
+        and b["counted_value_atoms"]
+        >= b["outstanding_vault_bridge_atoms"] + b["redemption_queue_atoms"],
+        "Solana source bucket is unavailable.",
+    )
+    required_atoms = shared_liabilities(s["buckets"], b["source_domain"])
+    snapshot = inspect_vault(c)
+    require(
+        snapshot["custody_atoms"] >= required_atoms,
+        "Shared custody is insufficient.",
+    )
+    return s, b, required_atoms
+
+
 def readiness():
     message = "Waiting for the governed Solana descriptor on six validators."
     try:
@@ -286,25 +311,7 @@ def readiness():
         message = "Withdrawal prover unavailable."
         available()
         message = "Vault custody or shared-bucket accounting unavailable."
-        s = rpc(0, "vault_bridge_status", asset_id=ASSET)
-        b = next((b for b in s["buckets"] if b["bucket_id"] == BUCKET), None)
-        require(
-            b is not None
-            and b["policy_hash"] == POLICY
-            and b["source_series_id"] == SERIES
-            and b["status"] == "active"
-            and b["redeemable_at_par"] is True
-            and b["impairment_factor_bps"] == 10000
-            and b["counted_value_atoms"]
-            >= b["outstanding_vault_bridge_atoms"] + b["redemption_queue_atoms"],
-            "Solana source bucket is unavailable.",
-        )
-        required_atoms = shared_liabilities(s["buckets"], b["source_domain"])
-        snapshot = inspect_vault(c)
-        require(
-            snapshot["custody_atoms"] >= required_atoms,
-            "Shared custody is insufficient.",
-        )
+        s, b, required_atoms = check_custody(c)
         burns_open = all(r.get("burns_open") is True for r in routes)
         message = "Waiting for a compatible finalized committee path."
         qualified = FINALIZED_PATH.check(head)
