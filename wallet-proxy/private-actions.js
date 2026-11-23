@@ -171,6 +171,18 @@ function parsePublicAction(actionJson) {
         const inner = prefix + (wire[71] ? 3309 : 0);
         if (wire.length <= inner + 3648 || !wire.subarray(inner, inner + 8).equals(Buffer.from('5046534830320000', 'hex'))
             || wire.readUInt32LE(inner + 3644) !== wire.length - inner - 3648) throw refusal(400, 'private_action_malformed');
+        const mode = wire[6], issued = wire.subarray(7, 55).some(Boolean);
+        const publicFee = wire.readBigUInt64LE(63);
+        const mint = wire.readBigUInt64LE(inner + 56), exit = wire.readBigUInt64LE(inner + 64);
+        const fee = wire.readBigUInt64LE(inner + 104);
+        if (mode > 2 || Boolean(wire[71]) !== (issued || mode === 1)
+            || (publicFee > 0n) !== issued || (mint > 0n) !== (mode === 1) || (exit > 0n) !== (mode === 2)
+            || (issued && fee !== 0n) || exit + fee > 0xffffffffffffffffn
+            || wire.subarray(inner + 72, inner + 84).some(Boolean)
+            || wire.subarray(inner + 84, inner + 104).some(Boolean) !== (mode === 2)
+            || (wire[71] && (!wire.subarray(72, 92).some(Boolean) || wire.readBigUInt64LE(92) === 0n))) {
+            throw refusal(400, 'private_action_malformed');
+        }
         // The configured domain and pool are checked separately. Only the
         // signature, proof length and proof can differ on an idempotent retry.
         const statement = crypto.createHash('sha384').update(wire.subarray(0, prefix))
@@ -292,9 +304,9 @@ function createStore(dir) {
     };
 }
 
-function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}) {
+function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefix = ROUTE_PREFIX } = {}) {
     const config = loadConfig(env, fleet);
-    if (!config.enabled) return { enabled: false, handleHttp: async (req, res, url) => disabledRoute(res, url) };
+    if (!config.enabled) return { enabled: false, handleHttp: async (req, res, url) => disabledRoute(res, url, prefix) };
     if (typeof rpcRequest !== 'function') throw new Error('private actions need an RPC client');
     const store = createStore(config.storeDir);
     let chain = Promise.resolve();
@@ -620,7 +632,8 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
 
     // One finalized snapshot from both sources; a mixed tip is refused.
     async function pinSnapshot(address) {
-        const params = { pool_id: config.poolId, address, base_asset_id: config.baseAssetId, quote_asset_id: config.quoteAssetId };
+        const params = config.poolId === PQ_POOL ? { pool_id: PQ_POOL }
+            : { pool_id: config.poolId, address, base_asset_id: config.baseAssetId, quote_asset_id: config.quoteAssetId };
         const reports = await Promise.all(config.sources.map((source) => readSource(source, 'private_pool_snapshot', params)));
         for (const report of reports) {
             if (report?.chain_id !== config.domain.chain_id || report.genesis_hash !== config.domain.genesis_hash
@@ -743,7 +756,27 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
         return response;
     }
 
+    async function pqPage(body) {
+        if (config.poolId !== PQ_POOL || !exactKeys(body, ['snapshot_token', 'section', 'cursor', 'limit'])
+            || !['pq_pairs', 'pq_assets'].includes(body.section)
+            || typeof body.snapshot_token !== 'string' || body.snapshot_token.length > 320
+            || !body.snapshot_token.startsWith(`pps1:${PQ_POOL}:`)
+            || !(body.cursor === null || (typeof body.cursor === 'string' && body.cursor.length <= 128))
+            || !Number.isInteger(body.limit) || body.limit < 1 || body.limit > 32) {
+            throw refusal(400, 'private_request_invalid');
+        }
+        const params = { ...body };
+        if (params.cursor === null) delete params.cursor;
+        return readSource(config.sources[0], 'private_pool_page', params);
+    }
+
     async function snapshot(body) {
+        if (config.poolId === PQ_POOL) {
+            if (!exactKeys(body, [])) throw refusal(400, 'private_request_invalid');
+            const report = await pinSnapshot();
+            if (report.pool_id !== PQ_POOL) throw refusal(503, 'private_snapshot_domain_mismatch');
+            return report;
+        }
         if (!exactKeys(body, ['address']) || !ADDRESS_RE.test(String(body.address))) throw refusal(400, 'private_request_invalid');
         if (!config.baseAssetId || !config.quoteAssetId) throw refusal(503, 'private_snapshot_not_configured');
         // A stale token (any STALE_TOKEN_CODES refusal): one fresh retry, then 503.
@@ -758,9 +791,9 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
     }
 
     async function handleHttp(req, res, url, auth) {
-        if (!url.pathname.startsWith(ROUTE_PREFIX)) return false;
-        const route = url.pathname.slice(ROUTE_PREFIX.length);
-        if (!['snapshot', 'submit', 'receipt'].includes(route)) return send(res, 404, error('private_route_unknown'));
+        if (!url.pathname.startsWith(prefix)) return false;
+        const route = url.pathname.slice(prefix.length);
+        if (!['snapshot', 'submit', 'receipt'].includes(route) && !(route === 'page' && config.poolId === PQ_POOL)) return send(res, 404, error('private_route_unknown'));
         if (req.method !== 'POST') return send(res, 405, error('method_not_allowed'));
         if (!auth.originAllowed(req, true)) return send(res, 403, error('origin_not_allowed'));
         const authentication = auth.authenticate(req);
@@ -774,6 +807,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest } = {}
         }
         try {
             const body = JSON.parse((await readBody(req, config.poolId === PQ_POOL && route === 'submit' ? MAX_ACTION_BYTES : MAX_REQUEST_BYTES)).toString('utf8'));
+            if (route === 'page') return send(res, 200, await pqPage(body));
             if (route === 'snapshot') return send(res, 200, await snapshot(body));
             if (route === 'receipt') return send(res, 200, await receipt(body, authentication.principal));
             return send(res, 202, await submit(body, authentication.principal));
@@ -828,8 +862,8 @@ function send(res, statusCode, body) {
     return true;
 }
 
-function disabledRoute(res, url) {
-    if (!url.pathname.startsWith(ROUTE_PREFIX)) return false;
+function disabledRoute(res, url, prefix) {
+    if (!url.pathname.startsWith(prefix)) return false;
     return send(res, 404, error('private_actions_disabled'));
 }
 

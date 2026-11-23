@@ -3,6 +3,8 @@
 export const memory: WebAssembly.Memory;
 export const make_rpc_request: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const parse_rpc_response: (a: number, b: number) => [number, number, number];
+export const pq_check_address: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+export const pq_review_payment: (a: number, b: number) => [number, number, number, number];
 export const random_master_seed: () => [number, number, number, number];
 export const wallet_address_from_seed: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
 export const wallet_fastpay_transfer_certificate_digest: (a: number, b: number) => [number, number, number, number];
@@ -24,7 +26,7 @@ export const wallet_sign_owned_unwrap: (a: number, b: number, c: number, d: numb
 export const wallet_sign_owned_unwrap_v3: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const wallet_sign_payment_v2: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const wallet_sign_pftl_swap_intent: (a: number, b: number, c: number, d: number) => [number, number, number];
-export const wallet_sign_transfer: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_transfer: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const wallet_sign_transfer_fields: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const wallet_verify_fastpay_apply_ack: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const __wbindgen_malloc: (a: number, b: number) => number;

@@ -1367,6 +1367,21 @@ const privateActions = createPrivateActions({
     fleet: RPC_FLEET,
     rpcRequest: (source, request, timeoutMs) => rpcTcpRequest(source.host, source.port, request, timeoutMs),
 });
+// The browser wallet can use both pools through one proxy. Their reservation
+// journals, snapshot formats and asset allowlists remain independent.
+const pqPrivateActions = createPrivateActions({
+    prefix: '/api/private/v1/pq/',
+    env: {
+        ...process.env,
+        WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID: 'PFT-PQ-SHIELDED-POOL-V1',
+        WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID: '00'.repeat(48),
+        WALLET_PROXY_PRIVATE_ACTIONS_QUOTE_ASSET_ID: process.env.WALLET_PROXY_PQ_ISSUE_ID || '',
+        WALLET_PROXY_PRIVATE_ACTIONS_STORE: path.join(process.env.WALLET_PROXY_PRIVATE_ACTIONS_STORE
+            || path.join(os.homedir(), '.local', 'share', 'postfiat', 'wallet-proxy', 'private-actions'), 'pq'),
+    },
+    fleet: RPC_FLEET,
+    rpcRequest: (source, request, timeoutMs) => rpcTcpRequest(source.host, source.port, request, timeoutMs),
+});
 const privateActionsAuth = {
     originAllowed,
     authenticate: httpMutationAuthentication,
@@ -1386,6 +1401,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     if (handleLocalSessionRequest(req, res, url)) return;
+    if (await pqPrivateActions.handleHttp(req, res, url, privateActionsAuth)) return;
     if (await privateActions.handleHttp(req, res, url, privateActionsAuth)) return;
     if (handleRetiredLegacyRoute(req, res, url)) return;
     if (await handleNavswapHttp(req, res, url)) return;

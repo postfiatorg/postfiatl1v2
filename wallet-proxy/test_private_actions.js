@@ -598,6 +598,34 @@ async function main() {
         }
         assert.throws(() => rpcTransportError('sensitive-upstream', 'x'), /unknown RPC transport class/);
 
+        // The browser and gateway decode the same eight release vectors as Rust.
+        const wasm = await import('../wallet-web/src/wasm/postfiat_wallet_wasm.js');
+        wasm.initSync({module: fs.readFileSync(path.join(__dirname,'../wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm'))});
+        const vectorDir = path.join(__dirname, '../tools/pft-binius-shielded-pq/l1-vectors');
+        const files = fs.readdirSync(vectorDir).filter(f => f.endsWith('.bin')).sort();
+        assert.equal(files.length, 8);
+        for (const file of files) {
+            const body = fs.readFileSync(path.join(vectorDir, file));
+            const json = JSON.stringify({kind:'pq_payment_v1',body:body.toString('base64')});
+            const parsed = parsePublicAction(json);
+            const signed = JSON.parse(wasm.pq_review_payment(json));
+            const python = spawnSync('python3',['-c', [
+                'import json,sys', 'from postfiat_rpc.client import private_action_hash, private_action_intent_id',
+                'net,action=json.load(sys.stdin)',
+                'print(json.dumps([private_action_hash(action), private_action_intent_id(**net,action_json=action)]))',
+            ].join('\n')], {input:JSON.stringify([DOMAIN,json]), encoding:'utf8',
+                env:{...process.env,PYTHONPATH:path.join(__dirname,'../python')}});
+            assert.equal(python.status, 0);
+            assert.deepEqual(JSON.parse(python.stdout),[signed.action_hash,intentIdFor(DOMAIN,json)]);
+            assert.equal(signed.asset, parsed.assetId);
+            assert.equal(signed.payer, parsed.payer);
+            assert.equal(parsed.canonical,json);
+            const invalid = Buffer.from(body); invalid[6] = 3;
+            const malformed=JSON.stringify({kind:'pq_payment_v1',body:invalid.toString('base64')});
+            assert.throws(()=>parsePublicAction(malformed));
+            assert.throws(()=>wasm.pq_review_payment(malformed));
+        }
+        console.log('8 shared PQ payment vectors: WASM, gateway and Python agree');
         // Disabled without a configured domain.
         const disabled = createPrivateActions({ env: {} });
         assert.strictEqual(disabled.enabled, false);

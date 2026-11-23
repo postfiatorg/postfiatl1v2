@@ -975,3 +975,43 @@ fn counter() -> u64 {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     COUNTER.fetch_add(1, Ordering::Relaxed)
 }
+
+/// Check the public checksum and network before asking the native prover to pay.
+#[wasm_bindgen]
+pub fn pq_check_address(chain: &str, genesis_hex: &str, address: &str) -> Result<(), JsError> {
+    use postfiat_types::pq_address;
+    let genesis = postfiat_crypto_provider::hex_to_bytes(genesis_hex)
+        .ok()
+        .and_then(|v| v.try_into().ok())
+        .ok_or_else(|| JsError::new("invalid genesis"))?;
+    let network = pq_address::network_frame(chain, &genesis).map_err(JsError::new)?;
+    pq_address::decode(&network, address).map_err(JsError::new)?;
+    Ok(())
+}
+
+/// Decode the same canonical payment as a validator. Amount strings preserve all u64 bits.
+#[wasm_bindgen]
+pub fn pq_review_payment(action_json: &str) -> Result<String, JsError> {
+    use postfiat_types::{private_action_hash, ShieldedAction};
+    if action_json.len() > postfiat_types::pq_payment::REQUEST_LIMIT {
+        return Err(JsError::new("payment too large"));
+    }
+    let action: ShieldedAction =
+        serde_json::from_str(action_json).map_err(|_| JsError::new("invalid payment"))?;
+    let ShieldedAction::PqPaymentV1(ref payment) = action else {
+        return Err(JsError::new("wrong pool"));
+    };
+    let (terms, _, inner) = payment.parts().map_err(JsError::new)?;
+    let atoms = |start| u64::from_le_bytes(inner[start..start + 8].try_into().unwrap());
+    let exit = atoms(64);
+    Ok(serde_json::json!({
+        "mode":terms.mode, "asset":bytes_to_hex(&terms.asset),
+        "mint":atoms(56).to_string(), "exit":exit.to_string(),
+        "recipient":(exit > 0).then(|| format!("pf{}", bytes_to_hex(&inner[84..104]))),
+        "fee":(terms.public_fee + atoms(104)).to_string(),
+        "payer":terms.account.as_ref().map(|a| format!("pf{}",bytes_to_hex(&a.id))),
+        "sequence":terms.account.as_ref().map(|a| a.sequence.to_string()),
+        "action_hash":private_action_hash(&action).map_err(|_| JsError::new("invalid payment"))?,
+    })
+    .to_string())
+}
