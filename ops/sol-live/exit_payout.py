@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import tempfile
 from solders.transaction import Transaction
 
 from solders.compute_budget import set_compute_unit_limit
@@ -21,6 +22,7 @@ from exit_setup import (
     EXIT,
     LIGHT,
     FEE_PAYER,
+    fleet,
     check_payout_authorities,
     ExitCluster,
     MINT,
@@ -44,13 +46,12 @@ from exit_setup import (
     six,
 )
 from exit_segments import (
-    RotationScan,
     public_checkpoint,
     select_target,
     validate_segment,
     committee,
 )
-from exit_precheck import inspect_vault, token_atoms
+from exit_precheck import inspect_vault, token_atoms, parent_of, qualify_path
 from exit_proof import available, prove
 
 ATA = pk("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
@@ -181,7 +182,29 @@ def payout_budget(c, proofs):
     return proofs * (6 * fee + c.rent(48)) + c.rent(2048) + c.rent(1) + c.rent(165)
 
 
-ROTATIONS = RotationScan()
+class FinalizedPath:
+    def __init__(self):
+        self.cursor = None
+        self.members = None
+
+    def check(self, head):
+        if self.cursor is None:
+            cfg = read(CONFIG)
+            cert = read(CONFIG.with_name("exit-checkpoint.json"))
+            witness = read(Path(os.environ["EXIT_ANCHOR_WITNESS"]))
+            h = witness["block"]["header"]
+            require(h["block_hash"] == cfg["initial_checkpoint"] and
+                    committee(h) == cfg["initial_committee"], "Wrong anchor witness.")
+            self.cursor = dict(cfg, height=cfg["initial_height"], block=cfg["initial_checkpoint"],
+                               root=cert["checkpoint_state_root"], committee=cfg["initial_committee"])
+            self.members = witness["committee"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = qualify_path(self.members, self.cursor, head, Path(tmp))
+        self.cursor, self.members = path["cursor"], path["members"]
+        return path["qualified_parent"]
+
+
+FINALIZED_PATH = FinalizedPath()
 
 
 def readiness():
@@ -201,7 +224,9 @@ def readiness():
         c = cluster()
         latest, anchor = light(c)
         message = "Relayer cannot fund the payout above its balance floor."
-        tip = max(r["current_height"] for r in routes)
+        head = fleet()
+        tip = head["block_height"]
+        require(all(r["current_height"] == tip for r in routes), "Descriptor and tip differ.")
         budget = payout_budget(c, proof_count(latest, tip + 1, tip))
         lamports = balance(c, budget)
         message = "Withdrawal prover unavailable."
@@ -228,15 +253,15 @@ def readiness():
         )
         burns_open = all(r.get("burns_open") is True for r in routes)
         message = "Waiting for a compatible finalized committee path."
-        compatible = ROTATIONS.check(
-            rpc, latest, anchor, max(r["current_height"] for r in routes)
-        )
+        qualified = FINALIZED_PATH.check(head)
+        require(qualified == parent_of(fleet()), "Tip advanced during qualification.")
         return dict(
             ok=True,
-            ready=compatible and burns_open,
-            payout_ready=compatible,
+            ready=burns_open,
+            payout_ready=True,
             accepting_jobs=True,
-            message=None if compatible else message,
+            qualified_parent=qualified,
+            message=None,
             burns_open=burns_open,
             required_custody_atoms=str(required_atoms),
             payout_budget_lamports=budget,

@@ -244,7 +244,8 @@ class JobsTest(unittest.TestCase):
             patch.object(payout, "payout_budget", return_value=1000),
             patch.object(payout, "balance", return_value=payout.FLOOR + 10000000),
             patch.object(payout, "available"),
-            patch.object(payout.ROTATIONS, "check", return_value=True),
+            patch.object(payout, "fleet", return_value=dict(block_height=1755,block_tip_hash="tip",state_root="root")),
+            patch.object(payout.FINALIZED_PATH, "check", side_effect=payout.parent_of),
             patch.object(payout, "rpc", side_effect=rpc),
         ):
             value = payout.readiness()

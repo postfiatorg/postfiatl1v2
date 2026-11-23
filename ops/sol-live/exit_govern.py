@@ -15,7 +15,8 @@ from exit_setup import (
     rpc,
     six,
 )
-from govern import govern
+from govern import govern, ParentChanged
+from exit_precheck import parent_of
 
 ETH_HASH = "29c91daa1c8d707ea3245db091976219266c5deca82b2d4571fafb221fd2dd092eb8833a28f4422bf0b4bbde44069e28"
 
@@ -95,19 +96,28 @@ def main():
     if args.action == "open":
         import requests
 
-        require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
-        status = requests.get(
-            "http://127.0.0.1:18089/solana/withdrawals/readiness", timeout=90
-        )
-        status.raise_for_status()
-        state = status.json()
-        require(
-            state.get("payout_ready") is True
-            and state.get("burns_open") is False
-            and state.get("bucket_id") == BUCKET,
-            "Payout service is not qualified.",
-        )
-        govern("exit-open", compatible=args.revision)
+        for _ in range(3):
+            require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
+            status = requests.get(
+                "http://127.0.0.1:18089/solana/withdrawals/readiness/qualify", timeout=600
+            )
+            status.raise_for_status()
+            state = status.json()
+            require(
+                state.get("payout_ready") is True
+                and state.get("burns_open") is False
+                and state.get("bucket_id") == BUCKET,
+                "Payout service is not qualified.",
+            )
+            try:
+                if state["qualified_parent"] != parent_of(fleet()):
+                    continue
+                govern("exit-open", compatible=args.revision, qualified_parent=state["qualified_parent"])
+            except ParentChanged:
+                continue
+            break
+        else:
+            raise ParentChanged("Tip advanced repeatedly. Restart the open command.")
         rows = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
         require(
             all(

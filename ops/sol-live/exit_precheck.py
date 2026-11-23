@@ -1,10 +1,12 @@
 """Authenticated inputs and finalized account readback for the one-time bootstrap."""
 
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 
 import base58
 from exit_setup import (
@@ -26,7 +28,7 @@ from exit_setup import (
     save,
     six,
 )
-from exit_segments import committee, public_checkpoint, validate_segment
+from exit_segments import committee, public_checkpoint, select_target, validate_segment
 from exit_proof import LOCAL, verify_local_host
 from route_binding import route_binding
 
@@ -267,33 +269,7 @@ def checkpoint_values(raw):
     )
 
 
-def guest_segment(members, anchor, tip, out):
-    h = anchor["height"]
-    forward = tip > h
-    target_height = h + 1 if forward else h
-    blocks = agreement(
-        six(lambda i: rpc(i, "blocks", from_height=target_height - 1, limit=2))
-    )
-    prior, target = [b["header"] for b in blocks]
-    require(
-        (prior if forward else target)["block_hash"] == anchor["block"]
-        and target["height"] == target_height,
-        "Witness does not touch the trusted block.",
-    )
-    try:
-        w = rpc(
-            0,
-            "pfusdc_checkpoint_witness",
-            prior_checkpoint=prior["block_hash"],
-            target_block=target["block_hash"],
-        )
-    except RuntimeError as err:
-        if "rpc_method_not_allowed" not in str(err):
-            raise
-        w = public_checkpoint(
-            rpc, prior["height"], prior["block_hash"], target, members, anchor
-        )
-    validate_segment(w, prior["block_hash"], target, committee(target))
+def execute_guest(w, out):
     out.mkdir(parents=True, exist_ok=True)
     save(out / "witness.json", w)
     verify_local_host()
@@ -314,14 +290,71 @@ def guest_segment(members, anchor, tip, out):
         raw == (out / "native-public-values.bin").read_bytes(),
         "Frozen guest disagrees with native verifier.",
     )
-    values = checkpoint_values(raw)
-    require(
-        (values["prior"], values["result"], values["height"])
-        == (prior["block_hash"], target["block_hash"], target_height)
-        and values["start" if forward else "end"] == anchor["committee"],
-        "Guest committee differs from tag 3.",
-    )
-    return dict(forward=forward, **values, execution=read(out / "execute-report.json"))
+    return dict(**checkpoint_values(raw), execution=read(out / "execute-report.json"))
+
+
+def parent_of(head):
+    return {k: head[k] for k in ("block_height", "block_tip_hash", "state_root")}
+
+
+def check_unproved_updates(w):
+    # A registry update at the last block has no successor QC in this segment.
+    # Authenticate even an apparently empty governance payload before accepting it.
+    for step in [*w.get("finality_ancestry", []), w]:
+        h = step["block"]["header"]
+        if h["batch_kind"] != "governance" or "governance_payload_json" in step:
+            continue
+        (batch,) = rpc(0, "batch_archive", batch_kind="governance", batch_id=h["batch_id"], limit=1)
+        payload = batch["payload_json"]
+        fields = [w[k] for k in ("chain_id", "genesis_hash", "protocol_version")]
+        fields.extend(["governance", h["batch_id"], payload])
+        encoded = json.dumps(fields, ensure_ascii=False, separators=(",", ":")).encode()
+        digest = hashlib.sha3_384(b"postfiat.batch_archive_payload.v1\0" + encoded).hexdigest()
+        require(batch["batch_id"] == h["batch_id"] and
+                digest == h["consensus_v2_commit"]["precommit_qc"]["block"]["payload_hash"],
+                "Governance archive differs from finalized payload.")
+        require(not json.loads(payload).get("validator_registry_updates"),
+                "Registry rotation requires a verified transition and successor.")
+
+
+def qualify_path(members, anchor, head, out, *, simulation_height=None):
+    height, block, root = anchor["height"], anchor["block"], anchor["committee"]
+    tip = head["block_height"]
+    require(tip >= height, "Finalized tip precedes trusted checkpoint.")
+    if simulation_height is None:
+        simulation_height = height
+    require(height <= simulation_height <= tip, "Current checkpoint is outside the finalized path.")
+    segments = []
+    simulation = None
+    state = anchor["root"]
+    with tempfile.TemporaryDirectory() as tmp:
+        while height < tip:
+            stop = simulation_height if height < simulation_height else tip
+            if stop - height > 65:
+                target = select_target(height, rpc)
+            else:
+                (record,) = rpc(0, "blocks", from_height=stop, limit=1)
+                target = record["header"]
+                require(target["height"] == stop, "Wrong checkpoint height.")
+            witness = public_checkpoint(rpc, height, block, target, members, anchor)
+            check_unproved_updates(witness)
+            validate_segment(witness, block, target, root)
+            use_for_simulation = height == simulation_height
+            values = execute_guest(witness, out if use_for_simulation else Path(tmp))
+            require((values["prior"], values["start"], values["result"], values["end"], values["height"])
+                    == (block, root, target["block_hash"], committee(target), target["height"]),
+                    "Frozen checkpoint endpoints differ from finalized path.")
+            if use_for_simulation:
+                simulation = values
+            segments.append(values)
+            height, block, root = values["height"], values["result"], values["end"]
+            members, state = witness["committee"], target["state_root"]
+    require((height, block, state) == (tip, head["block_tip_hash"], head["state_root"]),
+            "Frozen path differs from the agreed finalized tip.")
+    return dict(qualified_parent=parent_of(head), segments=segments,
+                guest=dict(simulation or {}, forward=simulation is not None),
+                cursor=dict(anchor, height=height, block=block, root=state, committee=root),
+                members=members)
 
 
 def bootstrap_state(cfg, rows):

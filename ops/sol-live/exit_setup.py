@@ -284,7 +284,9 @@ def main():
         bootstrap_state,
         check_certificate,
         committee,
-        guest_segment,
+        qualify_path,
+        execute_guest,
+        parent_of,
         inspect_vault,
         records,
         certified_witness,
@@ -336,18 +338,23 @@ def main():
     config = config_from_records(
         agreed["activation"], profile, anchor_row, agreed["bucket"]
     )
-    guest = guest_segment(
-        archived["committee"],
-        anchor_row,
-        head["block_height"],
-        args.output.parent / "guest",
-    )
+    save(args.output.parent / "anchor-witness.json", archived)
+    path = qualify_path(archived["committee"], anchor_row, head, args.output.parent / "guest")
+    guest = path["guest"]
+    if head["block_height"] == anchor_row["height"]:
+        values = execute_guest(archived, args.output.parent / "guest")
+        require((values["result"], values["end"], values["height"]) ==
+                (anchor_row["block"], anchor_row["committee"], anchor_row["height"]),
+                "Frozen guest disagrees with the archived anchor.")
+        guest = dict(values, forward=False)
     ix = build_initialize(config, c.owner)
     check_reviewed_instruction(config, ix)
     anchor = ix.accounts[3].pubkey
     evidence = dict(
         vault=vault,
         fleet_height=head["block_height"],
+        qualified_parent=path["qualified_parent"],
+        segments=path["segments"],
         anchors=rows,
         certificate=cert,
         inputs=inputs,
@@ -411,7 +418,6 @@ def main():
             guest["forward"],
             "Signing requires a finalized segment starting at the trusted block.",
         )
-        fleet()
         governed = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
         require(
             all(
@@ -428,6 +434,7 @@ def main():
         c.unlock(DIRECTORY / "mainnet-payer.json")
         deployment = load(DIRECTORY / "egress-verifier.json")
         require(deployment.pubkey() == VERIFIER, "incorrect program signer")
+        require(parent_of(fleet()) == path["qualified_parent"], "Tip advanced. Repeat qualification.")
         sig = c.send("egress.initialize", [ix], deployment)
         require(recover(sig), "Waiting for finalized bootstrap readback.")
     print(f"Simulation passed. Rent {rent} lamports, fee {fee} lamports.")

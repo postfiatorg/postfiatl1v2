@@ -394,7 +394,7 @@ def local_healthy(server):
     return True
 
 
-def service_readiness(server):
+def service_readiness(server, *, fresh=False):
     if not local_healthy(server):
         return dict(
             ok=True,
@@ -403,7 +403,7 @@ def service_readiness(server):
             message="Withdrawal worker or journal unavailable.",
         )
     with server.ready_lock:
-        if time.monotonic() >= server.valid_until:
+        if fresh or time.monotonic() >= server.valid_until:
             server.ready = readiness()
             server.valid_until = time.monotonic() + 5
         return server.ready
@@ -468,6 +468,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        if self.path == BASE + "/readiness/qualify":
+            return self.reply(200, service_readiness(self.server, fresh=True))
         if self.path == BASE + "/readiness":
             return self.reply(200, service_readiness(self.server))
         prefix = BASE + "/"
