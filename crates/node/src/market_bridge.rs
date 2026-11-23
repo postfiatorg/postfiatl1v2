@@ -1168,7 +1168,8 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
     let store = NodeStore::new(options.data_dir);
     let genesis = store.read_genesis()?;
     let (governance, ledger, tip) = if store.transactional_storage_active()? {
-        let snapshot = store.transactional_store()?.read_snapshot()?;
+        let database = store.transactional_store()?;
+        let snapshot = database.read_snapshot()?;
         let tip = snapshot.chain_tip();
         validate_chain_tip_domain(&tip, &genesis)?;
         (

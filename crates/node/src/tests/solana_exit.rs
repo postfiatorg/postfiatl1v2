@@ -1201,6 +1201,22 @@ fn exit_review_unanimous_close_stops_new_burns() {
 }
 
 #[test]
+#[ignore = "copied transactional WAN ledger at height 1753"]
+fn exit_review_route_reads_transactional_archive() {
+    let data_dir = PathBuf::from("/var/lib/postfiat/validator-3");
+    assert!(NodeStore::new(&data_dir)
+        .transactional_storage_active()
+        .unwrap());
+    let route = vault_bridge_route(VaultBridgeRouteOptions {
+        data_dir,
+        asset_id: solana_exit::FAMILY.into(),
+    })
+    .unwrap();
+    assert_eq!(route.current_height, 1753);
+    assert_eq!(route.profile_hash, ETH_HASH);
+}
+
+#[test]
 #[ignore = "copied WAN ledger, release height 1760"]
 fn exit_review_route_waits_for_committed_close() {
     let source = NodeStore::new("/var/lib/postfiat/validator-3");
