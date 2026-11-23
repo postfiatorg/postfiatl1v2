@@ -927,6 +927,7 @@ pub fn create_asset_orchard_ingress(
         &mempool,
         block_height,
         asset_execution_compatibility,
+        &crate::mempool_proposals::pending_asset_orchard_balances(&store, &mempool)?,
     )?;
     let asset = quote_ledger
         .asset_definition(&options.asset_id)

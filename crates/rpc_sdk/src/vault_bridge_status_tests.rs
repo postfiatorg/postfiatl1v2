@@ -286,6 +286,18 @@ mod vault_bridge_status {
     }
 
     #[test]
+    fn redemption_asset_id_matches_enclosing_asset_when_present() {
+        let mut report = fixture();
+        validate(&report).expect("historical row without asset_id");
+        report["redemptions"][0]["asset_id"] = report["asset_id"].clone();
+        validate(&report).expect("matching family");
+        for value in [json!("00".repeat(48)), json!(null), json!(42)] {
+            report["redemptions"][0]["asset_id"] = value;
+            assert_eq!(rejected_field(report.clone()), "asset_id");
+        }
+    }
+
+    #[test]
     fn accepts_source_series_classification_when_enforced() {
         let report = with(fixture(), "/source_series_enforced", json!(true));
         let report = with(

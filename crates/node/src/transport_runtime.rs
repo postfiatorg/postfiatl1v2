@@ -3713,6 +3713,8 @@ pub(super) fn transport_peer_certified_batch_round(
     .map_err(|error| format!("peer certified batch round proposal failed: {error}"))?;
     let proposal_breakdown = proposal_with_timings.timings;
     let expected_unsigned_proposal = proposal_with_timings.proposal;
+    postfiat_node::check_operator_batch_submission(&expected_unsigned_proposal, &options.batch_file)
+        .map_err(|error| format!("peer certified batch submission failed: {error}"))?;
     let prevalidated_unsigned_proposal = expected_unsigned_proposal.clone();
     if let Some(block_height) = options.block_height {
         if expected_unsigned_proposal.block_height != block_height {

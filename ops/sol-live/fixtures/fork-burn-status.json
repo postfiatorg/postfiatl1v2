@@ -1,0 +1,112 @@
+{
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "redemptions": [
+    {
+      "amount_atoms": 20000,
+      "bucket_id": "4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc",
+      "burn_tx_id": "e61f2498a7f5a6cfad83a1c7d843ccfcca7f4c338d099bdf74536b24e5ec8463e60dbbc2b4d41d543cf1858124383b14",
+      "created_at_height": 1755,
+      "destination_ref": "solana-spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:7878787878787878787878787878787878787878787878787878787878787878",
+      "epoch": 157,
+      "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "owner": "pf3443591959748cd1944a42155a1f8eac4a3bccfa",
+      "owner_sequence": 1,
+      "redemption_id": "aa23e85ab7d78b67fca751a9279bf8f4db8cc029c4159d2ecf4dcca77615229ce2985a80c3fcde6d3288a2631b103014",
+      "reserve_packet_hash": "28e877f8e186e49a47a197608962c47d87c894f7a72f794635cf6e96129486d3c96d56de27b65aff102423fca06ef669",
+      "settled_atoms": 0,
+      "settlement_receipt_hash": "",
+      "state": "pending",
+      "withdrawal_evidence_root": "4da023bf7dda8dc3cc4a33e6c7fe8a730d944d375166b97a4a7002b6ead99dee93650c8874ee97902bfd46485b4e0e24",
+      "withdrawal_packet_evm_digest": "f7e5d4096d815e0b915a0b9ae5d1cddbbf77e3c9efd7ffc2e507847491539ab5",
+      "withdrawal_packet_hash": "e2f8664a91e1803b54f79ae92a2d26c76c48fbc34348cf2913e13150dd437430dd725178149afc1d2f4a91010fb35a1c",
+      "withdrawal_recipient": "0x437e7563958d5e65571e7280a05e5bf29bb841e5"
+    }
+  ],
+  "receipts": [
+    {
+      "allocated_value_atoms": 20000,
+      "amount_atoms": 20000,
+      "bucket_id": "4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc",
+      "claim_type": "bridge_deposit",
+      "counted_at_height": 1752,
+      "counted_value_atoms": 20000,
+      "created_at_height": 1752,
+      "expires_at_height": 4294967295,
+      "finality_ref": "solana_slot:472734635:fe0fb384654a2aebf549d22b996a462d32fb11356088fa899aa29771a842c06d:47d4f6e03b3fb9613eb6c63ac019a44043ec93f613a8b2e9b8755b711e150bb8",
+      "haircut_bps": 0,
+      "receipt_id": "733ead50f56df3e84a94dec4424b13ad8d84fb416f090e061ebdac0132acc62f3b614ba38e17b3877e54e689d0f3a7ec",
+      "source_asset": "spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61",
+      "source_domain": "spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:e2a6fbfcf1e65a0f3e08d400c97d913e3e4eca81f84c814efa0bbcada24aac8b:c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61",
+      "source_tx_or_attestation": "solana_deposit:6b4c2357443ef14bf0dae240852ed30d6b59440b09ebd591f65c092979748d15",
+      "status": "counted",
+      "unallocated_value_atoms": 0,
+      "vault_id": "e2a6fbfcf1e65a0f3e08d400c97d913e3e4eca81f84c814efa0bbcada24aac8b"
+    },
+    {
+      "allocated_value_atoms": 1610000,
+      "amount_atoms": 1610000,
+      "bucket_id": "4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc",
+      "claim_type": "bridge_deposit",
+      "counted_at_height": 1753,
+      "counted_value_atoms": 1610000,
+      "created_at_height": 1753,
+      "expires_at_height": 4294967295,
+      "finality_ref": "solana_slot:472740027:4b051aa8cf4f4c2e1caf8b9b5b48a35c2504f28523df7ba9f9b2b935d06c4c7f:89f8d98c593402b3b03862a8e863cd3cf6af76b3169ae9d0fe8647d1c8a57147",
+      "haircut_bps": 0,
+      "receipt_id": "d64d8a1614c15c093be43b8954010d1b6afc948b43286a9adbb701dfddc13f3fd027abb38fccaa2f6d6f94dac7535edc",
+      "source_asset": "spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61",
+      "source_domain": "spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:e2a6fbfcf1e65a0f3e08d400c97d913e3e4eca81f84c814efa0bbcada24aac8b:c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61",
+      "source_tx_or_attestation": "solana_deposit:d15068436b7544420749b05d730e42b934fb6c20264ea34400df84ea51af3fbf",
+      "status": "counted",
+      "unallocated_value_atoms": 0,
+      "vault_id": "e2a6fbfcf1e65a0f3e08d400c97d913e3e4eca81f84c814efa0bbcada24aac8b"
+    }
+  ],
+  "allocations": [
+    {
+      "allocation_id": "109c02c9e74ac55a8078e724ccd8a978c2cdae257103d70cbf28a2725a5f40b5aa3ad873cc03e95c779cd4156790c9f5",
+      "amount_atoms": 1610000,
+      "bucket_id": "4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc",
+      "consumer_id": "vault_bridge_deposit_claim:d64d8a1614c15c093be43b8954010d1b6afc948b43286a9adbb701dfddc13f3fd027abb38fccaa2f6d6f94dac7535edc",
+      "created_at_height": 1753,
+      "purpose": "vault_bridge_supply",
+      "receipt_id": "d64d8a1614c15c093be43b8954010d1b6afc948b43286a9adbb701dfddc13f3fd027abb38fccaa2f6d6f94dac7535edc",
+      "released_atoms": 0,
+      "remaining_atoms": 1610000,
+      "retired_at_height": 0
+    },
+    {
+      "allocation_id": "d72a39c0236c2ba3916e6487818bc94d540c55db705933509f975d2cc7ef0ac1b2e56b943a61a829d52622eef2885b63",
+      "amount_atoms": 20000,
+      "bucket_id": "4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc",
+      "consumer_id": "vault_bridge_deposit_claim:733ead50f56df3e84a94dec4424b13ad8d84fb416f090e061ebdac0132acc62f3b614ba38e17b3877e54e689d0f3a7ec",
+      "created_at_height": 1752,
+      "purpose": "vault_bridge_supply",
+      "receipt_id": "733ead50f56df3e84a94dec4424b13ad8d84fb416f090e061ebdac0132acc62f3b614ba38e17b3877e54e689d0f3a7ec",
+      "released_atoms": 0,
+      "remaining_atoms": 20000,
+      "retired_at_height": 0
+    }
+  ],
+  "buckets": [
+    {
+      "bucket_id": "4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc",
+      "counted_value_atoms": 1630000,
+      "gross_receipt_atoms": 1630000,
+      "impairment_factor_bps": 10000,
+      "last_packet_epoch": 0,
+      "last_updated_height": 1755,
+      "nav_subscription_allocations_atoms": 0,
+      "other_allocations_atoms": 0,
+      "outstanding_vault_bridge_atoms": 1610000,
+      "policy_hash": "5bb5a3d99616945cb7330c07a51c47c0453ff54f6c622f44f18c5b505cc9b13f179a6796a537119a482d788537bd96c7",
+      "redeemable_at_par": true,
+      "redeemable_claim_atoms": 1630000,
+      "redemption_queue_atoms": 20000,
+      "source_domain": "spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:e2a6fbfcf1e65a0f3e08d400c97d913e3e4eca81f84c814efa0bbcada24aac8b:c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61",
+      "source_series_id": "e90627502bea5857aefd003d80af518f0ccb44ad2be8098ec6db2025ccaf8390e8bef31e7538b398a3c94f019d7b3b0f",
+      "status": "active",
+      "unallocated_counted_capacity_atoms": 0
+    }
+  ]
+}

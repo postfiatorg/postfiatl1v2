@@ -44,14 +44,6 @@ def _stub(name, **attrs):
     return module
 
 
-# The scripts import Solana SDK and relay modules that are not needed under test.
-for _name in ("solders", "solders.hash", "solders.pubkey", "solders.transaction", "solders.system_program",
-              "solders.compute_budget", "keys", "bridge", "source", "measure", "recorder"):
-    _stub(_name)
-_stub("route_binding", CHAIN=b"postfiat-wan-devnet-2", PFTL_GENESIS=bytes(48), PUBLIC_ROUTES={},
-      route_binding=lambda *args, **kwargs: bytes(32))
-_stub("storage", Invalid=Invalid, Rejected=Rejected, AwaitingSource=type("AwaitingSource", (Exception,), {}))
-sys.path.insert(0, str(HERE))
 
 
 def load(name):
@@ -61,7 +53,22 @@ def load(name):
     return module
 
 
-live = load("live")
+def setUpModule():
+    global live
+    modules = mock.patch.dict(sys.modules)
+    paths = sys.path[:]
+    modules.start()
+    unittest.addModuleCleanup(modules.stop)
+    unittest.addModuleCleanup(lambda: sys.path.__setitem__(slice(None), paths))
+    # The scripts import Solana SDK and relay modules that are not needed under test.
+    for _name in ("solders", "solders.hash", "solders.pubkey", "solders.transaction", "solders.system_program",
+                  "solders.compute_budget", "keys", "bridge", "source", "measure", "recorder"):
+        _stub(_name)
+    _stub("route_binding", CHAIN=b"postfiat-wan-devnet-2", PFTL_GENESIS=bytes(48), PUBLIC_ROUTES={},
+          route_binding=lambda *args, **kwargs: bytes(32))
+    _stub("storage", Invalid=Invalid, Rejected=Rejected, AwaitingSource=type("AwaitingSource", (Exception,), {}))
+    sys.path.insert(0, str(HERE))
+    live = load("live")
 
 
 class Reply:

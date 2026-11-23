@@ -190,6 +190,12 @@ pub struct ShieldedState {
 }
 
 impl ShieldedState {
+    pub fn asset_orchard_balances(&self) -> &[AssetOrchardAssetBalance] {
+        self.orchard
+            .as_ref()
+            .map_or(&[], |pool| pool.asset_orchard_balances.as_slice())
+    }
+
     pub fn empty() -> Self {
         Self {
             next_note_position: 0,
@@ -1571,7 +1577,13 @@ impl GovernanceState {
         }
         let mut latest = None::<&VaultBridgeRouteProfileRecordV1>;
         for record in &self.vault_bridge_route_profiles {
-            if record.profile.solana.is_some() || record.profile.asset_id != asset_id
+            if record.profile_hash == solana_exit::PROFILE_HASH
+                && solana_exit::registered(self).is_some()
+            {
+                continue;
+            }
+            if record.profile.solana.is_some()
+                || record.profile.asset_id != asset_id
                 || record.profile.activation_height > current_height
             {
                 continue;

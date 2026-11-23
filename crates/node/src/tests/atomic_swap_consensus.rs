@@ -1355,6 +1355,7 @@ fn pausing_an_admitted_atomic_swap_does_not_wedge_unrelated_mempool_traffic() {
         &store.read_mempool().expect("read paused mempool"),
         1,
         compatibility,
+        &[],
     )
     .expect("paused atomic wedged unrelated dry-run");
 
