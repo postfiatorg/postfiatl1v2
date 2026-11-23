@@ -270,11 +270,15 @@ From the reviewed checkout, run the following command with the operator's existi
 bash ops/sol-live/authorize-exit-prover.sh
 ```
 
-As the orchestrator, build the host verifier from the same reviewed release checkout. Package the committed worker files, hash-pinned wheels, frozen proof host and ELF, verifier, public role record, witness and approved host trust. The two private credentials stay outside the tar. Keep the tar at an absolute path readable by `postfiat`. Use a fresh output path on each build.
+On the orchestrator's trusted build account, use an independent, clean checkout of the approved full release commit. Keep this checkout, toolchain, build cache and GitHub publishing credential outside the relay operator's write access. Stage the reviewed public inputs under the builder's own KIT. Verify the role signatures, witness against the archived checkpoint and host fingerprint before packaging. Package the committed worker files, hash-pinned wheels, frozen proof host and ELF, verifier, public role record, witness and approved host trust. The two private credentials stay outside the tar. After publication, place a copy of the tar at an absolute path readable by `postfiat` on the relay host. Use a fresh output path on each build.
 
 ```bash
+set -euo pipefail
 wheels="$EXIT_WORK/target-ops/ops3/wheels"
-git diff --exit-code HEAD -- ops/sol-live solana/pfusdc-egress-verifier
+test "$(git rev-parse HEAD)" = "${RELEASE_COMMIT:?approved full release commit}"
+test -z "$(git status --porcelain)"
+CARGO_TARGET_DIR=$(mktemp -d "$KIT/verifier-build.XXXXXXXX")
+export CARGO_TARGET_DIR
 bash ops/sol-live/build-exit-verifier.sh
 BUNDLE="$KIT/sol-exit-install.tar"
 python3 ops/sol-live/build-exit-bundle.py --kit "$KIT" --wheels "$wheels" \
@@ -398,7 +402,7 @@ python3 ops/sol-live/exit_canary.py check --output "$KIT/canary"
 jq -e '.token_deltas=={"custody":-20000,"recipient":20000} and .withdrawal_packet_hash and .solana_tx' "$KIT/canary/paid.json"
 ```
 
-The checker compares the signed envelope including fee and sequence, the six finalized burn confirmations, the permanent Solana marker, the transaction-local custody debit and ATA credit, and the 20,000-atom debit recorded by that accepted L1 burn. Later wallet credits do not affect this check. After a signing or submission interruption run `python3 ops/sol-live/exit_canary.py recover --output "$KIT/canary"`, then `check`. Recovery verifies the saved ML-DSA envelope offline and looks up its exact ID on all six. If absent everywhere it submits those same bytes against a fresh, matching quote. Preserve the directory if the signed file is missing or incomplete. A paid marker with unavailable history proves payment; obtain the finalized transaction from an archival RPC before attesting settlement.
+The checker compares the signed envelope including fee and sequence, the six finalized burn confirmations, the permanent Solana marker, the transaction-local custody debit and ATA credit, and the 20,000-atom debit recorded by that accepted L1 burn. Later wallet credits do not affect this check. If a finalized burn already exists, rerun `check` in its original directory. After a signing or submission interruption run `python3 ops/sol-live/exit_canary.py recover --output "$KIT/canary"`, then `check`. Recovery verifies the saved ML-DSA envelope offline and looks up its exact ID on all six. If absent everywhere it submits those same bytes against a fresh, matching quote. Preserve the directory if the signed file is missing or incomplete. A paid marker with unavailable history proves payment; obtain the finalized transaction from an archival RPC before attesting settlement.
 
 Save the six-way accounting baseline before settlement.
 

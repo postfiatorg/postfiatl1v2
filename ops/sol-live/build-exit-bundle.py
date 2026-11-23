@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import tarfile
+import tempfile
 
 OPS = Path(__file__).resolve().parent
 REPO = OPS.parents[1]
@@ -34,11 +35,11 @@ def add(tar, name, data, mode=0o644):
     tar.addfile(info, io.BytesIO(data))
 
 
-def build(args):
+def write_bundle(args, stream):
     revision = git("rev-parse", "HEAD").decode().strip()
     def committed(path):
         return git("show", f"{revision}:{path}")
-    with tarfile.open(args.output, "x") as tar:
+    with tarfile.open(fileobj=stream, mode="w") as tar:
         add(tar, "revision", (revision + "\n").encode())
         for name in ("install-exit-system.sh", "exit_install_credential.py"):
             add(tar, name, committed("ops/sol-live/" + name))
@@ -66,6 +67,15 @@ def build(args):
             if hashlib.sha256(data).hexdigest() != digest:
                 raise ValueError(f"Wrong wheel digest for {package}")
             add(tar, "wheels/" + matches[0].name, data)
+
+
+def build(args):
+    # Publish only a complete tar, without replacing an earlier release bundle.
+    with tempfile.NamedTemporaryFile(dir=args.output.parent) as stream:
+        write_bundle(args, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
+        os.link(stream.name, args.output)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,19 @@ class InstallTests(unittest.TestCase):
         self.assertNotIn("git -C", SCRIPT)
         self.assertNotIn("repo_git", SCRIPT)
 
+    def test_failed_build_cannot_publish_a_partial_bundle(self):
+        import subprocess
+        import sys
+        with tempfile.TemporaryDirectory() as d:
+            kit = Path(d)
+            bundle = kit / "release.tar"
+            result = subprocess.run(
+                [sys.executable, HERE / "build-exit-bundle.py", "--kit", kit, "--output", bundle,
+                 "--proof", kit, "--wheels", kit, "--verifier", kit / "verify", "--trust", kit / "trust"],
+                capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(bundle.exists())
+
     def test_sudoers_exact_commands(self):
         grants = SCRIPT.split('<<RULES\n')[1].split('\nRULES')[0].splitlines()
         self.assertEqual(grants, [
