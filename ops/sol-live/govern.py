@@ -29,6 +29,22 @@ def remote(i, args, data=None):
     ).stdout
 
 
+REVIEW_READER = """import os, stat, sys
+with os.fdopen(os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as stream:
+    s = os.fstat(stream.fileno())
+    if not stat.S_ISREG(s.st_mode) or s.st_uid != 0 or s.st_mode & 0o022 or s.st_size > 65536:
+        sys.exit("Unsafe operator review file")
+    data = stream.read(65537)
+    if len(data) > 65536:
+        sys.exit("Oversized operator review file")
+    sys.stdout.buffer.write(data)
+"""
+
+
+def read_operator_review(i, path):
+    return json.loads(remote(i, ["/usr/bin/python3", "-I", "-c", REVIEW_READER, path]))
+
+
 def draft(profile):
     """Build the public governance proposal on a read replica without signing it."""
     pid = remote(
@@ -243,17 +259,18 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         raise ValueError("Unexpected Solana exit amendment.")
     save(local / "amendment.json", amend)
 
-    def sign(i):
-        if kind == "exit-paid":
-            from exit_precheck import parent_of
-
-            approval = json.loads(
-                remote(i, ["cat", "/etc/postfiat/sol-exit-paid-review.json"])
-            )
-            if approval != dict(kind=amend["kind"], parent=parent_of(head)):
+    if kind == "exit-paid":
+        def verify_review(i):
+            approval = read_operator_review(i, "/etc/postfiat/sol-exit-paid-review.json")
+            if approval != dict(kind=amend["kind"], parent=qualified_parent):
                 raise ValueError(
                     f"Validator-{i} has not verified this payout and proposal parent."
                 )
+
+        with ThreadPoolExecutor(6) as pool:
+            list(pool.map(verify_review, range(6)))
+
+    def sign(i):
         if i:
             put(i, "amend", amend)
         tool(

@@ -1,7 +1,6 @@
 """Prepare the six-validator governance envelope or submit it during the reviewed roll."""
 
 import argparse
-import json
 import re
 import subprocess
 from pathlib import Path
@@ -18,7 +17,7 @@ from exit_setup import (
     six,
     save,
 )
-from govern import govern, ParentChanged
+from govern import govern, ParentChanged, read_operator_review
 from exit_precheck import parent_of
 
 ETH_HASH = "29c91daa1c8d707ea3245db091976219266c5deca82b2d4571fafb221fd2dd092eb8833a28f4422bf0b4bbde44069e28"
@@ -69,15 +68,6 @@ def require_open_accounting(routes, state, height):
     reconcile_supply(routes, int(outstanding))
 
 
-CLEARANCE_READER = """import os, stat, sys
-with os.fdopen(os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as stream:
-    s = os.fstat(stream.fileno())
-    if not stat.S_ISREG(s.st_mode) or s.st_uid != 0 or s.st_mode & 0o022 or s.st_size > 65536:
-        sys.exit("Unsafe rotation clearance file")
-    sys.stdout.buffer.write(stream.read(65537))
-"""
-
-
 def rotation_clearance(head):
     """Read the independent inventories over the six authenticated host connections."""
     from govern import remote
@@ -111,10 +101,7 @@ def rotation_clearance(head):
                 match and int(match[1]) <= head["block_height"],
                 f"Unknown or uncommitted signing round on validator-{i}.",
             )
-        return json.loads(
-            remote(i, ["/usr/bin/python3", "-I", "-c", CLEARANCE_READER,
-                       "/etc/postfiat/sol-exit-rotation-clearance.json"])
-        )
+        return read_operator_review(i, "/etc/postfiat/sol-exit-rotation-clearance.json")
 
     rows = six(inspect)
     for i, row in enumerate(rows):

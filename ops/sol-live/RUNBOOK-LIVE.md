@@ -410,7 +410,7 @@ Save the six-way accounting baseline before settlement.
 python3 ops/sol-live/exit_canary.py settlement-before --output "$KIT/canary"
 ```
 
-Each validator operator independently reviews the original paid.json, finalized Solana transaction and L1 packet using the reviewed checkout, their trusted mainnet RPC, and the validator tunnels. The review binds the one successful tag 2 (ordinal zero), marker, accounts, signature, amount, slot and packet. On each signer host install that operator's verified JSON result at `/etc/postfiat/sol-exit-paid-review.json` under root ownership. Re-review on a new parent. The review command prints only the parent and expected amendment kind.
+Each validator operator independently reviews the original paid.json, finalized Solana transaction and L1 packet using the reviewed checkout, their trusted mainnet RPC, and the validator tunnels. The review binds the one successful tag 2 (ordinal zero), marker, accounts, signature, amount, slot and packet. On each signer host install that operator's verified JSON result at `/etc/postfiat/sol-exit-paid-review.json` as a root-owned regular file with mode 0644 or 0600. The paid command checks all six opened files for root ownership and rejects symlinks and group or world write access before any signer starts. Re-review on a new parent. The review command prints only the parent and expected amendment kind.
 
 ```bash
 python3 ops/sol-live/exit_canary.py settlement-review --output "$KIT/canary"
