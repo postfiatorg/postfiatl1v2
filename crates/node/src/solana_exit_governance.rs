@@ -23,7 +23,9 @@ pub(super) fn needs_signatures(
         .amendments
         .iter()
         .any(|a| solana_exit::is_decision(&a.kind))
-        || (registers_descriptor(batch)
+        || ((!batch.validator_registry_updates.is_empty()
+            || batch.amendments.iter().any(changes_numbered_set)
+            || registers_descriptor(batch))
             && solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
                 .is_some_and(|h| h <= height))
 }

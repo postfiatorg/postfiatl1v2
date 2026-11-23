@@ -997,6 +997,9 @@ fn invalid(message: impl Into<String>) -> io::Error {
 }
 
 #[cfg(test)]
+pub(super) use tests::signed_exit_rotation;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::cobalt_shadow::{
@@ -1031,6 +1034,12 @@ mod tests {
         let validator_count_u32 = u32::try_from(validator_count).expect("validator count fits u32");
         let genesis =
             Genesis::new_with_validator_count("postfiat-cobalt-handoff-test", validator_count_u32);
+        fixture_for_genesis(genesis)
+    }
+
+    fn fixture_for_genesis(genesis: Genesis) -> Fixture {
+        let validator_count_u32 = genesis.validator_count;
+        let validator_count = validator_count_u32 as usize;
         let mut validators = (0..validator_count)
             .map(|index| format!("validator-{index}"))
             .collect::<Vec<_>>();
@@ -1424,6 +1433,25 @@ mod tests {
             })
             .collect();
         update
+    }
+
+    /// Give the isolated exit fork its own Cobalt committee and a valid rotation certificate.
+    pub(crate) fn signed_exit_rotation(
+        genesis: &Genesis,
+        governance: &mut GovernanceState,
+        height: u64,
+    ) -> (ValidatorRegistry, Vec<MlDsa65KeyPair>, GovernanceActionBatch) {
+        let fixture = fixture_for_genesis(genesis.clone());
+        let local = activate(&fixture);
+        governance.cobalt_authority_transitions = local.cobalt_authority_transitions;
+        governance.authority_mode = local.authority_mode;
+        governance.validator_registry_updates.clear();
+        let update = signed_rotate_update(&fixture, governance, height);
+        let batch = build_governance_action_batch(genesis, vec![], vec![update]).unwrap();
+        verify_live_signed_governance_batch(genesis, governance, &fixture.registry, &batch, height)
+            .expect("valid six-member Cobalt rotation under ordinary signature rules");
+        std::fs::remove_dir_all(fixture.cobalt_root).unwrap();
+        (fixture.registry, fixture.keys, batch)
     }
 
     #[test]

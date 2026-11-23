@@ -869,7 +869,15 @@ fn certified_fork(output: Option<&Path>) {
             burn.withdrawal_packet_hash,
             "bc".repeat(64)
         );
-        let batch = decision(&paid, 1, h + 3);
+        let close = decision(solana_exit::CLOSE, 1, h + 3);
+        commit(
+            BATCH_KIND_GOVERNANCE,
+            &close.batch_id,
+            serde_json::to_string(&close).unwrap(),
+            true,
+        );
+        assert!(solana_exit::open_height(&store.read_governance().unwrap()).is_none());
+        let batch = decision(&paid, 1, h + 4);
         commit(
             BATCH_KIND_GOVERNANCE,
             &batch.batch_id,
@@ -888,7 +896,7 @@ fn certified_fork(output: Option<&Path>) {
         );
         assert_eq!(holder_balance(&settled), holder_balance(&after));
         settled.validate_asset_state(&g.chain_id).unwrap();
-        let batch = decision(&paid, 1, h + 4);
+        let batch = decision(&paid, 1, h + 5);
         commit(
             BATCH_KIND_GOVERNANCE,
             &batch.batch_id,
@@ -1002,7 +1010,8 @@ fn exit_review_open_checks_checkpoint_history() {
 #[ignore = "copied WAN ledger, release height 1760"]
 fn exit_review_close_drain_rotate_and_reopen() {
     let (g, mut gov, mut ledger) = scheduled_parent(true);
-    let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
+    let (registry, keys, batch) = crate::cobalt_handoff::signed_exit_rotation(&g, &mut gov, H + 6);
+    let committee = LocalCommittee { registry, keys };
     let decision = |gov: &mut GovernanceState, ledger: &mut LedgerState, kind, height| {
         let batch = committee.decision(&g, gov, kind, height);
         verify_live_signed_governance_batch(&g, gov, &committee.registry, &batch, height)?;
@@ -1017,38 +1026,39 @@ fn exit_review_close_drain_rotate_and_reopen() {
         Ok::<(), io::Error>(())
     };
     let tx = funded_burn(&g, &mut ledger);
-    let mut update = gov.validator_registry_updates.last().unwrap().clone();
-    update.activation_height = H + 6;
-    update.update_id = "aa".repeat(48);
-    let batch = GovernanceActionBatch::with_registry_updates("rotation", vec![], vec![update]);
-    // Exercise the state interlock independently of the Cobalt certificate verifier.
     let source = NodeStore::new("/var/lib/postfiat/validator-3");
     let mut block = source.read_blocks().unwrap().blocks.pop().unwrap();
     block.header.height = H + 6;
     block.header.batch_kind = "governance".into();
+    block.header.batch_id = batch.batch_id.clone();
+    let payload = serde_json::to_string(&batch).unwrap();
     let entry = BatchArchiveEntry {
         batch_kind: "governance".into(),
         batch_id: batch.batch_id.clone(),
-        payload_hash: String::new(),
-        payload_json: serde_json::to_string(&batch).unwrap(),
+        payload_hash: batch_archive_payload_hash(&g, "governance", &batch.batch_id, &payload)
+            .unwrap(),
+        payload_json: payload,
     };
     let rotation = |gov: &GovernanceState, ledger: &LedgerState| {
-        crate::block_replay_wallet::replay_archived_payload(
+        let mut rotated = gov.clone();
+        let receipts = crate::block_replay_wallet::replay_archived_payload(
             &g,
             &block,
             &entry,
             crate::block_replay_wallet::ArchivedReplayState {
-                governance: &mut gov.clone(),
+                governance: &mut rotated,
                 ledger: &mut ledger.clone(),
                 shielded: &mut source.read_shielded().unwrap(),
                 bridge: &mut source.read_bridge().unwrap(),
                 validator_registry: &committee.registry,
             },
-        )
-        .map(|_| ())
+        )?;
+        assert!(receipts[0].accepted);
+        Ok::<_, io::Error>(rotated)
     };
-    let error =
-        rotation(&gov, &ledger).expect_err("open admission blocks rotation with an empty queue");
+    let error = rotation(&gov, &ledger)
+        .err()
+        .expect("open admission blocks rotation with an empty queue");
     assert!(error.to_string().contains("burns are open"), "{error}");
     assert!(block_burn(&g, &gov, &mut ledger, &tx, H + 2).accepted);
     let packet = ledger
@@ -1059,9 +1069,12 @@ fn exit_review_close_drain_rotate_and_reopen() {
         .clone();
     decision(&mut gov, &mut ledger, "solana_exit_r8_close", H + 3).unwrap();
     assert_eq!(solana_exit::open_height(&gov), None);
-    assert_eq!(
-        rotation(&gov, &ledger).unwrap_err().kind(),
-        io::ErrorKind::PermissionDenied
+    let pending = rotation(&gov, &ledger)
+        .err()
+        .expect("closed pending queue blocks rotation");
+    assert!(
+        pending.to_string().contains("redemptions are pending"),
+        "{pending}"
     );
     let payout = format!(
         "{}{}:12345:0:{}",
@@ -1070,7 +1083,21 @@ fn exit_review_close_drain_rotate_and_reopen() {
         "ab".repeat(64)
     );
     decision(&mut gov, &mut ledger, &payout, H + 4).unwrap();
-    rotation(&gov, &ledger).unwrap();
+    let rotated = rotation(&gov, &ledger).unwrap();
+    assert_eq!(
+        rotated.validator_registry_updates.last(),
+        batch.validator_registry_updates.first()
+    );
+    let reopen = committee.decision(&g, &rotated, OPEN, H + 7);
+    assert!(crate::solana_exit_governance::validate_decision(
+        &g,
+        &rotated,
+        &reopen.amendments[0],
+        H + 7
+    )
+    .unwrap_err()
+    .contains(&(H + 6).to_string()));
+    // The same drained parent can reopen if the rotation was never committed.
     decision(&mut gov, &mut ledger, OPEN, H + 5).unwrap();
     assert_eq!(solana_exit::open_height(&gov), Some(H + 5));
 }
