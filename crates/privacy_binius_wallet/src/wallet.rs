@@ -973,6 +973,41 @@ mod fee_tests {
             .unwrap_err()
             .to_string()
             .contains("different payment"));
+        let mut pay = order.clone();
+        pay["mode"] = json!("Internal");
+        pay["recipient"] = json!(w.address(0).unwrap());
+        assert!(w
+            .prove(serde_json::from_value(pay).unwrap())
+            .unwrap_err()
+            .to_string()
+            .contains("different payment"));
+
+        let mut other = order.clone();
+        other["asset"] = json!(pq::NATIVE_ASSET_HEX);
+        assert!(w
+            .prove(serde_json::from_value(other).unwrap())
+            .unwrap_err()
+            .to_string()
+            .contains("insufficient funds"));
+        let mut deposit = order.clone();
+        deposit["mode"] = json!("Shield");
+        assert!(w
+            .prove(serde_json::from_value(deposit).unwrap())
+            .unwrap_err()
+            .to_string()
+            .contains("required public payer"));
+
+        let original = w.prepared(Some(id)).unwrap();
+        let mut replacement = exit(2, 1);
+        replacement["replace"] = json!(id);
+        let replacement = w
+            .prove(serde_json::from_value(replacement).unwrap())
+            .unwrap();
+        let next = &w.attempts[replacement["action_hash"].as_str().unwrap()];
+        assert!(next
+            .serials
+            .contains(w.attempts[id].shared_input.as_ref().unwrap()));
+        assert_eq!(w.prepared(Some(id)).unwrap(), original);
         order["different_payment"] = json!(true);
         assert!(w.prove(serde_json::from_value(order).unwrap()).is_ok());
     }
