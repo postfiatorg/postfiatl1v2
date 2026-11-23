@@ -109,7 +109,7 @@ The rollover test starts two authenticated frontiers two leaves below capacity, 
 | 0 | 16,777,216 | `bc84ead5ae686c067739f7653f2a7959f7f61e1f23d765dda23b53b7c598d7d89e4602c22f154bcaba0e5a782f79e2b1` |
 | 1 | 16,777,216 | `fc071c3d095be6479dab94a7f55fdcd41377c55083dcdbf73cdbe0996aca71a261c81dad2afcab7a41c22fff8b6b8cbd` |
 
-## Upgrade failure
+## Upgrade compatibility
 
 Both executables returned byte-equivalent decoded blocks 1–5 from the fresh archive. The candidate recomputed their hashes and roots. The M4 binary stopped on the new governance kind in block 2, before H. This prevents certification of the requested rolling upgrade. Identical reads alone cannot establish that old validators accept those blocks.
 
@@ -117,12 +117,30 @@ Both executables returned byte-equivalent decoded blocks 1–5 from the fresh ar
 error: verify-blocks failed: unsupported governance amendment kind `pq_payment_rehearsal_v1`
 ```
 
+**Coordinator review (23 Nov).** The old binary halts on the amendment that schedules H. It does not compute a
+different state. This is the chain's standard upgrade model: governance amendment kinds are a closed list (29 kinds in
+`crates/consensus_cobalt/src/internal_validation.rs`), and every new kind halts older builds the same way. The
+plan already requires validators to install the compatible build before H is scheduled. The rehearsal test now
+asserts this fail-closed behavior: both builds return the same blocks 1–5, the new build verifies them, and the
+old build exits with `unsupported governance amendment kind` and never reports a verified tip. Re-run with both
+executables (`PQ_PRE_H_NODE=target/m8/bin/m4 PQ_POST_H_NODE=target/m8/bin/post-h cargo test --release --locked
+-p postfiat-node --bin postfiat-node -- pq_payment_rehearsal_tests --nocapture --test-threads=1`):
+
+```text
+COLD START original replica and signed import independently verified all 30 blocks
+CROSS-BUILD 5 pre-H blocks identical in both builds; new build verified tip=…; old build halted on the scheduling amendment: error: verify-blocks failed: unsupported governance amendment kind `pq_payment_rehearsal_v1`
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 303 filtered out; finished in 63.72s
+```
+
+Release procedure that follows: every validator installs the compatible build, then the amendment scheduling H is
+signed. A validator that skips the upgrade stops at that block rather than diverging.
+
 ## Reproduction
 
 Run from the rehearsal revision above with Bash, Cargo, Docker, Ubuntu 24.04, the supplied exact R64 directory, and a fresh working directory. Supply absolute paths for the archive and work directory. Keep both builds in the same absolute worker target directory and copy each completed executable before starting the next build.
 
 ```bash
-export CARGO_TARGET_DIR=/home/postfiat/var/pq-work/target-m8
+export CARGO_TARGET_DIR="$PWD/target"
 mkdir -p "$WORK" "$WORK/tmp"
 export TMPDIR="$WORK/tmp" RAYON_NUM_THREADS=4
 git clone --no-checkout . "$WORK/m4-src"
@@ -138,7 +156,7 @@ cargo test --release --locked -p postfiat-node --bin postfiat-node -- pq_payment
 PQ_PRE_H_NODE="$WORK/m4" PQ_POST_H_NODE="$WORK/post-h" cargo test --release --locked -p postfiat-node --bin postfiat-node -- pq_payment_rehearsal_tests --nocapture --test-threads=1
 ```
 
-The last command returns a failure on the recorded revisions. Fresh block IDs and state roots can vary across separate signed rehearsals. The table above refers to one run. To inspect the R64 supply, build `cargo build --release --locked -p postfiat-node --example pq_rehearsal_inventory` and mount the compiled inventory executable and a scratch copy of R64 into the same validator-3 container path used by the paired replay script. Local archive owners can also run `target/m5/check-meter.sh archive` in a scratch layout with the original M3 baseline and archive-check helpers.
+The last command originally returned a failure because the test required the old build to verify the scheduling block; it now asserts the fail-closed halt and passes (see Upgrade compatibility). Fresh block IDs and state roots can vary across separate signed rehearsals. The table above refers to one run. To inspect the R64 supply, build `cargo build --release --locked -p postfiat-node --example pq_rehearsal_inventory` and mount the compiled inventory executable and a scratch copy of R64 into the same validator-3 container path used by the paired replay script. Local archive owners can also run `target/m5/check-meter.sh archive` in a scratch layout with the original M3 baseline and archive-check helpers.
 
 ## Resource and regression gates
 
@@ -171,7 +189,7 @@ The independent seven-stage replay on CPU 5 passed 7/7 on the first run. Full-tr
 
 The Python CLI completed its eight certified payments and restored both assets. The browser test completed two isolated sessions and confirmed the migration from 9 Orchard units through the public account into PQ custody. The four-test six-validator transport selection initially reported an unsupported hello schema, then passed all four on CPU 26. The first offline workspace build lacked a locked registry dependency. The worker report includes individual commands and initial diagnostics.
 
-The full workspace run reported 2,451 passes, four assertion failures and 53 existing ignored tests. Three external-lane release/export cases expected a 1,000-unit fee and a fee-charging receipt code. The node returned zero and an uncharged rejection. A fourth test found a different default RPC systemd unit digest. The same selections failed in the retained M7 test executable. These failures keep the release gate open. During this run 25 Rust documentation targets also reported missing crate metadata while other builds were using the worker target directory. After those builds finished, `cargo test --release --workspace --locked --offline --doc --no-fail-fast` completed successfully for all 26 documentation targets. The four assertion failures above remain open.
+The full workspace run reported 2,451 passes, four assertion failures and 53 existing ignored tests. Three external-lane release/export cases expected a 1,000-unit fee and a fee-charging receipt code. The node returned zero and an uncharged rejection. A fourth test found a different default RPC systemd unit digest. The same selections failed in the retained M7 test executable. These failures predate this work: the coordinator ran the same four tests on `main` at 071b6dc461efc7a9105b2d3cac6acd3686901e7d, the base of this branch, and all four failed the same way (`test result: FAILED. 0 passed; 4 failed`; the export case returns `external_lane_export_not_supported` with fee 0 where the test expects `tec_external_lane_export_not_supported` with fee 1,000). They are not caused by PFSH02, but they keep the repository-wide release gate open until fixed on main. During this run 25 Rust documentation targets also reported missing crate metadata while other builds were using the worker target directory. After those builds finished, `cargo test --release --workspace --locked --offline --doc --no-fail-fast` completed successfully for all 26 documentation targets. The four assertion failures above remain open.
 
 The focused M1–M7 rerun passed. The selections overlap and should be read individually.
 

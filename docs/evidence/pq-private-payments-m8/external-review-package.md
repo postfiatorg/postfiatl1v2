@@ -134,7 +134,7 @@ The source is available from the [repository](https://github.com/postfiatorg/pos
 Use Linux x86-64 with Rust 1.95.0, Go 1.25.1, Python 3.12 with z3-solver 5.4.1.0 or the pinned container environment in the standalone tool, Node 22 and a Chromium installation available to Playwright. The host replay used Python's Z3 5.4.1. The wallet tests use disposable keys and loopback connections. Run from the pinned checkout with an absolute writable Cargo target. Set `GO_BIN` and `PY_BIN` to the local Go executable and Z3-enabled Python. Keep the package and module locks.
 
 ```bash
-export CARGO_TARGET_DIR=/home/postfiat/var/pq-work/target-m8
+export CARGO_TARGET_DIR="$PWD/target"
 export RAYON_NUM_THREADS=4
 (cd tools/pft-binius-shielded-pq && BENCH_CPU=$("$PY_BIN" idle_cpu.py) ./verify.sh)
 (cd tools/pft-binius-shielded-pq/go-verifier && "$GO_BIN" test -count=1 ./... && "$GO_BIN" test -count=1 -tags purego ./...)

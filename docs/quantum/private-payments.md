@@ -66,8 +66,8 @@ sha256sum -c SHA256SUMS
 
 PFSH02 is not yet switched on for any public chain. On local test chains everything a user needs now works:
 validators verify and settle payments, the pool keeps its own ledger, and a command-line wallet and the browser wallet
-shield, pay and exit for PFT and pfUSDC. What remains is a full upgrade rehearsal on six validators and an external
-review of the cryptography (M8). Only after both does a signed amendment choose an activation height. The build plan is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
+shield, pay and exit for PFT and pfUSDC. The six-validator upgrade rehearsal is done. What remains is an external review of the cryptography;
+the package for reviewers is ready. Only after review does a signed amendment choose an activation height. The build plan is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
 It has eight milestones, each tested and merged on its own:
 
 | Milestone | Delivers | Status |
@@ -79,7 +79,7 @@ It has eight milestones, each tested and merged on its own:
 | M5 | Activation height, per-block verification limits, every public submission path | Done 23 Nov in rehearsal: off unless a signed amendment sets a height; blocks before it are invalid; at most 4 payments per block; 25 to 36 ms per payment inside a validator; a six-validator round takes 0.51 to 0.57 s with one payment (0.31 s without) |
 | M6 | A wallet that scans for its notes, recovers from backup and pays from the command line | Done 23 Nov on a local chain: two wallets shield, pay and unshield PFT and pfUSDC from the Python CLI; Bob restores from backup and spends across a tree rollover; no secrets in 89 RPC requests or logs; a payment takes about 25 s to prove on one core (585 MB) |
 | M7 | The browser wallet flow; moving funds from the old Orchard pool | Done 23 Nov on a local chain: Alice and Bob, in two browser sessions, shield, pay, spend a received note and exit for PFT and pfUSDC, checked against 10 validator receipts; Orchard funds move out in two approved steps (exit to the public account, then a fresh PQ deposit) and survive a restart at either step; keys and proving stay on the user's machine; the old Orchard wallet still works. [Screenshots](../evidence/pq-private-payments-m7/) |
-| M8 | Upgrade rehearsal on a six-validator chain and external review before activation | Next |
+| M8 | Upgrade rehearsal on a six-validator chain and external review before activation | Rehearsal done 23 Nov: on a fresh six-validator chain payments switch on at the scheduled height, mix with ordinary traffic, pause and reopen, and survive cold restart, snapshot import and full replay; the real 1,734-block archive replays identically; a validator that has not upgraded stops at the scheduling block instead of diverging. [Rehearsal record](../evidence/pq-private-payments-m8/rehearsal-record.md). External review: package ready ([review package](../evidence/pq-private-payments-m8/external-review-package.md)), reviewers not yet engaged |
 
 Closed on 22 November in the standalone tool:
 

@@ -444,10 +444,32 @@ mod pq_payment_rehearsal_tests {
             assert_eq!(rows.as_array().unwrap().len() as u64, ATOMIC_ACTIVATION - 1);
             assert_eq!(cli(&pre, &before, &args), rows);
             let current = cli(&post, &before, &["verify-blocks"]);
-            assert_eq!(cli(&pre, &before, &["verify-blocks"]), current);
+            assert_eq!(current["verified"], true);
+            // The block that schedules H carries a new amendment kind. Like every new
+            // kind, an older build halts on it instead of computing a different state,
+            // so validators must install the compatible build before the amendment is
+            // signed. The older build must fail closed here, never report a verified tip.
+            let old = Command::new(&pre)
+                .args(["verify-blocks", "--data-dir"])
+                .arg(&before)
+                .output()
+                .unwrap();
+            let stderr = String::from_utf8_lossy(&old.stderr);
+            assert!(
+                !old.status.success(),
+                "pre-H build accepted the scheduling amendment"
+            );
+            assert!(
+                stderr.contains("unsupported governance amendment kind"),
+                "pre-H build failed for another reason: {stderr}"
+            );
+            assert!(!String::from_utf8_lossy(&old.stdout).contains("\"verified\": true"));
             println!(
-                "CROSS-BUILD {} pre-H blocks replayed, tip={}, root={}",
-                current["block_count"], current["tip_hash"], current["state_root"]
+                "CROSS-BUILD {} pre-H blocks identical in both builds; new build verified tip={}, root={}; old build halted on the scheduling amendment: {}",
+                current["block_count"],
+                current["tip_hash"],
+                current["state_root"],
+                stderr.lines().find(|l| l.contains("unsupported governance amendment kind")).unwrap_or("")
             );
         }
         fs::remove_dir_all(fleet.root).unwrap();
