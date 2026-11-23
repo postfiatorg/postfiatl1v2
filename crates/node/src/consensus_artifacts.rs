@@ -1798,7 +1798,7 @@ pub(super) fn check_pq_block<'a>(
                 .parts()
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             let inner_fee = u64::from_le_bytes(inner[104..112].try_into().unwrap());
-            let (fee, minimum) = pq_payment_actions::fee_terms(governance, &terms, inner_fee)
+            let (fee, minimum) = pq_payment_actions::fee_terms(governance, &terms, inner_fee, height)
                 .map_err(|code| io::Error::new(io::ErrorKind::InvalidData, code))?;
             if fee < minimum {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_minimum_fee"));

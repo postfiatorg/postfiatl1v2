@@ -322,3 +322,30 @@ fn pq_registry_threshold_applies_to_signed_schedule_and_withdrawal() {
     }
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn pq_replacement_fee_waits_for_activation_and_links_the_two_schedules() {
+    use postfiat_types::PQ_REHEARSAL_ISSUE;
+    let genesis = Genesis::new_with_validator_count("fee-history", 6);
+    let mut g = GovernanceState::new(6);
+    for (height, fee) in [(3, 1), (9, 7)] {
+        let mut schedule = amendment(&genesis, height);
+        schedule.kind = format!("pq_payment_rehearsal_v1:fee:{fee}");
+        crate::execution_actions::apply_governance_amendment_with_lifecycle_records(
+            &mut g, schedule, "fee-batch", u64::from(height - 2));
+    }
+    assert_eq!(g.pq_issued_fee(PQ_REHEARSAL_ISSUE, 2), None);
+    assert_eq!(g.pq_issued_fee(PQ_REHEARSAL_ISSUE, 8), Some(1));
+    assert_eq!(g.pq_issued_fee(PQ_REHEARSAL_ISSUE, 9), Some(7));
+    let [record] = g.amendment_supersession_records.as_slice() else { panic!("missing schedule history") };
+    assert_eq!(record.superseded_amendment_id, g.amendments[0].amendment_id);
+    assert_eq!(record.previous_value, 3);
+    crate::execution_actions::verify_governance_amendment_supersession_records(&genesis, &g).unwrap();
+    let bare = GovernanceActionBatch::new("bare", vec![amendment(&genesis, 12)]);
+    let receipts = crate::execution_actions::execute_governance_batch(&mut g, None, Some(&genesis), &bare, 10);
+    assert_eq!(receipts[0].code, "pq_fee_unconfigured");
+    let pause = GovernanceActionBatch::new("pause", vec![amendment(&genesis, 0)]);
+    let receipts = crate::execution_actions::execute_governance_batch(&mut g, None, Some(&genesis), &pause, 11);
+    assert!(receipts[0].accepted);
+    assert_eq!(g.pq_issued_fee(PQ_REHEARSAL_ISSUE, 12), None);
+}

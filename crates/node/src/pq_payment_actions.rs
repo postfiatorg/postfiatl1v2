@@ -156,6 +156,7 @@ pub(super) fn fee_terms(
     governance: &GovernanceState,
     terms: &postfiat_types::pq_payment::Terms,
     inner_fee: u64,
+    height: u64,
 ) -> Result<(u64, u64), &'static str> {
     let pft_minimum = MIN_TRANSFER_FEE.max(postfiat_types::PQ_REHEARSAL_MIN_FEE);
     if terms.asset == [0; 48] {
@@ -170,12 +171,11 @@ pub(super) fn fee_terms(
         }
         return Ok((terms.public_fee, pft_minimum));
     }
-    Ok((
-        inner_fee,
-        governance
-            .pq_issued_minimum_fee(&id)
-            .ok_or("pq_fee_unconfigured")?,
-    ))
+    let required = governance.pq_issued_fee(&id, height).ok_or("pq_fee_unconfigured")?;
+    if inner_fee != required {
+        return Err("pq_fee_mismatch");
+    }
+    Ok((inner_fee, required))
 }
 
 /// Only the ratified governance batch calls this transfer. All recipient and
@@ -270,7 +270,7 @@ pub(super) fn apply(
     let (next, receipt) = pq_pool_state::prepare_pair(pool, payment, chain, height)?;
     let pair = next.pending.back().ok_or("pq_missing_pair")?;
     let native = terms.asset == [0; 48];
-    let (fee, base_minimum) = fee_terms(governance, &terms, pair.fee)?;
+    let (fee, base_minimum) = fee_terms(governance, &terms, pair.fee, height)?;
     let issued_spend = !native && terms.mode != Mode::Shield;
     let mut collector = None;
     let payer = terms

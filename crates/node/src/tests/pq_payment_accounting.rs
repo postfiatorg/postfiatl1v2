@@ -91,7 +91,7 @@ impl Fixture {
         ] {
             governance.apply(amendment(kind, 1, 0));
         }
-        let mut activation = amendment("pq_payment_rehearsal_v1:fee:1", 1, 0);
+        let mut activation = amendment("pq_payment_rehearsal_v1:fee:3", 1, 0);
         activation.chain_id = genesis.chain_id.clone();
         activation.genesis_hash = genesis_hash(&genesis);
         activation.protocol_version = genesis.protocol_version;
@@ -502,7 +502,8 @@ fn refusal_cases(f: &Fixture, payment: &PqPayment, issued: bool, step: usize, he
     }
     if issued && step != 0 {
         for (kind, code) in [
-            ("pq_payment_rehearsal_v1:fee:4", "pq_minimum_fee"),
+            ("pq_payment_rehearsal_v1:fee:4", "pq_fee_mismatch"),
+            ("pq_payment_rehearsal_v1:fee:2", "pq_fee_mismatch"),
             (postfiat_types::PQ_REHEARSAL_V1, "pq_fee_unconfigured"),
         ] {
             let mut changed = gov.clone();
@@ -941,6 +942,11 @@ fn issued_note_fees_settle_and_only_governance_can_release_the_collector() {
         (Mode::Exit, 0, 7, 1, 20, 3),
     ] {
         let shield = mode == Mode::Shield;
+        if !shield {
+            let mut schedule = super::pq_payment_activation::amendment(&f.genesis, 1);
+            schedule.kind = format!("pq_payment_rehearsal_v1:fee:{fee}");
+            governance.apply(schedule);
+        }
         let terms = Terms {
             mode,
             asset: hex_to_bytes(&f.child).unwrap().try_into().unwrap(),
@@ -994,7 +1000,7 @@ fn issued_note_fees_settle_and_only_governance_can_release_the_collector() {
                 .windows(pq::PUBLIC_KEY_BYTES)
                 .any(|w| w == sender.public_key.as_slice()));
             for (kind, code) in [
-                ("pq_payment_rehearsal_v1:fee:3", "pq_minimum_fee"),
+                ("pq_payment_rehearsal_v1:fee:3", "pq_fee_mismatch"),
                 (postfiat_types::PQ_REHEARSAL_V1, "pq_fee_unconfigured"),
             ] {
                 let mut changed = governance.clone();

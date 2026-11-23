@@ -1845,36 +1845,30 @@ impl GovernanceState {
             .min()
     }
 
-    /// Call after checking activation for this chain and candidate height.
-    pub fn pq_issued_minimum_fee(&self, asset: &str) -> Option<u64> {
+    fn pq_schedule_at(&self, height: u64) -> Option<&GovernanceAmendment> {
+        self.amendments.iter().rev().find(|a| is_pq_rehearsal_kind(&a.kind)
+            && height >= a.activation_height && height >= u64::from(a.value))
+    }
+
+    /// For the candidate height, after checking the network and pool activation.
+    pub fn pq_issued_fee(&self, asset: &str, height: u64) -> Option<u64> {
         if asset != PQ_REHEARSAL_ISSUE {
             return None;
         }
-        self.amendments.iter().rev()
-            .find(|a| is_pq_rehearsal_kind(&a.kind))
-            .and_then(|a| pq_rehearsal_fee(&a.kind))
+        let schedule = self.pq_schedule_at(height)?;
+        if schedule.value == 0 || schedule.paused {
+            return None;
+        }
+        pq_rehearsal_fee(&schedule.kind)
     }
 
     pub fn pq_rehearsal_active(
-        &self,
-        chain: &str,
-        genesis: &str,
-        protocol: u32,
-        height: u64,
+        &self, chain: &str, genesis: &str, protocol: u32, height: u64,
     ) -> bool {
-        self.amendments
-            .iter()
-            .rev()
-            .find(|a| is_pq_rehearsal_kind(&a.kind))
-            .is_some_and(|a| {
-                a.chain_id == chain
-                    && a.genesis_hash == genesis
-                    && a.protocol_version == protocol
-                    && !a.paused
-                    && a.value != 0
-                    && height >= u64::from(a.value)
-                    && height >= a.activation_height
-            })
+        self.pq_schedule_at(height).is_some_and(|a| {
+            a.chain_id == chain && a.genesis_hash == genesis && a.protocol_version == protocol
+                && !a.paused && a.value != 0
+        })
     }
 
     pub fn shielded_atomic_batch_activation_height(&self) -> Option<u64> {

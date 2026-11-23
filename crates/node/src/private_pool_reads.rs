@@ -99,6 +99,9 @@ pub struct PrivatePoolCompleteness {
 pub struct PrivatePoolSnapshotReport {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pq_last_page: Option<String>,
+    /// Exact series and decimal atoms for the requested inclusion height.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pq_issued_fee: Option<(String, String)>,
     pub schema: String,
     pub chain_id: String,
     pub genesis_hash: String,
@@ -616,6 +619,13 @@ pub(super) fn private_pool_snapshot_from(
         };
     }
     Ok(PrivatePoolSnapshotReport {
+        pq_issued_fee: if pq_read && genesis_hash(&snapshot.genesis) == pq_payment_fixture::GENESIS_HASH
+            && snapshot.governance.pq_rehearsal_active(&snapshot.genesis.chain_id,
+                pq_payment_fixture::GENESIS_HASH, snapshot.genesis.protocol_version, inclusion_height)
+        {
+            snapshot.governance.pq_issued_fee(postfiat_types::PQ_REHEARSAL_ISSUE, inclusion_height)
+                .map(|fee| (postfiat_types::PQ_REHEARSAL_ISSUE.to_owned(), fee.to_string()))
+        } else { None },
         pq_last_page: pq_read.then(|| pq_head.map_or(String::new(), |h| h.last_page.clone())),
         schema: PRIVATE_POOL_SNAPSHOT_SCHEMA.to_string(),
         chain_id: snapshot.genesis.chain_id.clone(),

@@ -1269,6 +1269,11 @@ fn execute_governance_batch_with_replay(
                 code,
                 message,
             ));
+        } else if amendment.kind == postfiat_types::PQ_REHEARSAL_V1 && amendment.value != 0
+            && governance.amendments.iter().any(|a| postfiat_types::pq_rehearsal_fee(&a.kind).is_some())
+        {
+            receipts.push(Receipt::rejected(amendment.amendment_id.clone(), "pq_fee_unconfigured",
+                "Supply the replacement fee or explicitly pause the pool with value zero"));
         } else if governance
             .amendments
             .iter()
@@ -2490,6 +2495,10 @@ pub(super) fn apply_governance_amendment_with_lifecycle_records(
 /// its commit height needs the genesis lane (its cap and window), which the
 /// governance-only replay paths do not carry. `external_lane_info` reports
 /// the cap in force (`release_cap_schedule_at`).
+fn same_amendment_family(left: &str, right: &str) -> bool {
+    left == right || (postfiat_types::is_pq_rehearsal_kind(left) && postfiat_types::is_pq_rehearsal_kind(right))
+}
+
 pub(super) fn governance_amendment_current_value(governance: &GovernanceState, kind: &str) -> u32 {
     match kind {
         GOVERNANCE_KIND_VALIDATOR_SET => governance.active_validator_count,
@@ -2554,7 +2563,7 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .amendments
             .iter()
             .rev()
-            .find(|a| a.kind == kind)
+            .find(|a| same_amendment_family(&a.kind, kind))
             .map_or(0, |a| a.value),
         GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT => governance
             .shielded_atomic_batch_activation_height()
@@ -3013,7 +3022,7 @@ pub(super) fn governance_amendment_supersession_record(
         .amendments
         .iter()
         .rev()
-        .find(|existing| existing.kind == amendment.kind)?;
+        .find(|existing| same_amendment_family(&existing.kind, &amendment.kind))?;
     let mut record = GovernanceAmendmentSupersessionRecord {
         schema: GOVERNANCE_AMENDMENT_SUPERSESSION_SCHEMA.to_string(),
         supersession_record_id: String::new(),
@@ -3066,7 +3075,7 @@ pub(super) fn governance_amendment_rollback_record(
         .amendments
         .iter()
         .rev()
-        .find(|existing| existing.kind == amendment.kind)?;
+        .find(|existing| same_amendment_family(&existing.kind, &amendment.kind))?;
     let restored = governance
         .amendments
         .iter()
@@ -3296,7 +3305,7 @@ pub(super) fn expected_governance_amendment_supersessions(
     for (index, amendment) in amendments.iter().enumerate() {
         if let Some(previous_index) = amendments[..index]
             .iter()
-            .rposition(|previous| previous.kind == amendment.kind)
+            .rposition(|previous| same_amendment_family(&previous.kind, &amendment.kind))
         {
             expected.push((&amendments[previous_index], amendment));
         }
@@ -3346,7 +3355,7 @@ pub(super) fn verify_governance_amendment_supersession_record_for_domain(
         || record.genesis_hash != superseding.genesis_hash
         || record.protocol_version != superseding.protocol_version
         || record.kind != superseding.kind
-        || record.kind != superseded.kind
+        || !same_amendment_family(&record.kind, &superseded.kind)
         || record.new_value != superseding.value
     {
         return Err(io::Error::new(
@@ -3455,7 +3464,7 @@ pub(super) fn expected_governance_amendment_rollbacks(
         let previous = &amendments[..index];
         let Some(rolled_back_index) = previous
             .iter()
-            .rposition(|existing| existing.kind == rollback.kind)
+            .rposition(|existing| same_amendment_family(&existing.kind, &rollback.kind))
         else {
             continue;
         };
@@ -3518,7 +3527,7 @@ pub(super) fn verify_governance_amendment_rollback_record_for_domain(
         || record.chain_id != rollback.chain_id
         || record.genesis_hash != rollback.genesis_hash
         || record.protocol_version != rollback.protocol_version
-        || record.kind != rolled_back.kind
+        || !same_amendment_family(&record.kind, &rolled_back.kind)
         || record.kind != restored.kind
         || record.kind != rollback.kind
         || record.restored_value != restored.value
