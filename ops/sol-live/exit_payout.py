@@ -104,7 +104,7 @@ def funded_send(c, label, instructions, *signers, rent=0, before_send=None):
     balance(c, rent + fee)
     if before_send is None:
         require(label != "exit.withdrawal", "Withdrawal journal is required.")
-    if label == "exit.withdrawal":
+    if label in {"exit.buffer", "exit.upload", "exit.checkpoint", "exit.withdrawal"}:
         check_custody(c)
     tx = Transaction([c.payer, *signers], message, block)
     sig = str(tx.signatures[0])

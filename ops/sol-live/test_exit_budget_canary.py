@@ -140,7 +140,9 @@ class BudgetCanaryTest(unittest.TestCase):
             return str(tx.signatures[0])
 
         c.call.side_effect = call
-        p.funded_send(c, "exit.checkpoint", [], rent=1200)
+        from unittest.mock import patch
+        with patch.object(p, "check_custody"):
+            p.funded_send(c, "exit.checkpoint", [], rent=1200)
         c.confirm.assert_called_once()
 
     def test_recover_resubmits_only_saved_envelope_after_six_status_checks(self):
