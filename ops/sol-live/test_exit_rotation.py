@@ -45,6 +45,18 @@ class RotationTest(unittest.TestCase):
                 gov.rotation_clearance(head)
             rows[5]["outstanding_signed_rotation_rounds"] = []
             self.assertEqual(gov.rotation_clearance(head), rows)
+            prefix = "epoch-3-" + "ab" * 48 + "-"
+            for name in ("height-1800.json", prefix + "height-1800-view-0.timeout-vote.json"):
+                safety[0] = name
+                self.assertEqual(gov.rotation_clearance(head), rows)
+                safety[0] = name.replace("1800", "2001")
+                with self.assertRaisesRegex(ValueError, "uncommitted"):
+                    gov.rotation_clearance(head)
+            for name in ("unrecognized.json", "height-1800-view-0.timeout-vote.json"):
+                safety[0] = name
+                with self.assertRaisesRegex(ValueError, "Unknown"):
+                    gov.rotation_clearance(head)
+            safety[0] = safety[1]
             safety[0] = safety[0].replace("2000", "2001")
             with self.assertRaisesRegex(ValueError, "uncommitted"):
                 gov.rotation_clearance(head)
