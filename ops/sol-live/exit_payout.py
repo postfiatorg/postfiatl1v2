@@ -43,6 +43,7 @@ from exit_setup import (
     rw,
     six,
 )
+from exit_segments import select_target, validate_segment, committee
 from exit_proof import available, prove
 
 ATA = pk("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
@@ -210,6 +211,16 @@ def signature(c, burn):
     raise ValueError("Burn already paid. Finalized signature history is unavailable.")
 
 
+def verify_endpoints(c, witness, prior, target):
+    start = c.account(checkpoint_pda(prior))
+    require(start and start["owner"] == str(VERIFIER), "Starting checkpoint missing.")
+    validate_segment(witness, prior, target, start["data"].hex())
+    result = c.account(checkpoint_pda(target["block_hash"]))
+    require(not result or (result["owner"] == str(SYSTEM) and not result["data"]) or
+            (result["owner"] == str(VERIFIER) and result["data"].hex() == committee(target)),
+            "Conflicting result checkpoint.")
+
+
 def submit(c, kind, witness, work, owner=None, on_pay=None):
     vals, proof = prove(kind, witness, work)
     require(0 < len(vals) <= 2048 and len(proof) == 356, "Invalid proof size.")
@@ -357,17 +368,17 @@ def process(burn, work, update):
     update("proving")
     work.mkdir(parents=True, exist_ok=True)
     while h - latest > 65:
-        target = latest + 65
-        block = rpc(0, "blocks", from_height=target, limit=1)[0]["header"]
-        require(block["height"] == target, "Checkpoint height mismatch.")
+        block = select_target(latest, rpc)
         w = rpc(
             0,
             "pfusdc_checkpoint_witness",
             prior_checkpoint=prior,
             target_block=block["block_hash"],
         )
+        verify_endpoints(c, w, prior, block)
         submit(c, "checkpoint", w, work)
         latest, prior = light(c)
+        require((latest, prior) == (block["height"], block["block_hash"]), "Checkpoint readback differs.")
     w = rpc(
         0,
         "pfusdc_egress_witness",
@@ -381,6 +392,9 @@ def process(burn, work, update):
         and w["withdrawal_packet"]["source_bucket_id"] == BUCKET,
         "Witness does not match this burn.",
     )
+    target = rpc(0, "blocks", from_height=h, limit=1)[0]["header"]
+    require(target["height"] == h, "Unexpected burn height.")
+    verify_endpoints(c, w, prior, target)
     sig = signature(c, burn)
     if not sig:
 
