@@ -160,6 +160,23 @@ fn scheduled_parent(open: bool) -> (Genesis, GovernanceState, LedgerState) {
     (g, gov, ledger)
 }
 
+#[test]
+#[ignore = "requires the copied WAN ledger at height 1753"]
+fn direct_client_explains_closed_burn_before_release() {
+    let (g, _, mut local) = archived_parent();
+    let tx = funded_burn(&g, &mut local);
+    let denied =
+        submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+            data_dir: "/var/lib/postfiat/validator-3".into(),
+            signed_asset_transaction_json: serde_json::to_string(&tx).unwrap(),
+        })
+        .unwrap_err();
+    assert!(
+        denied.to_string().contains("solana_exit_burns_closed"),
+        "{denied}"
+    );
+}
+
 fn block_burn(
     g: &Genesis,
     gov: &GovernanceState,
@@ -183,7 +200,8 @@ fn block_burn(
 fn solana_exit_registration_leaves_burns_closed() {
     let (g, gov, mut ledger) = scheduled_parent(false);
     let tx = funded_burn(&g, &mut ledger);
-    let lookup = |id: &str| crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, H, id);
+    let lookup =
+        |id: &str| crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, H, id);
     let family = lookup(solana_exit::FAMILY).unwrap();
     assert_eq!(family, lookup("541e451e6ae96b6680988655571a0feec59c7f1d073c9b5d29547254cab38a3be540f8767446d25baebc7081ce97aef7").unwrap());
     let expected_eth: VaultBridgeRouteProfileV1 = serde_json::from_str(include_str!(
@@ -724,7 +742,10 @@ fn certified_fork(output: Option<&Path>) {
                 denied.to_string().contains("Solana exit release"),
                 "{denied}"
             );
-            assert!(submit().is_err());
+            assert!(submit()
+                .unwrap_err()
+                .to_string()
+                .contains("solana_exit_burns_closed"));
         }
         // Advance the local fork with ordinary signed governance blocks.
         let batch = decision(

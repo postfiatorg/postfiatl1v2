@@ -522,6 +522,23 @@ fn admit_signed_asset_transaction_to_mempool(
             "signed asset transaction chain domain does not match local node",
         ));
     }
+    // Explain the release gate at ingress while preserving historical block receipts.
+    if let AssetTransactionOperation::VaultBridgeBurnToRedeem(op) = &signed.unsigned.operation {
+        if op.bucket_id == postfiat_types::solana_exit::BUCKET
+            && op.asset_id == postfiat_types::solana_exit::FAMILY
+            && op.destination_ref.starts_with("solana-spl:")
+            && postfiat_types::solana_exit::release_height(
+                &genesis.chain_id,
+                &signed.unsigned.genesis_hash,
+            )
+            .is_none_or(|h| block_height < h)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "solana_exit_burns_closed: the Solana exit release is not active",
+            ));
+        }
+    }
     let ledger = admission_base_ledger(&store)?;
     let shielded = store.read_shielded()?;
     let orchard_balances = shielded
