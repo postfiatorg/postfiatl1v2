@@ -267,3 +267,12 @@ fn issued_spends_have_only_the_inner_fee_and_no_sender_fields() {
         assert!(PqPayment::encode(&terms, None, &body).is_err());
     }
 }
+
+#[test]
+fn original_rehearsal_issued_exit_is_refused() {
+    let bytes = include_bytes!("fixtures/pre-profile-2-issued-exit.bin");
+    assert_eq!(
+        postfiat_types::pq_payment::PqPayment::from_bytes(bytes.to_vec()).unwrap_err(),
+        "unsupported rehearsal issued spend with a public payer"
+    );
+}

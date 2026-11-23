@@ -1,5 +1,8 @@
 # Integrating PFSH02 private payments into Post Fiat L1
 
+**Rehearsal archive compatibility.** Archives from rehearsal builds before this change that contain issued private spends cannot be replayed; no live chain is affected. The decoder refuses the original public-payer format for issued payments and exits.
+
+
 Build on **`public/main`** (design baseline `071b6dc461`). Import the PFSH02 source and fixtures from
 `feat/peel-binius-shielded-pq` (tool baseline `d76e5a8c6`, spec baseline `dd9be3ba9`). Reconcile any
 subsequent tool or spec corrections against those vectors before pinning. The Orchard transfer diff is a map

@@ -1,5 +1,8 @@
 # Network Status
 
+**Rehearsal archive compatibility.** Archives from rehearsal builds before this change that contain issued private spends cannot be replayed; no live chain is affected. The decoder refuses the original public-payer format for issued payments and exits.
+
+
 **Guidance reviewed 2026-11-06; latest fleet observation 2026-11-19.**
 This page summarizes recorded observations and separately labels newer source
 work. It is not a live query. The full, dated operating log is

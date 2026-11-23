@@ -166,6 +166,9 @@ impl PqPayment {
         let epoch = u64::from_le_bytes(b[55..63].try_into().unwrap());
         let public_fee = u64::from_le_bytes(b[63..71].try_into().unwrap());
         let issued = asset != [0; 48];
+        if issued && mode != Mode::Shield && b[5] == 1 {
+            return Err("unsupported rehearsal issued spend with a public payer");
+        }
         if b[5] != profile(mode, &asset) {
             return Err("unknown PQ encoding or profile");
         }
