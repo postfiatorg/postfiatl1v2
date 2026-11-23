@@ -3052,7 +3052,9 @@ pub(super) fn verify_external_lane_amendment_admission(
     }
 }
 
-pub(super) fn verify_live_signed_governance_batch(
+pub(super) use verify_signed_governance_batch as verify_live_signed_governance_batch;
+
+pub(super) fn verify_signed_governance_batch(
     genesis: &Genesis,
     governance: &GovernanceState,
     registry: &ValidatorRegistry,
@@ -3097,6 +3099,15 @@ pub(super) fn verify_live_signed_governance_batch(
         .filter(|update| update.activation_height < proposal_slot)
         .count() as u64;
     for amendment in &batch.amendments {
+        if postfiat_types::solana_exit::is_decision(&amendment.kind) {
+            crate::solana_exit_governance::validate_decision(
+                genesis,
+                governance,
+                amendment,
+                proposal_slot,
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e))?;
+        }
         verify_external_lane_amendment_admission(
             genesis,
             governance,
@@ -3214,6 +3225,19 @@ pub(super) fn verify_live_signed_governance_batch(
                 io::ErrorKind::PermissionDenied,
                 "vault bridge route profile validator set does not match the old active registry",
             ));
+        }
+        if amendment
+            .kind
+            .ends_with(postfiat_types::solana_exit::PROFILE_HASH)
+            && activation.profile == postfiat_types::solana_exit::descriptor()
+            && postfiat_types::solana_exit::release_height(
+                &genesis.chain_id,
+                &genesis_hash(genesis),
+            )
+            .is_some_and(|release| proposal_slot >= release)
+        {
+            crate::solana_exit_governance::require_unanimity(amendment, &validators)
+                .map_err(|message| io::Error::new(io::ErrorKind::PermissionDenied, message))?;
         }
         verify_signed_governance_authorization_set(
             "vault bridge route profile activation",

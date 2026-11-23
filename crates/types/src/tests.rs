@@ -3846,3 +3846,58 @@ fn a_pinned_beacon_anchor_is_covered_by_the_state_commitment() {
         "a different beacon root must change the commitment"
     );
 }
+
+#[test]
+fn vault_bridge_solana_destination_binds_the_bucket_genesis_and_full_owner() {
+    let genesis = "1a".repeat(32);
+    let owner = "ce".repeat(32);
+    let vault = "33".repeat(32);
+    let mint = "44".repeat(32);
+    let source = format!("spl:{genesis}:{vault}:{mint}");
+    let destination = format!("solana-spl:{genesis}:{owner}");
+    let (chain, v, m, recipient) = solana_packet_destination(&source, &destination).unwrap();
+    assert_eq!(chain.to_be_bytes(), *b"SOLANA01");
+    assert_eq!(v, solana_egress_packet_alias(&vault).unwrap());
+    assert_eq!(m, solana_egress_packet_alias(&mint).unwrap());
+    assert_eq!(recipient, solana_egress_packet_alias(&owner).unwrap());
+    let other = format!("solana-spl:{genesis}:{}00", &owner[..62]);
+    assert_ne!(
+        vault_bridge_destination_ref_hash(&other),
+        vault_bridge_destination_ref_hash(&destination)
+    );
+    for invalid in [
+        format!("solana-spl:{}:{owner}", "22".repeat(32)),
+        format!("solana-spl:{genesis}:{}", owner.to_uppercase()),
+        format!("solana-spl:{genesis}:{}", &owner[..62]),
+        format!("{destination}:extra"),
+        format!("evm-erc20:1:0x{}", "aa".repeat(20)),
+    ] {
+        assert!(solana_packet_destination(&source, &invalid).is_err());
+    }
+    let evm_source = format!(
+        "erc20_bridge_vault:1:0x{}:0x{}",
+        "33".repeat(20),
+        "44".repeat(20)
+    );
+    assert!(solana_packet_destination(&evm_source, &destination).is_err());
+    let error = VaultBridgeRedemption::new(
+        "test-chain",
+        "holder",
+        "issuer",
+        "11".repeat(48),
+        "22".repeat(48),
+        evm_source,
+        1,
+        20_000,
+        1,
+        "33".repeat(48),
+        destination,
+        "44".repeat(48),
+        1755,
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("destination_ref") && error.contains("evm"),
+        "{error}"
+    );
+}

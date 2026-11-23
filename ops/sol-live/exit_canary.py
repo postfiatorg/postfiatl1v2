@@ -1,0 +1,661 @@
+"""Orchestrator's one-burn mainnet proof. Keep the output directory for recovery."""
+
+import argparse
+import base58
+import fcntl
+import hashlib
+import re
+import json
+import os
+from pathlib import Path
+import subprocess
+import time
+
+import requests
+from exit_setup import (
+    ASSET,
+    ExitCluster,
+    FEE_PAYER,
+    VAULT,
+    BUCKET,
+    ROOT,
+    SERIES,
+    fleet,
+    pk,
+    read,
+    require,
+    rpc,
+    save,
+    six,
+)
+from exit_payout import ATA, MINT, PREFIX, TOKEN, marker, pda, signature
+
+OWNER = "pf5c266a1bdb18320e140961411a8c4d8383eaafb2"
+PHANTOM = pk("Ce5Yv528pKVrVq4JbQchZ8zasCAzxT3f9uCfatTZcfo8")
+API = "http://127.0.0.1:18089/solana/withdrawals"
+DEST = PREFIX + bytes(PHANTOM).hex()
+
+
+def cluster():
+    return ExitCluster(FEE_PAYER)
+
+
+def expected_unsigned(fields):
+    envelope = dict(fields)
+    operation = envelope.pop("operation")
+    return dict(
+        envelope,
+        **operation,
+        address_namespace="postfiat.address.v1",
+        transaction_kind=operation["operation"],
+        signature_algorithm_id="ML-DSA-65",
+    )
+
+
+def check_unsigned(unsigned, fields):
+    require(
+        unsigned == expected_unsigned(fields),
+        "Signed envelope differs from the reviewed quote.",
+    )
+
+
+def token_deltas(tx, owner=PHANTOM):
+    meta = tx["meta"]
+    require(meta["err"] is None, "Solana payout failed.")
+    keys = tx["transaction"]["message"]["accountKeys"]
+    addresses = [
+        pda(VAULT, b"custody"),
+        pda(ATA, bytes(owner), bytes(TOKEN), bytes(MINT)),
+    ]
+    deltas = {}
+    for name, address in zip(("custody", "recipient"), addresses):
+        index = keys.index(str(address))
+        amounts = []
+        for phase in ("preTokenBalances", "postTokenBalances"):
+            rows = [r for r in meta[phase] if r["accountIndex"] == index]
+            if not rows and name == "recipient" and phase == "preTokenBalances":
+                amounts.append(0)
+                continue
+            require(
+                len(rows) == 1
+                and rows[0]["mint"] == str(MINT)
+                and rows[0]["uiTokenAmount"]["decimals"] == 6,
+                "Missing USDC payout token balance.",
+            )
+            amounts.append(int(rows[0]["uiTokenAmount"]["amount"]))
+        deltas[name] = amounts[1] - amounts[0]
+    require(
+        deltas == {"custody": -20000, "recipient": 20000},
+        "Canary transaction token deltas differ.",
+    )
+    return deltas
+
+
+def balances(c):
+    from exit_precheck import recipient_atoms
+
+    addr = pda(ATA, bytes(PHANTOM), bytes(TOKEN), bytes(MINT))
+    acc = c.account(addr)
+    line = rpc(0, "account_assets", account=OWNER, asset_id=SERIES, limit=1)["assets"]
+    require(
+        len(line) == 1
+        and line[0]["source_bucket_id"] == BUCKET
+        and line[0]["authorized"]
+        and not line[0]["frozen"],
+        "missing test series",
+    )
+    return dict(
+        ata=str(addr),
+        usdc_atoms=recipient_atoms(addr, acc, PHANTOM),
+        pfusdc_atoms=int(line[0]["balance"]),
+    )
+
+
+def prepare(out, *, allow_closed=False):
+    r = requests.get(API + "/readiness", timeout=60).json()
+    require(
+        (r["ready"] or (allow_closed and r["payout_ready"] and not r["burns_open"]))
+        and r["bucket_id"] == BUCKET
+        and r["series_asset_id"] == SERIES,
+        "Payout is unavailable",
+    )
+    before = balances(cluster())
+    require(before["pfusdc_atoms"] >= 20000, "Insufficient Solana-backed pfUSDC")
+    op = dict(
+        operation="vault_bridge_burn_to_redeem",
+        owner=OWNER,
+        issuer=r["issuer"],
+        asset_id=ASSET,
+        bucket_id=BUCKET,
+        amount_atoms=20000,
+        epoch=r["epoch"],
+        reserve_packet_hash=r["reserve_packet_hash"],
+        destination_ref=DEST,
+    )
+    head = fleet()
+    q = rpc(
+        0,
+        "asset_fee_quote",
+        source=OWNER,
+        operation_json=json.dumps(op, separators=(",", ":")),
+    )
+    require(
+        q["source"] == OWNER
+        and q["operation"] == op
+        and q["chain_id"] == head["chain_id"]
+        and q["genesis_hash"] == head["genesis_hash"],
+        "Unexpected fee quote",
+    )
+    require(
+        q.get("sender_meets_reserve_after_fee") is True,
+        "Insufficient native reserve after fee.",
+    )
+    return dict(
+        before=before,
+        parent=head,
+        fields=dict(
+            chain_id=q["chain_id"],
+            genesis_hash=q["genesis_hash"],
+            protocol_version=q["protocol_version"],
+            source=OWNER,
+            fee=q["minimum_fee"],
+            sequence=q["sequence"],
+            operation=op,
+        ),
+    )
+
+
+def burn(out):
+    plan = read(out / "plan.json")
+    require(
+        not (out / "sign-request.json").exists(),
+        "Signing already attempted. Use recover with this output directory.",
+    )
+    current = prepare(out)
+    require(
+        current["fields"] == plan["fields"]
+        and current["parent"]["block_tip_hash"] == plan["parent"]["block_tip_hash"],
+        "Quote or parent changed before signing. Prepare again.",
+    )
+    save(out / "sign-request.json", dict(kind="asset", fields=plan["fields"]))
+    subprocess.run(
+        [
+            Path.home() / "repos/StakeHub/.venv/bin/python",
+            ROOT / "ops/b24-live/sign_bob.py",
+            out / "sign-request.json",
+            out / "signed.json",
+        ],
+        check=True,
+    )
+    recover(out)
+
+
+def verified_burn_id(raw, fields):
+    signed = json.loads(raw)
+    check_unsigned(signed["unsigned"], fields)
+    op = fields["operation"]
+    require(
+        set(signed) == {"unsigned", "algorithm_id", "public_key_hex", "signature_hex"}
+        and fields["source"] == op["owner"] == OWNER
+        and op["asset_id"] == ASSET
+        and op["destination_ref"] == DEST
+        and op["bucket_id"] == BUCKET
+        and op["amount_atoms"] == 20000,
+        "Unexpected canary intent.",
+    )
+    result = subprocess.run(
+        [
+            Path.home() / "repos/StakeHub/.venv/bin/python",
+            Path(__file__).with_name("verify_canary_envelope.py"),
+        ],
+        input=raw,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.strip()
+    require(re.fullmatch("[a-f0-9]{96}", result), "Invalid signed burn ID.")
+    return result
+
+
+def recover(out):
+    plan = read(out / "plan.json")
+    require(
+        read(out / "sign-request.json") == dict(kind="asset", fields=plan["fields"]),
+        "Original signing request and plan differ.",
+    )
+    with (out / "signed.json").open("rb") as f:
+        raw = f.read().decode()
+        os.fsync(f.fileno())
+    tx_id = verified_burn_id(raw, plan["fields"])
+    seal = dict(tx_id=tx_id, sha256=hashlib.sha256(raw.encode()).hexdigest())
+    seal_path = out / "signed-envelope-id.json"
+    if seal_path.exists():
+        require(read(seal_path) == seal, "Signed envelope changed after verification.")
+    else:
+        if (out / "submission.json").exists():
+            receipt = read(out / "submission.json")["finality"]["receipt"]
+            require(
+                receipt["tx_id"] == tx_id, "Stored submission names another envelope."
+            )
+        save(seal_path, seal)
+    fd = os.open(out, os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+    def status(i):
+        try:
+            return rpc(i, "tx", tx_id=tx_id)
+        except RuntimeError as err:
+            if "rpc_tx_not_found" not in str(err):
+                raise
+            return None
+
+    rows = six(status)
+    if any(row is not None for row in rows):
+        require(
+            all(
+                r
+                and r.get("confirmed")
+                and r["receipt"]["accepted"]
+                and r["receipt"]["tx_id"] == tx_id
+                for r in rows
+            ),
+            "Original burn is pending, rejected or validators disagree.",
+        )
+        return
+    current = prepare(out)
+    require(
+        current["fields"] == plan["fields"], "Original envelope is no longer eligible."
+    )
+    head = current["parent"]
+    params = dict(
+        signed_asset_transaction_json=raw,
+        proxy_required_current_height=head["block_height"],
+        proxy_required_parent_hash=head["block_tip_hash"],
+        proxy_required_state_root=head["state_root"],
+    )
+    for i in range(6):
+        try:
+            result = rpc(
+                i, "mempool_submit_signed_asset_transaction_finality", **params
+            )
+        except RuntimeError as error:
+            if "rpc_finality_wrong_proposer" in str(error):
+                continue
+            raise
+        save(out / "submission.json", result)
+        require(
+            result["finality"]["confirmed"]
+            and result["finality"]["receipt"]["accepted"]
+            and result["finality"]["receipt"]["tx_id"] == tx_id,
+            "burn not accepted",
+        )
+        return
+    raise ValueError("Six validators refused proposer role")
+
+
+def burn_debit(report, transaction, tx, *, owner, sequence, bucket, amount, destination):
+    require(report["asset_id"] == ASSET, "Unexpected burn report asset.")
+    matches = [r for r in report["redemptions"] if r["burn_tx_id"] == tx]
+    require(len(matches) == 1, "Unique finalized canary burn not found.")
+    row = matches[0]
+    require(
+        row["owner"] == owner and row["owner_sequence"] == sequence
+        and row["bucket_id"] == bucket and row["amount_atoms"] == amount
+        and row["destination_ref"] == destination,
+        "Canary burn debit differs from the reviewed withdrawal.",
+    )
+    receipt, header = transaction["receipt"], transaction["block"]["header"]
+    require(
+        transaction["confirmed"] is True and receipt["accepted"] is True
+        and receipt["tx_id"] == tx and header["height"] == row["created_at_height"],
+        "Wrong finalized burn receipt.",
+    )
+    return dict(height=header["height"], block_hash=header["block_hash"],
+                state_root=header["state_root"], receipt=receipt,
+                amount_atoms=row["amount_atoms"], packet=row["withdrawal_packet_hash"])
+
+
+def check(out):
+    plan = read(out / "plan.json")
+    from exit_precheck import agreement
+
+    tx = verified_burn_id((out / "signed.json").read_text(), plan["fields"])
+
+    def verify_debit(i):
+        return burn_debit(
+            rpc(i, "vault_bridge_status", asset_id=ASSET), rpc(i, "tx", tx_id=tx), tx,
+            owner=OWNER, sequence=plan["fields"]["sequence"], bucket=BUCKET,
+            amount=20000, destination=DEST,
+        )
+
+    fleet()
+    confirmations = six(verify_debit)
+    debit = agreement(confirmations)
+    res = requests.post(API, json=dict(burn_tx_id=tx), timeout=15)
+    res.raise_for_status()
+    deadline = time.monotonic() + 3600
+    while time.monotonic() < deadline:
+        res = requests.get(API + "/" + tx, timeout=15)
+        res.raise_for_status()
+        job = res.json()
+        if job["stage"] == "failed":
+            raise ValueError(job["error"])
+        if job["stage"] == "paid":
+            c = cluster()
+            before = plan["before"]
+            require(
+                job["solana_tx"],
+                "A finalized transaction signature is required for the canary.",
+            )
+            finalized = c.call(
+                "getTransaction",
+                job["solana_tx"],
+                dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
+            )
+            deltas = token_deltas(finalized)
+            require(
+                signature(c, tx, job["solana_tx"]) == job["solana_tx"],
+                "Canary payout signature mismatch",
+            )
+            evidence = dict(
+                burn_tx_id=tx,
+                height=debit["height"],
+                solana_tx=job["solana_tx"],
+                before=before,
+                l1_debit_atoms=debit["amount_atoms"],
+                burn_receipts=[dict(validator=i, **record) for i, record in enumerate(confirmations)],
+                token_deltas=deltas,
+                finalized_slot=finalized["slot"],
+                withdrawal_packet_hash=debit["packet"],
+                marker=str(marker(tx)),
+                recipient=str(PHANTOM),
+            )
+            finalized_reference(evidence, finalized)
+            save(out / "paid.json", evidence)
+            print(json.dumps(evidence, indent=2))
+            return
+        time.sleep(8)
+    raise TimeoutError("Payout pending. Run check again with the same directory.")
+
+
+def finalized_reference(paid, tx):
+    from exit_payout import LIGHT, SYSTEM, VERIFIER
+
+    sig = paid["solana_tx"]
+    packet = paid["withdrawal_packet_hash"]
+    require(
+        tx
+        and tx["transaction"]["signatures"] == [sig]
+        and type(tx["slot"]) is int
+        and tx["slot"] == paid["finalized_slot"] > 0
+        and re.fullmatch("[0-9a-f]{96}", packet),
+        "Wrong finalized payout reference.",
+    )
+    raw = base58.b58decode(sig)
+    require(len(raw) == 64 and any(raw), "Invalid transaction signature.")
+    token_deltas(tx)
+    msg = tx["transaction"]["message"]
+    keys = msg["accountKeys"]
+    require(not msg.get("addressTableLookups"), "Unexpected lookup-table payout.")
+
+    def tag2(ix):
+        return (
+            keys[ix["programIdIndex"]] == str(VERIFIER)
+            and base58.b58decode(ix["data"])[:1] == b"\x02"
+        )
+
+    # A worker transaction has a single top-level withdrawal. Reject traces with
+    # additional withdrawals (including CPI), so its execution ordinal must be zero.
+    inner = tx["meta"]["innerInstructions"]
+    require(
+        isinstance(inner, list)
+        and not any(tag2(ix) for group in inner for ix in group["instructions"]),
+        "Cannot establish a single top-level payout.",
+    )
+    withdrawals = [ix for ix in msg["instructions"] if tag2(ix)]
+    require(len(withdrawals) == 1, "Unexpected payout ordinal or multiplicity.")
+    ix = withdrawals[0]
+    keys_used = [keys[i] for i in ix["accounts"]]
+    ata = pda(ATA, bytes(PHANTOM), bytes(TOKEN), bytes(MINT))
+    tail = [
+        SYSTEM,
+        marker(paid["burn_tx_id"]),
+        VAULT,
+        pda(VERIFIER, b"egress-release", bytes(VAULT)),
+        pda(VAULT, b"config"),
+        pda(VAULT, b"custody"),
+        ata,
+        PHANTOM,
+        MINT,
+        TOKEN,
+    ]
+    require(
+        len(base58.b58decode(ix["data"])) == 357
+        and len(keys_used) == 15
+        and keys_used[:2] == [str(FEE_PAYER), str(LIGHT)]
+        and keys_used[5:] == list(map(str, tail)),
+        "Payout instruction names different accounts or route.",
+    )
+    return dict(
+        packet=packet,
+        slot=tx["slot"],
+        ordinal=0,
+        signature_hex=raw.hex(),
+        kind=f"solana_exit_r8_paid:{packet}:{tx['slot']}:0:{raw.hex()}",
+    )
+
+
+def match_reference(amendment, ref):
+    require(
+        amendment["kind"] == ref["kind"], "Settlement draft differs from paid.json."
+    )
+
+
+def review_paid(paid):
+    from exit_precheck import agreement
+
+    c = cluster()
+    tx = c.call(
+        "getTransaction",
+        paid["solana_tx"],
+        dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
+    )
+    ref = finalized_reference(paid, tx)
+    require(
+        signature(c, paid["burn_tx_id"], paid["solana_tx"]) == paid["solana_tx"],
+        "Finalized marker differs from payout.",
+    )
+
+    def verify(i):
+        status = rpc(i, "vault_bridge_status", asset_id=ASSET)
+        (red,) = [
+            r for r in status["redemptions"] if r["burn_tx_id"] == paid["burn_tx_id"]
+        ]
+        require(
+            red["owner"] == OWNER and red["destination_ref"] == DEST,
+            "Wrong burn owner or destination.",
+        )
+        return settlement_state(status, paid)
+
+    agreement(six(verify))
+    return ref
+
+
+def settlement_state(status, paid):
+    (row,) = [r for r in status["redemptions"] if r["burn_tx_id"] == paid["burn_tx_id"]]
+    require(
+        row["bucket_id"] == BUCKET
+        and row["amount_atoms"] == 20000
+        and row["withdrawal_packet_hash"] == paid["withdrawal_packet_hash"],
+        "Settlement does not identify the original withdrawal packet.",
+    )
+    (bucket,) = [b for b in status["buckets"] if b["bucket_id"] == BUCKET]
+    allocations = [
+        a for a in status["allocations"]
+        if a["purpose"] == "vault_bridge_supply" and a["bucket_id"] == BUCKET
+    ]
+    others = [
+        r for r in status["redemptions"]
+        if r["bucket_id"] == BUCKET and r["burn_tx_id"] != paid["burn_tx_id"]
+    ]
+    return dict(
+        state=row["state"],
+        settled=row["settled_atoms"],
+        receipt=row["settlement_receipt_hash"],
+        counted=bucket["counted_value_atoms"],
+        queue=bucket["redemption_queue_atoms"],
+        outstanding=bucket["outstanding_vault_bridge_atoms"],
+        supply=sum(a["remaining_atoms"] for a in allocations),
+        activity=dict(
+            issued=sum(a["amount_atoms"] for a in allocations),
+            credited=sum(r["counted_value_atoms"] for r in status["receipts"] if r["bucket_id"] == BUCKET),
+            other_burns=sum(r["amount_atoms"] for r in others),
+            other_settled=sum(r["settled_atoms"] for r in others),
+        ),
+        packet=row["withdrawal_packet_hash"],
+    )
+
+
+def check_settlement(before, after, amendment):
+    # Older baselines lack the activity counters. Only their original quiet-window
+    # comparison can be proved. Preserve them across retries.
+    delta = dict(issued=0, credited=0, other_burns=0, other_settled=0)
+    if "activity" in before:
+        require(before["packet"] == after["packet"], "Baseline names another packet.")
+        delta = {k: after["activity"][k] - before["activity"][k] for k in delta}
+        require(min(delta.values()) >= 0, "Cumulative bucket activity regressed.")
+    settled = 20000 + delta["other_settled"]
+    require(
+        before["state"] == "pending"
+        and before["settled"] == 0
+        and after["state"] == "settled"
+        and after["settled"] == 20000
+        and after["receipt"] == amendment
+        and after["outstanding"] == before["outstanding"] + delta["issued"] - delta["other_burns"]
+        and after["queue"] == before["queue"] + delta["other_burns"] - settled
+        and after["supply"] == before["supply"] + delta["issued"] - settled
+        and after["counted"] == before["counted"] + delta["credited"] - settled,
+        "Settlement receipt or revision-8 accounting differs.",
+    )
+
+
+def settlement(out, amendment=None, height=None):
+    from live import receipt_at
+    from exit_precheck import agreement
+
+    paid = read(out / "paid.json")
+    before_path = out / "settlement-before.json"
+    state = agreement(
+        six(
+            lambda i: settlement_state(
+                rpc(i, "vault_bridge_status", asset_id=ASSET), paid
+            )
+        )
+    )
+    if amendment is None:
+        require(
+            state["state"] == "pending" and state["settled"] == 0,
+            "Expected pending redemption.",
+        )
+        if before_path.exists():
+            baseline = read(before_path)
+            require(
+                baseline["state"] == "pending" and baseline["settled"] == 0
+                and baseline.get("packet", state["packet"]) == state["packet"],
+                "Invalid saved baseline for this packet.",
+            )
+        else:
+            save(before_path, state)
+        return
+    require(
+        re.fullmatch("[0-9a-f]{96}", amendment) and height,
+        "Settlement ID and height required.",
+    )
+    ref = review_paid(paid)
+
+    def verify_archive(i):
+        h = rpc(i, "tx", tx_id=amendment)["block"]["header"]
+        require(
+            h["height"] == height and h["batch_kind"] == "governance",
+            "Wrong settlement block.",
+        )
+        (batch,) = rpc(
+            i, "batch_archive", batch_kind="governance", batch_id=h["batch_id"], limit=1
+        )
+        (decision,) = [
+            a
+            for a in json.loads(batch["payload_json"])["amendments"]
+            if a["amendment_id"] == amendment
+        ]
+        match_reference(decision, ref)
+        return decision["kind"]
+
+    agreement(six(verify_archive))
+    receipts = receipt_at(amendment, height)
+    check_settlement(read(before_path), state, amendment)
+    save(
+        out / "settled.json",
+        dict(state=state, validators=receipts, amendment=amendment, reference=ref),
+    )
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument(
+        "action",
+        choices=(
+            "preflight",
+            "prepare",
+            "burn",
+            "recover",
+            "check",
+            "settlement-before",
+            "settlement-review",
+            "settlement-check",
+        ),
+    )
+    p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--amendment")
+    p.add_argument("--height", type=int)
+    args = p.parse_args()
+    os.umask(0o077)
+    out = args.output.resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    with (out / "lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if args.action == "preflight":
+            save(out / "preflight.json", prepare(out, allow_closed=True))
+        elif args.action == "settlement-review":
+            from exit_precheck import parent_of
+
+            parent = parent_of(fleet())
+            ref = review_paid(read(out / "paid.json"))
+            require(parent_of(fleet()) == parent, "Tip changed during payout review.")
+            print(json.dumps(dict(kind=ref["kind"], parent=parent)))
+        elif args.action == "settlement-before":
+            settlement(out)
+        elif args.action == "settlement-check":
+            require(
+                args.amendment and args.height,
+                "Specify the accepted amendment and its height.",
+            )
+            settlement(out, args.amendment, args.height)
+        elif args.action == "prepare":
+            require(
+                not (out / "sign-request.json").exists(),
+                "Existing signing attempt. Use check.",
+            )
+            save(out / "plan.json", prepare(out))
+        elif args.action == "burn":
+            burn(out)
+        elif args.action == "recover":
+            recover(out)
+        else:
+            check(out)
+
+
+if __name__ == "__main__":
+    main()

@@ -82,7 +82,11 @@ fn validate_sha3_384_digest(label: &str, value: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn write_exclusive_json<T: Serialize>(path: &Path, value: &T, label: &str) -> io::Result<()> {
+pub(super) fn write_exclusive_json<T: Serialize>(
+    path: &Path,
+    value: &T,
+    label: &str,
+) -> io::Result<()> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
     use std::sync::atomic::{AtomicU64, Ordering};

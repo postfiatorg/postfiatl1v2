@@ -1717,6 +1717,54 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "ratify-solana-exit-open" | "ratify-solana-exit-retire" | "ratify-solana-exit-close" | "ratify-solana-exit-paid" => {
+            let validators =
+                split_csv(flag_value(flags, "--validators").ok_or("missing --validators")?);
+            let height = flag_value(flags, "--height")
+                .ok_or("missing proposal --height")?
+                .parse::<u64>()
+                .map_err(|_| "invalid proposal height")?;
+            let kind = if command == "ratify-solana-exit-open" {
+                postfiat_types::solana_exit::OPEN.to_owned()
+            } else if command == "ratify-solana-exit-retire" {
+                postfiat_types::solana_exit::RETIRE.to_owned()
+            } else if command == "ratify-solana-exit-close" {
+                postfiat_types::solana_exit::CLOSE.to_owned()
+            } else {
+                let packet = flag_value(flags, "--packet-hash").ok_or("missing --packet-hash")?;
+                let slot = flag_value(flags, "--solana-slot").ok_or("missing --solana-slot")?;
+                let index = flag_value(flags, "--payout-index").ok_or("missing --payout-index")?;
+                let signature =
+                    flag_value(flags, "--signature-hex").ok_or("missing --signature-hex")?;
+                let kind = format!(
+                    "{}{packet}:{slot}:{index}:{signature}",
+                    postfiat_types::solana_exit::PAID
+                );
+                postfiat_types::solana_exit::payout_fields(&kind)?;
+                kind
+            };
+            let amendment = ratify_governance(RatifyGovernanceOptions {
+                data_dir: PathBuf::from(
+                    flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR),
+                ),
+                support: validators.clone(),
+                validators,
+                kind,
+                value: 1,
+                activation_height: height,
+                veto_until_height: 0,
+                paused: false,
+                amendment_file: PathBuf::from(
+                    flag_value(flags, "--amendment-file").ok_or("missing --amendment-file")?,
+                ),
+            })
+            .map_err(|error| format!("{command} failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&amendment).map_err(|e| e.to_string())?
+            );
+            Ok(())
+        }
         "ratify-crypto-policy" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let validators =
@@ -2888,8 +2936,10 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 .map_err(|_| "--current-height must be a u64".to_string())?;
             let previous_registry_file =
                 flag_value(flags, "--previous-registry-file").map(PathBuf::from);
-            let output_registry_file =
-                flag_value(flags, "--output-registry-file").map(PathBuf::from);
+            let output_registry_file = Some(PathBuf::from(
+                flag_value(flags, "--output-registry-file")
+                    .ok_or("missing offline --output-registry-file")?,
+            ));
             let report = apply_validator_registry_update(ValidatorRegistryUpdateApplyOptions {
                 data_dir: PathBuf::from(data_dir),
                 update_file: PathBuf::from(update_file),

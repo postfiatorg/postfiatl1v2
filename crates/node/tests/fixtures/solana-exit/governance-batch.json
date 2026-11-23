@@ -1,0 +1,97 @@
+{
+  "batch_id": "b92e7fdd35a8134fe8d51cad0b1e0a9a1f3c7148a3dafa9182981ccdae8ebeddddd8a750be7067e6a18826a9050a712b",
+  "vault_bridge_route_profile_activations": [
+    {
+      "schema": "postfiat.vault_bridge.route_profile_activation.v1",
+      "profile": {
+        "schema": "postfiat.vault_bridge.route_profile.v1",
+        "route_id": "solana-mainnet-usdc-exit-r8",
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "source_chain_id": 6003100671677640753,
+        "vault_address": "0x44ab631e7073b53b3fb55f2d124b968c3290c3b3",
+        "vault_runtime_code_hash": "0x75371e9a74f6ac2b5462f9e286f11396e3dee9f9f621cba1ec5cc55fee3a95aa",
+        "token_address": "0x852001017c3a4ed01bd73129e4cfdfd41c495b6b",
+        "token_runtime_code_hash": "0x8190d3f7ceb6cb7a7a8d8924bff89f9f611e15ce1f806f2b6237f3311a98f697",
+        "route_epoch": 8,
+        "verifier_kind": "sp1-groth16",
+        "evidence_tier": "receipt-proven",
+        "verifier_policy_hash": "6f9204e6c0cdacfc78daf75c2b09ad8f1d7fdcf0e17e2fa6afeb3d4cf2e01a1d",
+        "verifier_program_vkey": "0x0015b046ba4b80c0ca7e2d9429a1f5fd88bc6d1d328cca6acec29ffdf48a9d87",
+        "verifier_proof_encoding": "groth16",
+        "max_proof_bytes": 356,
+        "max_public_values_bytes": 2048,
+        "max_snapshot_age_blocks": 1,
+        "challenge_window_blocks": 1,
+        "max_epoch_gap_blocks": 1,
+        "settle_deadline_blocks": 1,
+        "min_challenge_bond": 0,
+        "min_attestations": 0,
+        "minimum_confirmations": 0,
+        "activation_height": 1754,
+        "expires_at_height": 9223372036854775807
+      },
+      "amendment": {
+        "amendment_id": "9f3e0f17c0925e9d06bdb40cbfdf62660a197b2d9ee0bfcd47634356dfdae4c0a581298263e3a55eb1e0f5786dbe2d0f",
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "protocol_version": 1,
+        "instance_id": "4ae74b44f22a924aa0c23e4c9fcc6634ccb2fc0a35bc7af5adf6bd32a3ff58f490fe9ca37098ebc4f610cf1aa752f591",
+        "proposal_id": "cf9261bf38ac2ab020f3fbc2098e808b7210759a313f682417f5722079506cc32a5aa18d4dce634f7f6bf193993639e4",
+        "certificate_id": "e296073b3cd7256e553a414dd1f3468e087fe17964d0ef39b7c0da4a1702d9c47c1b6f3229e2110cd86a18de89d3d4d0",
+        "proposer": "validator-0",
+        "validators": [
+          "validator-0",
+          "validator-1",
+          "validator-2",
+          "validator-3",
+          "validator-4",
+          "validator-5"
+        ],
+        "quorum": 6,
+        "kind": "vault_bridge_route_v1:02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b:37e3c05d8e353d93d56819bfdc3b10f314e5ae298cf43a34cefac477d06893953ceca391165ec3bc977c5e5b273b4046",
+        "value": 8,
+        "activation_height": 1754,
+        "support": [
+          "validator-0",
+          "validator-1",
+          "validator-2",
+          "validator-3",
+          "validator-4",
+          "validator-5"
+        ],
+        "votes": [
+          {
+            "vote_id": "fb66eda1ca80b56a8b5b4c6b41471a84698c800ef0ac4b6316d50871a0bc3851623d30ce5dd9fa95fa806f22415c29dd",
+            "validator": "validator-0",
+            "accept": true
+          },
+          {
+            "vote_id": "0f10b940a9aca870f31c70fb35e107afc69db68a79e4cdb825fe968444f4ac290c50013ed03408284d101fd136db677d",
+            "validator": "validator-1",
+            "accept": true
+          },
+          {
+            "vote_id": "16ad75dd5eab022b77b950ab8e3e6ad5c567e80b6361cf71d68bbd0ffd1142ad71db970cef390884d36d4ac405840a9d",
+            "validator": "validator-2",
+            "accept": true
+          },
+          {
+            "vote_id": "06608d5e71bdd96210d2f53972d9b6df6c78ecb0a3e2bf91b1667dd1d1934fe14ae190bd697d392b612d5ca3e87d10c6",
+            "validator": "validator-3",
+            "accept": true
+          },
+          {
+            "vote_id": "f7153d3b149fde2db478d6b6dab4c0f88c08a3c7175949f8aa0b03b7d1a79b4a3f106dc2e8b6348311403c89c0a20bfa",
+            "validator": "validator-4",
+            "accept": true
+          },
+          {
+            "vote_id": "6267fdc91c65573a5e38b543be15739187f8fa8611b6042683f4bbcef2c9c56e39c38aad6bc5c285e8e779fba4884aa0",
+            "validator": "validator-5",
+            "accept": true
+          }
+        ]
+      }
+    }
+  ]
+}

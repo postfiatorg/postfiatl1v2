@@ -29,6 +29,22 @@ def remote(i, args, data=None):
     ).stdout
 
 
+REVIEW_READER = """import os, stat, sys
+with os.fdopen(os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as stream:
+    s = os.fstat(stream.fileno())
+    if not stat.S_ISREG(s.st_mode) or s.st_uid != 0 or s.st_mode & 0o022 or s.st_size > 65536:
+        sys.exit("Unsafe operator review file")
+    data = stream.read(65537)
+    if len(data) > 65536:
+        sys.exit("Oversized operator review file")
+    sys.stdout.buffer.write(data)
+"""
+
+
+def read_operator_review(i, path):
+    return json.loads(remote(i, ["/usr/bin/python3", "-I", "-c", REVIEW_READER, path]))
+
+
 def draft(profile):
     """Build the public governance proposal on a read replica without signing it."""
     pid = remote(
@@ -104,10 +120,19 @@ def recover(profile):
     return None
 
 
-def govern(kind, profile=None, compatible=None):
+class ParentChanged(RuntimeError):
+    """Qualification expired before submitting the round."""
+
+
+def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout=None):
     head = fleet()
     if head["build_git_revision"] != (compatible or R6):
         raise RuntimeError("waiting for compatible six-validator release")
+    if kind in ("exit-open", "exit-close", "exit-paid"):
+        from exit_precheck import parent_of
+
+        if parent_of(head) != qualified_parent:
+            raise ParentChanged("Fresh parent qualification required.")
     h = head["block_height"] + 1
     local = STATE / "governance" / f"{kind}-{h}-{time.time_ns()}"
     local.mkdir(mode=0o700, parents=True)
@@ -129,6 +154,8 @@ def govern(kind, profile=None, compatible=None):
             raise RuntimeError("expected one transport validator")
         args = remote(i, ["cat", f"/proc/{pid}/cmdline"]).split("\0")
         binary = args[0]
+        if args[args.index("--data-dir") + 1] != dirs[i]:
+            raise ValueError("Unexpected resident data directory.")
         topo = args[args.index("--topology") + 1]
         if not re.fullmatch(
             r"/opt/postfiat/releases/[A-Za-z0-9_.-]+/postfiat-node", binary
@@ -172,6 +199,32 @@ def govern(kind, profile=None, compatible=None):
             "--batch-file",
             work[0] + "/draft",
         )
+    elif kind in ("exit-open", "exit-close", "exit-paid"):
+        extra = []
+        if kind == "exit-paid":
+            extra = [
+                "--packet-hash",
+                payout["packet"],
+                "--solana-slot",
+                payout["slot"],
+                "--payout-index",
+                payout["ordinal"],
+                "--signature-hex",
+                payout["signature_hex"],
+            ]
+        tool(
+            0,
+            "ratify-solana-" + kind,
+            *extra,
+            "--data-dir",
+            dirs[0],
+            "--validators",
+            ",".join(names),
+            "--height",
+            h,
+            "--amendment-file",
+            work[0] + "/amend",
+        )
     elif kind == "activation":
         tool(
             0,
@@ -188,7 +241,34 @@ def govern(kind, profile=None, compatible=None):
     else:
         raise ValueError(kind)
     amend = get(0, "amend")
+    if kind == "exit-paid":
+        from exit_canary import match_reference
+
+        match_reference(amend, payout)
+    if kind in ("exit-open", "exit-close", "exit-paid") and (
+        (
+            kind != "exit-paid"
+            and amend["kind"] != "solana_exit_r8_" + kind.split("-")[1]
+        )
+        or amend["activation_height"] != h
+        or amend["value"] != 1
+        or amend.get("paused", False)
+        or amend["quorum"] != 6
+        or amend["validators"] != names
+    ):
+        raise ValueError("Unexpected Solana exit amendment.")
     save(local / "amendment.json", amend)
+
+    if kind == "exit-paid":
+        def verify_review(i):
+            approval = read_operator_review(i, "/etc/postfiat/sol-exit-paid-review.json")
+            if approval != dict(kind=amend["kind"], parent=qualified_parent):
+                raise ValueError(
+                    f"Validator-{i} has not verified this payout and proposal parent."
+                )
+
+        with ThreadPoolExecutor(6) as pool:
+            list(pool.map(verify_review, range(6)))
 
     def sign(i):
         if i:
@@ -213,6 +293,8 @@ def govern(kind, profile=None, compatible=None):
         )
         return get(i, "auth")
 
+    if kind in ("exit-open", "exit-close", "exit-paid") and parent_of(fleet()) != qualified_parent:
+        raise ParentChanged("Parent changed before signing.")
     with ThreadPoolExecutor(6) as pool:
         auth = list(pool.map(sign, range(6)))
     for i, a in enumerate(auth):
@@ -262,7 +344,7 @@ def govern(kind, profile=None, compatible=None):
     if prop:
         put(prop, "batch", get(0, "batch"))
     if fleet()["block_tip_hash"] != head["block_tip_hash"]:
-        raise RuntimeError("tip advanced during signing")
+        raise ParentChanged("tip advanced during signing")
     txid = signed.get("amendment_id") or signed["amendment"]["amendment_id"]
     print(f"{kind} height={h} proposer={prop} tx_id={txid}", flush=True)
     tool(

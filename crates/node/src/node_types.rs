@@ -695,6 +695,8 @@ pub struct VaultBridgeAllocationStatusRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultBridgeRedemptionStatusRow {
     pub redemption_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub asset_id: String,
     pub owner: String,
     pub owner_sequence: u64,
     pub issuer: String,
@@ -1051,18 +1053,51 @@ pub struct VaultBridgeRouteReport {
     pub governance_amendment_id: String,
     pub governance_activation_height: u64,
     pub governance_route_epoch: u32,
-    pub nav_profile_id: String,
-    pub nav_profile_source_class: String,
-    pub nav_profile_verifier_kind: String,
-    pub nav_profile_policy_hash: String,
+    #[serde(flatten)]
+    pub nav: VaultBridgeNavReport,
     pub route_trust_class: String,
     pub live_value_enabled: bool,
     pub active: bool,
+    /// Admission status of the separately governed Solana exit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub burns_open: Option<bool>,
     /// Current ledger anchor for this exact governed profile and epoch.
     /// Null means 29-field proofs for this epoch are refused; old 26-field
     /// deposits are admitted only if the profile has no anchor in any epoch.
     #[serde(default)]
     pub beacon_finality_anchor: Option<postfiat_types::PfUsdcBeaconFinalityStateV1>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum VaultBridgeNavReport {
+    Route {
+        nav_profile_id: String,
+        nav_profile_source_class: String,
+        nav_profile_verifier_kind: String,
+        nav_profile_policy_hash: String,
+    },
+    SolanaExit {
+        family_nav_profile: FamilyNavProfileReport,
+        source_backing: SolanaSourceBackingReport,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FamilyNavProfileReport {
+    pub id: String,
+    pub source_class: String,
+    pub verifier_kind: String,
+    pub policy_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SolanaSourceBackingReport {
+    pub series_supply_atoms: u64,
+    pub outstanding_vault_bridge_atoms: u64,
+    pub revision: u32,
+    pub bucket_id: String,
+    pub policy_hash: String,
 }
 
 #[path = "b23_ingress_route_report.rs"]
