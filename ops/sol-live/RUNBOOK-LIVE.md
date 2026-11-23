@@ -172,7 +172,12 @@ On each authenticated validator host the operator publishes a root-owned `/etc/p
 ```bash
 setup_args=(--binary "$B" --archive "$ARCHIVE" --integrity-file "$INTEGRITY" --faucet-file "$FAUCET")
 mkdir -p "$KIT/evidence/solana"
-python3 ops/sol-live/exit_setup.py prove-roles --output "$KIT/evidence/solana/roles.json"
+roles="$KIT/evidence/solana/roles.json"
+if [[ -e "$roles" ]]; then
+  python3 -c 'from exit_setup import CONFIG,read,verify_role_record; import sys; verify_role_record(read(CONFIG), read(sys.argv[1]))' "$roles"
+else
+  python3 ops/sol-live/exit_setup.py prove-roles --output "$roles"
+fi
 python3 ops/sol-live/exit_setup.py "${setup_args[@]}" --qualify --output "$KIT/evidence/solana/unsigned.json"
 jq -e '.guest.forward and .guest.start==.config.initial_committee and .simulation.value.err==null' "$KIT/evidence/solana/unsigned.json"
 ```
