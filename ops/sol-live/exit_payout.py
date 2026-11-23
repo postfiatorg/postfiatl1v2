@@ -478,13 +478,35 @@ def rent_shortfall(c, account, size, owner):
     return 0
 
 
+def finalized_reclaim(c, buffer):
+    import base58
+
+    history = c.call("getSignaturesForAddress", str(buffer), dict(c.level, limit=1))
+    if not history or history[0]["err"] is not None:
+        return False
+    sig = history[0]["signature"]
+    tx = c.call("getTransaction", sig, dict(c.level, encoding="json", maxSupportedTransactionVersion=0))
+    if not tx or tx["meta"]["err"] is not None or tx["transaction"]["signatures"][0] != sig:
+        return False
+    msg = tx["transaction"]["message"]
+    keys = msg["accountKeys"]
+    return any(keys[ix["programIdIndex"]] == str(VERIFIER)
+               and [keys[i] for i in ix["accounts"]] == [str(buffer), str(c.owner)]
+               and base58.b58decode(ix["data"]) == b"\x06" for ix in msg["instructions"])
+
+
 def reclaim_completed(c, work):
     from exit_precheck import checkpoint_values
 
     for path in work.glob("*.key"):
         signer = load(path)
         account = c.account(signer.pubkey())
-        if not account or account["owner"] != str(VERIFIER):
+        if account is None:
+            # An allocation may still be in flight. Only a finalized close proves this key retired.
+            if finalized_reclaim(c, signer.pubkey()):
+                path.unlink()
+            continue
+        if account["owner"] != str(VERIFIER):
             continue
         raw = account["data"]
         if hashlib.sha256(raw).hexdigest() != path.stem:

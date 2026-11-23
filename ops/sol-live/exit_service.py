@@ -58,6 +58,7 @@ class Journal:
                 raise ValueError("Missing journal generation. Rebuild required.")
         self.worker_ok = True
         self.last_prune = 0
+        self.last_buffer_job = ""
         self.marker_cache = OrderedDict()
         self.marker_lock = threading.Lock()
         self.refresh_slot = threading.BoundedSemaphore(1)
@@ -360,13 +361,19 @@ def prune_terminal(journal, directory, retain=1024):
             (retain,),
         ).fetchall()
     burns = {r["burn_tx_id"]: r["stage"] for r in rows}
-    # Also recover rent stranded after a confirmed payout, even inside the retention window.
-    for path in directory.glob("[0-9a-f]" * 96):
+    # Rotate through retained work even when a different due job needs its rent.
+    paths = sorted(p for p in directory.glob("[0-9a-f]" * 96)
+                   if p.name not in burns and not p.is_symlink() and p.is_dir())
+    if paths:
+        path = next((p for p in paths if p.name > journal.last_buffer_job), paths[0])
+        journal.last_buffer_job = path.name
         row = journal.get(path.name)
-        if row and row["stage"] == "paid" and path.name not in burns:
+        if row and row["stage"] == "paid":
             if chain_payment(path.name, row["solana_tx"]):
                 prune_work(cluster(), path, reclaim=True)
-            break
+        elif row and any(path.glob("*.key")):
+            from exit_payout import reclaim_completed
+            reclaim_completed(cluster(), path)
     for burn, stage in burns.items():
         if not BURN.fullmatch(burn):
             raise ValueError("Invalid journal entry. Rebuild required.")

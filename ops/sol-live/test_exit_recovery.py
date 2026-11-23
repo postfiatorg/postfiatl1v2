@@ -329,3 +329,37 @@ class RecoveryTest(unittest.TestCase):
                 j.enqueue(f"{i:096x}")
             self.assertFalse(svc.service_readiness(server)["ready"])
             self.assertFalse(svc.service_readiness(server)["payout_ready"])
+
+    def test_sweep_recovers_pending_jobs_even_when_other_jobs_are_paid(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            j=svc.Journal(root/"db")
+            for burn in [BURN,"bc"*48]:
+                j.enqueue(burn)
+                (root/burn).mkdir()
+                (root/burn/("ab"*32+".key")).touch()
+            j.update(BURN,"paid")
+            with patch.object(svc,"cluster"), patch.object(svc,"chain_payment",return_value=p.PAID_NO_HISTORY),patch.object(svc,"prune_work"),patch.object(p,"reclaim_completed") as reclaim:
+                svc.prune_terminal(j,root)
+                svc.prune_terminal(j,root)
+                self.assertIn(root/("bc"*48), [args.args[1] for args in reclaim.call_args_list])
+
+    def test_confirmed_closed_buffer_does_not_consume_pending_capacity(self):
+        with tempfile.TemporaryDirectory() as d:
+            import base58
+            work=Path(d)
+            path=work/("cd"*32+".key")
+            path.touch()
+            signer=Keypair()
+            c=Mock(owner=p.FEE_PAYER,level={"commitment":"finalized"})
+            c.account.return_value=None
+            def call(method,*args):
+                if method=="getSignaturesForAddress":
+                    return [dict(err=None,signature="sig")]
+                return dict(meta={"err":None},transaction=dict(signatures=["sig"],message=dict(
+                    accountKeys=[str(c.owner),str(signer.pubkey()),str(p.VERIFIER)],
+                    instructions=[dict(programIdIndex=2,accounts=[1,0],data=base58.b58encode(b"\x06").decode())])))
+            c.call.side_effect=call
+            with patch.object(p,"load",return_value=signer):
+                p.reclaim_completed(c,work)
+            self.assertFalse(path.exists())
