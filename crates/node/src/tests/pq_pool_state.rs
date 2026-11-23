@@ -110,7 +110,7 @@ fn pq_global_uniqueness_and_checked_public_flows_are_atomic() {
     assert_eq!(both.head.assets[&native()].reserve, 99);
     for (asset, state) in &both.head.assets {
         if asset != &native() {
-            assert_eq!((state.reserve, state.fees, state.ingress), (100, 0, 100));
+            assert_eq!((state.reserve, state.fees, state.ingress), (99, 1, 100));
         }
     }
     for h in [5, 6] {
@@ -151,7 +151,7 @@ fn pq_global_uniqueness_and_checked_public_flows_are_atomic() {
             }
             _ => {
                 bad.kind = Mode::Exit;
-                bad.exit = u64::MAX;
+                bad.exit = u64::MAX - bad.fee;
                 "pq_reserve"
             }
         };

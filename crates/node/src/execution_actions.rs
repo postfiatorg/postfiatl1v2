@@ -1280,6 +1280,27 @@ fn execute_governance_batch_with_replay(
                 "governance amendment already applied",
             ));
         } else {
+            if let Some(recipient) = postfiat_types::pq_fee_withdraw_recipient(&amendment.kind) {
+                let result = (|| {
+                    if amendment.value == 0 {
+                        return Err("pq_fee_balance");
+                    }
+                    crate::pq_payment_actions::withdraw_fees(
+                        genesis.ok_or("pq_genesis")?,
+                        governance,
+                        ledger.as_deref_mut().ok_or("pq_ledger")?,
+                        recipient,
+                        u64::from(amendment.value),
+                        block_height,
+                    )
+                })();
+                if let Err(code) = result {
+                    receipts.push(Receipt::rejected(
+                        amendment.amendment_id.clone(), code, "PQ fee withdrawal refused",
+                    ));
+                    continue;
+                }
+            }
             apply_governance_amendment_with_lifecycle_records(
                 governance,
                 amendment.clone(),
@@ -2230,7 +2251,7 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 .to_string(),
         ));
     }
-    if amendment.kind == postfiat_types::PQ_REHEARSAL_V1
+    if postfiat_types::is_pq_rehearsal_kind(&amendment.kind)
         && amendment.value != 0
         && u64::from(amendment.value) <= block_height
     {
@@ -2529,7 +2550,7 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .external_lane_export_root_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
-        postfiat_types::PQ_REHEARSAL_V1 => governance
+        kind if postfiat_types::is_pq_rehearsal_kind(kind) => governance
             .amendments
             .iter()
             .rev()
@@ -2556,6 +2577,9 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
 }
 
 fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
+    if postfiat_types::is_pq_rehearsal_kind(kind) {
+        return true;
+    }
     matches!(
         kind,
         GOVERNANCE_KIND_VALIDATOR_SET
@@ -2577,7 +2601,6 @@ fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
             | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
             | postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT
-            | postfiat_types::PQ_REHEARSAL_V1
             | GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT

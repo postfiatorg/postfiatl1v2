@@ -781,6 +781,7 @@ fn validate_issued_supply_custody_inventory(
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits: _,
+        collected_private_fees,
         pftl_uniswap_source_custody,
         pftl_uniswap_routes,
         pftl_uniswap_receipts: _,
@@ -951,6 +952,11 @@ fn validate_issued_supply_custody_inventory(
         }
     }
 
+    for (id, amount) in collected_private_fees {
+        if *amount == 0 || id != postfiat_types::PQ_REHEARSAL_ISSUE || !known(id) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid PQ collected private fees"));
+        }
+    }
     for row in pftl_uniswap_source_custody {
         if !known(&row.asset_id) {
             return Err(io::Error::new(
@@ -1519,6 +1525,10 @@ pub(super) fn append_ledger_state(
         }
     }
 
+    for (series, balance) in &ledger.collected_private_fees {
+        append_canonical_str(bytes, "ledger.pq_fee_asset", series);
+        append_canonical_u64(bytes, "ledger.pq_collected_fees", *balance);
+    }
     if !ledger.pftl_uniswap_source_custody.is_empty() {
         let mut rows = ledger
             .pftl_uniswap_source_custody
@@ -1825,6 +1835,7 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits: _,
+        collected_private_fees: _,
         pftl_uniswap_source_custody: _,
         pftl_uniswap_routes: _,
         pftl_uniswap_receipts: _,

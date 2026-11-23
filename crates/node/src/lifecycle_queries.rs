@@ -3885,6 +3885,7 @@ pub(super) fn issued_asset_report(
         requires_authorization: asset.requires_authorization,
         freeze_enabled: asset.freeze_enabled,
         clawback_enabled: asset.clawback_enabled,
+        collected_private_fees: ledger.collected_private_fees.get(&asset.asset_id).copied(),
         outstanding_supply,
         trustline_count,
         holder_count,
@@ -3969,6 +3970,9 @@ pub(super) fn asset_metrics(ledger: &LedgerState, shielded: &ShieldedState) -> i
         ..AssetMetrics::default()
     };
 
+    for amount in ledger.collected_private_fees.values() {
+        metric_add(&mut metrics.total_outstanding_supply, *amount, "collected private fees")?;
+    }
     for asset in &ledger.asset_definitions {
         if asset.requires_authorization {
             metric_increment(
@@ -4093,7 +4097,7 @@ pub(super) fn issued_asset_stats(
     ledger: &LedgerState,
     asset_id: &str,
 ) -> io::Result<(u64, u64, u64)> {
-    let mut outstanding_supply = 0_u64;
+    let mut outstanding_supply = ledger.collected_private_fees.get(asset_id).copied().unwrap_or(0);
     let mut trustline_count = 0_u64;
     let mut holder_count = 0_u64;
     for line in ledger

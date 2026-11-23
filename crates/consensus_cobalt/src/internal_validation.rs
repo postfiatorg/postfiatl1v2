@@ -1696,6 +1696,9 @@ fn build_cobalt_safety_witness_report(
 }
 
 fn validate_amendment_kind(kind: &str) -> Result<(), String> {
+    if postfiat_types::pq_rehearsal_fee(kind).is_some() || postfiat_types::pq_fee_withdraw_recipient(kind).is_some() {
+        return Ok(());
+    }
     // Value 0 is in range, so this checks the kind alone; the value is
     // checked by `validate_amendment_value`.
     if let Some((code, message)) = postfiat_types::external_lane_amendment_refusal(kind, 0) {
@@ -1873,7 +1876,7 @@ fn validate_amendment_value(kind: &str, value: u32) -> Result<(), String> {
             )),
         };
     }
-    if value == 0 && kind != postfiat_types::PQ_REHEARSAL_V1 {
+    if value == 0 && !postfiat_types::is_pq_rehearsal_kind(kind) {
         return Err(format!(
             "governance amendment `{kind}` value must be nonzero"
         ));

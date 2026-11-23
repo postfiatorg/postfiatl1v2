@@ -772,7 +772,8 @@ fn issued_asset_supply_with_non_nav_spread(
                 .ok_or_else(|| ("issued_supply_overflow", "source custody overflow".to_string()))
         })?;
     trustline_supply
-        .checked_add(source_custody)
+        .checked_add(ledger.collected_private_fees.get(asset_id).copied().unwrap_or(0))
+        .and_then(|supply| supply.checked_add(source_custody))
         .and_then(|supply| supply.checked_add(open_escrow_supply))
         .and_then(|supply| supply.checked_add(open_offer_supply))
         .and_then(|supply| supply.checked_add(fast_lane_reserve_supply))
@@ -866,6 +867,7 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits: _,
+        collected_private_fees: _,
         pftl_uniswap_source_custody: _, // counted by the source-specific custody sum
         pftl_uniswap_routes: _,
         pftl_uniswap_receipts: _,

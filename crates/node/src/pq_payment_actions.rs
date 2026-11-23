@@ -151,6 +151,90 @@ fn enabled_issue<'a>(
     Ok(asset)
 }
 
+/// The activation check precedes this lookup at both block admission and settlement.
+pub(super) fn fee_terms(
+    governance: &GovernanceState,
+    terms: &postfiat_types::pq_payment::Terms,
+    inner_fee: u64,
+) -> Result<(u64, u64), &'static str> {
+    let pft_minimum = MIN_TRANSFER_FEE.max(postfiat_types::PQ_REHEARSAL_MIN_FEE);
+    if terms.asset == [0; 48] {
+        return Ok((inner_fee, pft_minimum));
+    }
+    let id = bytes_to_hex(&terms.asset);
+    if terms.mode == Mode::Shield {
+        if id != postfiat_types::PQ_REHEARSAL_ISSUE
+            && id != postfiat_types::PQ_ARCHIVE_FIXTURE_ISSUE
+        {
+            return Err("pq_issue_disabled");
+        }
+        return Ok((terms.public_fee, pft_minimum));
+    }
+    Ok((
+        inner_fee,
+        governance
+            .pq_issued_minimum_fee(&id)
+            .ok_or("pq_fee_unconfigured")?,
+    ))
+}
+
+/// Only the ratified governance batch calls this transfer. All recipient and
+/// backing checks precede both writes, just as they do for a public exit.
+pub(super) fn withdraw_fees(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &mut LedgerState,
+    recipient: &str,
+    amount: u64,
+    height: u64,
+) -> Result<(), &'static str> {
+    let digest = genesis_hash(genesis);
+    if digest != pq_payment_fixture::GENESIS_HASH
+        || !governance.pq_rehearsal_active(
+            &genesis.chain_id,
+            &digest,
+            genesis.protocol_version,
+            height,
+        )
+    {
+        return Err("pq_settlement_inactive");
+    }
+    let id = postfiat_types::PQ_REHEARSAL_ISSUE;
+    let held = ledger
+        .collected_private_fees
+        .get(id)
+        .copied()
+        .ok_or("pq_fee_balance")?;
+    let remaining = held.checked_sub(amount).ok_or("pq_fee_balance")?;
+    let compatibility =
+        crate::execution_actions::asset_execution_compatibility_for_genesis_and_governance(
+            genesis, governance,
+        );
+    if !compatibility.pfusdc_source_series_active(height) {
+        return Err("pq_issue_disabled");
+    }
+    let asset = enabled_issue(
+        ledger,
+        genesis,
+        governance,
+        &governance.asset_orchard_egress_policy_registry(),
+        height,
+        id,
+        held,
+    )?;
+    check_pq_recipient(ledger, recipient, height, compatibility)?;
+    let (index, balance) = prepare_pq_line_balance(ledger, asset, recipient, amount, true)?;
+    ledger.trustlines[index].balance = balance;
+    if remaining == 0 {
+        ledger.collected_private_fees.remove(id);
+    } else {
+        ledger
+            .collected_private_fees
+            .insert(id.to_owned(), remaining);
+    }
+    Ok(())
+}
+
 pub(super) fn apply(
     genesis: &Genesis,
     genesis_digest: &str,
@@ -186,7 +270,9 @@ pub(super) fn apply(
     let (next, receipt) = pq_pool_state::prepare_pair(pool, payment, chain, height)?;
     let pair = next.pending.back().ok_or("pq_missing_pair")?;
     let native = terms.asset == [0; 48];
-    let fee = if native { pair.fee } else { terms.public_fee };
+    let (fee, base_minimum) = fee_terms(governance, &terms, pair.fee)?;
+    let issued_spend = !native && terms.mode != Mode::Shield;
+    let mut collector = None;
     let payer = terms
         .account
         .as_ref()
@@ -212,6 +298,24 @@ pub(super) fn apply(
         if !compatibility.pfusdc_source_series_active(height) {
             return Err("pq_issue_disabled");
         }
+        let held = ledger
+            .collected_private_fees
+            .get(&pair.asset)
+            .copied()
+            .unwrap_or(0);
+        let next_held = held.checked_add(pair.fee).ok_or("pq_fee_balance")?;
+        let previous_reserve = pool
+            .head
+            .assets
+            .get(&pair.asset)
+            .map_or(0, |asset| asset.reserve);
+        let before = previous_reserve
+            .checked_add(held)
+            .ok_or("pq_issue_backing")?;
+        let after = next.head.assets[&pair.asset]
+            .reserve
+            .checked_add(next_held)
+            .ok_or("pq_issue_backing")?;
         let asset = enabled_issue(
             ledger,
             genesis,
@@ -219,13 +323,11 @@ pub(super) fn apply(
             policies,
             height,
             &pair.asset,
-            next.head.assets[&pair.asset].reserve.max(
-                pool.head
-                    .assets
-                    .get(&pair.asset)
-                    .map_or(0, |asset| asset.reserve),
-            ),
+            before.max(after),
         )?;
+        if issued_spend {
+            collector = Some((pair.asset.clone(), next_held));
+        }
         line = match terms.mode {
             Mode::Shield => Some(prepare_pq_line_balance(
                 ledger,
@@ -244,14 +346,18 @@ pub(super) fn apply(
             Mode::Internal => None,
         };
     }
-    let minimum = MIN_TRANSFER_FEE + creation_fee;
+    let minimum = base_minimum
+        .checked_add(creation_fee)
+        .ok_or("pq_minimum_fee")?;
     if fee < minimum {
         return Err("pq_minimum_fee");
     }
+    // These receipt fields feed chain-wide PFT totals. The pair records the asset fee.
+    let (pft_fee, pft_minimum) = if issued_spend { (0, 0) } else { (fee, minimum) };
     let receipt = receipt.with_fee_policy_and_state_expansion(
-        fee,
-        fee,
-        minimum,
+        pft_fee,
+        pft_fee,
+        pft_minimum,
         ACCOUNT_RESERVE,
         creation_fee,
     );
@@ -262,6 +368,9 @@ pub(super) fn apply(
     }
     if let Some((index, balance)) = line {
         ledger.trustlines[index].balance = balance;
+    }
+    if let Some((asset, balance)) = collector {
+        ledger.collected_private_fees.insert(asset, balance);
     }
     shielded.pq_pool_v1 = Some(next);
     Ok(receipt)

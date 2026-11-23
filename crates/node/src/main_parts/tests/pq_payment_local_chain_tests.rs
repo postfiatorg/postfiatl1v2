@@ -336,7 +336,7 @@ mod pq_payment_local_chain_tests {
         let store = NodeStore::new(peer);
         let genesis = store.read_genesis().unwrap();
         let bytes = include_bytes!(
-            "../../../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-exit.bin"
+            "../../../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-shield.bin"
         );
         let payment = PqPayment::from_bytes(bytes.to_vec()).unwrap();
         let id = payment.digest();

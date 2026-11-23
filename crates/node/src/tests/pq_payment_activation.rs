@@ -126,7 +126,7 @@ fn replay_rejects_preactivation_non_atomic_body_before_receipts() {
     let disk = NodeStore::new(&dir);
     let batch = build_shielded_action_batch(
         &genesis,
-        vec![ShieldedAction::PqPaymentV1(payment("pfusdc-exit"))],
+        vec![ShieldedAction::PqPaymentV1(payment("pfusdc-shield"))],
     )
     .unwrap();
     let entry = BatchArchiveEntry {

@@ -339,7 +339,7 @@ mod private_action_six_validator_tests {
             ATOMIC_ACTIVATION as u32,
         )];
         if let Some(height) = pq_height {
-            amendments.push((postfiat_types::PQ_REHEARSAL_V1, height));
+            amendments.push(("pq_payment_rehearsal_v1:fee:1", height));
         }
         if pricing {
             amendments.push((

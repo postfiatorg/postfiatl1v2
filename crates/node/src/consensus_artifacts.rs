@@ -1794,22 +1794,10 @@ pub(super) fn check_pq_block<'a>(
             let (terms, _, inner) = payment
                 .parts()
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            let fee = if terms.asset == [0; 48] {
-                u64::from_le_bytes(inner[104..112].try_into().unwrap())
-            } else {
-                let asset = bytes_to_hex(&terms.asset);
-                // M2 archives this fixture with a rejected, non-atomic receipt.
-                if asset != postfiat_types::PQ_REHEARSAL_ISSUE
-                    && asset != postfiat_types::PQ_ARCHIVE_FIXTURE_ISSUE
-                {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "pq_issue_disabled",
-                    ));
-                }
-                terms.public_fee
-            };
-            if fee < postfiat_types::PQ_REHEARSAL_MIN_FEE {
+            let inner_fee = u64::from_le_bytes(inner[104..112].try_into().unwrap());
+            let (fee, minimum) = pq_payment_actions::fee_terms(governance, &terms, inner_fee)
+                .map_err(|code| io::Error::new(io::ErrorKind::InvalidData, code))?;
+            if fee < minimum {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_minimum_fee"));
             }
         }

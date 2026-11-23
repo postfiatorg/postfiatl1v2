@@ -241,7 +241,7 @@ impl PqPool {
         if pair.height == 0
             || (pair.kind == Mode::Shield) != (pair.mint != 0)
             || (pair.kind == Mode::Exit) != (pair.exit != 0)
-            || (asset != [0; 48] && pair.fee != 0)
+            || (asset != [0; 48] && pair.kind == Mode::Shield && pair.fee != 0)
         {
             return Err("pq_invalid_flow");
         }

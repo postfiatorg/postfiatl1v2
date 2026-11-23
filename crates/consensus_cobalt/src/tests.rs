@@ -27,6 +27,25 @@
     }
 
     #[test]
+    fn pq_governance_binds_the_fee_and_withdrawal_recipient() {
+        let domain = test_domain();
+        let config = EssentialSubsetConfig::all_of(vec!["validator-0".into(), "validator-1".into()]);
+        let schedule = "pq_payment_rehearsal_v1:fee:17".to_string();
+        let withdrawal = format!("pq_private_fee_withdraw_v1:pf{}", "22".repeat(20));
+        for kind in [&schedule, &withdrawal] {
+            let mut amendment = ratify_governance_amendment(&domain, &config, kind, 10, config.validators.clone()).unwrap();
+            verify_governance_amendment(&domain, &amendment).unwrap();
+            amendment.kind.push('1');
+            assert!(verify_governance_amendment(&domain, &amendment).is_err());
+        }
+        for suffix in ["", "0", "01", "+1", "-1", "18446744073709551616"] {
+            assert!(validate_amendment_kind(&format!("pq_payment_rehearsal_v1:fee:{suffix}")).is_err());
+        }
+        assert!(validate_amendment_value(&schedule, 0).is_ok()); // Pause.
+        assert!(validate_amendment_value(&withdrawal, 0).is_err());
+    }
+
+    #[test]
     fn governance_accepts_only_canonical_vault_bridge_route_authority_kinds() {
         assert!(validate_amendment_kind(
             GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT

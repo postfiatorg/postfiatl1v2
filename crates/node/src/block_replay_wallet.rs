@@ -2777,6 +2777,7 @@ pub fn native_pft_supply_breakdown(
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits,
+        collected_private_fees: _,
         pftl_uniswap_source_custody: _, // issued pfUSDC custody, never native PFT
         pftl_uniswap_routes: _,
         pftl_uniswap_receipts: _,

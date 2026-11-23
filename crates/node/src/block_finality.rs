@@ -747,33 +747,16 @@ fn account_tx_rows_for_shielded_batch(
         let issue = (terms.asset != [0; 48]).then(|| bytes_to_hex(&terms.asset));
         if let Some(auth) = terms.account {
             let source = format!("pf{}", bytes_to_hex(&auth.id));
-            if terms.mode == Mode::Shield {
-                rows.push(row(
-                    "pq_payment_v1",
-                    source,
-                    POOL_ID.into(),
-                    amount(56),
-                    if issue.is_some() {
-                        terms.public_fee
-                    } else {
-                        amount(104)
-                    },
-                    auth.sequence,
-                    issue.clone(),
-                    "shielded_deposit",
-                ));
-            } else {
-                rows.push(row(
-                    "pq_payment_v1",
-                    source,
-                    POOL_ID.into(),
-                    0,
-                    terms.public_fee,
-                    auth.sequence,
-                    None,
-                    "shielded_fee",
-                ));
-            }
+            rows.push(row(
+                "pq_payment_v1",
+                source,
+                POOL_ID.into(),
+                amount(56),
+                if issue.is_some() { terms.public_fee } else { amount(104) },
+                auth.sequence,
+                issue.clone(),
+                "shielded_deposit",
+            ));
         }
         if terms.mode == Mode::Exit {
             rows.push(row(

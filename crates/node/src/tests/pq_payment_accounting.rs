@@ -50,6 +50,18 @@ impl Fixture {
         assert_eq!(genesis_hash(&genesis), pq_payment_fixture::GENESIS_HASH);
         let mut ledger = store.read_ledger().unwrap();
         let mut governance = store.read_governance().unwrap();
+        let f = Self::funded(dir, genesis, &mut ledger, &mut governance);
+        store.write_ledger(&ledger).unwrap();
+        store.write_governance(&governance).unwrap();
+        f
+    }
+
+    fn funded(
+        dir: PathBuf,
+        genesis: Genesis,
+        ledger: &mut LedgerState,
+        governance: &mut GovernanceState,
+    ) -> Self {
         let issuer = address_from_public_key(&ml_dsa_65_keygen_from_seed(&[7; 32]).public_key);
         let alice = ml_dsa_65_keygen_from_seed(&[41; 32]);
         let sponsor = ml_dsa_65_keygen_from_seed(&[42; 32]);
@@ -79,12 +91,12 @@ impl Fixture {
         ] {
             governance.apply(amendment(kind, 1, 0));
         }
-        let mut activation = amendment(postfiat_types::PQ_REHEARSAL_V1, 1, 0);
+        let mut activation = amendment("pq_payment_rehearsal_v1:fee:1", 1, 0);
         activation.chain_id = genesis.chain_id.clone();
         activation.genesis_hash = genesis_hash(&genesis);
         activation.protocol_version = genesis.protocol_version;
         governance.apply(activation);
-        let receipt = activate_route(&mut governance, &mut ledger, &profile);
+        let receipt = activate_route(governance, ledger, &profile);
         assert!(receipt.accepted, "{}", receipt.message);
         let backed_series = |profile: &postfiat_types::VaultBridgeRouteProfileV1, amount, name| {
             let mut bucket = VaultBridgeBucketState::new(
@@ -124,8 +136,6 @@ impl Fixture {
         ledger
             .asset_definitions
             .extend([family.clone(), child.clone(), sibling.clone()]);
-        store.write_ledger(&ledger).unwrap();
-        store.write_governance(&governance).unwrap();
         Self {
             dir,
             genesis,
@@ -490,10 +500,17 @@ fn refusal_cases(f: &Fixture, payment: &PqPayment, issued: bool, step: usize, he
             "pq_recipient_reserve"
         );
     }
-    if issued && step == 1 {
-        let mut exhausted = ledger.clone();
-        exhausted.account_mut(&sponsor).unwrap().balance = ACCOUNT_RESERVE;
-        reject(payment, &exhausted, &shielded, &gov, "pq_unfunded_source");
+    if issued && step != 0 {
+        for (kind, code) in [
+            ("pq_payment_rehearsal_v1:fee:4", "pq_minimum_fee"),
+            (postfiat_types::PQ_REHEARSAL_V1, "pq_fee_unconfigured"),
+        ] {
+            let mut changed = gov.clone();
+            let mut schedule = super::pq_payment_activation::amendment(&f.genesis, 1);
+            schedule.kind = kind.into();
+            changed.apply(schedule);
+            reject(payment, &ledger, &shielded, &changed, code);
+        }
     }
 }
 
@@ -511,10 +528,10 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
     let mut burned = 0;
     let mut height = 0;
     let mut alice_pft = 1000;
-    let mut sponsor_pft = 1000;
+    let sponsor_pft = 1000;
     let mut fresh_pft = 0;
     let mut alice_seq = 0;
-    let mut sponsor_seq = 0;
+    let sponsor_seq = 0;
     let mut deposited = 0;
     let mut withdrawn = 0;
     for issued in [false, true] {
@@ -541,7 +558,11 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
         {
             height += 1;
             let fee = if issued {
-                0
+                if step == 0 {
+                    0
+                } else {
+                    3
+                }
             } else if step == 2 {
                 1 + TRANSFER_ACCOUNT_CREATION_FEE
             } else {
@@ -564,13 +585,10 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
                 mode,
                 asset: hex_to_bytes(&asset).unwrap().try_into().unwrap(),
                 epoch: 0,
-                public_fee: if issued { 3 } else { 0 },
+                public_fee: if issued && step == 0 { 3 } else { 0 },
                 account: if step == 0 {
                     alice_seq += 1;
                     Some(authorization(&f.alice, alice_seq))
-                } else if issued {
-                    sponsor_seq += 1;
-                    Some(authorization(&f.sponsor, sponsor_seq))
                 } else {
                     None
                 },
@@ -631,16 +649,7 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
                 )
                 .unwrap()
             } else {
-                let signature =
-                    terms
-                        .signing_message(f.chain(), tx.statement().tx_ctx)
-                        .map(|msg| {
-                            ml_dsa_65_sign(&f.sponsor.private_key, &msg)
-                                .unwrap()
-                                .try_into()
-                                .unwrap()
-                        });
-                PqPayment::encode(&terms, signature.as_ref(), &inner).unwrap()
+                PqPayment::encode(&terms, None, &inner).unwrap()
             };
             refusal_cases(&f, &payment, issued, step, height);
             if issued && step == 0 {
@@ -708,7 +717,7 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
                 measured_payments.push(payment.clone());
             }
             let receipt = f.apply(&[payment]).unwrap().pop().unwrap();
-            let charged = if issued { 3 } else { fee };
+            let charged = if issued { terms.public_fee } else { fee };
             assert!(receipt.accepted);
             assert_eq!(
                 (receipt.fee_charged, receipt.fee_burned),
@@ -730,7 +739,10 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
                 alice_pft -= 3;
                 deposited += mint
             } else {
-                sponsor_pft -= 3;
+                assert_eq!(
+                    disk.read_ledger().unwrap().collected_private_fees[&asset],
+                    3 * step as u64
+                );
                 withdrawn += exit
             }
             let ledger = disk.read_ledger().unwrap();
@@ -811,7 +823,7 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
                 global_issued_asset_supply(&ledger, &shielded, &f.family).unwrap(),
                 110
             );
-            if issued && step == 0 {
+            if issued {
                 f.check_cap();
             }
             println!("block {height}: public PFT {public} + live PQ {native} + burned {burned} = {}; pfUSDC family 110; wallet notes {:?}",f.starting_supply,notes);
@@ -847,11 +859,8 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
         (
             &sponsor,
             vec![
-                ("shielded_fee", 0, 3, 1, None),
-                ("shielded_fee", 0, 3, 2, None),
-                ("shielded_withdrawal", 20, 0, 0, issue),
-                ("shielded_fee", 0, 3, 3, None),
-                ("shielded_withdrawal", 80, 0, 0, issue),
+                ("shielded_withdrawal", 20, 3, 0, issue),
+                ("shielded_withdrawal", 71, 3, 0, issue),
             ],
         ),
         (
@@ -898,3 +907,196 @@ mod wallet_cli;
 #[cfg(feature = "pq-wallet-browser-test")]
 #[path = "pq_browser_merge.rs"]
 mod browser;
+
+#[test]
+fn issued_note_fees_settle_and_only_governance_can_release_the_collector() {
+    let mut genesis =
+        Genesis::try_new_with_validator_count(pq_payment_fixture::CHAIN_ID, 6).unwrap();
+    genesis.consensus_v2_activation_height = Some(1000);
+    assert_eq!(genesis_hash(&genesis), pq_payment_fixture::GENESIS_HASH);
+    let mut ledger = LedgerState::new(vec![Account::new("faucet", 10_000, None)]);
+    let mut governance = GovernanceState::new(6);
+    let mut shielded = pq_payment_fixture::genesis_shielded_state(&genesis).unwrap();
+    let f = Fixture::funded(PathBuf::new(), genesis, &mut ledger, &mut governance);
+    let sender = authorization(&f.alice, 1);
+    let recipient = address_from_public_key(&f.sponsor.public_key);
+    let mut rng = StdRng::seed_from_u64(91);
+    let wallet = ShieldedWallet::from_seed(&mut rng);
+    let mut tree = MerkleTree24::new();
+    let mut input = SpendInput::Dummy;
+    let root = |ledger: &LedgerState, shielded: &ShieldedState, gov: &GovernanceState| {
+        crate::state_commitment::replicated_state_root(
+            &f.genesis,
+            gov,
+            ledger,
+            &[],
+            shielded,
+            &BridgeState::empty(),
+        )
+        .unwrap()
+    };
+    for (mode, mint, exit, fee, value, held) in [
+        (Mode::Shield, 30, 0, 0, 30, 0),
+        (Mode::Internal, 0, 0, 2, 28, 2),
+        (Mode::Exit, 0, 7, 1, 20, 3),
+    ] {
+        let shield = mode == Mode::Shield;
+        let terms = Terms {
+            mode,
+            asset: hex_to_bytes(&f.child).unwrap().try_into().unwrap(),
+            epoch: 0,
+            public_fee: if shield { 3 } else { 0 },
+            account: shield.then(|| sender.clone()),
+        };
+        let (tx, blind, _) = create_profiled_tx(
+            &tree,
+            input,
+            SpendInput::Dummy,
+            &wallet.stealth_address(),
+            value,
+            &wallet.stealth_address(),
+            0,
+            mint,
+            exit,
+            if exit > 0 {
+                pq::destination(&recipient).unwrap()
+            } else {
+                [0; 32]
+            },
+            fee,
+            None,
+            Some(&|raw| terms.statement_context(f.chain(), raw)),
+            &mut rng,
+        )
+        .unwrap();
+        let signature = terms
+            .signing_message(f.chain(), tx.statement().tx_ctx)
+            .map(|msg| {
+                ml_dsa_65_sign(&f.alice.private_key, &msg)
+                    .unwrap()
+                    .try_into()
+                    .unwrap()
+            });
+        let payment = PqPayment::encode(&terms, signature.as_ref(), &tx.to_bytes()).unwrap();
+        let batch = build_atomic_shielded_action_batch(
+            &f.genesis,
+            vec![ShieldedAction::PqPaymentV1(payment.clone())],
+        )
+        .unwrap();
+        consensus_artifacts::check_pq_block(&f.genesis, &governance, 5, [&batch]).unwrap();
+        if !shield {
+            assert!(!payment
+                .bytes()
+                .windows(sender.id.len())
+                .any(|w| w == sender.id));
+            assert!(!payment
+                .bytes()
+                .windows(pq::PUBLIC_KEY_BYTES)
+                .any(|w| w == sender.public_key.as_slice()));
+            for (kind, code) in [
+                ("pq_payment_rehearsal_v1:fee:3", "pq_minimum_fee"),
+                (postfiat_types::PQ_REHEARSAL_V1, "pq_fee_unconfigured"),
+            ] {
+                let mut changed = governance.clone();
+                let mut rule = super::pq_payment_activation::amendment(&f.genesis, 1);
+                rule.kind = kind.into();
+                changed.apply(rule);
+                assert_eq!(
+                    consensus_artifacts::check_pq_block(&f.genesis, &changed, 5, [&batch])
+                        .unwrap_err()
+                        .to_string(),
+                    code
+                );
+                rejection(&f, &payment, &ledger, &shielded, &changed, 5, code);
+            }
+        }
+        let receipt = crate::pq_payment_actions::apply(
+            &f.genesis,
+            pq_payment_fixture::GENESIS_HASH,
+            &mut ledger,
+            &mut shielded,
+            &payment,
+            5,
+            asset_execution_compatibility_for_genesis_and_governance(&f.genesis, &governance),
+            &governance,
+            &governance.asset_orchard_egress_policy_registry(),
+        )
+        .unwrap();
+        assert_eq!(receipt.fee_burned, terms.public_fee);
+        assert_eq!(
+            shielded.pq_pool_v1.as_ref().unwrap().head.assets[&f.child].reserve,
+            value
+        );
+        assert_eq!(
+            ledger
+                .collected_private_fees
+                .get(&f.child)
+                .copied()
+                .unwrap_or(0),
+            held
+        );
+        assert_eq!(
+            ledger.vault_bridge_bucket_states[0].outstanding_vault_bridge_atoms,
+            100
+        );
+        assert_eq!(
+            global_issued_asset_supply(&ledger, &shielded, &f.child).unwrap(),
+            100
+        );
+        assert_eq!(
+            global_issued_asset_supply(&ledger, &shielded, &f.family).unwrap(),
+            110
+        );
+        crate::state_commitment::verify_global_issued_asset_supply_caps(&ledger, &shielded)
+            .unwrap();
+        if held > 0 {
+            let mut missing = ledger.clone();
+            missing.collected_private_fees.clear();
+            assert_ne!(
+                root(&ledger, &shielded, &governance),
+                root(&missing, &shielded, &governance)
+            );
+        }
+        input = SpendInput::Real {
+            leaf_index: tree.len(),
+            spend_secret: wallet.spend_secret,
+            value,
+            r_blind: blind,
+        };
+        tree.append(tx.coin_out0);
+        tree.append(tx.coin_out1);
+    }
+    let kind = format!("{}{recipient}", postfiat_types::PQ_FEE_WITHDRAW_PREFIX);
+    let withdraw = |amount| {
+        let mut a = amendment(&kind, amount, 0);
+        a.chain_id = f.genesis.chain_id.clone();
+        a.genesis_hash = genesis_hash(&f.genesis);
+        GovernanceActionBatch::new("fee-withdrawal", vec![a])
+    };
+    for (amount, accepted) in [(4, false), (3, true), (3, false)] {
+        let before = ledger.clone();
+        let receipt = execute_governance_batch(
+            &mut governance,
+            Some(&mut ledger),
+            Some(&f.genesis),
+            &withdraw(amount),
+            6,
+        );
+        assert_eq!(receipt[0].accepted, accepted, "{:?}", receipt[0]);
+        if !accepted {
+            assert_eq!(ledger, before);
+        }
+    }
+    assert!(ledger.collected_private_fees.is_empty());
+    assert_eq!(
+        ledger
+            .trustline_for_account_asset(&recipient, &f.child)
+            .unwrap()
+            .balance,
+        10
+    );
+    assert_eq!(
+        global_issued_asset_supply(&ledger, &shielded, &f.child).unwrap(),
+        100
+    );
+}

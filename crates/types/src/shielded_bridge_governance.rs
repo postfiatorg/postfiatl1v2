@@ -69,7 +69,27 @@ pub const GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT: &str =
     "external_lane_export_root_activation_height";
 /// Signed amendment value is the earliest candidate height. Zero pauses the pool.
 pub const PQ_REHEARSAL_V1: &str = "pq_payment_rehearsal_v1";
-/// This version selects L1 profile 1, native PFT and the development source series.
+/// The rehearsal enables exactly one source series. Its optional fee suffix is
+/// covered by the signed amendment kind. The value remains the activation height.
+pub const PQ_REHEARSAL_FEE_PREFIX: &str = "pq_payment_rehearsal_v1:fee:";
+pub const PQ_FEE_WITHDRAW_PREFIX: &str = "pq_private_fee_withdraw_v1:";
+pub fn pq_rehearsal_fee(kind: &str) -> Option<u64> {
+    let text = kind.strip_prefix(PQ_REHEARSAL_FEE_PREFIX)?;
+    let amount: u64 = text.parse().ok()?;
+    (amount > 0 && amount.to_string() == text).then_some(amount)
+}
+
+pub fn is_pq_rehearsal_kind(kind: &str) -> bool {
+    kind == PQ_REHEARSAL_V1 || pq_rehearsal_fee(kind).is_some()
+}
+
+pub fn pq_fee_withdraw_recipient(kind: &str) -> Option<&str> {
+    let recipient = kind.strip_prefix(PQ_FEE_WITHDRAW_PREFIX)?;
+    pq_payment::destination(recipient).ok()?;
+    Some(recipient)
+}
+
+/// Exact development source series selected by the rehearsal amendment.
 pub const PQ_REHEARSAL_ISSUE: &str = "bbf2fb96437f2e87ff3b470f19aa2455ae226ab810b06b64ab327b0daa71a2d1ad14638a107b7bbd3b0cf3a6f4d56269";
 /// Published M2 archive vector. Account settlement has no enabled route for this issue.
 pub const PQ_ARCHIVE_FIXTURE_ISSUE: &str = "a1c5b7e096966c3736cbcf2291c0d10a166f3c2edee2d7c5faf9c870c565d0009ad5b0e23e1dbdee4ca9f7e07b954cb8";
@@ -1825,6 +1845,16 @@ impl GovernanceState {
             .min()
     }
 
+    /// Call after checking activation for this chain and candidate height.
+    pub fn pq_issued_minimum_fee(&self, asset: &str) -> Option<u64> {
+        if asset != PQ_REHEARSAL_ISSUE {
+            return None;
+        }
+        self.amendments.iter().rev()
+            .find(|a| is_pq_rehearsal_kind(&a.kind))
+            .and_then(|a| pq_rehearsal_fee(&a.kind))
+    }
+
     pub fn pq_rehearsal_active(
         &self,
         chain: &str,
@@ -1835,7 +1865,7 @@ impl GovernanceState {
         self.amendments
             .iter()
             .rev()
-            .find(|a| a.kind == PQ_REHEARSAL_V1)
+            .find(|a| is_pq_rehearsal_kind(&a.kind))
             .is_some_and(|a| {
                 a.chain_id == chain
                     && a.genesis_hash == genesis
