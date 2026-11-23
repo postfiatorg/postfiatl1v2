@@ -3154,6 +3154,7 @@ fn fastpay_active_storage_transfer_restart_and_six_validator_anchor() {
                 limit: None,
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
                 max_page_bytes: None,
             })
             .unwrap()

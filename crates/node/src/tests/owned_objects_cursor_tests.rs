@@ -69,6 +69,7 @@ fn options(data_dir: &Path, owner: &str) -> OwnedObjectsOptions {
         limit: None,
         cursor: None,
         omit_owner_keys: false,
+        include_inventory_revision: false,
         max_page_bytes: None,
     }
 }
@@ -168,6 +169,7 @@ fn owned_objects_byte_bound_ends_pages_early_and_keeps_every_object() {
     // Without the per-object key, all 300 fit one small page.
     let page = owned_objects(OwnedObjectsOptions {
         omit_owner_keys: true,
+        include_inventory_revision: false,
         ..options(&data_dir, &owner)
     })
     .expect("keyless page");
@@ -313,7 +315,38 @@ fn owned_objects_default_call_answers_as_before() {
         .map(|key| json.as_object_mut().expect("object").remove(key).expect(key));
     let view = json.as_object_mut().expect("object").remove("view_digest");
     assert_eq!(view.and_then(|v| v.as_str().map(str::len)), Some(64));
-    // Revision-era field; `node_id` is absent without node state.
+    assert_eq!(json, before);
+    assert_eq!(
+        added,
+        [
+            serde_json::Value::Null,
+            serde_json::Value::Null,
+            40.into(),
+            "bb".repeat(48).into()
+        ]
+    );
+    // A default read never creates the inventory incarnation either.
+    assert!(!data_dir
+        .join(crate::lifecycle_queries::INVENTORY_INCARNATION_FILE)
+        .exists());
+}
+
+/// `include_inventory_revision` adds exactly the revision (and `node_id`
+/// when the directory has node state) to the default answer.
+#[test]
+fn owned_objects_include_inventory_revision_adds_only_the_revision() {
+    let owner = owner_key(6);
+    let data_dir = fixture("revision-opt-in", &owner, 2);
+    let default = serde_json::to_value(owned_objects(options(&data_dir, &owner)).expect("default"))
+        .expect("json");
+    let mut json = serde_json::to_value(
+        owned_objects(OwnedObjectsOptions {
+            include_inventory_revision: true,
+            ..options(&data_dir, &owner)
+        })
+        .expect("opt-in report"),
+    )
+    .expect("json");
     let mut revision = json
         .as_object_mut()
         .expect("object")
@@ -329,17 +362,9 @@ fn owned_objects_default_call_answers_as_before() {
         revision,
         serde_json::json!({"finalized_height": 40, "fastpay_sequence": 0})
     );
+    // `node_id` is absent without node state.
     assert_eq!(json.get("node_id"), None);
-    assert_eq!(json, before);
-    assert_eq!(
-        added,
-        [
-            serde_json::Value::Null,
-            serde_json::Value::Null,
-            40.into(),
-            "bb".repeat(48).into()
-        ]
-    );
+    assert_eq!(json, default);
 }
 
 /// The reviewer's sequence: page 1 returns object 1 of {1, 2, 3} (10 each);

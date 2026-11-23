@@ -1,5 +1,6 @@
-//! `owned_objects` carries `inventory_revision` {finalized_height,
-//! fastpay_sequence, incarnation} and the answering `node_id`, all read under
+//! `owned_objects` with `include_inventory_revision` carries
+//! `inventory_revision` {finalized_height, fastpay_sequence, incarnation} and
+//! the answering `node_id`, all read under
 //! the same ordered-commit lock as the page (after recovering a pending
 //! ordered journal), so a page and its revision always belong to one view.
 
@@ -13,6 +14,7 @@ fn read(data_dir: &Path, owner: &str, limit: Option<usize>) -> OwnedObjectsOptio
         limit,
         cursor: None,
         omit_owner_keys: false,
+        include_inventory_revision: true,
         max_page_bytes: None,
     }
 }

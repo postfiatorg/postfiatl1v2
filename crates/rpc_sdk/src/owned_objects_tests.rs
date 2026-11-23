@@ -88,12 +88,14 @@ mod owned_objects {
                 limit: None,
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         );
         assert_eq!(request.method, METHOD_OWNED_OBJECTS);
         assert_eq!(request.params["owner_public_key_hex"], json!(owner()));
         assert!(request.params.get("asset").is_none());
         assert!(request.params.get("limit").is_none());
+        assert!(request.params.get("include_inventory_revision").is_none());
         validate_request(
             &request,
             Some("owned-objects-1"),
@@ -112,6 +114,7 @@ mod owned_objects {
                 limit: Some(2048),
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         );
         assert_eq!(request.params["asset"], json!("USDX"));
@@ -122,6 +125,26 @@ mod owned_objects {
             Some(RpcRequestKind::OwnedObjects),
         )
         .expect("owned objects request with uppercase key, asset, and limit");
+    }
+
+    #[test]
+    fn asks_for_the_inventory_revision_only_when_told() {
+        let mut request = owned_objects_request(
+            "owned-objects-revision",
+            OwnedObjectsParams {
+                owner_public_key_hex: owner(),
+                asset: None,
+                limit: None,
+                cursor: None,
+                omit_owner_keys: false,
+                include_inventory_revision: true,
+            },
+        );
+        assert_eq!(request.params["include_inventory_revision"], json!(true));
+        validate_request(&request, None, Some(RpcRequestKind::OwnedObjects))
+            .expect("owned objects request asking for the revision");
+        request.params["include_inventory_revision"] = json!("yes");
+        assert!(validate_request(&request, None, Some(RpcRequestKind::OwnedObjects)).is_err());
     }
 
     #[test]
@@ -159,6 +182,7 @@ mod owned_objects {
                 limit: Some(128),
                 cursor: Some(cursor.clone()),
                 omit_owner_keys: true,
+                include_inventory_revision: false,
             },
         );
         assert_eq!(request.params["cursor"], json!(cursor));
@@ -172,6 +196,7 @@ mod owned_objects {
                 limit: None,
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         );
         assert!(first.params.get("cursor").is_none());
@@ -215,6 +240,7 @@ mod owned_objects {
                 limit: None,
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         ));
         rejects(owned_objects_request(
@@ -225,6 +251,7 @@ mod owned_objects {
                 limit: Some(0),
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         ));
         rejects(owned_objects_request(
@@ -235,6 +262,7 @@ mod owned_objects {
                 limit: Some(2049),
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         ));
         rejects(
@@ -246,6 +274,7 @@ mod owned_objects {
                     limit: None,
                     cursor: None,
                     omit_owner_keys: false,
+                    include_inventory_revision: false,
                 },
             )
             .with_param_value("state", string_value("open")),
@@ -374,6 +403,7 @@ mod owned_objects {
                 limit,
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         )
     }
@@ -390,6 +420,7 @@ mod owned_objects {
                     limit: Some(5),
                     cursor: cursor.map(str::to_string),
                     omit_owner_keys: omit,
+                    include_inventory_revision: false,
                 },
             )
         };

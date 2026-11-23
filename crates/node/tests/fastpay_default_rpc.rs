@@ -367,7 +367,8 @@ fn rpc_worker_unreadable_request_file_answers_with_fallback_error_shape() {
     fs::remove_dir_all(root).expect("remove RPC test directory");
 }
 
-/// `owned_objects` over rpc-serve carries `inventory_revision` only where the
+/// `owned_objects` over rpc-serve carries `node_id` and `inventory_revision`
+/// only when asked, and the revision only where the
 /// owned-lane gate refuses legacy (non-v3) certified applies: those change
 /// objects without a FastPay fence, so the revision would not move. Where
 /// they are allowed (the default lane) the page says why it is absent.
@@ -391,13 +392,34 @@ fn owned_objects_revision_only_where_the_owned_lane_refuses_legacy_applies() {
             limit: None,
             cursor: None,
             omit_owner_keys: false,
+            include_inventory_revision: true,
         },
     );
+    let mut default_request = request.clone();
+    default_request
+        .params
+        .as_object_mut()
+        .expect("params")
+        .remove("include_inventory_revision");
     for disabled in [false, true] {
         let port = free_port();
         let ready = root.join(format!("owned-objects-{disabled}.ready.json"));
-        let mut child = spawn_rpc(&data_dir, &ready, port, disabled);
+        let mut child = spawn_rpc_serving(&data_dir, &ready, port, disabled, 2);
         wait_for_file(&ready);
+        // Without the parameter the page has main's shape: none of the fields.
+        let default = rpc_call(port, &default_request);
+        assert!(default.ok, "owned_objects failed: {:?}", default.error);
+        let default = default.result.expect("owned_objects result");
+        for field in [
+            "node_id",
+            "inventory_revision",
+            "inventory_revision_unavailable",
+        ] {
+            assert!(
+                default.get(field).is_none(),
+                "{field} in a default page: {default}"
+            );
+        }
         let response = rpc_call(port, &request);
         assert!(response.ok, "owned_objects failed: {:?}", response.error);
         validate_response_kind(&response, RpcResponseKind::OwnedObjects)

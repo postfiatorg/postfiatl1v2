@@ -57,6 +57,25 @@ assert.strictEqual(
 );
 console.log('PASS owned_objects fleet agreement compares the view digest and the objects');
 
+// main's gateway grouped owned_objects by everything but height and
+// state_root. Six default answers (no include_inventory_revision: the shape
+// on main) still give it one majority; the per-node fields would not.
+const mainGroupKey = (result) => {
+  const { height: _height, state_root: _stateRoot, ...copy } = result;
+  copy.objects = [...copy.objects].sort((a, b) => `${a.id}:${a.version}`.localeCompare(`${b.id}:${b.version}`));
+  return JSON.stringify(copy);
+};
+const groups = (results, groupKey) => new Set(results.map(groupKey)).size;
+const sixDefault = [0, 1, 2, 3, 4, 5].map((index) => answer({ height: 40 + (index % 2) }));
+assert.strictEqual(groups(sixDefault, mainGroupKey), 1, 'six default answers form one majority on main');
+const sixOptIn = [0, 1, 2, 3, 4, 5].map((index) => revised(`node-${index}`, 7, {
+  inventory_revision: { finalized_height: 40, fastpay_sequence: 7, incarnation: `${index}`.repeat(32) },
+}));
+assert.strictEqual(groups(sixOptIn, mainGroupKey), 6, 'the opt-in fields would split main\'s grouping');
+assert.strictEqual(groups(sixOptIn, key), 1, 'this gateway keeps them out of its grouping');
+console.log('PASS main\'s owned_objects grouping still finds its majority over default answers');
+
+
 function validator(result) {
   const server = net.createServer((socket) => {
     socket.on('data', (chunk) => {
@@ -92,7 +111,46 @@ const expectedAnswer = (() => {
   return rest;
 })();
 
+async function snapshotRequests() {
+  const requests = [];
+  const servers = await Promise.all([0, 1, 2].map(() => {
+    const server = net.createServer((socket) => {
+      socket.on('data', (chunk) => {
+        const request = JSON.parse(chunk.toString('utf8').split('\n')[0]);
+        requests.push(request);
+        socket.write(`${JSON.stringify({ id: request.id, ok: true, result: answer() })}\n`);
+      });
+    });
+    return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
+  }));
+  const routing = require('./rpc-routing').create({
+    net,
+    RPC_FLEET: servers.map((server, index) => ({
+      validatorId: `v${index}`,
+      host: '127.0.0.1',
+      port: server.address().port,
+    })),
+    WALLET_SUBSCRIPTION_READ_TIMEOUT_MS: 2000,
+    TCP_TIMEOUT_MS: 2000,
+    ENABLE_UPSTREAM_KEEPALIVE: false,
+  });
+  try {
+    await routing.fetchWalletSnapshot({ owner_public_key_hex: 'ab'.repeat(32) });
+    return requests;
+  } finally {
+    servers.forEach((server) => server.close());
+  }
+}
+
 (async () => {
+  // The gateway's own owned_objects reads ask for the per-node fields.
+  const sent = (await snapshotRequests()).filter((request) => request.method === 'owned_objects');
+  assert.strictEqual(sent.length, 3);
+  for (const request of sent) {
+    assert.strictEqual(request.params.include_inventory_revision, true, JSON.stringify(request.params));
+  }
+  console.log('PASS the gateway asks every validator for include_inventory_revision');
+
   // Six nodes, six ids, two fastpay sequences, one view: one majority.
   const six = await fleetRead([0, 1, 2, 3, 4, 5].map((index) => revised(`node-${index}`, index < 3 ? 7 : 8)));
   assert.strictEqual(six.ok, true);

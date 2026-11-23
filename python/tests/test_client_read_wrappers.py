@@ -513,6 +513,20 @@ class RemainingReadWrapperTests(unittest.TestCase):
             with self.assertRaises(RpcClientError):
                 client.owned_objects_all("ab")
 
+    def test_owned_objects_asks_for_the_revision_only_when_told(self) -> None:
+        client = _client()
+        page = {"height": 7, "view_digest": "v", "objects": [], "object_count": 0,
+                "truncated": False, "next_cursor": None}
+        with mock.patch.object(client, "_call", return_value=page) as call:
+            client.owned_objects("ab")
+            client.owned_objects("ab", include_inventory_revision=True)
+            client.owned_objects_all("ab")
+            client.owned_objects_all("ab", include_inventory_revision=True)
+        sent = [args[1] for args, _ in call.call_args_list]
+        self.assertEqual([("include_inventory_revision" in params) for params in sent],
+                         [False, True, False, True])
+        self.assertTrue(all(params.get("include_inventory_revision", True) is True for params in sent))
+
     def test_owned_objects_revision_incarnation_and_unavailable_reason(self) -> None:
         from postfiat_rpc import OwnedObjectsRevision, RpcClientError
         from postfiat_rpc.client import owned_objects_revision
