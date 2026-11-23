@@ -4,6 +4,7 @@ import hashlib
 import os
 import pwd
 import socket
+import subprocess
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -73,7 +74,7 @@ def self_test():
 
 
 def proof(*, check_anchor=False):
-    from exit_proof import prove
+    from exit_proof import LOCAL, prove
     from live import read
 
     with TemporaryDirectory() as directory:
@@ -88,6 +89,8 @@ def proof(*, check_anchor=False):
             require((fields["height"], fields["result"], fields["end"]) ==
                     (cfg["initial_height"], cfg["initial_checkpoint"], cfg["initial_committee"]),
                     "Prover did not verify the trusted archive checkpoint.")
+            subprocess.run([LOCAL / "bin/exit-verify-proof"], input=result + values,
+                           check=True, timeout=30)
         if not values or len(result) != 356:
             raise RuntimeError("Invalid checkpoint proof")
     print("service-proof verified")
