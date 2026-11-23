@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from functools import lru_cache
 import base64
 import os
-import shlex
 import hashlib
 import json
 from pathlib import Path
@@ -13,29 +12,26 @@ import subprocess
 
 HOST = "root@ssh8.vast.ai"
 PORT = "20628"
-GPU_LOCK = "/workspace/b23-gpu/prover.lock"
-REMOTE = "/workspace/b23-withdraw-20261116"
 LOCAL = Path(
     os.getenv("EXIT_PROOF_HOME", Path.home() / "repos/b23-coord/evidence/withdraw")
 )
-SSH_OPTIONS = []
-if os.getenv("EXIT_PROVER_SSH") == "sandbox":
-    SSH_OPTIONS = [
-        "-F", "none", "-oIdentitiesOnly=yes", "-oIdentityAgent=none",
-        "-i", "/credentials/prover", "-oStrictHostKeyChecking=yes",
-        "-oUserKnownHostsFile=/credentials/known_hosts", "-oUpdateHostKeys=no",
-    ]
-SSH = [
-    "ssh",
-    *SSH_OPTIONS,
-    "-oBatchMode=yes",
-    "-oConnectTimeout=8",
-    "-oServerAliveInterval=20",
-    "-p",
-    PORT,
-    HOST,
-]
-SCP = ["scp", *SSH_OPTIONS, "-q", "-oBatchMode=yes", "-oConnectTimeout=8", "-P", PORT]
+def prover_ssh():
+    mode = os.getenv("EXIT_PROVER_SSH", "operator")
+    directory, identity_name, trust_name = {
+        "system": (Path("/var/lib/pf-sol-exit"), "prover", "known_hosts"),
+        "sandbox": (Path("/credentials"), "prover", "known_hosts"),
+        "operator": (Path.home()/".config/postfiat/sol-bridge", "exit-prover-ssh", "exit-prover-known_hosts"),
+    }[mode]
+    identity, trust = directory / identity_name, directory / trust_name
+    ops = Path(__file__).resolve().parent
+    if mode != "sandbox":  # The sandbox launcher verifies both before the read-only mounts.
+        run(["bash", ops / "check-prover-identity.sh", identity,
+             (ops / "exit-prover.fingerprint").read_text().strip()], 10)
+        run(["bash", ops / "check-prover-host.sh", trust], 10)
+    return ["ssh", "-F", "/dev/null", "-oIdentitiesOnly=yes", "-oIdentityAgent=none",
+            "-i", str(identity), "-oStrictHostKeyChecking=yes", "-oGlobalKnownHostsFile=/dev/null",
+            f"-oUserKnownHostsFile={trust}", "-oUpdateHostKeys=no", "-oBatchMode=yes",
+            "-oConnectTimeout=8", "-oServerAliveInterval=20", "-p", PORT, HOST]
 
 
 def run(args, timeout):
@@ -65,32 +61,15 @@ def verify_local_host():
 
 def available():
     verify_local_host()
-    run(SSH + [f"test -x {REMOTE}/proof-host && test -s {REMOTE}/egress.elf"], 15)
+    run(prover_ssh() + ["pf-sol-exit-check"], 15)
 
 
 def remote_proof(kind, data):
-    # One fixed scratch path, exclusively under the existing GPU lock. An interrupted
-    # session leaves at most one directory, removed on the next lock acquisition.
-    script = f"""
-set -eu
-umask 077
-cd {REMOTE}
-job=jobs/sol-exit-worker
-mkdir -p jobs
-rm -rf -- "$job"
-mkdir "$job"
-trap 'rm -rf -- "$job"' EXIT
-cat > "$job/witness.json"
-SP1_PROVER=cuda RAYON_NUM_THREADS=4 timeout 1500 ./proof-host {kind} egress.elf "$job/witness.json" "$job/proof" prove > "$job/prove.log" 2>&1
-for file in public-values.bin proof-report.json proof-calldata.bin; do
-    test "$(wc -c < "$job/proof/$file")" -le 8192
-    base64 -w0 "$job/proof/$file"
-    echo
-done
-"""
-    command = f"flock -E 75 -n {shlex.quote(GPU_LOCK)} bash -c " + shlex.quote(script)
+    if kind not in ("checkpoint", "withdrawal"):
+        raise ValueError("Unknown proof kind.")
+    command = "pf-sol-exit-" + kind
     result = subprocess.run(
-        SSH + [command], input=data, capture_output=True, timeout=1550
+        prover_ssh() + [command], input=data, capture_output=True, timeout=1550
     )
     if result.returncode:
         raise RuntimeError("Withdrawal prover unavailable.")

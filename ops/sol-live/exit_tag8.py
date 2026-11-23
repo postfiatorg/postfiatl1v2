@@ -13,6 +13,9 @@ from exit_proof import prove
 from exit_payout import cluster, funded_send, upload
 from exit_setup import (
     CONFIG,
+    DIRECTORY,
+    MAINNET_PAYER,
+    check_payout_authorities,
     ExitCluster,
     FEE_PAYER,
     LIGHT,
@@ -99,16 +102,28 @@ def require_forward(c, cfg, light, values):
     )
 
 
+def setup_cluster(action):
+    c = ExitCluster(MAINNET_PAYER)
+    if action != "simulate":
+        check_payout_authorities(c)
+        c.unlock(DIRECTORY / "mainnet-payer.json")
+    return c
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["stage", "simulate", "reclaim"])
+    parser.add_argument("--setup-payer", action="store_true", help="use the orchestrator setup payer for the buffer and its refund")
     parser.add_argument("--guest", type=Path, required=True)
     parser.add_argument("--work", type=Path, required=True)
     args = parser.parse_args()
     raw = (args.guest / "public-values.bin").read_bytes()
     values = checkpoint_values(raw)
     cfg = read(CONFIG)
-    c = ExitCluster(FEE_PAYER) if args.action == "simulate" else cluster()
+    if args.setup_payer:
+        c = setup_cluster(args.action)
+    else:
+        c = ExitCluster(FEE_PAYER) if args.action == "simulate" else cluster()
     if args.action != "reclaim":
         light = c.account(LIGHT)
         require_forward(c, cfg, light, values)

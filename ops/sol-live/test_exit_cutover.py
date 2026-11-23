@@ -46,7 +46,8 @@ class CutoverTest(unittest.TestCase):
             )
             self.assertEqual((app / "venv/bin").stat().st_mode & 0o777, 0o755)
         doc = (HERE / "RUNBOOK-LIVE.md").read_text()
-        self.assertLess(doc.index("import exit_service"), doc.index('mv -T "$fee"'))
+        install = (HERE / "install-exit-system.sh").read_text()
+        self.assertLess(install.index("import exit_service"), install.index('mv -T "$fee"'))
         self.assertIn("wait-closed", doc)
 
     def test_enabled_relay_outage_cannot_pass_disabled_check(self):

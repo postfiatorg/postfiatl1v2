@@ -52,6 +52,17 @@ def require_closed(rows):
     )
 
 
+def require_open_accounting(routes, state, height):
+    from exit_payout import reconcile_supply
+
+    require(all(r["current_height"] == height for r in routes), "Stale route supply report.")
+    outstanding = state.get("bucket_outstanding_atoms")
+    require(isinstance(outstanding, str) and re.fullmatch(r"0|[1-9][0-9]*", outstanding)
+            and state.get("series_supply_atoms") == outstanding,
+            "Payout service lacks matching full supply and bucket outstanding.")
+    reconcile_supply(routes, int(outstanding))
+
+
 def rotation_clearance(head):
     """Read the independent inventories over the six authenticated host connections."""
     from govern import remote
@@ -177,7 +188,8 @@ def main():
 
         for _ in range(3):
             start = parent_of(fleet())
-            require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
+            closed = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
+            require_closed(closed)
             status = requests.get(
                 "http://127.0.0.1:18089/solana/withdrawals/readiness/qualify",
                 timeout=600,
@@ -192,6 +204,7 @@ def main():
                 and state.get("bucket_id") == BUCKET,
                 "Payout service is not qualified.",
             )
+            require_open_accounting(closed, state, start["block_height"])
             try:
                 if state["qualified_parent"] != parent_of(fleet()):
                     continue

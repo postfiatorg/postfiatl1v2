@@ -16,7 +16,7 @@ from exit_setup import (
     FEE_PAYER,
     MAINNET_PAYER,
     check_payout_authorities,
-    prove_roles,
+    require_installed_self_test,
     read,
     require,
     save,
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     parser.add_argument("--execute", required=True, action="store_true")
     parser.parse_args()
     os.umask(0o077)
-    prove_roles(read(CONFIG))
+    require_installed_self_test(read(CONFIG))
     cluster = ExitCluster(MAINNET_PAYER)
     check_payout_authorities(cluster)
     cluster.unlock(DIRECTORY / "mainnet-payer.json")

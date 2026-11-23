@@ -1,15 +1,20 @@
 """Read-only self-test and separate proof rehearsal for the installed user unit."""
 
+import hashlib
 import os
+import pwd
+import socket
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
 
 
 def check_tunnels():
-    from live import CHAIN, PFTL_GENESIS, PEERS, rpc, six
+    from live import CHAIN, PFTL_GENESIS, PEERS, rpc, six, verify_node_ids
 
-    for peer, status in zip(PEERS, six(lambda i: rpc(i, "status")), strict=True):
+    rows = six(lambda i: rpc(i, "status"))
+    verify_node_ids(rows)
+    for peer, status in zip(PEERS, rows, strict=True):
         if (status["chain_id"], status["genesis_hash"]) != (
             CHAIN.decode(),
             PFTL_GENESIS.hex(),
@@ -67,7 +72,7 @@ def self_test():
     print("Prover SSH and remote proof files verified", flush=True)
 
 
-def proof():
+def proof(*, check_anchor=False):
     from exit_proof import prove
     from live import read
 
@@ -75,10 +80,45 @@ def proof():
         values, result = prove(
             "checkpoint", read(os.environ["EXIT_ANCHOR_WITNESS"]), Path(directory)
         )
+        if check_anchor:
+            from exit_precheck import checkpoint_values
+            from exit_setup import CONFIG, require
+            cfg = read(CONFIG)
+            fields = checkpoint_values(values)
+            require((fields["height"], fields["result"], fields["end"]) ==
+                    (cfg["initial_height"], cfg["initial_checkpoint"], cfg["initial_committee"]),
+                    "Prover did not verify the trusted archive checkpoint.")
         if not values or len(result) != 356:
             raise RuntimeError("Invalid checkpoint proof")
     print("service-proof verified")
 
 
+def system_self_test():
+    import exit_service
+    from exit_setup import ExitCluster, FEE_PAYER, load, require, verify_role_record, CONFIG
+    from exit_proof import available
+    from live import read
+
+    require(pwd.getpwuid(os.getuid()).pw_name == "pf-sol-exit", "Wrong self-test identity.")
+    home = Path("/var/lib/pf-sol-exit")
+    require(Path.home() == home and os.environ["EXIT_PROVER_SSH"] == "system", "Wrong service environment.")
+    require(not os.access("/home/postfiat/.ssh", os.R_OK), "Operator SSH directory is accessible.")
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 18089))
+        listener.listen(1)
+    print("Loopback port 18089 available", flush=True)
+    with TemporaryDirectory(dir=home / "jobs"):
+        pass
+    require(load(os.environ["EXIT_FEE_KEY"]).pubkey() == FEE_PAYER, "Wrong installed payer.")
+    roles = Path("/opt/postfiat/sol-exit/roles.json")
+    verify_role_record(read(CONFIG), read(roles))
+    check_tunnels()
+    c = ExitCluster(FEE_PAYER)
+    print(f"{exit_service.__name__} imported; finalized Solana slot {c.call('getSlot', c.level)}", flush=True)
+    available()
+    proof(check_anchor=True)
+    print("service-proof verified", hashlib.sha256(roles.read_bytes()).hexdigest(), flush=True)
+
+
 if __name__ == "__main__":
-    {"self-test": self_test, "proof": proof}[sys.argv[1]]()
+    {"self-test": self_test, "proof": proof, "system-self-test": system_self_test}[sys.argv[1]]()

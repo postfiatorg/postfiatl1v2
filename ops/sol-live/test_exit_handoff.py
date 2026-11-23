@@ -131,7 +131,7 @@ class HandoffTest(unittest.TestCase):
             "Precheck",
             "Initialize",
             "Verify",
-            "Install",
+            "Start",
             "Open",
             "Pay",
             "Enable",
