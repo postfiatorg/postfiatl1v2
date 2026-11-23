@@ -16,6 +16,21 @@ use std::{
 };
 
 #[test]
+fn pq_inactive_snapshot_accepts_explicit_heights() {
+    let f = Fixture::new();
+    let mut snap = crate::asset_orchard_pricing_reads::read_finalized_pair_snapshot(&f.dir).unwrap();
+    snap.genesis.chain_id = "unrelated-chain".into();
+    for height in [0, snap.tip.height + 2] {
+        let report = private_pool_snapshot_from(PrivatePoolSnapshotOptions {
+            data_dir:f.dir.clone(), pool_id:pq::POOL_ID.into(), address:None,
+            base_asset_id:None, quote_asset_id:None, inclusion_height:Some(height),
+        }, &snap).unwrap();
+        assert_eq!(report.inclusion_height, height);
+        assert!(report.pq_issued_fee.is_none());
+    }
+}
+
+#[test]
 fn recover_both_assets_and_spend_across_rollover_from_python() {
     let f = Fixture::new();
     let store = NodeStore::new(&f.dir);

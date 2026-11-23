@@ -715,8 +715,7 @@ mod fee_tests {
     use super::*;
     use pft_binius_shielded::shake256::{coin_commit, MerkleTree24};
 
-    #[test]
-    fn issued_spends_select_notes_for_amount_plus_fee_without_a_signer() {
+    fn funded(values: [u64; 2]) -> Wallet {
         let asset = postfiat_types::PQ_REHEARSAL_ISSUE;
         let point = Point {
             network: Network {
@@ -735,7 +734,7 @@ mod fee_tests {
         let key = wallet.recovery.key(0).unwrap();
         let mut history = History::default();
         let mut tree = MerkleTree24::new();
-        for (index, value) in [(0, 10), (1, 2)] {
+        for (index, value) in (0u32..).zip(values) {
             let blind = [index as u8; 78];
             let coin = coin_commit(&key.addr, value, &blind);
             tree.append(coin);
@@ -765,6 +764,92 @@ mod fee_tests {
             .entry(asset.into())
             .or_default()
             .insert(0, history);
+        wallet
+    }
+
+    fn exit(amount: u64, fee: u64) -> Value {
+        json!({"mode":"Exit", "asset":postfiat_types::PQ_REHEARSAL_ISSUE, "amount":amount, "fee":fee,
+               "recipient":format!("pf{}", "33".repeat(20))})
+    }
+
+    #[test]
+    fn imported_unknown_order_requires_an_independent_decision() {
+        let mut w = funded([5, 5]);
+        let first = w.prove(serde_json::from_value(exit(2, 1)).unwrap()).unwrap();
+        let id = first["action_hash"].as_str().unwrap();
+        let mut state = serde_json::to_value(&w).unwrap();
+        let mut pending = state["attempts"].as_object_mut().unwrap().remove(id).unwrap();
+        for k in ["order_id","phase"] { pending.as_object_mut().unwrap().remove(k); }
+        state["pending"] = pending;
+        let mut w: Wallet = serde_json::from_value(state).unwrap();
+        let mut order = exit(1, 1);
+        assert!(w.prove(serde_json::from_value(order.clone()).unwrap()).unwrap_err()
+                   .to_string().contains("different payment"));
+        order["different_payment"] = json!(true);
+        assert!(w.prove(serde_json::from_value(order).unwrap()).is_ok());
+    }
+
+    #[test]
+    fn recovery_exit_conflicts_with_both_five_atom_orders() {
+        let mut w = funded([5, 5]);
+        let mut parents = vec![];
+        for amount in [1, 2] {
+            let proof = w.prove(serde_json::from_value(exit(amount, 1)).unwrap()).unwrap();
+            let id = proof["action_hash"].as_str().unwrap().to_owned();
+            w.submitted(&id).unwrap();
+            parents.push(id);
+        }
+        let mut order = exit(4, 6);
+        order["replace"] = json!(parents[0]);
+        order["also_replace"] = json!(parents[1]);
+        let proof = w.prove(serde_json::from_value(order).unwrap()).unwrap();
+        let id = proof["action_hash"].as_str().unwrap();
+        let state = serde_json::to_value(&w).unwrap();
+        assert_eq!(state["attempts"][id]["supersedes"], json!(parents));
+        for parent in parents {
+            assert!(w.attempts[&parent].serials.iter().any(|sn|
+                w.notes.contains_key(sn) && w.attempts[id].serials.contains(sn)));
+        }
+    }
+
+    #[test]
+    fn retired_pending_is_quarantined_in_the_encrypted_wallet() {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        use crate::{service::execute, storage::Store};
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("wallet");
+        std::fs::create_dir(&home).unwrap();
+        std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let key = tempfile::NamedTempFile::new_in(tmp.path()).unwrap();
+        std::fs::write(key.path(), [42;32]).unwrap();
+        let store = Store::new(key.path(), &home).unwrap();
+        let mut state = serde_json::to_value(funded([5, 5])).unwrap();
+        let wire = include_bytes!("../../privacy_binius/tests/fixtures/pre-profile-2-issued-exit.bin");
+        let retired = json!({"payment":{"body":STANDARD.encode(wire)}, "asset":hex::encode(&wire[7..55]),
+                           "serials":["11".repeat(48),"22".repeat(48)],"delta":-2});
+        state["pending"] = retired.clone();
+        let path = home.join("wallet.enc");
+        let tag = b"postfiat/pq-wallet/v1/state";
+        store.save(&path, tag, &state, true).unwrap();
+        let balance = execute(&home,&store,json!({"op":"balance"})).unwrap();
+        assert_eq!(balance["finalized"][postfiat_types::PQ_REHEARSAL_ISSUE], 10);
+        assert!(!balance["quarantined"].is_null());
+        let backup = tmp.path().join("backup");
+        execute(&home,&store,json!({"op":"backup","backup":backup})).unwrap();
+        let recovery: Value = store.load(&backup,b"postfiat/pq-wallet/v1/recovery").unwrap();
+        assert_eq!(recovery, state["recovery"]);
+        let saved: Value = store.load(&path,tag).unwrap();
+        assert_eq!(saved["quarantined"],retired);
+        assert_eq!(saved["notes"],state["notes"]);
+        assert!(execute(&home,&store,json!({"op":"prepared"})).is_err());
+        assert!(PqPayment::from_bytes(wire.to_vec()).is_err());
+    }
+
+    #[test]
+    fn issued_spends_select_notes_for_amount_plus_fee_without_a_signer() {
+        let asset = postfiat_types::PQ_REHEARSAL_ISSUE;
+        let mut wallet = funded([10,2]);
         for mode in [Mode::Internal, Mode::Exit] {
             let recipient = if mode == Mode::Internal {
                 wallet.address(0).unwrap()

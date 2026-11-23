@@ -27,6 +27,15 @@
     }
 
     #[test]
+    fn pq_off_domain_matches_base_unknown_kind() {
+        let config = EssentialSubsetConfig::all_of(vec!["validator-0".into()]);
+        for kind in ["pq_payment_rehearsal_v1:fee:6", &format!("pq_private_fee_withdraw_v1:pf{}", "22".repeat(20))] {
+            let result = ratify_governance_amendment(&test_domain(), &config, kind, 10, config.validators.clone());
+            assert_eq!(result.unwrap_err(), format!("unsupported governance amendment kind `{kind}`"));
+        }
+    }
+
+    #[test]
     fn pq_governance_binds_the_fee_and_withdrawal_recipient() {
         let domain = test_domain();
         let config = EssentialSubsetConfig::all_of(vec!["validator-0".into(), "validator-1".into()]);
