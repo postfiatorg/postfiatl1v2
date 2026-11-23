@@ -35,6 +35,16 @@ pub fn verify_payment(
     Ok(statement)
 }
 
+/// Public inputs of an L1 payment, parsed without checking its signature or proof.
+/// The fields used for ledger checks equal those `verify_l1` returns.
+pub fn l1_public_statement(
+    payment: &postfiat_types::pq_payment::PqPayment,
+) -> Result<PaymentStatement, VerifyError> {
+    let (_, _, inner) = payment.parts().map_err(|_| VerifyError::Encoding)?;
+    let tx = ShieldedTx::from_l1_inner(inner).map_err(|_| VerifyError::Encoding)?;
+    Ok(tx.statement())
+}
+
 /// Verify the settled-domain transcript and the single public authorization, if present.
 /// Stateful eligibility, sequence and debits are checked at settlement.
 pub fn verify_l1(

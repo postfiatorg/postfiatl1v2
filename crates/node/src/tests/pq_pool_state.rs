@@ -112,10 +112,25 @@ fn pq_spent_or_stale_payment_is_refused_before_its_proof_is_verified() {
     );
     // A root the pfUSDC tree has never had.
     assert_eq!(
-        prepare_pair(&PqPool::default(), &vector("l1-vectors", "pfusdc-pay"), chain(), 5)
-            .unwrap_err(),
+        prepare_pair(
+            &PqPool::default(),
+            &vector("l1-vectors", "pfusdc-pay"),
+            chain(),
+            5
+        )
+        .unwrap_err(),
         "pq_unknown_anchor"
     );
+    // The pool checks do not read the batch ID.
+    let batch = ShieldedActionBatch::new_atomic(
+        "0".repeat(96),
+        vec![ShieldedAction::PqPaymentV1(shield.clone())],
+    );
+    assert_eq!(
+        crate::pq_pool_state::precheck_batch(Some(&pool), &batch, 6).unwrap_err(),
+        "pq_spent_serial"
+    );
+    crate::pq_pool_state::precheck_batch(None, &batch, 5).unwrap();
     assert_eq!(crate::pq_payment_actions::proof_verifications(), before);
 }
 
@@ -248,9 +263,12 @@ fn pq_old_note_spends_after_two_real_depth_rollovers() {
     let old = vector("rollover-vectors", "old-spend");
     let mut changed = old.bytes().to_vec();
     changed[55] = 1;
+    let changed = PqPayment::from_bytes(changed).unwrap();
+    // The proof binds the input epoch; the pool refuses the other epoch's root first.
+    assert!(postfiat_privacy_binius::verify_l1(&changed, chain()).is_err());
     assert_eq!(
-        prepare_pair(&pool, &PqPayment::from_bytes(changed).unwrap(), chain(), 5).unwrap_err(),
-        "pq_invalid_proof"
+        prepare_pair(&pool, &changed, chain(), 5).unwrap_err(),
+        "pq_unknown_anchor"
     );
     let (pool, _) = prepare_pair(&pool, &old, chain(), 5).unwrap();
     let pair = pool.pending.back().unwrap();
