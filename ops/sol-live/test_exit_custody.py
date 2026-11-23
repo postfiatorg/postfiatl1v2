@@ -72,3 +72,32 @@ class SpendGateTest(unittest.TestCase):
             payout.funded_send(c, "exit.withdrawal", [], before_send=record)
             record.assert_called_once()
             self.assertEqual(len(sent), 1)
+
+    def test_shared_custody_covers_all_buckets_before_tag3_signing(self):
+        import exit_setup as setup
+
+        c = Mock(owner=setup.MAINNET_PAYER)
+        c.call.return_value = {"value": {"blockhash": str(setup.Hash.default())}}
+        parent = dict(block_height=1759, block_tip_hash="tip", state_root="root")
+        bucket = dict(
+            bucket_id=payout.BUCKET, policy_hash=payout.POLICY,
+            source_series_id=payout.SERIES, status="active", redeemable_at_par=True,
+            impairment_factor_bps=10000, source_domain="sol", counted_value_atoms=20000,
+            outstanding_vault_bridge_atoms=10000, redemption_queue_atoms=10000,
+            other_allocations_atoms=0, nav_subscription_allocations_atoms=0,
+        )
+        buckets = [bucket, dict(bucket, bucket_id="earlier", counted_value_atoms=100000)]
+        with (
+            patch.object(payout, "rpc", return_value=dict(buckets=buckets)),
+            patch.object(payout, "inspect_vault", side_effect=[
+                {"custody_atoms": 119999}, {"custody_atoms": 120000}]),
+            patch.object(setup, "fleet", return_value=parent),
+            patch.object(setup, "Transaction") as tx,
+        ):
+            tx.new_signed_with_payer.side_effect = RuntimeError("signing reached")
+            with self.assertRaisesRegex(ValueError, "Shared custody"):
+                setup.send_initialize(c, Mock(), Mock(), parent)
+            tx.new_signed_with_payer.assert_not_called()
+            with self.assertRaisesRegex(RuntimeError, "signing reached"):
+                setup.send_initialize(c, Mock(), Mock(), parent)
+            self.assertNotIn("sendTransaction", [call.args[0] for call in c.call.call_args_list])

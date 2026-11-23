@@ -223,8 +223,10 @@ def build_initialize(config, payer):
 
 
 def send_initialize(c, ix, deployment, qualified_parent):
+    from exit_payout import check_custody
     from exit_precheck import parent_of
 
+    check_custody(c)
     recent = c.call("getLatestBlockhash", c.level)["value"]
     block = Hash.from_string(recent["blockhash"])
     require(
@@ -488,7 +490,6 @@ def main():
             ),
             "waiting for governed series on six validators",
         )
-        inspect_vault(c)
         require_installed_self_test(config)
         c.unlock(DIRECTORY / "mainnet-payer.json")
         deployment = load(DIRECTORY / "egress-verifier.json")

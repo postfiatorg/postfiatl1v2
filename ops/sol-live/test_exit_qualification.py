@@ -290,6 +290,7 @@ class QualificationTest(unittest.TestCase):
         c.call.return_value = {"value": {"blockhash": str(setup.Hash.default())}}
         parent = dict(block_height=10, block_tip_hash="old", state_root="root")
         with (
+            patch("exit_payout.check_custody"),
             patch.object(setup, "fleet", return_value=dict(parent, block_height=11)),
             patch.object(setup, "Transaction") as tx,
         ):
