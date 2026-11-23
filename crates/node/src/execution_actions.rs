@@ -2025,6 +2025,14 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
     let profile = ledger
         .nav_proof_profile(&nav_asset.proof_profile)
         .ok_or_else(|| "vault bridge route NAV proof profile is missing".to_string())?;
+    validate_route_nav_profile(route, route_hash, profile)
+}
+
+pub(super) fn validate_route_nav_profile(
+    route: &postfiat_types::VaultBridgeRouteProfileV1,
+    route_hash: &str,
+    profile: &postfiat_types::NavProofProfile,
+) -> Result<(), String> {
     let expected_source_class = format!("vault_bridge:{}", route.source_domain());
     let effective_route_policy_hash = if profile.vault_bridge_route_policy_hash.is_empty() {
         &profile.valuation_policy_hash

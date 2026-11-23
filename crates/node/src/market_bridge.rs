@@ -1218,13 +1218,31 @@ pub(super) fn vault_bridge_route_at_height(
             return Err(deny("Solana source bucket has no active exit route".into()));
         }
         (isolated, amendment)
+    } else if let Some(b) = bucket {
+        let record = governance
+            .authorized_vault_bridge_route_profile(family, &b.policy_hash)
+            .map_err(deny)?;
+        if record.profile.source_domain() != b.source_domain
+            || height < record.authorized_height
+            || height >= record.profile.expires_at_height
+            || governance
+                .vault_bridge_route_authority_activation_height()
+                .is_none_or(|h| height < h)
+        {
+            return Err(deny(
+                "Ethereum series has no authorized route at this height".into(),
+            ));
+        }
+        let amendment = governance
+            .amendments
+            .iter()
+            .find(|a| a.amendment_id == record.governance_amendment_id)
+            .ok_or_else(|| deny("Ethereum series has no route amendment".into()))?;
+        (record, amendment)
     } else {
         let record = governance
             .active_vault_bridge_route_profile(family, height)
             .map_err(deny)?;
-        if bucket.is_some_and(|b| b.source_domain != record.profile.source_domain()) {
-            return Err(deny("source bucket has no matching exit route".into()));
-        }
         (
             record,
             governance
@@ -1256,10 +1274,42 @@ pub(super) fn vault_bridge_route_at_height(
                 ),
             )
         })?;
-    if !is_solana {
-        validate_vault_bridge_route_profile_against_ledger(ledger, route, &record.profile_hash)
-            .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error))?;
-    }
+    let profile = if !is_solana && bucket.is_some() {
+        let mut candidates = ledger.nav_proof_profiles.iter().filter(|p| {
+            (p.registered_by == nav_asset.issuer || p.registered_by == nav_asset.reserve_operator)
+                && crate::execution_actions::validate_route_nav_profile(
+                    route,
+                    &record.profile_hash,
+                    p,
+                )
+                .is_ok()
+        });
+        let first = candidates
+            .next()
+            .ok_or_else(|| deny("Ethereum series has no matching NAV proof profile".into()))?;
+        if candidates.next().is_some() {
+            if crate::execution_actions::validate_route_nav_profile(
+                route,
+                &record.profile_hash,
+                profile,
+            )
+            .is_err()
+            {
+                return Err(deny(
+                    "Ethereum series has ambiguous NAV proof profiles".into(),
+                ));
+            }
+            profile
+        } else {
+            first
+        }
+    } else {
+        if !is_solana {
+            validate_vault_bridge_route_profile_against_ledger(ledger, route, &record.profile_hash)
+                .map_err(deny)?;
+        }
+        profile
+    };
     let beacon_finality_anchor = VaultBridgeRouteReport::select_beacon_anchor(
         &ledger.beacon_finality_states,
         &record.profile_hash,
