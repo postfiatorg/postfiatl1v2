@@ -43,11 +43,17 @@ class ExitKeysTest(unittest.TestCase):
         import base64
         from unittest.mock import Mock
         import exit_setup as s
-        c=Mock()
+
+        c = Mock()
+
         def loader(authority):
-            raw=(3).to_bytes(4,"little")+bytes(8)+b"\x01"+bytes(authority)
-            return dict(owner=str(s.LOADER),data=[base64.b64encode(raw).decode(),"base64"])
-        c.call.return_value={"value":[loader(s.MAINNET_PAYER),loader(s.FEE_PAYER)]}
-        with self.assertRaises(ValueError):s.check_payout_authorities(c)
-        c.call.return_value={"value":[loader(s.MAINNET_PAYER)]*2}
+            raw = (3).to_bytes(4, "little") + bytes(8) + b"\x01" + bytes(authority)
+            return dict(
+                owner=str(s.LOADER), data=[base64.b64encode(raw).decode(), "base64"]
+            )
+
+        c.call.return_value = {"value": [loader(s.MAINNET_PAYER), loader(s.FEE_PAYER)]}
+        with self.assertRaises(ValueError):
+            s.check_payout_authorities(c)
+        c.call.return_value = {"value": [loader(s.MAINNET_PAYER)] * 2}
         s.check_payout_authorities(c)

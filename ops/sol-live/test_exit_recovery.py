@@ -198,3 +198,40 @@ class RecoveryTest(unittest.TestCase):
             self.assertEqual(
                 next(state.glob("*.damaged-*")).read_bytes(), b"damaged sqlite fixture"
             )
+
+    def test_rebuild_waits_out_unknown_inflight_signatures(self):
+        with tempfile.TemporaryDirectory() as d:
+            state = Path(d)
+            row = dict(
+                burn_tx_id=BURN,
+                bucket_id=p.BUCKET,
+                amount_atoms=20000,
+                destination_ref=p.PREFIX + "12" * 32,
+                created_at_height=7,
+            )
+            rpc = Mock()
+            rpc.call.return_value = {"value": {"lastValidBlockHeight": 100}}
+            with (
+                patch.object(svc, "cluster", return_value=rpc),
+                patch.object(svc, "chain_payment", return_value=None),
+                patch.object(svc, "redemptions", return_value=[row]),
+            ):
+                svc.rebuild(state)
+            journal = svc.Journal(state / "jobs.sqlite")
+            with (
+                patch.object(svc, "cluster", return_value=rpc),
+                patch.object(svc, "process") as work,
+            ):
+                rpc.call.return_value = 100
+                svc.process_next(journal, state)
+                work.assert_not_called()
+                rpc.call.return_value = 101
+                svc.process_next(journal, state)
+                work.assert_called_once()
+
+    def test_terminal_history_cannot_fill_database_without_limit(self):
+        with tempfile.TemporaryDirectory() as d:
+            j=svc.Journal(Path(d)/'db')
+            with j.connect() as db:
+                db.executemany("INSERT INTO jobs(burn_tx_id,stage) VALUES(?,'paid')",[(f'{i:096x}',) for i in range(1280)])
+            with self.assertRaises(OverflowError):j.enqueue('ab'*48)

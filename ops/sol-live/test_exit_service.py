@@ -203,7 +203,9 @@ class JobsTest(unittest.TestCase):
             source_series_id=payout.SERIES,
             status="active",
             outstanding_vault_bridge_atoms=40000,
-            source_domain="shared",redeemable_at_par=True,impairment_factor_bps=10000,
+            source_domain="shared",
+            redeemable_at_par=True,
+            impairment_factor_bps=10000,
             redemption_queue_atoms=0,
             other_allocations_atoms=0,
             nav_subscription_allocations_atoms=0,
@@ -238,7 +240,9 @@ class JobsTest(unittest.TestCase):
         with (
             patch.object(payout, "cluster", return_value=c),
             patch.object(payout, "light", return_value=(1753, "anchor")),
-            patch.object(payout, "inspect_vault", return_value={"custody_atoms":40000}),
+            patch.object(
+                payout, "inspect_vault", return_value={"custody_atoms": 40000}
+            ),
             patch.object(payout, "payout_budget", return_value=1000),
             patch.object(payout, "balance", return_value=payout.FLOOR + 10000000),
             patch.object(payout, "available"),

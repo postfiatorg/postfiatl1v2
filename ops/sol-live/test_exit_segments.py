@@ -93,3 +93,31 @@ class SegmentTest(unittest.TestCase):
         self.assertEqual(w["committee"], [new])
         self.assertEqual(w["finality_ancestry"][0]["governance_payload_json"], payload)
         self.assertEqual(w["finality_ancestry"][0]["committee"], old)
+
+    def test_historical_burn_skips_stranded_rotation_checkpoint(self):
+        from exit_payout import compatible_prior, VERIFIER
+        import base64
+
+        before, after = "ab" * 48, "cd" * 48
+
+        def header(h, root):
+            return dict(
+                height=h,
+                block_hash=f"{h:096x}",
+                parent_hash=f"{h - 1:096x}",
+                consensus_v2_commit={
+                    "precommit_qc": {"domain": {"committee_root": root}}
+                },
+            )
+
+        def checkpoint(root):
+            return dict(
+                owner=str(VERIFIER),
+                data=[base64.b64encode(bytes.fromhex(root)).decode(), "base64"],
+            )
+
+        headers = [header(1817, before), header(1818, before), header(1819, after)]
+        self.assertEqual(
+            compatible_prior(headers, [checkpoint(before), checkpoint(before)]),
+            headers[0]["block_hash"],
+        )

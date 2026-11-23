@@ -197,13 +197,19 @@ def readiness():
             b is not None
             and b["policy_hash"] == POLICY
             and b["source_series_id"] == SERIES
-            and b["status"] == "active" and b["redeemable_at_par"] is True and b["impairment_factor_bps"]==10000
-            and b["counted_value_atoms"]>=b["outstanding_vault_bridge_atoms"]+b["redemption_queue_atoms"],
+            and b["status"] == "active"
+            and b["redeemable_at_par"] is True
+            and b["impairment_factor_bps"] == 10000
+            and b["counted_value_atoms"]
+            >= b["outstanding_vault_bridge_atoms"] + b["redemption_queue_atoms"],
             "Solana source bucket is unavailable.",
         )
         required_atoms = shared_liabilities(s["buckets"], b["source_domain"])
-        snapshot=inspect_vault(c)
-        require(snapshot["custody_atoms"] >= required_atoms,"Shared custody is insufficient.")
+        snapshot = inspect_vault(c)
+        require(
+            snapshot["custody_atoms"] >= required_atoms,
+            "Shared custody is insufficient.",
+        )
         return dict(
             ok=True,
             ready=all(r.get("burns_open") is True for r in routes),
@@ -458,6 +464,24 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
     return sig
 
 
+def compatible_prior(headers, states):
+    require(len(headers) == len(states) + 1, "Incomplete historical checkpoint lookup.")
+    for h, next_h, account in reversed(list(zip(headers, headers[1:], states))):
+        require(
+            next_h["parent_hash"] == h["block_hash"]
+            and next_h["height"] == h["height"] + 1,
+            "Discontinuous historical headers.",
+        )
+        if (
+            account
+            and account["owner"] == str(VERIFIER)
+            and base64.b64decode(account["data"][0], validate=True).hex()
+            == committee(next_h)
+        ):
+            return h["block_hash"]
+    raise ValueError("No compatible checkpoint precedes this burn.")
+
+
 def process(burn, work, update, *, attempt=None, before_send=None):
     update("reading")
     c = cluster()
@@ -502,26 +526,20 @@ def process(burn, work, update, *, attempt=None, before_send=None):
     latest, prior = light(c)
     if latest >= h:
         start = max(1, h - 65)
-        blocks = rpc(0, "blocks", from_height=start, limit=h - start)
-        candidates = [
-            b["header"]["block_hash"]
-            for b in reversed(blocks)
-            if start <= b["header"]["height"] < h
-        ]
+        headers = []
+        for first in range(start, h + 1, 8):
+            page = rpc(0, "blocks", from_height=first, limit=min(8, h - first + 1))
+            headers.extend(b["header"] for b in page)
+        require(
+            headers and headers[0]["height"] == start and headers[-1]["height"] == h,
+            "Missing historical headers.",
+        )
         states = c.call(
             "getMultipleAccounts",
-            [str(checkpoint_pda(b)) for b in candidates],
+            [str(checkpoint_pda(v["block_hash"])) for v in headers[:-1]],
             dict(c.level, encoding="base64"),
         )["value"]
-        prior = next(
-            (
-                b
-                for b, a in zip(candidates, states)
-                if a and a["owner"] == str(VERIFIER)
-            ),
-            None,
-        )
-        require(prior, "No known checkpoint precedes this burn.")
+        prior = compatible_prior(headers, states)
     update("proving")
     require(
         work.exists()

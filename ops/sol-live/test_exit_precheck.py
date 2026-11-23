@@ -92,3 +92,45 @@ class BootstrapTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 bootstrap_state(cfg, pair)
+
+    def test_reviewed_instruction_binds_all_account_permissions(self):
+        cfg = s.read(s.CONFIG)
+        ix = s.build_initialize(cfg, s.MAINNET_PAYER)
+        s.check_reviewed_instruction(cfg, ix)
+        bad = s.Instruction(
+            ix.program_id, ix.data, [s.rw(s.FEE_PAYER, True), *ix.accounts[1:]]
+        )
+        with self.assertRaises(ValueError):
+            s.check_reviewed_instruction(cfg, bad)
+        bad = s.Instruction(ix.program_id, ix.data, [*ix.accounts[:-1], s.rw(s.SYSTEM)])
+        with self.assertRaises(ValueError):
+            s.check_reviewed_instruction(cfg, bad)
+
+    def test_finalized_bootstrap_history_requires_exact_tag_and_accounts(self):
+        import base58
+        from exit_precheck import bootstrap_history
+
+        ix = s.build_initialize(s.read(s.CONFIG), s.MAINNET_PAYER)
+        keys = [str(a.pubkey) for a in ix.accounts]
+        item = dict(
+            programIdIndex=1,
+            accounts=list(range(5)),
+            data=base58.b58encode(ix.data).decode(),
+        )
+        c = Mock(level={"commitment": "finalized"})
+        tx = dict(
+            meta={"err": None},
+            transaction={
+                "signatures": ["given"],
+                "message": {"accountKeys": keys, "instructions": [item]},
+            },
+        )
+        c.call.return_value = tx
+        self.assertEqual(bootstrap_history(c, ix, "given"), "given")
+        item["accounts"][2] = 3
+        with self.assertRaises(ValueError):
+            bootstrap_history(c, ix, "given")
+        item["accounts"][2] = 2
+        tx["transaction"]["signatures"][0] = "different"
+        with self.assertRaises(ValueError):
+            bootstrap_history(c, ix, "given")

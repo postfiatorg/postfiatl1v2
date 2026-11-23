@@ -26,7 +26,7 @@ from exit_setup import (
     save,
     six,
 )
-from exit_segments import committee, validate_segment
+from exit_segments import committee, public_checkpoint, validate_segment
 from exit_proof import LOCAL, verify_local_host
 from route_binding import route_binding
 
@@ -201,7 +201,7 @@ def check_certificate(cert, anchor, archive_committee):
     )
 
 
-def signed_header(args, cert, parent):
+def certified_witness(args, cert, parent):
     witness = archive_cmd(
         args,
         args.archive,
@@ -227,7 +227,7 @@ def signed_header(args, cert, parent):
         ),
         "Archive header disagrees with verified certificate.",
     )
-    return header
+    return witness
 
 
 def checkpoint_values(raw):
@@ -257,7 +257,7 @@ def checkpoint_values(raw):
     )
 
 
-def guest_segment(args, anchor, tip, out):
+def guest_segment(members, anchor, tip, out):
     h = anchor["height"]
     forward = tip > h
     target_height = h + 1 if forward else h
@@ -280,14 +280,8 @@ def guest_segment(args, anchor, tip, out):
     except RuntimeError as err:
         if "rpc_method_not_allowed" not in str(err):
             raise
-        w = archive_cmd(
-            args,
-            args.witness_store or args.archive,
-            "pfusdc-checkpoint-witness",
-            "--prior-checkpoint",
-            prior["block_hash"],
-            "--target-block",
-            target["block_hash"],
+        w = public_checkpoint(
+            rpc, prior["height"], prior["block_hash"], target, members, anchor
         )
     validate_segment(w, prior["block_hash"], target, committee(target))
     out.mkdir(parents=True, exist_ok=True)
@@ -354,7 +348,11 @@ def bootstrap_history(c, ix, known=None):
             sig,
             dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
         )
-        if not tx or tx["meta"]["err"] is not None:
+        if (
+            not tx
+            or tx["meta"]["err"] is not None
+            or tx["transaction"]["signatures"][0] != sig
+        ):
             continue
         msg = tx["transaction"]["message"]
         keys = msg["accountKeys"]

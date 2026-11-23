@@ -15,6 +15,7 @@ from collections import deque
 from exit_payout import (
     CheckpointAdvanced,
     UnknownBurn,
+    PAID_NO_HISTORY,
     prune_work,
     ASSET,
     BUCKET,
@@ -60,6 +61,7 @@ class Journal:
                     )
             db.execute("""CREATE TABLE IF NOT EXISTS attempts (
                 burn TEXT PRIMARY KEY, signature TEXT NOT NULL, expiry INTEGER NOT NULL)""")
+            db.execute("CREATE TABLE IF NOT EXISTS recovery (expiry INTEGER NOT NULL)")
             db.commit()
 
     def probe(self):
@@ -81,6 +83,17 @@ class Journal:
                 "INSERT OR REPLACE INTO attempts VALUES(?,?,?)", (burn, sig, height)
             )
             db.execute("UPDATE jobs SET stage='paying' WHERE burn_tx_id=?", (burn,))
+
+    def waiting_for_expiry(self):
+        with closing(self.connect()) as db, db:
+            row = db.execute("SELECT expiry FROM recovery LIMIT 1").fetchone()
+            if row is None:
+                return False
+            c = cluster()
+            if c.call("getBlockHeight", c.level) <= row[0]:
+                return True
+            db.execute("DELETE FROM recovery")
+            return False
 
     def next_due(self, burn):
         with closing(self.connect()) as db:
@@ -128,7 +141,8 @@ class Journal:
                 active = db.execute(
                     "SELECT count(*) FROM jobs WHERE stage NOT IN ('paid','failed')"
                 ).fetchone()[0]
-                if active >= 32 and not rebuilding:
+                total = db.execute("SELECT count(*) FROM jobs").fetchone()[0]
+                if not rebuilding and (active >= 32 or (row is None and total>=1280)):
                     raise OverflowError("withdrawal queue is full")
                 db.execute(
                     """INSERT INTO jobs(burn_tx_id,stage) VALUES(?,'queued')
@@ -192,7 +206,12 @@ def chain_payment(burn, known=None):
 def checked_row(journal, burn):
     row = journal.get(burn)
     if row and row["stage"] == "paid":
-        result = chain_payment(burn, row["solana_tx"])
+        known = row["solana_tx"] or (journal.attempt(burn) or (None,))[0]
+        result = chain_payment(burn, known)
+        if result is PAID_NO_HISTORY and known:
+            return dict(
+                row, solana_tx=None, detail="Finalized marker. Signature unavailable."
+            )
         if result is None:
             journal.update(burn, "queued", solana_tx=None, detail=None, error=None)
         else:
@@ -236,7 +255,13 @@ def rebuild(state):
         for row in redemptions():
             if row["bucket_id"] == BUCKET:
                 restore_redemption(journal, row)
-        with closing(journal.connect()) as db:
+        with closing(journal.connect()) as db, db:
+            if journal.pending() is not None:
+                c = cluster()
+                expiry = c.call("getLatestBlockhash", c.level)["value"][
+                    "lastValidBlockHeight"
+                ]
+                db.execute("INSERT INTO recovery VALUES(?)", (expiry,))
             if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise ValueError("Recovery integrity check failed.")
         if target.exists():
@@ -258,7 +283,7 @@ def rebuild(state):
 
 def process_next(journal, directory):
     burn = journal.pending()
-    if burn is None:
+    if burn is None or journal.waiting_for_expiry():
         return False
     try:
         process(
@@ -378,7 +403,9 @@ class WithdrawalServer(ThreadingHTTPServer):
         if not self.slots.acquire(blocking=False):
             try:
                 request.settimeout(0.1)
-                request.sendall(b'HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Type: application/json\r\n\r\n{"error":"Withdrawal service busy."}')
+                request.sendall(
+                    b'HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Type: application/json\r\n\r\n{"error":"Withdrawal service busy."}'
+                )
             except OSError:
                 pass
             self.shutdown_request(request)
@@ -407,6 +434,10 @@ class WithdrawalServer(ThreadingHTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def log_request(self, code="-", size="-"):
+        # User-controlled request targets never enter the service log.
+        pass
+
     def setup(self):
         super().setup()
         self.connection.settimeout(8)

@@ -73,15 +73,30 @@ class ExitCluster(Cluster):
 
 
 def check_payout_authorities(c):
-    addresses=[str(pda(LOADER,bytes(program))) for program in (VAULT,VERIFIER)]
-    result=c.call("getMultipleAccounts",addresses,dict(commitment="finalized",encoding="base64",dataSlice={"offset":0,"length":45}))
-    require(len(result["value"])==2,"Program authorities unavailable.")
+    addresses = [str(pda(LOADER, bytes(program))) for program in (VAULT, VERIFIER)]
+    result = c.call(
+        "getMultipleAccounts",
+        addresses,
+        dict(
+            commitment="finalized",
+            encoding="base64",
+            dataSlice={"offset": 0, "length": 45},
+        ),
+    )
+    require(len(result["value"]) == 2, "Program authorities unavailable.")
     for account in result["value"]:
-        require(account and account["owner"]==str(LOADER),"Program authority unavailable.")
-        data=base64.b64decode(account["data"][0],validate=True)
-        require(len(data)==45 and data[:4]==(3).to_bytes(4,"little") and data[12] in (0,1)
-                and (not data[12] or data[13:45] not in (bytes(FEE_PAYER),bytes(PAUSE))),
-                "An exit credential controls a program upgrade.")
+        require(
+            account and account["owner"] == str(LOADER),
+            "Program authority unavailable.",
+        )
+        data = base64.b64decode(account["data"][0], validate=True)
+        require(
+            len(data) == 45
+            and data[:4] == (3).to_bytes(4, "little")
+            and data[12] in (0, 1)
+            and (not data[12] or data[13:45] not in (bytes(FEE_PAYER), bytes(PAUSE))),
+            "An exit credential controls a program upgrade.",
+        )
 
 
 def config_from_records(activation, profile, checkpoint, bucket):
@@ -160,6 +175,27 @@ def build_initialize(config, payer):
     )
 
 
+def check_reviewed_instruction(config, ix):
+    expected = [
+        (MAINNET_PAYER, True, True),
+        (VERIFIER, True, False),
+        (LIGHT, False, True),
+        (pk("BATyPAkKcpPBjFAttaHAVR9raxdNuWtQUNrdKgaWkait"), False, True),
+        (SYSTEM, False, False),
+    ]
+    require(
+        ix.program_id == VERIFIER
+        and [(a.pubkey, a.is_signer, a.is_writable) for a in ix.accounts] == expected,
+        "Unreviewed bootstrap account permissions.",
+    )
+    require(
+        config == read(CONFIG)
+        and hashlib.sha256(ix.data).hexdigest()
+        == "bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4",
+        "Unreviewed bootstrap bytes.",
+    )
+
+
 def expected_light(config):
     from route_binding import route_binding
 
@@ -235,7 +271,7 @@ def main():
         guest_segment,
         inspect_vault,
         records,
-        signed_header,
+        certified_witness,
     )
 
     ap = argparse.ArgumentParser(description=__doc__)
@@ -251,11 +287,6 @@ def main():
         type=Path,
         required=True,
         help="writable scratch archive at height 1753",
-    )
-    ap.add_argument(
-        "--witness-store",
-        type=Path,
-        help="refreshed scratch archive when RPC witness export is unavailable",
     )
     ap.add_argument(
         "--integrity-file", type=Path, help="mount archive integrity file read-only"
@@ -277,24 +308,21 @@ def main():
     rows = six(trusted)
     anchor_row = agreement(rows)
     cert = archive_cmd(args, args.archive, "verify-finalized-checkpoint")
-    check_certificate(
-        cert, anchor_row, committee(signed_header(args, cert, anchor_row["parent"]))
-    )
+    archived = certified_witness(args, cert, anchor_row["parent"])
+    check_certificate(cert, anchor_row, committee(archived["block"]["header"]))
     inputs = six(records)
     agreed = agreement(inputs)
     config = config_from_records(
         agreed["activation"], profile, anchor_row, agreed["bucket"]
     )
     guest = guest_segment(
-        args, anchor_row, head["block_height"], args.output.parent / "guest"
+        archived["committee"],
+        anchor_row,
+        head["block_height"],
+        args.output.parent / "guest",
     )
     ix = build_initialize(config, c.owner)
-    require(
-        config == read(CONFIG)
-        and hashlib.sha256(ix.data).hexdigest()
-        == "bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4",
-        "Unreviewed bootstrap bytes.",
-    )
+    check_reviewed_instruction(config, ix)
     anchor = ix.accounts[3].pubkey
     evidence = dict(
         vault=vault,
@@ -358,6 +386,10 @@ def main():
         "unexpected simulated state",
     )
     if args.execute:
+        require(
+            guest["forward"],
+            "Signing requires a finalized segment starting at the trusted block.",
+        )
         fleet()
         governed = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
         require(
