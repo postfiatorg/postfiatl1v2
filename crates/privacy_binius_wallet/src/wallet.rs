@@ -8,7 +8,7 @@ use pft_binius_shielded::{
     payment::{create_profiled_tx, ShieldedWallet, SpendInput},
     shake256::nullifier,
 };
-use postfiat_crypto_provider::{address_from_public_key, ml_dsa_65_sign};
+use postfiat_crypto_provider::address_from_public_key;
 use postfiat_privacy_binius::{sign_l1_shield, verify_l1, ShieldOutputIntent};
 use postfiat_types::pq_payment::{
     self as pq, Mode, PqAsset, PqPair, PqPayment, Terms, PQ_CAPACITY,
@@ -325,7 +325,9 @@ impl Wallet {
             return Err("asset ID must use canonical lowercase hex".into());
         }
         let issued = asset != [0; 48];
-        let inner_fee = if issued { 0 } else { o.fee };
+        let public = o.mode == Mode::Shield;
+        let public_fee = if issued && public { o.fee } else { 0 };
+        let inner_fee = o.fee - public_fee;
         let net = &self.point.network;
         let chain = pq::Chain {
             id: &net.chain_id,
@@ -345,7 +347,6 @@ impl Wallet {
         } else {
             [0; 32]
         };
-        let public = issued || o.mode == Mode::Shield;
         let signing =
             match (&o.account_key, &o.payer, o.sequence, public) {
                 (Some(path), Some(payer), Some(seq), true) if seq > 0 => {
@@ -449,7 +450,7 @@ impl Wallet {
             mode: o.mode,
             asset,
             epoch,
-            public_fee: if issued { o.fee } else { 0 },
+            public_fee,
             account: signing.as_ref().map(|(a, _)| a.clone()),
         };
         let [i0, i1] = inputs;
@@ -474,7 +475,7 @@ impl Wallet {
         let seconds = start.elapsed().as_secs_f64();
         let inner = tx.to_bytes();
         let payment = match signing {
-            Some((_, sk)) if mint > 0 => sign_l1_shield(
+            Some((_, sk)) => sign_l1_shield(
                 chain,
                 &terms,
                 &inner,
@@ -496,22 +497,7 @@ impl Wallet {
                 ],
                 &sk,
             )?,
-            other => {
-                let sig = match other {
-                    Some((_, sk)) => Some(
-                        ml_dsa_65_sign(
-                            &sk,
-                            &terms
-                                .signing_message(chain, tx.statement().tx_ctx)
-                                .ok_or("missing fee terms")?,
-                        )?
-                        .try_into()
-                        .map_err(|_| "signature size")?,
-                    ),
-                    None => None,
-                };
-                PqPayment::encode(&terms, sig.as_ref(), &inner)?
-            }
+            None => PqPayment::encode(&terms, None, &inner)?,
         };
         verify_l1(&payment, chain).map_err(|_| "local L1 proof verification failed")?;
         let self_pay = o.mode == Mode::Internal
@@ -533,5 +519,95 @@ impl Wallet {
             serials: [hex::encode(tx.sn0), hex::encode(tx.sn1)],
         });
         Ok(json!({"prove_seconds":seconds,"action_hash":hash,"statement_id":statement_id}))
+    }
+}
+
+#[cfg(test)]
+mod fee_tests {
+    use super::*;
+    use pft_binius_shielded::shake256::{coin_commit, MerkleTree24};
+
+    #[test]
+    fn issued_spends_select_notes_for_amount_plus_fee_without_a_signer() {
+        let asset = postfiat_types::PQ_REHEARSAL_ISSUE;
+        let point = Point {
+            network: Network {
+                chain_id: "wallet-test".into(),
+                genesis_hash: "55".repeat(48),
+                protocol_version: 1,
+            },
+            height: 0,
+            block_hash: "genesis".into(),
+            state_root: "22".repeat(48),
+            pairs: 0,
+            last_page: String::new(),
+            assets: BTreeMap::new(),
+        };
+        let mut wallet = Wallet::restore(Recovery::new(point, 0, 0, 1).unwrap()).unwrap();
+        let key = wallet.recovery.key(0).unwrap();
+        let mut history = History::default();
+        let mut tree = MerkleTree24::new();
+        for (index, value) in [(0, 10), (1, 2)] {
+            let blind = [index as u8; 78];
+            let coin = coin_commit(&key.addr, value, &blind);
+            tree.append(coin);
+            history.leaves.push(hex::encode(coin));
+            wallet.notes.insert(
+                hex::encode(nullifier(&key.spend_secret, &coin)),
+                Note {
+                    index,
+                    value,
+                    key: 0,
+                    epoch: 0,
+                    asset: asset.into(),
+                    blind: hex::encode(blind),
+                },
+            );
+        }
+        wallet
+            .point
+            .assets
+            .entry(asset.into())
+            .or_default()
+            .writable
+            .anchors
+            .push_back(hex::encode(tree.root()));
+        wallet
+            .trees
+            .entry(asset.into())
+            .or_default()
+            .insert(0, history);
+        for mode in [Mode::Internal, Mode::Exit] {
+            let recipient = if mode == Mode::Internal {
+                wallet.address(0).unwrap()
+            } else {
+                format!("pf{}", "33".repeat(20))
+            };
+            let order = |fee| Order {
+                mode,
+                asset: asset.into(),
+                amount: 10,
+                fee,
+                recipient: Some(recipient.clone()),
+                payer: None,
+                sequence: None,
+                account_key: None,
+            };
+            assert!(wallet
+                .prove(order(3))
+                .unwrap_err()
+                .to_string()
+                .contains("insufficient funds"));
+            wallet.prove(order(2)).unwrap();
+            let pending = wallet.pending.take().unwrap();
+            assert_eq!(pending.delta, if mode == Mode::Exit { -12 } else { -2 });
+            let (terms, sig, inner) = pending.payment.parts().unwrap();
+            assert!(terms.account.is_none() && sig.is_none());
+            assert_eq!(u64::from_le_bytes(inner[104..112].try_into().unwrap()), 2);
+            assert!(pending
+                .serials
+                .iter()
+                .all(|sn| wallet.notes.contains_key(sn)));
+        }
     }
 }

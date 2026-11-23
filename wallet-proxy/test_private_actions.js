@@ -613,7 +613,7 @@ async function main() {
             const json = JSON.stringify({kind:'pq_payment_v1',body:body.toString('base64')});
             const parsed = parsePublicAction(json);
             const signed = JSON.parse(wasm.pq_review_payment(json));
-            if (file === 'pft-shield.bin') {
+            if (file === 'pft-shield.bin' || file === 'pft-pay.bin') {
                 const route = createPrivateActions({
                     prefix: '/api/private/v1/pq/',
                     env: { ...privateEnv, WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID: parsed.poolId,
@@ -638,10 +638,18 @@ async function main() {
             assert.equal(signed.asset, parsed.assetId);
             assert.equal(signed.payer, parsed.payer);
             assert.equal(parsed.canonical,json);
-            const invalid = Buffer.from(body); invalid[6] = 3;
-            const malformed=JSON.stringify({kind:'pq_payment_v1',body:invalid.toString('base64')});
-            assert.throws(()=>parsePublicAction(malformed));
-            assert.throws(()=>wasm.pq_review_payment(malformed));
+            const mutations = [[6, 3]];
+            if (file === 'pfusdc-pay.bin' || file === 'pfusdc-exit.bin') {
+                assert.equal(parsed.payer, null);
+                mutations.push([5, 1], [63, 1], [71, 1]);
+            }
+            for (const [offset, value] of mutations) {
+                const invalid = Buffer.from(body);
+                invalid[offset] = value;
+                const malformed = JSON.stringify({kind:'pq_payment_v1', body:invalid.toString('base64')});
+                assert.throws(() => parsePublicAction(malformed));
+                assert.throws(() => wasm.pq_review_payment(malformed));
+            }
         }
         console.log('8 shared PQ payment vectors: WASM, gateway and Python agree');
         // Disabled without a configured domain.

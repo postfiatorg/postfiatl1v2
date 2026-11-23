@@ -1,4 +1,5 @@
 """Owner-local wallet-web bridge. Only public pages and proven actions traverse the gateway."""
+import base64
 import contextlib
 import fcntl
 import hashlib
@@ -78,9 +79,10 @@ class BrowserWallet:
                                            response_byte_cap=MAX_RESPONSE)
         self.gateway = Gateway(args.gateway, args.gateway_token_file, origin)
         self.account = args.payer
-        self.key = str(args.account_key.absolute())
+        self.key = str(args.account_key.absolute()) if args.account_key else None
+        check(bool(self.account) == bool(self.key), "Supply both deposit account and signing key for shielding.")
         self.issue = args.issue
-        check(re.fullmatch(r"pf[0-9a-f]{40}", self.account) and re.fullmatch(r"[0-9a-f]{96}", self.issue)
+        check((self.account is None or re.fullmatch(r"pf[0-9a-f]{40}", self.account)) and re.fullmatch(r"[0-9a-f]{96}", self.issue)
               and self.issue != NATIVE, "Invalid public account or source-series ID.")
         self.net = local(self.home, "checkpoint")["network"]
         self.exit_action = None
@@ -126,7 +128,12 @@ class BrowserWallet:
         return self.row(db, intent)
 
     def request(self, row):
-        return dict(address=self.account, intent_id=row["intent"], action_json=row["wire"])
+        address = self.account
+        if row["pool"] == PQ_POOL_ID:
+            wire = base64.b64decode(json.loads(row["wire"])["body"], validate=True)
+            if wire[5] == 2:
+                address = None
+        return dict(address=address, intent_id=row["intent"], action_json=row["wire"])
 
     def send(self, db, row):
         # Commit the uncertain state before the first network byte. No background resend.
@@ -193,13 +200,13 @@ class BrowserWallet:
         check(all(tip[k] == v for k, v in self.net.items()) and tip["pool_id"] == PQ_POOL_ID,
               "Gateway snapshot is on a different network.")
         trusted = self.validator.private_pool_snapshot(PQ_POOL_ID)
-        account = self.validator.account(self.account)
-        lines = self.validator.account_lines(self.account, asset_id=self.issue)["lines"]
+        account = self.validator.account(self.account) if self.account else None
+        lines = self.validator.account_lines(self.account, asset_id=self.issue)["lines"] if self.account else []
         last = db.execute("SELECT intent,phase FROM payments WHERE network=? ORDER BY rowid DESC LIMIT 1",
                           (compact(self.net),)).fetchone()
         return dict(network=self.net, account=self.account, issue=self.issue,
-                    address=local(self.home, "address")["address"], sequence=str(account["sequence"] + 1),
-                    public={NATIVE:str(account["balance"]), self.issue:str(sum(l["balance"] for l in lines))},
+                    address=local(self.home, "address")["address"], sequence=str(account["sequence"] + 1) if account else None,
+                    public={NATIVE:str(account["balance"]), self.issue:str(sum(l["balance"] for l in lines))} if account else {},
                     private={k:str(v) for k,v in balance["finalized"].items()},
                     pending=({k:str(v) for k,v in balance["pending"].items()} if balance["pending"] else None),
                     height=checkpoint["height"], tip=trusted["finalized_height"],
@@ -267,7 +274,8 @@ class BrowserWallet:
                       and self.receipt(db, self.exit_id())["state"] == "final"
                       and mode == "Shield" and str(amount) == migration["amount"] and asset == migration["asset_id"],
                       "Confirm the exact Orchard exit before shielding.")
-            public = mode == "Shield" or asset != NATIVE
+            public = mode == "Shield"
+            check(not public or self.account, "Configure a deposit account to shield funds.")
             terms = dict(**body, payer=self.account if public else None,
                          sequence=state["sequence"] if public else None)
             token = secrets.token_urlsafe(32)

@@ -244,7 +244,8 @@ fn recover_both_assets_and_spend_across_rollover_from_python() {
                         .filter(|l| l.asset_id == f.child || l.asset_id == f.sibling)
                         .map(|l| l.balance)
                         .sum::<u64>();
-                    assert_eq!(issued + custody, 110);
+                    let collected = snap.ledger.collected_private_fees.get(&f.child).copied().unwrap_or(0);
+                    assert_eq!(issued + custody + collected, 110);
                     let write_epoch = pool.pending.back().unwrap().epoch;
                     println!("certified block {h}, {asset} read epoch {read_epoch} output epoch {write_epoch}, PFT supply {}, pfUSDC family 110",f.starting_supply);
                     snap.tip.height = h;

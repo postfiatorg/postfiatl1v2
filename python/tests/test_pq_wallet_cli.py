@@ -21,6 +21,33 @@ ROOT = Path(__file__).resolve().parents[2]
 NATIVE = "00"*48
 
 
+class PqIssuedFee(unittest.TestCase):
+    def test_private_spends_omit_the_depositor_from_review_and_relay(self):
+        from postfiat_rpc.pq_browser import BrowserWallet, PQ_POOL_ID
+        from postfiat_rpc.pq_wallet import parser
+
+        browser = object.__new__(BrowserWallet)
+        browser.issue = "cd" * 48
+        browser.account = "pf" + "11" * 20
+        browser.overview = lambda db: dict(synced=True, pending=None, sequence="7")
+        vectors = ROOT / "tools/pft-binius-shielded-pq/l1-vectors"
+        for command, mode, recipient, vector in [
+            ("pay", "Internal", "x" * 2241, "pfusdc-pay.bin"),
+            ("unshield", "Exit", "pf" + "22" * 20, "pfusdc-exit.bin"),
+        ]:
+            args = parser().parse_args(["--wallet", ".", command, "--asset", browser.issue,
+                                        "--amount", "5", "--fee", "3", "--to", recipient])
+            self.assertTrue({"payer", "account_key", "sequence"}.isdisjoint(vars(args)))
+            order = dict(mode=mode, asset=browser.issue, amount="5", fee="3",
+                         recipient=recipient, migration=False)
+            terms = browser.dispatch(None, "review", order)["terms"]
+            self.assertIsNone(terms["payer"])
+            self.assertIsNone(terms["sequence"])
+            action = dict(kind="pq_payment_v1", body=base64.b64encode((vectors / vector).read_bytes()).decode())
+            request = browser.request(dict(pool=PQ_POOL_ID, intent="example", wire=json.dumps(action)))
+            self.assertIsNone(request["address"])
+
+
 class PqWalletMerge(unittest.TestCase):
     def test_two_wallets_restore_and_spend(self):
         cargo = ["cargo", "build", "--offline", "--locked", "--release", "-p", "postfiat-node",
@@ -187,7 +214,7 @@ def exercise(root, stack):
     assert retry["intent_id"] == first["intent_id"]
     pay(alice, "pay", "PFT", 30, "--to", ba)
     pay(alice, "shield", issue, 80, *public("ALICE", 2))
-    pay(alice, "pay", issue, 25, "--to", ba, *public("ALICE", 3))
+    pay(alice, "pay", issue, 25, "--to", ba)
     cli(bob, "sync")
     original = inspect(bob, bkey)
     assert cli(bob, "balance")["finalized"] == {NATIVE:30, issue:25}
@@ -215,12 +242,12 @@ def exercise(root, stack):
           f"({scan['outputs']*scan['keys']/scan['trial_seconds']:.0f} trials/s), full sync with retry {elapsed:.3f} s",flush=True)
     pay(restored,"pay","PFT",10,"--to",aa)
     pay(restored,"unshield","PFT",18,"--to",env["PQ_ALICE"])
-    pay(restored,"pay",issue,5,"--to",aa,*public("SPONSOR",1))
-    pay(restored,"unshield",issue,20,"--to",env["PQ_SPONSOR"],*public("SPONSOR",2))
+    pay(restored,"pay",issue,5,"--to",aa)
+    pay(restored,"unshield",issue,14,"--to",env["PQ_SPONSOR"])
     cli(restored,"sync")
     cli(alice,"sync")
     assert cli(restored,"balance")["finalized"] == {}
-    assert cli(alice,"balance")["finalized"] == {NATIVE:78,issue:60}
+    assert cli(alice,"balance")["finalized"] == {NATIVE:78,issue:57}
     inspect(alice,akey)
     for who in ("ALICE","SPONSOR"):
         known.add(bytes.fromhex(json.loads(Path(env[f"PQ_{who}_KEY"]).read_bytes())["private_key_hex"]))

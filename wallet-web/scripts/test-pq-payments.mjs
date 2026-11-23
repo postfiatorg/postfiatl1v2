@@ -148,14 +148,18 @@ async function exercise() {
       return page.items;
     };
     const orchard=(await view('asset-orchard-v1','assets')).find(row=>row.asset_id===issue).live_total;
-    const pq=(await view('PFT-PQ-SHIELDED-POOL-V1','pq_assets')).find(([id])=>id===issue)[1].reserve;
+    const poolState=(await view('PFT-PQ-SHIELDED-POOL-V1','pq_assets')).find(([id])=>id===issue)[1];
+    const pq=poolState.reserve;
+    const {asset}=await rpc(nodePorts[0],'asset_info',{asset_id:issue});
+    const collected=asset.collected_private_fees;
+    assert.equal(collected,9);
     let publicAtoms=0;
     for(const account of Object.values(addresses)) {
       const {lines}=await rpc(nodePorts[0],'account_lines',{account,asset_id:issue});
       for(const line of lines) publicAtoms+=line.balance;
     }
-    assert.equal(orchard,expectedOrchard); assert.equal(pq,expectedPQ); assert.equal(publicAtoms+pq+orchard,100);
-    console.log(label+': public '+publicAtoms+', PQ '+pq+', Orchard '+orchard+' = 100 source-series atoms');
+    assert.equal(orchard,expectedOrchard); assert.equal(pq,expectedPQ); assert.equal(publicAtoms+pq+orchard+collected,100);
+    console.log(label+': public '+publicAtoms+', PQ '+pq+', Orchard '+orchard+', collector '+collected+' = 100 source-series atoms');
   }
   async function finalize(intent) {
     assert.match(intent,/^[a-f0-9]{96}$/);
@@ -323,10 +327,10 @@ async function exercise() {
     await transfer('alice',issue,'Pay',25,receive.bob,'pfusdc-02-alice-pay');
     assert.equal((await sync('bob')).private[issue],'25');
     await transfer('bob',issue,'Pay',5,receive.alice,'pfusdc-03-bob-second-spend');
-    await transfer('bob',issue,'Unshield',20,addresses.bob,'pfusdc-04-bob-exit');
-    const before=await sync('alice'); assert.deepEqual(before.private,{[native]:'78',[issue]:'60'});
+    await transfer('bob',issue,'Unshield',14,addresses.bob,'pfusdc-04-bob-exit');
+    const before=await sync('alice'); assert.deepEqual(before.private,{[native]:'78',[issue]:'57'});
     assert.deepEqual((await sync('bob')).private,{});
-    await migrationSupply('Before migration',9,60);
+    await migrationSupply('Before migration',9,57);
     await click(a,'Orchard migration'); await capture(a,'migration-01-review-exit');
     const exit=await walletCall(a,'exit','Authorize Orchard exit');
     await a.getByText('Awaiting Orchard finality',{exact:true}).waitFor();
@@ -337,7 +341,7 @@ async function exercise() {
     const exitReceipt=await finalize(exit.intent);
     await startDaemon('alice'); await startBridge('alice'); await click(a,'Orchard migration');
     await check('alice',exit.intent,'migration-03-final-exit-after-restart',exitReceipt);
-    await migrationSupply('After Orchard exit',0,60);
+    await migrationSupply('After Orchard exit',0,57);
     const afterExit=await sync('alice'); assert.equal(BigInt(afterExit.public[issue]),BigInt(before.public[issue])+9n);
     await a.getByLabel('New shield fee (PFT atoms)').fill('3');
     await walletCall(a,'review','Review new PQ shield');
@@ -350,9 +354,9 @@ async function exercise() {
     assert.equal((await walletCall(a,'receipt','Check finality')).state,'queued');
     await capture(a,'migration-04b-await-shield-finality');
     await check('alice',shieldIntent,'migration-05-final-shield');
-    await migrationSupply('After fresh PQ shield',0,69);
+    await migrationSupply('After fresh PQ shield',0,66);
     const after=await sync('alice'); assert.equal(after.migration.state,'Migration final');
-    assert.equal(after.public[issue],before.public[issue]); assert.equal(after.private[issue],'69');
+    assert.equal(after.public[issue],before.public[issue]); assert.equal(after.private[issue],'66');
     await stop(wallets.bob); await click(b,'Sync'); await b.getByRole('alert').filter({hasText:'Disconnected'}).waitFor();
     assert.ok(await b.getByRole('button',{name:'Review payment'}).isDisabled());
     assert.deepEqual(await legacyPage(),historic);

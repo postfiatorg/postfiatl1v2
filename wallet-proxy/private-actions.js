@@ -168,7 +168,7 @@ function parsePublicAction(actionJson, domain) {
         if (value.body.length > Math.ceil(149130 / 3) * 4) throw refusal(413, 'private_action_too_large');
         const wire = Buffer.from(value.body, 'base64');
         if (wire.length < 72 || wire.length > 149130 || wire.toString('base64') !== value.body
-            || wire.subarray(0, 6).toString('hex') !== '504650510101' || wire[71] > 1) throw refusal(400, 'private_action_malformed');
+            || wire.subarray(0, 5).toString('hex') !== '5046505101' || wire[71] > 1) throw refusal(400, 'private_action_malformed');
         const prefix = 72 + (wire[71] ? 20 + 8 + 1952 : 0);
         const inner = prefix + (wire[71] ? 3309 : 0);
         if (wire.length - inner > 140476 || wire.length <= inner + 3648 || !wire.subarray(inner, inner + 8).equals(Buffer.from('5046534830320000', 'hex'))
@@ -177,9 +177,9 @@ function parsePublicAction(actionJson, domain) {
         const publicFee = wire.readBigUInt64LE(63);
         const mint = wire.readBigUInt64LE(inner + 56), exit = wire.readBigUInt64LE(inner + 64);
         const fee = wire.readBigUInt64LE(inner + 104);
-        if (mode > 2 || Boolean(wire[71]) !== (issued || mode === 1)
-            || (publicFee > 0n) !== issued || (mint > 0n) !== (mode === 1) || (exit > 0n) !== (mode === 2)
-            || (issued && fee !== 0n) || exit + fee > 0xffffffffffffffffn
+        if (mode > 2 || wire[5] !== (issued && mode !== 1 ? 2 : 1) || Boolean(wire[71]) !== (mode === 1)
+            || (publicFee > 0n) !== (issued && mode === 1) || (mint > 0n) !== (mode === 1) || (exit > 0n) !== (mode === 2)
+            || (issued && mode === 1 && fee !== 0n) || exit + fee > 0xffffffffffffffffn
             || wire.subarray(inner + 72, inner + 84).some(Boolean)
             || wire.subarray(inner + 84, inner + 104).some(Boolean) !== (mode === 2)
             || (wire[71] && (!wire.subarray(72, 92).some(Boolean) || wire.readBigUInt64LE(92) === 0n))) {
@@ -353,11 +353,14 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
     function validateRequest(body, principal) {
         if (!exactKeys(body, ['address', 'intent_id', 'action_json'])) throw refusal(400, 'private_request_invalid');
         const { address, intent_id: intentId, action_json: actionJson } = body;
-        if (!ADDRESS_RE.test(String(address)) || !HEX96.test(String(intentId)) || typeof actionJson !== 'string') {
+        if (!HEX96.test(String(intentId)) || typeof actionJson !== 'string') {
             throw refusal(400, 'private_request_invalid');
         }
         if (Buffer.byteLength(actionJson, 'utf8') > MAX_ACTION_BYTES) throw refusal(413, 'private_action_too_large');
         const action = parsePublicAction(actionJson);
+        if (!(address === null && action.kind === 'pq_payment_v1' && !action.payer) && !ADDRESS_RE.test(String(address))) {
+            throw refusal(400, 'private_request_invalid');
+        }
         if (intentIdFor(config.domain, actionJson) !== intentId) throw refusal(400, 'private_intent_mismatch');
         if (action.kind === 'asset_orchard_ingress_v2') {
             const unsigned = action.value.burn_transaction.unsigned;

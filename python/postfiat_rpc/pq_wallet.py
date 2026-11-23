@@ -126,7 +126,7 @@ def submit(home, client, scope, expected_hash=None):
         # These are explicit settlement refusals before the validator reserves
         # the action. A transport failure has an unknown outcome and stays pending.
         if err.error.get("code") in {"pq_source_authorization", "pq_minimum_fee", "pq_unknown_anchor",
-                                    "pq_unfunded_source", "pq_issue_disabled", "pq_insufficient_issued_balance",
+                                    "pq_unfunded_source", "pq_fee_unconfigured", "pq_issue_disabled", "pq_insufficient_issued_balance",
                                     "pq_recipient_policy", "pq_recipient_reserve", "pq_missing_trustline"}:
             if client.private_action_receipt(intent)["state"] == "pending_unknown":
                 local(home, "rejected", action_hash=action_hash)
@@ -155,8 +155,8 @@ def parser():
     b.add_argument("--pair-file", type=Path, required=True, help="new owner-only file for the local session link")
     b.add_argument("--gateway", required=True, help="wallet-proxy HTTP(S) origin")
     b.add_argument("--gateway-token-file", type=Path, required=True)
-    b.add_argument("--payer", required=True, help="public account used for deposits or fee sponsorship")
-    b.add_argument("--account-key", type=Path, required=True)
+    b.add_argument("--payer", help="public deposit account, only needed for shielding")
+    b.add_argument("--account-key", type=Path, help="local deposit signing key")
     b.add_argument("--issue", required=True, help="exact governed pfUSDC source-series ID")
     b.add_argument("--orchard-exit-batch", type=Path, help="locally prepared, single private-egress public batch")
     k = cmds.add_parser("keygen", help="create a new owner-only wrapping key outside the wallet")
@@ -174,12 +174,13 @@ def parser():
         c = cmds.add_parser(name)
         c.add_argument("--asset", required=True, help="PFT or the exact pfUSDC issue ID")
         c.add_argument("--amount", type=int, required=True, help="integer asset atoms")
-        c.add_argument("--fee", type=int, required=True, help="integer PFT fee atoms")
+        c.add_argument("--fee", type=int, required=True, help="PFT atoms for deposits, otherwise atoms of the selected asset")
         if name != "shield":
             c.add_argument("--to", required=True)
-        c.add_argument("--payer", help="public account paying the debit or fee")
-        c.add_argument("--account-key", type=Path)
-        c.add_argument("--sequence", type=int)
+        else:
+            c.add_argument("--payer", required=True, help="public deposit account")
+            c.add_argument("--account-key", type=Path, required=True)
+            c.add_argument("--sequence", type=int, required=True)
     return p
 
 
@@ -239,11 +240,12 @@ def run(args):
     sync(home, client, validator)
     mode = {"shield": "Shield", "pay": "Internal", "unshield": "Exit"}[cmd]
     order = dict(mode=mode, asset="00"*48 if args.asset == "PFT" else args.asset,
-                 amount=args.amount, fee=args.fee, payer=args.payer, sequence=args.sequence,
-                 account_key=str(args.account_key.absolute()) if args.account_key else None,
+                 amount=args.amount, fee=args.fee,
                  recipient=getattr(args, "to", None))
-    print(f"{cmd} {args.amount} {args.asset} atoms, fee {args.fee} PFT atoms, "
-          f"payer {args.payer or 'private PFT balance'}", file=sys.stderr, flush=True)
+    if mode == "Shield":
+        order.update(payer=args.payer, sequence=args.sequence, account_key=str(args.account_key.absolute()))
+    unit = "PFT" if mode == "Shield" else args.asset
+    print(f"{cmd} {args.amount} {args.asset} atoms, fee {args.fee} {unit} atoms", file=sys.stderr, flush=True)
     metrics = local(home, "prove", order=order)
     return {**metrics, **submit(home, client, args.scope, metrics["action_hash"])}
 

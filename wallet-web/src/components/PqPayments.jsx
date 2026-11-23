@@ -133,9 +133,9 @@ export default function PqPayments() {
         onChange={e => change(() => setAmount(e.target.value))}/></label>
       {mode !== 'Shield' && <label>{mode === 'Exit' ? 'Public exit account' : 'Recipient receive address'}
         <input value={recipient} disabled={!!busy} onChange={e => change(() => setRecipient(e.target.value))}/></label>}
-      <label>Fee (PFT atoms)<input value={fee} inputMode="numeric" disabled={!!busy} onChange={e => change(() => setFee(e.target.value))}/></label>
-      <Field label={mode === 'Shield' ? 'Public deposit account' : 'Fee payer'}>{mode === 'Shield' || asset !== NATIVE ? wallet.account : 'Private PFT balance'}</Field>
-      <button className="pq-primary" disabled={!canReview || !amount} onClick={() => work('Reviewing', () => requestReview())}>Review payment</button>
+      <label>Fee ({mode === 'Shield' ? 'PFT' : unit} atoms)<input value={fee} inputMode="numeric" disabled={!!busy} onChange={e => change(() => setFee(e.target.value))}/></label>
+      {mode === 'Shield' && <Field label="Public deposit account">{wallet.account || 'Configure a deposit signer to shield'}</Field>}
+      <button className="pq-primary" disabled={!canReview || !amount || (mode === 'Shield' && !wallet.account)} onClick={() => work('Reviewing', () => requestReview())}>Review payment</button>
     </section> : <section><h2>Orchard → Public account → PQ</h2>
       {!migration ? <p>Prepare a policy-permitted Orchard private exit with your Orchard wallet. Open its public batch using the local bridge’s Orchard exit option.</p> : <>
       <h3 data-testid="migration-state">{migration.state}</h3>
@@ -156,9 +156,8 @@ export default function PqPayments() {
       <Field label="Action">{modes[review.terms.mode]} {review.terms.amount} {review.terms.asset === NATIVE ? 'PFT' : 'pfUSDC'} atoms</Field>
       <Field label="Asset / issue">{review.terms.asset === NATIVE ? 'PFT' : review.terms.asset}</Field>
       {review.terms.recipient && <details><summary>Destination · {review.terms.recipient.slice(0,18)}…</summary><code>{review.terms.recipient}</code></details>}
-      <Field label="Fee">{review.terms.fee} PFT atoms · {review.terms.asset === NATIVE ?
-        (review.terms.mode === 'Shield' ? 'deducted from public deposit' : 'paid from private balance') : 'paid by public account'}</Field>
-      <Field label={review.terms.mode === 'Shield' ? 'Depositor' : 'Fee sponsor'}>{review.terms.payer || 'Private PFT balance'}</Field>
+      <Field label="Fee">{review.terms.fee} {review.terms.mode === 'Shield' || review.terms.asset === NATIVE ? 'PFT' : 'pfUSDC'} atoms · {review.terms.mode !== 'Shield' ? 'paid from private notes' : review.terms.asset === NATIVE ? 'deducted from deposit' : 'paid by depositor'}</Field>
+      {review.terms.payer && <Field label="Depositor">{review.terms.payer}</Field>}
       {review.terms.sequence && <Field label="Account sequence">{review.terms.sequence}</Field>}
       <button className="pq-primary" disabled={!!busy} onClick={() => work('Proving locally', confirm)}>Confirm and prove locally</button>
     </section>}
@@ -171,8 +170,8 @@ export default function PqPayments() {
     </div><aside><section><div className="pq-heading"><h2>Balances</h2><button disabled={!!busy}
       onClick={() => work('Syncing', () => refresh('sync'))}>Sync</button></div>
       <table><thead><tr><th>Atoms</th><th>Public</th><th>Private</th></tr></thead><tbody>{[NATIVE,wallet.issue].map(a =>
-        <tr key={a}><th>{a === NATIVE ? 'PFT' : 'pfUSDC'}</th><td>{wallet.public[a]}</td><td>{wallet.private[a] || '0'}</td></tr>)}</tbody></table>
-      <Field label="Public account">{wallet.account}</Field>
+        <tr key={a}><th>{a === NATIVE ? 'PFT' : 'pfUSDC'}</th><td>{wallet.public[a] ?? '—'}</td><td>{wallet.private[a] || '0'}</td></tr>)}</tbody></table>
+      {wallet.account && <Field label="Public account">{wallet.account}</Field>}
       <Field label="pfUSDC source series">{wallet.issue}</Field>
       <Field label="Pending private change">{wallet.pending ? String(wallet.pending.delta) + (wallet.pending.asset === NATIVE ? ' PFT atoms' : ' pfUSDC atoms') : 'None'}</Field>
       <button onClick={() => setShowAddress(!showAddress)}>{showAddress ? 'Hide receive address' : 'Receive address'}</button>
@@ -180,6 +179,7 @@ export default function PqPayments() {
     </section>{!migrating && <section className="pq-privacy"><h2>Privacy</h2>
       <h3>{activity?.count < 16 ? 'hidden, small pool' : 'Observer privacy unverified'}</h3>
       {activity && <p>{activity.count} matching {unit} {modes[mode].toLowerCase()} actions in the latest {activity.sampled} finalized pool actions.</p>}
+      <p>Deposits and exits reveal the public account and amount. Payments reveal the asset, fee, time and tree. The payment carries no sender account.</p>
       <p>The submission service sees the caller and timing. The observer model requires 16 joint candidates. Timing, fees and disclosures can narrow the set.</p>
     </section>}</aside></div></>}
   </main>;

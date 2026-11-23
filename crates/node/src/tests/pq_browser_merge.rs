@@ -116,7 +116,7 @@ fn two_browser_wallets_and_orchard_migration() {
         .map(|l| l.balance)
         .sum();
     assert_eq!(orchard.ingress_total, orchard.egress_total);
-    assert_eq!(pq + public, 100);
+    assert_eq!(pq + public + ledger.collected_private_fees[&f.child], 100);
     assert_eq!(
         global_issued_asset_supply(&ledger, &shielded, &f.family).unwrap(),
         110
