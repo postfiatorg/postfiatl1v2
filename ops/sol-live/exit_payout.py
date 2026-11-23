@@ -221,12 +221,7 @@ def verify_endpoints(c, witness, prior, target):
             "Conflicting result checkpoint.")
 
 
-def submit(c, kind, witness, work, owner=None, on_pay=None):
-    vals, proof = prove(kind, witness, work)
-    require(0 < len(vals) <= 2048 and len(proof) == 356, "Invalid proof size.")
-    balance(c)
-    if on_pay:
-        on_pay()
+def upload(c, vals, work):
     # Each distinct witness owns one restart-safe upload buffer.
     path = work / (hashlib.sha256(vals).hexdigest() + ".key")
     if not path.exists():
@@ -258,6 +253,17 @@ def submit(c, kind, witness, work, owner=None, on_pay=None):
             ],
             signer,
         )
+    return signer
+
+
+def submit(c, kind, witness, work, owner=None, on_pay=None):
+    vals, proof = prove(kind, witness, work)
+    require(0 < len(vals) <= 2048 and len(proof) == 356, "Invalid proof size.")
+    balance(c)
+    if on_pay:
+        on_pay()
+    signer = upload(c, vals, work)
+    buf = signer.pubkey()
     prior = checkpoint_pda(witness["prior_checkpoint_block_id"])
     result = checkpoint_pda(witness["block"]["header"]["block_hash"])
     accounts = [

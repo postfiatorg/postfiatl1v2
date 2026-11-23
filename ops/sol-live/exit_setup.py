@@ -175,10 +175,12 @@ def trusted(i):
         height=h["height"],
         block=h["block_hash"],
         root=h["state_root"],
+        parent=h["parent_hash"],
+        certificate_id=h["certificate_id"],
         committee=h["consensus_v2_commit"]["precommit_qc"]["domain"]["committee_root"],
         verified=r["confirmed"]
         and r["receipt"]["accepted"]
-        and cp["verified"]
+        and h["certificate_id"] == cp["certificate_id"]
         and h["block_hash"] == cp["checkpoint_block_hash"]
         and h["state_root"] == cp["checkpoint_state_root"]
         and h["height"] == cp["checkpoint_height"]
@@ -199,11 +201,16 @@ def profile_code(c, key):
             and programdata["data"][:4] == (3).to_bytes(4, "little"),
             "invalid program data",
         )
+        if key in (VERIFIER, VAULT):
+            require(programdata["data"][12:45] == b"\x01" + bytes(MAINNET_PAYER)
+                    and MAINNET_PAYER not in (PAUSE, FEE_PAYER), "Unexpected program upgrade authority.")
         data = programdata["data"][45:]
     return "0x" + hashlib.sha256(data).hexdigest()
 
 
 def main():
+    from exit_precheck import (accounts, agreement, archive_cmd, bootstrap_history, bootstrap_state,
+                               check_certificate, committee, guest_segment, inspect_vault, records, signed_header)
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument(
@@ -211,6 +218,11 @@ def main():
         action="store_true",
         help="orchestrator only, requires six governed series reads",
     )
+    ap.add_argument("--binary", type=Path, required=True, help="reviewed replay binary")
+    ap.add_argument("--archive", type=Path, required=True, help="writable scratch archive at height 1753")
+    ap.add_argument("--witness-store", type=Path, help="refreshed scratch archive when RPC witness export is unavailable")
+    ap.add_argument("--integrity-file", type=Path, help="mount archive integrity file read-only")
+    ap.add_argument("--init-signature", help="finalized signature for historical recovery")
     args = ap.parse_args()
     c = ExitCluster(MAINNET_PAYER)
     profile = read(PROFILE)
@@ -220,25 +232,32 @@ def main():
         and profile_code(c, TOKEN) == profile["token_runtime_code_hash"],
         "deployed program hash changed",
     )
-    activation = read(STATE / "mainnet/activation.json")
-    if activation["profile_hash"] != POLICY:
-        candidates = [
-            read(p) for p in (STATE / "mainnet").glob("activation-revision-*.json")
-        ]
-        activation = next(a for a in candidates if a["profile_hash"] == POLICY)
+    vault = inspect_vault(c)
+    head = fleet()
     rows = six(trusted)
-    require(all(r == rows[0] for r in rows), "checkpoint disagreement")
-    bucket = next(
-        b
-        for b in rpc(0, "vault_bridge_status", asset_id=ASSET)["buckets"]
-        if b["bucket_id"] == BUCKET
-    )
-    config = config_from_records(activation, profile, rows[0], bucket)
+    anchor_row = agreement(rows)
+    cert = archive_cmd(args,args.archive,"verify-finalized-checkpoint")
+    check_certificate(cert, anchor_row, committee(signed_header(args, cert, anchor_row["parent"])))
+    inputs = six(records)
+    agreed = agreement(inputs)
+    config = config_from_records(agreed["activation"], profile, anchor_row, agreed["bucket"])
+    guest = guest_segment(args, anchor_row, head["block_height"], args.output.parent/"guest")
     ix = build_initialize(config, c.owner)
+    require(config == read(CONFIG) and hashlib.sha256(ix.data).hexdigest() ==
+            "bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4", "Unreviewed bootstrap bytes.")
     anchor = ix.accounts[3].pubkey
-    require(
-        not c.account(LIGHT) and not c.account(anchor), "bootstrap PDAs already exist"
-    )
+    evidence = dict(vault=vault, fleet_height=head["block_height"], anchors=rows, certificate=cert, inputs=inputs,
+                    guest=guest, config=config, accounts=[str(a.pubkey) for a in ix.accounts], instruction_hex=ix.data.hex())
+    def recover(sig=None):
+        slot, current = accounts(c,[LIGHT,anchor])
+        if bootstrap_state(config,current) == "initialized":
+            history=bootstrap_history(c,ix,sig or args.init_signature)
+            save(args.output,dict(evidence,signature=history,finalized_readback=True,slot=slot))
+            return True
+        return False
+    if recover():
+        print("Verified both initialized accounts and the finalized tag-3 transaction.")
+        return
     block = Hash.from_string(
         c.call("getLatestBlockhash", c.level)["value"]["blockhash"]
     )
@@ -260,11 +279,9 @@ def main():
         ),
     )
     record = dict(
-        config=config,
+        **evidence,
         fee_lamports=fee,
         rent_lamports=rent,
-        accounts=[str(a.pubkey) for a in ix.accounts],
-        instruction_hex=ix.data.hex(),
         simulation=sim,
     )
     save(args.output, record)
@@ -281,21 +298,17 @@ def main():
         governed = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
         require(
             all(
-                r["active"] and r["profile_hash"] == EXIT and r["profile"] == profile
+                r["profile_hash"] == EXIT and r["profile"] == profile
                 for r in governed
             ),
             "waiting for governed series on six validators",
         )
+        inspect_vault(c)
         c.unlock(DIRECTORY / "mainnet-payer.json")
         deployment = load(DIRECTORY / "egress-verifier.json")
         require(deployment.pubkey() == VERIFIER, "incorrect program signer")
         sig = c.send("egress.initialize", [ix], deployment)
-        require(
-            c.account(LIGHT)["data"] == expected_light(config)
-            and c.account(anchor)["data"].hex() == config["initial_committee"],
-            "finalized bootstrap readback differs",
-        )
-        save(args.output, dict(record, signature=sig, finalized_readback=True))
+        require(recover(sig), "Waiting for finalized bootstrap readback.")
     print(f"Simulation passed. Rent {rent} lamports, fee {fee} lamports.")
 
 
