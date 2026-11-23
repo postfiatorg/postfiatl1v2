@@ -2,7 +2,6 @@
 
 **Historical evidence.** The original milestone measurements and artifact inventory tested L1 profile 1, including the public PFT payer for issued spends. Issued payments and exits now use profile 2.
 
-
 **Release held.** The candidate verified the full R64 archive and the fresh six-validator history. The M4 node rejected the signed height-2 amendment while validating the fresh five-block pre-activation prefix. A live activation height requires a compatible upgrade path, independent review and a founder decision. [External review package](external-review-package.md)
 
 | Input | Exact revision or SHA-256 |

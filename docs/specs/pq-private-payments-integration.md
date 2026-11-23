@@ -2,7 +2,6 @@
 
 **Rehearsal archive compatibility.** Archives from rehearsal builds before this change that contain issued private spends cannot be replayed; no live chain is affected. The decoder refuses the original public-payer format for issued payments and exits.
 
-
 Build on **`public/main`** (design baseline `071b6dc461`). Import the PFSH02 source and fixtures from
 `feat/peel-binius-shielded-pq` (tool baseline `d76e5a8c6`, spec baseline `dd9be3ba9`). Reconcile any
 subsequent tool or spec corrections against those vectors before pinning. The Orchard transfer diff is a map
@@ -52,6 +51,8 @@ parse, retry and scanner tests below.
 
 Merge milestones in order. M2–M4 can merge with production activation absent and can exercise their code
 directly in local-chain tests.
+
+Original milestone measurements below cover the standalone fixture and L1 profile 1. Issued-spend measurements from that period include public PFT payer authorization.
 
 ## M1. Finalize one real transfer on a disposable chain · 3–5 days
 

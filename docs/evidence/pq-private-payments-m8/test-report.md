@@ -2,7 +2,6 @@
 
 **Historical evidence.** The original milestone measurements and artifact inventory tested L1 profile 1, including the public PFT payer for issued spends. Issued payments and exits now use profile 2.
 
-
 Coordinator addendum, 23 Nov: item 1 of UNMET below is resolved as expected fail-closed upgrade behaviour (see rehearsal-record.md, Upgrade compatibility; the test now asserts it and passes). Item 4's four failures also fail on main at 071b6dc46 and predate this work.
 
 ```text
