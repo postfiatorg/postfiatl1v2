@@ -74,8 +74,8 @@ It has eight milestones, each tested and merged on its own:
 | M2 | The on-chain transaction format, frozen with test vectors in Rust and Go | Done 22 Nov: 8 byte-exact payment vectors (PFT, pfUSDC, deposits, payments, exits); largest stored payment 146,546 of 149,130 bytes; validators check the proof and deposit signature before voting |
 | M3 | The pool's own ledger state: note trees, nullifiers, root history, tree rollover | Done 22 Nov: separate pool per asset; old notes spendable after two full-tree rollovers; restart, snapshot and genesis replay agree; a real 1,734-block archived chain replays to identical block hashes and state roots |
 | M4 | Deposits signed by the account's ML-DSA-65 key, payments and exits, for PFT and pfUSDC | Done 22 Nov on a test chain: deposit, private payment, partial and full exit for PFT and pfUSDC; supply reconciles at every block (public + private pool + burned fees = 1,000,000,000 PFT) |
-| M5 | Activation height, per-block verification limits, every public submission path | Next |
-| M6 | A wallet that scans for its notes, recovers from backup and pays from the command line | Planned |
+| M5 | Activation height, per-block verification limits, every public submission path | Done 23 Nov in rehearsal: off unless a signed amendment sets a height; blocks before it are invalid; at most 4 payments per block; 25 to 36 ms per payment inside a validator; a six-validator round takes 0.51 to 0.57 s with one payment (0.31 s without) |
+| M6 | A wallet that scans for its notes, recovers from backup and pays from the command line | Next |
 | M7 | The browser wallet flow; moving funds from the old Orchard pool | Planned |
 | M8 | Upgrade rehearsal on a six-validator chain and external review before activation | Planned |
 
