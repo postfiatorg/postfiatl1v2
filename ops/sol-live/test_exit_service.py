@@ -245,6 +245,7 @@ class JobsTest(unittest.TestCase):
             patch.object(payout, "balance", return_value=payout.FLOOR + 10000000),
             patch.object(payout, "available"),
             patch.object(payout, "fleet", return_value=dict(block_height=1755,block_tip_hash="tip",state_root="root")),
+            patch.object(payout, "check_light_path"),
             patch.object(payout.FINALIZED_PATH, "check", side_effect=payout.parent_of),
             patch.object(payout, "rpc", side_effect=rpc),
         ):

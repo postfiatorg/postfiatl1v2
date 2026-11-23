@@ -109,12 +109,15 @@ def main():
         import requests
 
         for _ in range(3):
+            start = parent_of(fleet())
             require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
             status = requests.get(
                 "http://127.0.0.1:18089/solana/withdrawals/readiness/qualify", timeout=600
             )
             status.raise_for_status()
             state = status.json()
+            if start != parent_of(fleet()):
+                continue
             require(
                 state.get("payout_ready") is True
                 and state.get("burns_open") is False

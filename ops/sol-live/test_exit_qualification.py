@@ -69,3 +69,59 @@ class QualificationTest(unittest.TestCase):
         with patch.object(pre,"rpc",return_value=[dict(batch_id="batch",payload_json=payload)]):
             with self.assertRaisesRegex(ValueError,"rotation"):
                 pre.check_unproved_updates(dict(domain,block={"header":h}))
+
+    def test_open_receipts_bind_all_six_to_qualified_parent(self):
+        import exit_govern
+        parent=dict(block_height=17,block_tip_hash="parent",state_root="prev")
+        tx=dict(confirmed=True,receipt=dict(tx_id="id",accepted=True),
+                block={"header":{"height":18,"parent_hash":"parent","state_root":"next","block_hash":"hash"}})
+        rows=[tx]*6
+        exit_govern.verify_open_parent(rows,"id",parent)
+        with self.assertRaises(ValueError):
+            exit_govern.verify_open_parent(rows[:5],"id",parent)
+        with self.assertRaises(ValueError):
+            exit_govern.verify_open_parent(rows,"id",dict(parent,block_tip_hash="other"))
+
+    def test_stationary_service_executes_anchor_once(self):
+        import exit_payout as payout
+        import os
+        cfg=setup.read(setup.CONFIG)
+        cert=setup.read(setup.CONFIG.with_name("exit-checkpoint.json"))
+        anchor={"block":{"header":{"block_hash":cfg["initial_checkpoint"],"consensus_v2_commit":{
+            "precommit_qc":{"domain":{"committee_root":cfg["initial_committee"]}}}}},"committee":[]}
+        values=dict(result=cfg["initial_checkpoint"],height=cfg["initial_height"],end=cfg["initial_committee"])
+        head=dict(block_height=cfg["initial_height"],block_tip_hash=cfg["initial_checkpoint"],state_root=cert["checkpoint_state_root"])
+        with tempfile.TemporaryDirectory() as d:
+            file=Path(d)/"witness.json"
+            setup.save(file,anchor)
+            with patch.dict(os.environ,EXIT_ANCHOR_WITNESS=str(file)), patch.object(pre,"execute_guest",return_value=values) as execute:
+                gate=payout.FinalizedPath()
+                self.assertEqual(gate.check(head),head)
+                gate.check(head)
+                execute.assert_called_once()
+
+    def test_stranded_current_checkpoint_cannot_advertise_readiness(self):
+        import exit_payout as payout
+        c=Mock()
+        h=fixture(3,3)["header"]
+        c.account.return_value=dict(owner=str(payout.VERIFIER),data=bytes.fromhex("aa"),executable=False)
+        with patch.object(payout,"read",return_value={"initial_height":1}), patch.object(payout,"checkpoint_pda"), patch.object(payout,"rpc",return_value=[{"header":h},fixture(4,3)]):
+            with self.assertRaisesRegex(ValueError,"successor"):
+                payout.check_light_path(c,3,h["block_hash"],5)
+
+    def test_open_requalifies_if_tip_moves_during_service_scan(self):
+        import exit_govern as g
+        import requests
+        old=dict(block_height=8,block_tip_hash="old",state_root="a",build_git_revision="rev")
+        new=dict(old,block_height=9,block_tip_hash="new",state_root="b")
+        route=dict(active=True,burns_open=True,profile_hash=setup.EXIT)
+        responses=[Mock(),Mock()]
+        responses[0].json.return_value=dict(payout_ready=False)
+        responses[1].json.return_value=dict(payout_ready=True,burns_open=False,bucket_id=setup.BUCKET,qualified_parent=pre.parent_of(new))
+        current=[old]
+        def get(*args,**kw):
+            current[0]=new
+            return responses.pop(0)
+        with patch("sys.argv",["govern","open","--release-height","8","--revision","rev"]), patch.object(g,"fleet",side_effect=lambda:current[0]), patch.object(g,"ethereum"), patch.object(g,"require_closed"), patch.object(g,"six",return_value=[route]*6), patch.object(requests,"get",side_effect=get), patch.object(g,"verify_open_parent"), patch.object(g,"govern",return_value={"tx_id":"id"}) as submit:
+            g.main()
+            submit.assert_called_once_with("exit-open",compatible="rev",qualified_parent=pre.parent_of(new))

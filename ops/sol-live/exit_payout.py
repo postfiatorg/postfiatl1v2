@@ -195,6 +195,12 @@ class FinalizedPath:
             h = witness["block"]["header"]
             require(h["block_hash"] == cfg["initial_checkpoint"] and
                     committee(h) == cfg["initial_committee"], "Wrong anchor witness.")
+            from exit_precheck import execute_guest
+            with tempfile.TemporaryDirectory() as tmp:
+                anchor = execute_guest(witness, Path(tmp))
+            require((anchor["height"], anchor["result"], anchor["end"]) ==
+                    (cfg["initial_height"], cfg["initial_checkpoint"], cfg["initial_committee"]),
+                    "Frozen checker disagrees with the trusted anchor.")
             self.cursor = dict(cfg, height=cfg["initial_height"], block=cfg["initial_checkpoint"],
                                root=cert["checkpoint_state_root"], committee=cfg["initial_committee"])
             self.members = witness["committee"]
@@ -205,6 +211,22 @@ class FinalizedPath:
 
 
 FINALIZED_PATH = FinalizedPath()
+
+
+def check_light_path(c, height, block, tip):
+    require(read(CONFIG)["initial_height"] <= height <= tip, "Light checkpoint outside finalized path.")
+    count = 1 if height == tip else 2
+    page = rpc(0, "blocks", from_height=height, limit=count)
+    require(len(page) == count, "Missing light checkpoint header.")
+    h = page[0]["header"]
+    account = c.account(checkpoint_pda(block))
+    require((h["block_hash"], h["height"]) == (block, height) and account
+            and not account["executable"] and account["owner"] == str(VERIFIER)
+            and account["data"].hex() == committee(h), "Light checkpoint differs from finalized path.")
+    if height < tip:
+        next_h = page[1]["header"]
+        require(next_h["height"] == height + 1 and next_h["parent_hash"] == block
+                and committee(next_h) == committee(h), "Light checkpoint cannot verify its successor.")
 
 
 def readiness():
@@ -254,6 +276,7 @@ def readiness():
         burns_open = all(r.get("burns_open") is True for r in routes)
         message = "Waiting for a compatible finalized committee path."
         qualified = FINALIZED_PATH.check(head)
+        check_light_path(c, latest, anchor, tip)
         require(qualified == parent_of(fleet()), "Tip advanced during qualification.")
         return dict(
             ok=True,
