@@ -1764,6 +1764,9 @@ pub(super) fn check_pq_block<'a>(
                     "pq_settlement_inactive",
                 ));
             }
+            if !batch.atomic {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_atomic_batch_required"));
+            }
             proofs += 1;
             if proofs > postfiat_types::PQ_REHEARSAL_PROOFS {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_block_limit"));

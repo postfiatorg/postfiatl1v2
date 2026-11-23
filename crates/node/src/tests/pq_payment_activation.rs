@@ -73,9 +73,10 @@ fn candidate_height_and_limits_cover_every_batch_and_non_atomic_attempt() {
     g.apply(amendment(&genesis, 6));
     assert!(check(&g, 5, &[&batch, &mixed]).is_err());
     for h in [6, 7] {
-        check(&g, h, &[&batch, &mixed, &mixed]).unwrap();
+        assert_eq!(check(&g, h, &[&mixed]).unwrap_err().to_string(), "pq_atomic_batch_required");
+        check(&g, h, &[&batch, &batch]).unwrap();
         assert_eq!(
-            check(&g, h, &[&batch, &mixed, &batch])
+            check(&g, h, &[&batch, &batch, &batch])
                 .unwrap_err()
                 .to_string(),
             "pq_block_limit"
@@ -161,7 +162,7 @@ fn replay_rejects_preactivation_non_atomic_body_before_receipts() {
                 },
             );
             if configured && h >= 6 {
-                assert_eq!(result.unwrap()[0].code, "pq_settlement_inactive");
+                assert_eq!(result.unwrap_err().to_string(), "pq_atomic_batch_required");
             } else {
                 assert_eq!(result.unwrap_err().to_string(), "pq_settlement_inactive");
             }

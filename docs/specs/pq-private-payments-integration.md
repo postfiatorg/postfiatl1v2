@@ -335,8 +335,7 @@ latter run.
 **Compatibility and admission.** The current block header certifies one batch. The shared meter also
 processes multiple batches in one call, including non-atomic attempts. The signed rehearsal amendment
 enables the pinned disposable genesis only. Its version fixes the L1 profile, native and issued settlement
-terms. The optional signed fee suffix sets the minimum issued spend fee in source-series atoms. The published M2 archive-only issue retains its
-post-activation non-atomic rejection receipt. An absent or paused amendment prevents inclusion of
+terms. The optional signed fee suffix sets the minimum issued spend fee in source-series atoms. Active blocks must use atomic batches for every private payment body. Proposal, commit and replay reject non-atomic inclusion before execution. An absent or paused amendment prevents inclusion of
 `pq_payment_v1`. The gateway uses its first configured validator to resolve a retry to its original record
 before relay. Unconfirmed PQ reservations expire after 64 blocks. Receipts can be queried during a pause.
 

@@ -246,7 +246,6 @@ pub fn create_shielded_atomic_batch(
     let mut actions = Vec::with_capacity(options.source_batch_files.len());
     for source_path in &options.source_batch_files {
         let source = read_shielded_action_batch_file(source_path)?;
-        consensus_artifacts::check_pq_block(&genesis, &governance, execution_height, [&source])?;
         verify_shielded_action_batch_id(&genesis, &source)?;
         if source.atomic {
             return Err(io::Error::new(
