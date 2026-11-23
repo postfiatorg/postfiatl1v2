@@ -296,6 +296,28 @@ def recover(out):
     raise ValueError("Six validators refused proposer role")
 
 
+def burn_debit(report, transaction, tx, *, owner, sequence, bucket, amount, destination):
+    require(report["asset_id"] == ASSET, "Unexpected burn report asset.")
+    matches = [r for r in report["redemptions"] if r["burn_tx_id"] == tx]
+    require(len(matches) == 1, "Unique finalized canary burn not found.")
+    row = matches[0]
+    require(
+        row["owner"] == owner and row["owner_sequence"] == sequence
+        and row["bucket_id"] == bucket and row["amount_atoms"] == amount
+        and row["destination_ref"] == destination,
+        "Canary burn debit differs from the reviewed withdrawal.",
+    )
+    receipt, header = transaction["receipt"], transaction["block"]["header"]
+    require(
+        transaction["confirmed"] is True and receipt["accepted"] is True
+        and receipt["tx_id"] == tx and header["height"] == row["created_at_height"],
+        "Wrong finalized burn receipt.",
+    )
+    return dict(height=header["height"], block_hash=header["block_hash"],
+                state_root=header["state_root"], receipt=receipt,
+                amount_atoms=row["amount_atoms"], packet=row["withdrawal_packet_hash"])
+
+
 def check(out):
     plan = read(out / "plan.json")
     from exit_precheck import agreement
@@ -303,28 +325,11 @@ def check(out):
     tx = verified_burn_id((out / "signed.json").read_text(), plan["fields"])
 
     def verify_debit(i):
-        # A successful burn writes this redemption and subtracts its amount
-        # from the owner's selected series in the same execution transition.
-        rows = rpc(i, "vault_bridge_status", asset_id=ASSET)["redemptions"]
-        matches = [r for r in rows if r["burn_tx_id"] == tx]
-        require(len(matches) == 1, "Unique finalized canary burn not found.")
-        row = matches[0]
-        require(
-            row["owner"] == OWNER and row["owner_sequence"] == plan["fields"]["sequence"]
-            and row["asset_id"] == ASSET and row["bucket_id"] == BUCKET
-            and row["amount_atoms"] == 20000 and row["destination_ref"] == DEST,
-            "Canary burn debit differs from the reviewed withdrawal.",
+        return burn_debit(
+            rpc(i, "vault_bridge_status", asset_id=ASSET), rpc(i, "tx", tx_id=tx), tx,
+            owner=OWNER, sequence=plan["fields"]["sequence"], bucket=BUCKET,
+            amount=20000, destination=DEST,
         )
-        result = rpc(i, "tx", tx_id=tx)
-        receipt, header = result["receipt"], result["block"]["header"]
-        require(
-            result["confirmed"] is True and receipt["accepted"] is True
-            and receipt["tx_id"] == tx and header["height"] == row["created_at_height"],
-            "Wrong finalized burn receipt.",
-        )
-        return dict(height=header["height"], block_hash=header["block_hash"],
-                    state_root=header["state_root"], receipt=receipt,
-                    amount_atoms=row["amount_atoms"], packet=row["withdrawal_packet_hash"])
 
     fleet()
     confirmations = six(verify_debit)
