@@ -523,9 +523,13 @@ pub(super) fn private_pool_snapshot_from(
     snapshot: &FinalizedPairSnapshot,
 ) -> io::Result<PrivatePoolSnapshotReport> {
     let pool = snapshot_pool(&snapshot, &options.pool_id);
-    let inclusion_height = options
-        .inclusion_height
-        .unwrap_or_else(|| snapshot.tip.height.saturating_add(1));
+    let next_height = snapshot.tip.height.saturating_add(1);
+    let inclusion_height = options.inclusion_height.unwrap_or(next_height);
+    if options.pool_id == postfiat_types::pq_payment::POOL_ID && inclusion_height != next_height {
+        return Err(invalid_input(
+            "PQ fee quotes require finalized height plus one",
+        ));
+    }
     let (base_asset_id, quote_asset_id) = match (&options.base_asset_id, &options.quote_asset_id) {
         (Some(base), Some(quote)) => (Some(base.clone()), Some(quote.clone())),
         (None, None) => match snapshot.ledger.pftl_uniswap_routes.as_slice() {

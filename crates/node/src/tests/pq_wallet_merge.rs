@@ -317,6 +317,18 @@ fn pq_wallet_pages_pin_real_disk_history_after_another_commit() {
         .unwrap()
     };
     assert!(f.apply(&[vector("pft-shield")]).unwrap()[0].accepted);
+    assert!(
+        private_pool_snapshot(PrivatePoolSnapshotOptions {
+            data_dir: f.dir.clone(),
+            pool_id: pq::POOL_ID.into(),
+            address: None,
+            base_asset_id: None,
+            quote_asset_id: None,
+            inclusion_height: Some(0),
+        })
+        .is_err(),
+        "PQ quotes only support the next block"
+    );
     let old = snapshot();
     let first = page(&old.snapshot_token, "pq_pairs", None);
     assert_eq!(first.item_count, 1);
