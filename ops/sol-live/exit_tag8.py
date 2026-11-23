@@ -8,7 +8,7 @@ from solders.hash import Hash
 from solders.message import Message
 from solders.transaction import Transaction
 
-from exit_precheck import checkpoint_values
+from exit_precheck import checkpoint_values, light_fields
 from exit_proof import prove
 from exit_payout import cluster, funded_send, upload
 from exit_setup import (
@@ -20,7 +20,6 @@ from exit_setup import (
     VERIFIER,
     Instruction,
     checkpoint_pda,
-    expected_light,
     pk,
     read,
     require,
@@ -82,6 +81,24 @@ def simulate(c, values, proof, buffer, light):
     return reply
 
 
+def require_forward(c, cfg, light, values):
+    height, block = light_fields(cfg, light)
+    require(
+        values["prior"] == block
+        and values["height"] > height
+        and not light["data"][-1],
+        "A forward witness from the current unpaused checkpoint is required.",
+    )
+    cp = c.account(checkpoint_pda(block))
+    require(
+        cp
+        and not cp["executable"]
+        and cp["owner"] == str(VERIFIER)
+        and cp["data"].hex() == values["start"],
+        "Current checkpoint committee differs.",
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["stage", "simulate", "reclaim"])
@@ -91,20 +108,10 @@ def main():
     raw = (args.guest / "public-values.bin").read_bytes()
     values = checkpoint_values(raw)
     cfg = read(CONFIG)
-    require(
-        values["prior"] == cfg["initial_checkpoint"]
-        and values["start"] == cfg["initial_committee"]
-        and values["height"] > cfg["initial_height"],
-        "A forward witness from the trusted block is required.",
-    )
     c = ExitCluster(FEE_PAYER) if args.action == "simulate" else cluster()
-    light = c.account(LIGHT)
-    require(
-        light
-        and light["owner"] == str(VERIFIER)
-        and light["data"] == expected_light(cfg),
-        "Expected initialized light client.",
-    )
+    if args.action != "reclaim":
+        light = c.account(LIGHT)
+        require_forward(c, cfg, light, values)
     args.work.mkdir(mode=0o700, parents=True, exist_ok=True)
     if args.action == "stage":
         data, proof = prove("checkpoint", read(args.guest / "witness.json"), args.work)

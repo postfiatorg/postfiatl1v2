@@ -57,3 +57,30 @@ class ExitKeysTest(unittest.TestCase):
             s.check_payout_authorities(c)
         c.call.return_value = {"value": [loader(s.MAINNET_PAYER)] * 2}
         s.check_payout_authorities(c)
+
+    def test_offline_challenges_require_both_reviewed_roles(self):
+        import exit_setup as setup
+        from solders.keypair import Keypair
+        from solders.signature import Signature
+        from solders.pubkey import Pubkey
+
+        fee, pause = Keypair(), Keypair()
+        with (
+            patch.object(setup, "FEE_PAYER", fee.pubkey()),
+            patch.object(setup, "PAUSE", pause.pubkey()),
+            patch.object(setup, "load", side_effect=[fee, pause, fee, fee]),
+        ):
+            cfg = dict(
+                setup.read(setup.CONFIG), pause_authority=bytes(pause.pubkey()).hex()
+            )
+            result = setup.prove_roles(cfg)
+            self.assertEqual(set(result["roles"]), {"fee_payer", "pause_authority"})
+            for role in result["roles"].values():
+                self.assertTrue(
+                    Signature.from_string(role["signature"]).verify(
+                        Pubkey.from_string(role["address"]),
+                        bytes.fromhex(role["challenge_hex"]),
+                    )
+                )
+            with self.assertRaises(ValueError):
+                setup.prove_roles(cfg)

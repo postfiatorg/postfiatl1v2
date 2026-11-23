@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import tempfile
 from solders.transaction import Transaction
 
 from solders.compute_budget import set_compute_unit_limit
@@ -21,6 +22,7 @@ from exit_setup import (
     EXIT,
     LIGHT,
     FEE_PAYER,
+    fleet,
     check_payout_authorities,
     ExitCluster,
     MINT,
@@ -44,13 +46,12 @@ from exit_setup import (
     six,
 )
 from exit_segments import (
-    RotationScan,
     public_checkpoint,
     select_target,
     validate_segment,
     committee,
 )
-from exit_precheck import inspect_vault
+from exit_precheck import inspect_vault, token_atoms, parent_of, qualify_path
 from exit_proof import available, prove
 
 ATA = pk("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
@@ -103,12 +104,10 @@ def funded_send(c, label, instructions, *signers, rent=0, before_send=None):
     balance(c, rent + fee)
     if before_send is None:
         require(label != "exit.withdrawal", "Withdrawal journal is required.")
-        return c.send(label, instructions, *signers)
-    tx = Transaction.new_signed_with_payer(
-        instructions, c.owner, [c.payer, *signers], block
-    )
+    tx = Transaction([c.payer, *signers], message, block)
     sig = str(tx.signatures[0])
-    before_send(sig, recent["lastValidBlockHeight"])
+    if before_send is not None:
+        before_send(sig, recent["lastValidBlockHeight"])
     result = c.call(
         "sendTransaction",
         base64.b64encode(bytes(tx)).decode(),
@@ -158,9 +157,19 @@ def shared_liabilities(buckets, domain):
     return total
 
 
-def payout_budget(c, distance):
-    # Even if committee changes shorten each checkpoint to one block, admission covers the full path.
-    proofs = 1 + max(0, distance - 65)
+def proof_count(latest, burn_height, finalized):
+    count = 1
+    while burn_height - latest > 65:
+        target = select_target(latest, rpc, end=min(latest + 65, finalized - 1))
+        require(
+            latest < target["height"] <= latest + 65, "Invalid checkpoint selection."
+        )
+        latest = target["height"]
+        count += 1
+    return count
+
+
+def payout_budget(c, proofs):
     block = Hash.from_string(
         c.call("getLatestBlockhash", c.level)["value"]["blockhash"]
     )
@@ -172,10 +181,81 @@ def payout_budget(c, distance):
     ]
     require(isinstance(fee, int) and fee > 0, "Solana fee quote unavailable.")
     # Allocate, upload up to three chunks, consume and reclaim. Charge two signatures throughout.
-    return proofs * (6 * fee + c.rent(48) + c.rent(2048)) + c.rent(1) + c.rent(165)
+    return proofs * (6 * fee + c.rent(48)) + c.rent(2048) + c.rent(1) + c.rent(165)
 
 
-ROTATIONS = RotationScan()
+class FinalizedPath:
+    def __init__(self):
+        self.cursor = None
+        self.members = None
+
+    def check(self, head):
+        if self.cursor is None:
+            cfg = read(CONFIG)
+            cert = read(CONFIG.with_name("exit-checkpoint.json"))
+            witness = read(Path(os.environ["EXIT_ANCHOR_WITNESS"]))
+            h = witness["block"]["header"]
+            require(
+                h["block_hash"] == cfg["initial_checkpoint"]
+                and committee(h) == cfg["initial_committee"],
+                "Wrong anchor witness.",
+            )
+            from exit_precheck import execute_guest
+
+            with tempfile.TemporaryDirectory() as tmp:
+                anchor = execute_guest(witness, Path(tmp))
+            require(
+                (anchor["height"], anchor["result"], anchor["end"])
+                == (
+                    cfg["initial_height"],
+                    cfg["initial_checkpoint"],
+                    cfg["initial_committee"],
+                ),
+                "Frozen checker disagrees with the trusted anchor.",
+            )
+            self.cursor = dict(
+                cfg,
+                height=cfg["initial_height"],
+                block=cfg["initial_checkpoint"],
+                root=cert["checkpoint_state_root"],
+                committee=cfg["initial_committee"],
+            )
+            self.members = witness["committee"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = qualify_path(self.members, self.cursor, head, Path(tmp))
+        self.cursor, self.members = path["cursor"], path["members"]
+        return path["qualified_parent"]
+
+
+FINALIZED_PATH = FinalizedPath()
+
+
+def check_light_path(c, height, block, tip):
+    require(
+        read(CONFIG)["initial_height"] <= height <= tip,
+        "Light checkpoint outside finalized path.",
+    )
+    count = 1 if height == tip else 2
+    page = rpc(0, "blocks", from_height=height, limit=count)
+    require(len(page) == count, "Missing light checkpoint header.")
+    h = page[0]["header"]
+    account = c.account(checkpoint_pda(block))
+    require(
+        (h["block_hash"], h["height"]) == (block, height)
+        and account
+        and not account["executable"]
+        and account["owner"] == str(VERIFIER)
+        and account["data"].hex() == committee(h),
+        "Light checkpoint differs from finalized path.",
+    )
+    if height < tip:
+        next_h = page[1]["header"]
+        require(
+            next_h["height"] == height + 1
+            and next_h["parent_hash"] == block
+            and committee(next_h) == committee(h),
+            "Light checkpoint cannot verify its successor.",
+        )
 
 
 def readiness():
@@ -195,7 +275,13 @@ def readiness():
         c = cluster()
         latest, anchor = light(c)
         message = "Relayer cannot fund the payout above its balance floor."
-        budget = payout_budget(c, max(r["current_height"] for r in routes) + 1 - latest)
+        head = fleet()
+        tip = head["block_height"]
+        require(
+            all(r["current_height"] == tip for r in routes),
+            "Descriptor and tip differ.",
+        )
+        budget = payout_budget(c, proof_count(latest, tip + 1, tip))
         lamports = balance(c, budget)
         message = "Withdrawal prover unavailable."
         available()
@@ -221,15 +307,16 @@ def readiness():
         )
         burns_open = all(r.get("burns_open") is True for r in routes)
         message = "Waiting for a compatible finalized committee path."
-        compatible = ROTATIONS.check(
-            rpc, latest, anchor, max(r["current_height"] for r in routes)
-        )
+        qualified = FINALIZED_PATH.check(head)
+        check_light_path(c, latest, anchor, tip)
+        require(qualified == parent_of(fleet()), "Tip advanced during qualification.")
         return dict(
             ok=True,
-            ready=compatible and burns_open,
-            payout_ready=compatible,
+            ready=burns_open,
+            payout_ready=True,
             accepting_jobs=True,
-            message=None if compatible else message,
+            qualified_parent=qualified,
+            message=None,
             burns_open=burns_open,
             required_custody_atoms=str(required_atoms),
             payout_budget_lamports=budget,
@@ -286,7 +373,7 @@ def matches_payout(c, key, sig):
     )
 
 
-def signature(c, burn, known=None):
+def signature(c, burn, known=None, *, history_limit=100):
     key = marker(burn)
     account = c.account(key)
     if not account or (account["owner"] == str(SYSTEM) and not account["data"]):
@@ -299,8 +386,10 @@ def signature(c, burn, known=None):
     try:
         if known and matches_payout(c, key, known):
             return known
-        history = c.call("getSignaturesForAddress", str(key), dict(c.level, limit=100))
-        for row in history:
+        history = c.call(
+            "getSignaturesForAddress", str(key), dict(c.level, limit=history_limit)
+        )
+        for row in history[:history_limit]:
             if row["err"] is None and matches_payout(c, key, row["signature"]):
                 return row["signature"]
     except (RuntimeError, OSError, KeyError, ValueError, TypeError):
@@ -412,7 +501,103 @@ def check_work_capacity(work):
     )
 
 
+def rent_shortfall(c, account, size, owner):
+    if account is None:
+        return c.rent(size)
+    require(not account["executable"], "Unexpected executable account.")
+    if account["owner"] == str(SYSTEM) and not account["data"]:
+        return max(0, c.rent(size) - account["lamports"])
+    require(
+        account["owner"] == str(owner) and len(account["data"]) == size,
+        "Unexpected allocated account.",
+    )
+    return 0
+
+
+def finalized_reclaim(c, buffer):
+    import base58
+
+    history = c.call("getSignaturesForAddress", str(buffer), dict(c.level, limit=1))
+    if not history or history[0]["err"] is not None:
+        return False
+    sig = history[0]["signature"]
+    tx = c.call(
+        "getTransaction",
+        sig,
+        dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
+    )
+    if (
+        not tx
+        or tx["meta"]["err"] is not None
+        or tx["transaction"]["signatures"][0] != sig
+    ):
+        return False
+    msg = tx["transaction"]["message"]
+    keys = msg["accountKeys"]
+    return any(
+        keys[ix["programIdIndex"]] == str(VERIFIER)
+        and [keys[i] for i in ix["accounts"]] == [str(buffer), str(c.owner)]
+        and base58.b58decode(ix["data"]) == b"\x06"
+        for ix in msg["instructions"]
+    )
+
+
+def reclaim_completed(c, work):
+    from exit_precheck import checkpoint_values
+
+    def completed(raw):
+        try:
+            values = checkpoint_values(raw)
+        except ValueError:
+            return False
+        result = c.account(checkpoint_pda(values["result"]))
+        return (
+            result
+            and result["owner"] == str(VERIFIER)
+            and result["data"].hex() == values["end"]
+        )
+
+    for cache in work.glob("[a-f0-9]" * 64):
+        native = cache / "native-public-values.bin"
+        if (
+            cache.is_dir()
+            and not cache.is_symlink()
+            and native.is_file()
+            and not native.is_symlink()
+            and native.stat().st_size <= 2048
+            and completed(native.read_bytes())
+        ):
+            shutil.rmtree(cache)
+    for path in work.glob("*.key"):
+        signer = load(path)
+        account = c.account(signer.pubkey())
+        if account is None:
+            # An allocation may still be in flight. Only a finalized close proves this key retired.
+            if finalized_reclaim(c, signer.pubkey()):
+                path.unlink()
+            continue
+        if account["owner"] != str(VERIFIER):
+            continue
+        raw = account["data"]
+        if hashlib.sha256(raw).hexdigest() != path.stem:
+            continue
+        if not completed(raw):
+            continue
+        funded_send(
+            c,
+            "exit.reclaim",
+            [Instruction(VERIFIER, b"\x06", [rw(signer.pubkey(), True), rw(c.owner)])],
+            signer,
+        )
+        if c.account(signer.pubkey()) is None:
+            path.unlink()
+
+
 def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
+    if owner is not None:
+        ata = pda(ATA, bytes(owner), bytes(TOKEN), bytes(MINT))
+        token_atoms(c.account(ata), owner, allow_empty=True)
+    reclaim_completed(c, work)
     check_work_capacity(work)
     vals, proof = prove(kind, witness, work)
     require(0 < len(vals) <= 2048 and len(proof) == 356, "Invalid proof size.")
@@ -431,11 +616,14 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
         ro(buf),
         ro(SYSTEM),
     ]
-    rent = 0 if c.account(result) else c.rent(48)
+    rent = rent_shortfall(c, c.account(result), 48, VERIFIER)
     ixs = [set_compute_unit_limit(400_000)]
     if owner is not None:
-        ata = pda(ATA, bytes(owner), bytes(TOKEN), bytes(MINT))
-        rent += c.rent(1) + (0 if c.account(ata) else c.rent(165))
+        destination = c.account(ata)
+        token_atoms(destination, owner, allow_empty=True)
+        burn_marker = marker(witness["receipt"]["tx_id"])
+        rent += rent_shortfall(c, c.account(burn_marker), 1, VERIFIER)
+        rent += rent_shortfall(c, destination, 165, TOKEN)
         ixs.append(
             Instruction(
                 ATA,
@@ -452,7 +640,7 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
         )
         accounts.extend(
             [
-                rw(marker(witness["receipt"]["tx_id"])),
+                rw(burn_marker),
                 ro(VAULT),
                 ro(pda(VERIFIER, b"egress-release", bytes(VAULT))),
                 ro(pda(VAULT, b"config")),

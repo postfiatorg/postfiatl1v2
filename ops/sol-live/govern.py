@@ -104,10 +104,19 @@ def recover(profile):
     return None
 
 
-def govern(kind, profile=None, compatible=None):
+class ParentChanged(RuntimeError):
+    """Qualification expired before submitting the round."""
+
+
+def govern(kind, profile=None, compatible=None, *, qualified_parent=None):
     head = fleet()
     if head["build_git_revision"] != (compatible or R6):
         raise RuntimeError("waiting for compatible six-validator release")
+    if kind == "exit-open":
+        from exit_precheck import parent_of
+
+        if parent_of(head) != qualified_parent:
+            raise ParentChanged("Fresh parent qualification required.")
     h = head["block_height"] + 1
     local = STATE / "governance" / f"{kind}-{h}-{time.time_ns()}"
     local.mkdir(mode=0o700, parents=True)
@@ -235,6 +244,8 @@ def govern(kind, profile=None, compatible=None):
         )
         return get(i, "auth")
 
+    if kind == "exit-open" and parent_of(fleet()) != qualified_parent:
+        raise ParentChanged("Parent changed before signing.")
     with ThreadPoolExecutor(6) as pool:
         auth = list(pool.map(sign, range(6)))
     for i, a in enumerate(auth):
@@ -284,7 +295,7 @@ def govern(kind, profile=None, compatible=None):
     if prop:
         put(prop, "batch", get(0, "batch"))
     if fleet()["block_tip_hash"] != head["block_tip_hash"]:
-        raise RuntimeError("tip advanced during signing")
+        raise ParentChanged("tip advanced during signing")
     txid = signed.get("amendment_id") or signed["amendment"]["amendment_id"]
     print(f"{kind} height={h} proposer={prop} tx_id={txid}", flush=True)
     tool(

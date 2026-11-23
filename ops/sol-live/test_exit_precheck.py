@@ -45,9 +45,12 @@ class BootstrapTests(unittest.TestCase):
             altered[idx] = acc(altered[idx]["owner"], data)
             c.call.return_value = dict(context={"slot": 42}, value=altered)
             with self.assertRaises(ValueError):
-                inspect_vault(c)
+                inspect_vault(c, PHANTOM)
         c.call.return_value = dict(context={"slot": 43}, value=rows)
-        self.assertEqual(inspect_vault(c)["slot"], 43)
+        self.assertEqual(inspect_vault(c, PHANTOM)["slot"], 43)
+        c.call.return_value = dict(context={"slot": 44}, value=rows[:3])
+        self.assertEqual(inspect_vault(c)["slot"], 44)
+        self.assertEqual(len(c.call.call_args.args[1]), 3)
         self.assertEqual(c.call.call_args.args[2]["commitment"], "finalized")
 
     def test_six_way_and_archive_committee_gate(self):
@@ -134,3 +137,59 @@ class BootstrapTests(unittest.TestCase):
         tx["transaction"]["signatures"][0] = "different"
         with self.assertRaises(ValueError):
             bootstrap_history(c, ix, "given")
+
+    def test_advanced_bootstrap_recovers_history_and_checks_current_checkpoint(self):
+        import exit_precheck as pre
+        from unittest.mock import patch
+
+        cfg = s.read(s.CONFIG)
+        ix = s.build_initialize(cfg, s.MAINNET_PAYER)
+        root = "ee" * 48
+        block = "ab" * 48
+        height = cfg["initial_height"] + 2
+
+        def acc(data):
+            return dict(owner=str(s.VERIFIER), executable=False, data=data)
+
+        light = acc(
+            s.expected_light(cfg)[:-57]
+            + bytes.fromhex(block)
+            + height.to_bytes(8, "little")
+            + b"\0"
+        )
+        original = acc(bytes.fromhex(cfg["initial_committee"]))
+        current = acc(bytes.fromhex(root))
+        h = dict(
+            height=height,
+            block_hash=block,
+            consensus_v2_commit={"precommit_qc": {"domain": {"committee_root": root}}},
+        )
+        with (
+            patch.object(
+                pre,
+                "accounts",
+                side_effect=lambda c, keys: (
+                    70,
+                    [light, original, current][: len(keys)],
+                ),
+            ),
+            patch.object(pre, "bootstrap_history", return_value="sig") as history,
+            patch.object(pre, "six", return_value=[[{"header": h}]] * 6),
+        ):
+            state = pre.recover_bootstrap(Mock(), cfg, ix, "sig")
+            self.assertEqual(
+                (
+                    state["signature"],
+                    state["height"],
+                    state["block"],
+                    state["committee"],
+                ),
+                ("sig", height, block, root),
+            )
+            history.assert_called_once()
+            current["data"] = bytes(48)
+            with self.assertRaises(ValueError):
+                pre.recover_bootstrap(Mock(), cfg, ix, "sig")
+            light["data"] = b"x" + light["data"][1:]
+            with self.assertRaises(ValueError):
+                pre.recover_bootstrap(Mock(), cfg, ix, "sig")

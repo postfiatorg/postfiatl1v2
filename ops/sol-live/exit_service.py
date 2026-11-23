@@ -11,7 +11,7 @@ import sqlite3
 import threading
 import time
 
-from collections import deque
+from collections import deque, OrderedDict
 from exit_payout import (
     CheckpointAdvanced,
     UnknownBurn,
@@ -58,6 +58,11 @@ class Journal:
                 raise ValueError("Missing journal generation. Rebuild required.")
         self.worker_ok = True
         self.last_prune = 0
+        self.last_buffer_job = ""
+        self.marker_cache = OrderedDict()
+        self.marker_lock = threading.Lock()
+        self.refresh_slot = threading.BoundedSemaphore(1)
+        self.refresh_rate = Admissions()
         with closing(self.connect()) as db:
             db.execute("""CREATE TABLE IF NOT EXISTS jobs (
                 burn_tx_id TEXT PRIMARY KEY, stage TEXT NOT NULL, detail TEXT, error TEXT,
@@ -79,6 +84,13 @@ class Journal:
             db.execute("BEGIN IMMEDIATE")
             db.execute("SELECT stage FROM jobs LIMIT 1").fetchone()
             db.rollback()
+
+    def has_capacity(self):
+        with closing(self.connect()) as db:
+            total, active = db.execute(
+                "SELECT count(*), count(*) FILTER (WHERE stage NOT IN ('paid','failed')) FROM jobs"
+            ).fetchone()
+        return total < 1280 and active < 32
 
     def attempt(self, burn):
         with closing(self.connect()) as db:
@@ -211,27 +223,55 @@ def public_row(row):
     return value
 
 
-def chain_payment(burn, known=None):
-    return signature(cluster(), burn, known)
+def chain_payment(burn, known=None, *, history_limit=100):
+    return signature(cluster(), burn, known, history_limit=history_limit)
 
 
 def checked_row(journal, burn):
     row = journal.get(burn)
-    if row and row["stage"] == "paid":
+    if not row or row["stage"] != "paid":
+        return row
+    with journal.marker_lock:
+        cached = journal.marker_cache.get(burn)
+        if cached and time.monotonic() < cached[0]:
+            return cached[1]
+    if not journal.refresh_slot.acquire(blocking=False):
+        if cached:
+            return cached[1]
+        raise RuntimeError("Settlement refresh busy.")
+    try:
+        # Another handler may have finished between the first lookup and acquisition.
+        with journal.marker_lock:
+            cached = journal.marker_cache.get(burn)
+            if cached and time.monotonic() < cached[0]:
+                return cached[1]
+        if not journal.refresh_rate.take():
+            if cached:
+                return cached[1]
+            raise RuntimeError("Settlement refresh limit reached.")
         known = row["solana_tx"] or (journal.attempt(burn) or (None,))[0]
-        result = chain_payment(burn, known)
-        if result is PAID_NO_HISTORY and known:
-            return dict(
-                row, solana_tx=None, detail="Finalized marker. Signature unavailable."
-            )
+        result = chain_payment(burn, known, history_limit=4)
         if result is None:
             journal.update(burn, "queued", solana_tx=None, detail=None, error=None)
+            return journal.get(burn)
+        if result is PAID_NO_HISTORY and known:
+            verified = dict(
+                row, solana_tx=None, detail="Finalized marker. Signature unavailable."
+            )
         else:
             finish_payment(
                 lambda stage, **kw: journal.update(burn, stage, **kw), result
             )
-        return journal.get(burn)
-    return row
+            verified = journal.get(burn)
+        expiry = time.monotonic() + 300 if result is PAID_NO_HISTORY else float("inf")
+        with journal.marker_lock:
+            journal.marker_cache[burn] = (expiry, verified)
+            journal.marker_cache.move_to_end(burn)
+            if len(journal.marker_cache) > 1280:
+                journal.marker_cache.popitem(last=False)
+        return verified
+    finally:
+        journal.refresh_slot.release()
 
 
 def redemptions():
@@ -325,13 +365,23 @@ def prune_terminal(journal, directory, retain=1024):
             (retain,),
         ).fetchall()
     burns = {r["burn_tx_id"]: r["stage"] for r in rows}
-    # Also recover rent stranded after a confirmed payout, even inside the retention window.
-    for path in directory.glob("[0-9a-f]" * 96):
+    # Rotate through retained work even when a different due job needs its rent.
+    paths = sorted(
+        p
+        for p in directory.glob("[0-9a-f]" * 96)
+        if p.name not in burns and not p.is_symlink() and p.is_dir()
+    )
+    if paths:
+        path = next((p for p in paths if p.name > journal.last_buffer_job), paths[0])
+        journal.last_buffer_job = path.name
         row = journal.get(path.name)
-        if row and row["stage"] == "paid" and path.name not in burns:
+        if row and row["stage"] == "paid":
             if chain_payment(path.name, row["solana_tx"]):
                 prune_work(cluster(), path, reclaim=True)
-            break
+        elif row and any(path.glob("*.key")):
+            from exit_payout import reclaim_completed
+
+            reclaim_completed(cluster(), path)
     for burn, stage in burns.items():
         if not BURN.fullmatch(burn):
             raise ValueError("Invalid journal entry. Rebuild required.")
@@ -394,7 +444,7 @@ def local_healthy(server):
     return True
 
 
-def service_readiness(server):
+def service_readiness(server, *, fresh=False):
     if not local_healthy(server):
         return dict(
             ok=True,
@@ -402,8 +452,12 @@ def service_readiness(server):
             payout_ready=False,
             message="Withdrawal worker or journal unavailable.",
         )
+    if not server.journal.has_capacity():
+        return dict(
+            ok=True, ready=False, payout_ready=False, message="Withdrawal queue full."
+        )
     with server.ready_lock:
-        if time.monotonic() >= server.valid_until:
+        if fresh or time.monotonic() >= server.valid_until:
             server.ready = readiness()
             server.valid_until = time.monotonic() + 5
         return server.ready
@@ -468,6 +522,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        if self.path == BASE + "/readiness/qualify":
+            return self.reply(200, service_readiness(self.server, fresh=True))
         if self.path == BASE + "/readiness":
             return self.reply(200, service_readiness(self.server))
         prefix = BASE + "/"
@@ -508,9 +564,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(
                     429, dict(error="Withdrawal admission rate exceeded.")
                 )
-            status = service_readiness(self.server)
-            if not status.get("accepting_jobs", status.get("payout_ready")):
-                return self.reply(503, dict(error="Withdrawal worker unavailable."))
             red = next(
                 (
                     r

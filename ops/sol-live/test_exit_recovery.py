@@ -261,3 +261,174 @@ class RecoveryTest(unittest.TestCase):
             with patch.object(svc.time, "time", return_value=205):
                 j.enqueue("bc" * 48)
                 self.assertEqual(j.pending(), BURN)
+
+    def test_pending_job_reclaims_only_confirmed_checkpoint_buffers_before_cap(self):
+        import hashlib
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            raws = [bytes([i]) for i in range(4)]
+            keys = [root / (hashlib.sha256(raw).hexdigest() + ".key") for raw in raws]
+            for key in keys:
+                key.touch()
+            c = Mock()
+            signers = {key: Mock() for key in keys}
+            buffers = {s.pubkey(): raw for s, raw in zip(signers.values(), raws)}
+            result = "ea" * 48
+
+            def account(key):
+                if key == p.checkpoint_pda(result):
+                    return dict(owner=str(p.VERIFIER), data=bytes(48))
+                if key in buffers:
+                    return dict(owner=str(p.VERIFIER), data=buffers[key])
+
+            c.account.side_effect = account
+
+            def reclaim(cluster, label, ix, signer):
+                buffers.pop(signer.pubkey())
+
+            def decode(raw):
+                if raw == raws[0]:
+                    raise ValueError("unfinished upload")
+                return dict(result=result, end="00" * 48)
+
+            c.owner = p.FEE_PAYER
+            with (
+                patch.object(p, "load", side_effect=signers.get),
+                patch("exit_precheck.checkpoint_values", side_effect=decode),
+                patch.object(p, "funded_send", side_effect=reclaim),
+            ):
+                from solders.keypair import Keypair
+
+                buffers.clear()
+                for signer, raw in zip(signers.values(), raws):
+                    signer.pubkey.return_value = Keypair().pubkey()
+                    buffers[signer.pubkey()] = raw
+                p.reclaim_completed(c, root)
+                p.check_work_capacity(root)
+            self.assertEqual(list(root.glob("*.key")), keys[:1])
+
+    def test_paid_polling_caches_marker_and_limits_history_reads(self):
+        with tempfile.TemporaryDirectory() as d:
+            j = svc.Journal(Path(d) / "db")
+            j.enqueue(BURN)
+            j.update(BURN, "paid", solana_tx="missing")
+            c = Mock()
+            c.account.return_value = dict(owner=str(p.VERIFIER), data=b"\1")
+            history = [dict(signature=str(i), err=None) for i in range(100)]
+
+            def call(method, *args):
+                if method == "getSignaturesForAddress":
+                    return history
+                self.assertEqual(method, "getTransaction")
+                return None
+
+            c.call.side_effect = call
+            with patch.object(svc, "cluster", return_value=c):
+                for _ in range(20):
+                    self.assertIsNone(svc.checked_row(j, BURN)["solana_tx"])
+            self.assertLessEqual(
+                sum(call.args[0] == "getTransaction" for call in c.call.call_args_list),
+                5,
+            )
+            c.account.assert_called_once()
+
+    def test_queue_capacity_overrides_cached_readiness(self):
+        import threading
+
+        with tempfile.TemporaryDirectory() as d:
+            j = svc.Journal(Path(d) / "db")
+            server = Mock(
+                journal=j,
+                ready_lock=threading.Lock(),
+                valid_until=float("inf"),
+                ready=dict(ready=True, payout_ready=True),
+            )
+            server.thread.is_alive.return_value = True
+            self.assertTrue(svc.service_readiness(server)["ready"])
+            for i in range(32):
+                j.enqueue(f"{i:096x}")
+            self.assertFalse(svc.service_readiness(server)["ready"])
+            self.assertFalse(svc.service_readiness(server)["payout_ready"])
+
+    def test_sweep_recovers_pending_jobs_even_when_other_jobs_are_paid(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            j = svc.Journal(root / "db")
+            for burn in [BURN, "bc" * 48]:
+                j.enqueue(burn)
+                (root / burn).mkdir()
+                (root / burn / ("ab" * 32 + ".key")).touch()
+            j.update(BURN, "paid")
+            with (
+                patch.object(svc, "cluster"),
+                patch.object(svc, "chain_payment", return_value=p.PAID_NO_HISTORY),
+                patch.object(svc, "prune_work"),
+                patch.object(p, "reclaim_completed") as reclaim,
+            ):
+                svc.prune_terminal(j, root)
+                svc.prune_terminal(j, root)
+                self.assertIn(
+                    root / ("bc" * 48),
+                    [args.args[1] for args in reclaim.call_args_list],
+                )
+
+    def test_confirmed_closed_buffer_does_not_consume_pending_capacity(self):
+        with tempfile.TemporaryDirectory() as d:
+            import base58
+
+            work = Path(d)
+            path = work / ("cd" * 32 + ".key")
+            path.touch()
+            signer = Keypair()
+            c = Mock(owner=p.FEE_PAYER, level={"commitment": "finalized"})
+            c.account.return_value = None
+
+            def call(method, *args):
+                if method == "getSignaturesForAddress":
+                    return [dict(err=None, signature="sig")]
+                return dict(
+                    meta={"err": None},
+                    transaction=dict(
+                        signatures=["sig"],
+                        message=dict(
+                            accountKeys=[
+                                str(c.owner),
+                                str(signer.pubkey()),
+                                str(p.VERIFIER),
+                            ],
+                            instructions=[
+                                dict(
+                                    programIdIndex=2,
+                                    accounts=[1, 0],
+                                    data=base58.b58encode(b"\x06").decode(),
+                                )
+                            ],
+                        ),
+                    ),
+                )
+
+            c.call.side_effect = call
+            with patch.object(p, "load", return_value=signer):
+                p.reclaim_completed(c, work)
+            self.assertFalse(path.exists())
+
+    def test_reconciles_confirmed_proof_directories_before_pending_capacity(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for i in range(4):
+                cache = root / f"{i:064x}"
+                cache.mkdir()
+                (cache / "native-public-values.bin").write_bytes(bytes([i]))
+            c = Mock()
+            c.account.return_value = dict(owner=str(p.VERIFIER), data=bytes(48))
+
+            def decode(raw):
+                if raw == b"\0":
+                    raise ValueError("a withdrawal, not a checkpoint")
+                return dict(result="cd" * 48, end="00" * 48)
+
+            with patch("exit_precheck.checkpoint_values", side_effect=decode):
+                p.reclaim_completed(c, root)
+                p.check_work_capacity(root)
+            self.assertEqual([path.name for path in root.iterdir()], ["0" * 64])
