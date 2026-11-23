@@ -228,7 +228,23 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             roll(kit, a.host, a.dry_run)
     else:
-        guard(Path(os.environ["KIT"]), a.host)
+        # Mid-deploy check. Once the new units are installed, the old RPC process on the
+        # host being rolled refuses status until it restarts, so read the other five.
+        timing = read(os.environ["EXIT_ROLL_PLAN"])
+        rows = [rpc(i, "status") for i in range(6) if i != a.host]
+        require(
+            all(parent_of(r) == parent_of(rows[0]) for r in rows)
+            and [r["node_id"] for r in rows]
+            == [f"validator-{i}" for i in range(6) if i != a.host],
+            "Five matching finalized statuses are required mid-deploy.",
+        )
+        require(int(os.environ["EXIT_ACTIVATION_HEIGHT"]) == timing["height"], "Scheduled height differs from timing plan.")
+        require_margin(
+            timing["height"],
+            rows[0]["block_height"],
+            max(timing["peak_blocks_per_second"], 1 / 60),
+            (6 - a.host) * timing["host_seconds"],
+        )
 
 
 if __name__ == "__main__":
