@@ -298,33 +298,37 @@ def recover(out):
 
 def check(out):
     plan = read(out / "plan.json")
-    reds = rpc(0, "vault_bridge_status", asset_id=ASSET)["redemptions"]
-    rows = [
-        r
-        for r in reds
-        if r["owner"] == OWNER
-        and r["owner_sequence"] == plan["fields"]["sequence"]
-        and r["bucket_id"] == BUCKET
-        and r["amount_atoms"] == 20000
-        and r["destination_ref"] == DEST
-    ]
-    require(len(rows) == 1, "Unique finalized canary burn not found")
-    row = rows[0]
-    tx = row["burn_tx_id"]
-    require(
-        tx == verified_burn_id((out / "signed.json").read_text(), plan["fields"]),
-        "Finalized redemption differs from original signed envelope.",
-    )
-    confirmations = six(lambda i: rpc(i, "tx", tx_id=tx))
-    require(
-        all(
-            r["confirmed"]
-            and r["receipt"]["accepted"]
-            and r["block"]["header"]["height"] == row["created_at_height"]
-            for r in confirmations
-        ),
-        "six-way burn confirmation failed",
-    )
+    from exit_precheck import agreement
+
+    tx = verified_burn_id((out / "signed.json").read_text(), plan["fields"])
+
+    def verify_debit(i):
+        # A successful burn writes this redemption and subtracts its amount
+        # from the owner's selected series in the same execution transition.
+        rows = rpc(i, "vault_bridge_status", asset_id=ASSET)["redemptions"]
+        matches = [r for r in rows if r["burn_tx_id"] == tx]
+        require(len(matches) == 1, "Unique finalized canary burn not found.")
+        row = matches[0]
+        require(
+            row["owner"] == OWNER and row["owner_sequence"] == plan["fields"]["sequence"]
+            and row["asset_id"] == ASSET and row["bucket_id"] == BUCKET
+            and row["amount_atoms"] == 20000 and row["destination_ref"] == DEST,
+            "Canary burn debit differs from the reviewed withdrawal.",
+        )
+        result = rpc(i, "tx", tx_id=tx)
+        receipt, header = result["receipt"], result["block"]["header"]
+        require(
+            result["confirmed"] is True and receipt["accepted"] is True
+            and receipt["tx_id"] == tx and header["height"] == row["created_at_height"],
+            "Wrong finalized burn receipt.",
+        )
+        return dict(height=header["height"], block_hash=header["block_hash"],
+                    state_root=header["state_root"], receipt=receipt,
+                    amount_atoms=row["amount_atoms"], packet=row["withdrawal_packet_hash"])
+
+    fleet()
+    confirmations = six(verify_debit)
+    debit = agreement(confirmations)
     res = requests.post(API, json=dict(burn_tx_id=tx), timeout=15)
     res.raise_for_status()
     deadline = time.monotonic() + 3600
@@ -336,7 +340,6 @@ def check(out):
             raise ValueError(job["error"])
         if job["stage"] == "paid":
             c = cluster()
-            after = balances(c)
             before = plan["before"]
             require(
                 job["solana_tx"],
@@ -349,19 +352,19 @@ def check(out):
             )
             deltas = token_deltas(finalized)
             require(
-                signature(c, tx, job["solana_tx"]) == job["solana_tx"]
-                and before["pfusdc_atoms"] - after["pfusdc_atoms"] == 20000,
-                "Canary balance or signature mismatch",
+                signature(c, tx, job["solana_tx"]) == job["solana_tx"],
+                "Canary payout signature mismatch",
             )
             evidence = dict(
                 burn_tx_id=tx,
-                height=row["created_at_height"],
+                height=debit["height"],
                 solana_tx=job["solana_tx"],
                 before=before,
-                after=after,
+                l1_debit_atoms=debit["amount_atoms"],
+                burn_receipts=[dict(validator=i, **record) for i, record in enumerate(confirmations)],
                 token_deltas=deltas,
                 finalized_slot=finalized["slot"],
-                withdrawal_packet_hash=row["withdrawal_packet_hash"],
+                withdrawal_packet_hash=debit["packet"],
                 marker=str(marker(tx)),
                 recipient=str(PHANTOM),
             )
