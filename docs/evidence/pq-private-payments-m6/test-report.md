@@ -1,5 +1,8 @@
 # M6 test report (worker report, re-checked by the coordinator)
 
+**Historical evidence.** The original milestone measurements and artifact inventory tested L1 profile 1, including the public PFT payer for issued spends. Issued payments and exits now use profile 2.
+
+
 ```text
 DONE
 M6 implements local PFSH02 proving and scanning, encrypted recovery, finalized public pages, and the Python payment CLI.

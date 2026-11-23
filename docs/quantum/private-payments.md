@@ -25,6 +25,10 @@ A PFSH02 payment spends two private notes and creates two new ones. The chain se
 The payment carries no public sender account, key, sequence or signature. The transferred amount and recipient stay inside the notes. Each source series has its own tree. Deposits into the pool and exits out of it show their public account and
 amount, as any bridge between public and private balances must.
 
+Issued payments and exits use L1 profile 2. Both wallets read the exact fee for the next inclusion height from finalized pool state. The proposed starting fee is 1 atom (0.000001 pfUSDC), equal in atom count to PFT's minimum. The gateway sees the caller's network address and timing. Validators see the relay address and timing, or the wallet's network address on direct requests. Issued spends use a shared admission scope.
+
+Archives from rehearsal builds before this change that contain issued private spends cannot be replayed; no live chain is affected.
+
 The recipient finds their payment by trial-decrypting envelopes with their own ML-KEM key. Nobody else can tell
 which envelope is theirs. The sender does not need the recipient to be online.
 
@@ -67,7 +71,7 @@ PFSH02 is not yet switched on for any public chain. On local test chains everyth
 validators verify and settle payments, the pool keeps its own ledger, and a command-line wallet and the browser wallet
 shield, pay and exit for PFT and pfUSDC. The six-validator upgrade rehearsal is done. What remains is an external review of the cryptography;
 the package for reviewers is ready. Only after review does a signed amendment choose an activation height. The build plan is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
-It has eight milestones, each tested and merged on its own:
+The historical M1–M8 results below cover the standalone fixture and the original L1 profile 1, which charged a public PFT payer on issued spends.
 
 | Milestone | Delivers | Status |
 | --- | --- | --- |

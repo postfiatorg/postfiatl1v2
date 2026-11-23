@@ -18,7 +18,7 @@ The validator must have the M5 rehearsal amendment and private-action admission 
    payer against the local ML-DSA-65 account key file. For pfUSDC use the exact governed
    source-series ID. Only a shield needs the deposit account, signing key and next sequence. A payment or exit selects notes covering amount plus fee in that same series.
 4. Run `pay --asset PFT --amount 30 --fee 1 --to RECEIVE_ADDRESS`, or `unshield --asset PFT
-   --amount 18 --fee 1 --to PUBLIC_ACCOUNT`. The client prints the fee source before proving.
+   --amount 18 --fee 1 --to PUBLIC_ACCOUNT`. For issued pay and unshield, omit `--fee`. The client reads the exact fee for the series from the trusted validator’s finalized pool snapshot and prints it before proving.
    It returns the intent ID, proof time and prover peak RSS. `receipt INTENT_ID` reads admission
    and inclusion status. Run `sync` to recover finalized notes, then `balance` to see per-issue
    finalized atoms and the separate pending change. `status` shows the current job and elapsed time.

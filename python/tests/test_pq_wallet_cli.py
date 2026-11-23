@@ -79,6 +79,19 @@ class PqIssuedFee(unittest.TestCase):
                         daemon.assert_called_once_with(Path("."), "rejected", action_hash=private_action_hash(wire))
                         self.assertIsNone(saved)
 
+    def test_rehearsal_release_contract_is_visible_to_wallets_and_reviewers(self):
+        spec = (ROOT / "docs/specs/pq-private-payments-integration.md").read_text()
+        status = (ROOT / "docs/quantum/private-payments.md").read_text()
+        package = (ROOT / "docs/evidence/pq-private-payments-m8/external-review-package.md").read_text()
+        for document in (spec, status, package):
+            self.assertIn("0.000001 pfUSDC", document)
+            self.assertIn("profile 2", document)
+        self.assertIn("pq_issued_fee", spec)
+        self.assertIn("wind-down", spec)
+        history = (ROOT / "docs/rpc/account-history.md").read_text()
+        self.assertIn("collector withdrawal", history)
+        self.assertNotIn("reads the same kinds", history)
+
 
 class PqWalletMerge(unittest.TestCase):
     def test_two_wallets_restore_and_spend(self):

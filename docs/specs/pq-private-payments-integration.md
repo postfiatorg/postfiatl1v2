@@ -34,11 +34,13 @@ fixed-width or length-prefixed canonical bytes for every field. A signed outer w
 ordinary private spend free of this binding. Give the L1 profile fresh Rust and Go vectors and review the
 changed transcript before enabling it. Raw M1 proofs stay confined to the fixture chain.
 
-**Fee unit.** The depositor signs a shield. For an issued deposit the depositor pays PFT publicly and the full issued amount enters the pool. Internal payments and exits pay the proved inner fee from notes of the selected asset. The public PFT fee field is zero and the wire omits the entire authorization block. PFT fees burn. Issued fees move from the private reserve to the public `collected_private_fees` balance of the exact source series.
+**Fee unit (L1 profile 2 for issued spends).** The depositor signs a shield. For an issued deposit the depositor pays PFT publicly and the full issued amount enters the pool. Internal payments and exits pay the proved inner fee from notes of the selected asset. The public PFT fee field is zero and the wire omits the entire authorization block. PFT fees burn. Issued fees move from the private reserve to the public `collected_private_fees` balance of the exact source series.
 
-The signed rehearsal kind `pq_payment_rehearsal_v1:fee:<atoms>` sets a positive minimum for its pinned source series. Its amendment value still specifies the activation height. A payment may pay more. The bare activation kind leaves issued payments and exits disabled. Governance can withdraw collected atoms with `pq_private_fee_withdraw_v1:<recipient>`, using the amendment value as the amount. The recipient needs an eligible trustline. The series and family supply include collector custody throughout.
+The signed rehearsal kind `pq_payment_rehearsal_v1:fee:<atoms>` sets the exact positive fee at inclusion for its pinned source series. The previous amount applies until the scheduled height. Value zero explicitly pauses the pool. A bare initial schedule allows deposits only for the issued asset. After a fee has been configured, resuming or replacing it requires a fee suffix. The proposed starting amount is 1 atom (0.000001 pfUSDC), the same atom count as PFT's minimum. Wallets read `pq_issued_fee` (series ID and decimal atoms) from the account-free finalized `private_pool_snapshot` for the next inclusion height. A missing quote disables issued spending. A fee change requires a fresh proof. Governance can withdraw collected atoms with `pq_private_fee_withdraw_v1:<recipient>`, using the amendment value as the amount. The recipient needs an eligible trustline. The series and family supply include collector custody throughout.
 
-A deposit reveals the depositor and amount. An exit reveals the destination and amount. A payment reveals the asset, fee, inclusion time and tree. It carries no sender account or public signing key. Observers can still correlate timing and public edges.
+**Collector wind-down.** Before retiring, replacing or letting a route expire, keep the rehearsal and route active and settle the outstanding private exits. Withdraw the remaining collector balance to an eligible series trustline through signed governance, in several withdrawals if the amount exceeds the amendment's u32 limit. Verify zero collector custody in finalized state at the retirement boundary. Defer retirement if another payment or exit accrues a fee. A paused or retired route cannot release the balance.
+
+A deposit reveals the depositor and amount. An exit reveals the destination and amount. A payment reveals the asset, fee, inclusion time and tree. It carries no sender account or public signing key. The gateway sees its authenticated caller, network address, action and timing. Profile 2 uses a null relay address and the shared `pq-private-spend` scope. A validator sees its peer's network address, the body, inclusion time and receipt queries. Direct wallet reads expose the wallet's network address and timing to the trusted validator. These observations can link activity.
 
 **Reference material.** Wire, relations, R0–R6, rollover, measured costs and security dependencies are in the
 [PFSH02 specification](../security/peel-binius-shielded-pq-payments.md) and
@@ -236,7 +238,7 @@ replay agreed at the certified tip. The exact R64 replay matched all 1,734 archi
   closed native fixture, public PFT plus live PQ PFT plus cumulative burned PFT must equal starting supply.
   Test unfunded or unsigned mint, reused sequence, substituted outputs/envelopes, standalone burn replay,
   sibling issue, wrong recipient, underflow, overflow, frozen/unauthorized/full line, required disclosure and
-  an unconfigured or insufficient fee. Failed actions and failed atomic batches leave fees, balances, keys, sequence, PQ state
+  an unconfigured or unequal issued fee. Failed actions and failed atomic batches leave fees, balances, keys, sequence, PQ state
   and history consistent. Include a cap-at-limit issuance attempt with most units already in the PQ pool.
 
 M4 reuses the M2 signing bytes. The raw header digest binds the mint, inner fee, output commitments and
@@ -335,7 +337,7 @@ latter run.
 **Compatibility and admission.** The current block header certifies one batch. The shared meter also
 processes multiple batches in one call, including non-atomic attempts. The signed rehearsal amendment
 enables the pinned disposable genesis only. Its version fixes the L1 profile, native and issued settlement
-terms. The optional signed fee suffix sets the minimum issued spend fee in source-series atoms. Active blocks must use atomic batches for every private payment body. Proposal, commit and replay reject non-atomic inclusion before execution. An absent or paused amendment prevents inclusion of
+terms. The optional signed fee suffix sets the exact issued spend fee in source-series atoms. Active blocks must use atomic batches for every private payment body. Proposal, commit and replay reject non-atomic inclusion before execution. An absent or paused amendment prevents inclusion of
 `pq_payment_v1`. The gateway uses its first configured validator to resolve a retry to its original record
 before relay. Unconfirmed PQ reservations expire after 64 blocks. Receipts can be queried during a pause.
 
