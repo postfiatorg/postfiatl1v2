@@ -64,7 +64,7 @@ export default function PqPayments() {
     setBusy(label); setError('');
     try { await action(); } catch (err) {
       setError(err.message);
-      if (/sync|disconnected|connection|unavailable/i.test(err.message)) setWallet(w => w && ({ ...w, synced: false }));
+      if (label === 'Syncing' || /sync|disconnected|connection|unavailable/i.test(err.message)) setWallet(w => w && ({ ...w, synced: false }));
     } finally { setBusy(''); setProgress(''); }
   }
   async function refresh(command = 'status') {

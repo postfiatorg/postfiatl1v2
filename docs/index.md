@@ -45,7 +45,7 @@ below do not imply deployment; fleet observations retain their own dates on
 | Settlement lanes | Consensus transactions, W6 atomic swaps, FastPay, FastSwap and Asset-Orchard, each with its own finality and recovery rules. | [Settlement Lanes](architecture/settlement-lanes.md) |
 | Privacy | Orchard/Halo2 deposit, spend, withdraw, scan and selective disclosure. The shielded stack is not post-quantum. | [Privacy](privacy/overview.md) |
 | Post-quantum authorization | ML-DSA-65 for accounts and validators; larger certificates accepted as a design cost. | [Quantum Authorization](quantum/authorization.md) |
-| Quantum-safe private payments | PFSH02: hash- and ML-KEM-based private payments. Works as a standalone tool; being built into the chain. | [Quantum-Safe Private Payments](quantum/private-payments.md) |
+| Quantum-safe private payments | PFSH02 shield, pay and withdrawal verified for PFT and pfUSDC on a local rehearsal chain. | [Browser wallet](wallets/shielded-wallet.md#pfsh02-browser-wallet), [Protocol](quantum/private-payments.md) |
 | Storage | Transactional `redb` storage active since height 930; G5 offline qualified on 2026-10-23 for the October 21 binary. G6 remains open; later binaries need their own qualification. | [Network Status](status/network-status.md), [State And Storage](architecture/state-and-storage.md) |
 | NAVCoins | A666 v2 is the deployed NAVCoin lineage (public general availability closed); BMNRC was created on the devnet on 2026-10-02. | [NAVCoins](navcoins/index.md) |
 | YOLO target receipts | Implemented and disabled by default; activation needs a future governance amendment. Receipts confer no trading, minting or reserve authority. | [YOLO Target Receipt v1](yolo/target-receipt-v1.md) |

@@ -894,3 +894,7 @@ fn two_wallets_settle_both_assets_and_reconcile_every_certified_block() {
 #[cfg(feature = "pq-wallet")]
 #[path = "pq_wallet_merge.rs"]
 mod wallet_cli;
+
+#[cfg(feature = "pq-wallet-browser-test")]
+#[path = "pq_browser_merge.rs"]
+mod browser;

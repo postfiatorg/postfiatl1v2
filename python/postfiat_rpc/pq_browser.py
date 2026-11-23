@@ -74,7 +74,7 @@ class Gateway:
 class BrowserWallet:
     def __init__(self, args, origin):
         self.home = args.wallet.absolute()
-        self.validator = PostFiatRpcClient(Endpoint.parse(args.endpoint), timeout_seconds=90,
+        self.validator = PostFiatRpcClient(Endpoint.parse(args.validator_endpoint or args.endpoint), timeout_seconds=90,
                                            response_byte_cap=MAX_RESPONSE)
         self.gateway = Gateway(args.gateway, args.gateway_token_file, origin)
         self.account = args.payer
@@ -302,7 +302,7 @@ class BrowserWallet:
 
 
 def serve(args):
-    check(args.endpoint, "A trusted validator endpoint is required.")
+    check(args.validator_endpoint or args.endpoint, "A trusted validator endpoint is required.")
     os.umask(0o077)
     dist = args.dist.resolve(strict=True)
     index = (dist / "index.html").read_bytes()

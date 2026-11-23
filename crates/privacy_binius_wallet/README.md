@@ -81,7 +81,8 @@ PYTHONPATH=python python3 -m postfiat_rpc pq-wallet --wallet "$wallet_dir" --end
 Open the URL in the owner-only pairing file on the same device. Treat that link as authorization to
 use the wallet. The bridge serves the bundled wallet-web UI on loopback. It checks the HTTP host,
 origin and a process-specific session capability on every API request. Stop the bridge to revoke the
-session. Each user runs their own wallet directory, daemon and bridge. Choose a separate port with
+session. If an abrupt shutdown leaves an old pairing file, restart with a fresh pairing-file path.
+Each user runs their own wallet directory, daemon and bridge. Choose a separate port with
 `--port` for a second user on the same machine.
 
 **Sync** downloads public pages and checks the reconstructed wallet checkpoint. **Receive address**

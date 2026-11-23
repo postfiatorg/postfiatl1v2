@@ -75,6 +75,7 @@ pft-binius-shielded = { path = "../../tools/pft-binius-shielded-pq/rust-prover",
 
 [features]
 pq-wallet = ["dep:postfiat-privacy-binius-wallet"]
+pq-wallet-browser-test = ["pq-wallet"]
 
 [dependencies.postfiat-privacy-binius-wallet]
 path = "../privacy_binius_wallet"
