@@ -613,6 +613,20 @@ async function main() {
             const json = JSON.stringify({kind:'pq_payment_v1',body:body.toString('base64')});
             const parsed = parsePublicAction(json);
             const signed = JSON.parse(wasm.pq_review_payment(json));
+            if (file === 'pft-shield.bin') {
+                const route = createPrivateActions({
+                    prefix: '/api/private/v1/pq/',
+                    env: { ...privateEnv, WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID: parsed.poolId,
+                        WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID: '00'.repeat(48),
+                        WALLET_PROXY_PRIVATE_ACTIONS_STORE: path.join(storeDir, 'pq') },
+                    rpcRequest: oneShot,
+                });
+                const intent = intentIdFor(DOMAIN, json);
+                const admitted = await route.submit({address:parsed.payer,intent_id:intent,action_json:json}, 'pq-owner');
+                assert.equal(admitted.state, 'queued');
+                assert.equal(admitted.statement_id, parsePublicAction(json, DOMAIN).statementId);
+                for (const node of [a,b]) assert.equal(submitsFor(node,intent).length, 1, node.validatorId);
+            }
             const python = spawnSync('python3',['-c', [
                 'import json,sys', 'from postfiat_rpc.client import private_action_hash, private_action_intent_id',
                 'net,action=json.load(sys.stdin)',
