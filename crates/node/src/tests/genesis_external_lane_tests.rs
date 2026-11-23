@@ -2291,7 +2291,7 @@ mod release_path {
         let template = activated.amendments[0].clone();
         activated.apply(GovernanceAmendment {
             amendment_id: "rejected-fee-activation".to_string(),
-            kind: GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT.to_string(),
+            kind: GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT.to_string(),
             value: u32::try_from(height).expect("height"),
             ..template
         });
@@ -3175,7 +3175,7 @@ mod release_path {
         let template = activated.amendments[0].clone();
         activated.apply(GovernanceAmendment {
             amendment_id: "rejected-fee-activation".to_string(),
-            kind: GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT.to_string(),
+            kind: GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT.to_string(),
             value: u32::try_from(height).expect("height"),
             ..template
         });
