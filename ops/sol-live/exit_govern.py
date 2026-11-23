@@ -96,8 +96,12 @@ def main():
     p.add_argument("--binary", required=True, type=Path)
     p.add_argument("--copied-store", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
-    for name in ("submit", "open"):
+    for name in ("submit", "open", "close", "paid"):
         p = subs.add_parser(name)
+        if name == "paid":
+            p.add_argument("--paid", required=True, type=Path)
+        if name in ("close", "paid"):
+            p.add_argument("--output", required=True, type=Path)
         if name == "open":
             p.add_argument("--output", type=Path)
         p.add_argument("--revision", required=True)
@@ -188,6 +192,14 @@ def main():
                 args.output,
                 dict(accepted, qualified_parent=state["qualified_parent"], routes=rows),
             )
+    elif args.action == "paid":
+        from exit_canary import review_paid
+        ref = review_paid(read(args.paid))
+        save(args.output, govern("exit-paid", compatible=args.revision, payout=ref))
+    elif args.action == "close":
+        result = govern("exit-close", compatible=args.revision)
+        require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
+        save(args.output, result)
     else:
         govern("route", read(PROFILE), compatible=args.revision)
         require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))

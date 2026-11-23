@@ -108,7 +108,7 @@ class ParentChanged(RuntimeError):
     """Qualification expired before submitting the round."""
 
 
-def govern(kind, profile=None, compatible=None, *, qualified_parent=None):
+def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout=None):
     head = fleet()
     if head["build_git_revision"] != (compatible or R6):
         raise RuntimeError("waiting for compatible six-validator release")
@@ -138,6 +138,8 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None):
             raise RuntimeError("expected one transport validator")
         args = remote(i, ["cat", f"/proc/{pid}/cmdline"]).split("\0")
         binary = args[0]
+        if args[args.index("--data-dir") + 1] != dirs[i]:
+            raise ValueError("Unexpected resident data directory.")
         topo = args[args.index("--topology") + 1]
         if not re.fullmatch(
             r"/opt/postfiat/releases/[A-Za-z0-9_.-]+/postfiat-node", binary
@@ -181,10 +183,15 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None):
             "--batch-file",
             work[0] + "/draft",
         )
-    elif kind == "exit-open":
+    elif kind in ("exit-open", "exit-close", "exit-paid"):
+        extra = []
+        if kind == "exit-paid":
+            extra = ["--packet-hash", payout["packet"], "--solana-slot", payout["slot"],
+                     "--payout-index", payout["ordinal"], "--signature-hex", payout["signature_hex"]]
         tool(
             0,
-            "ratify-solana-exit-open",
+            "ratify-solana-" + kind,
+            *extra,
             "--data-dir",
             dirs[0],
             "--validators",
@@ -210,8 +217,11 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None):
     else:
         raise ValueError(kind)
     amend = get(0, "amend")
-    if kind == "exit-open" and (
-        amend["kind"] != "solana_exit_r8_open"
+    if kind == "exit-paid":
+        from exit_canary import match_reference
+        match_reference(amend, payout)
+    if kind in ("exit-open","exit-close","exit-paid") and (
+        (kind != "exit-paid" and amend["kind"] != "solana_exit_r8_" + kind.split("-")[1])
         or amend["activation_height"] != h
         or amend["value"] != 1
         or amend.get("paused", False)
@@ -222,6 +232,11 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None):
     save(local / "amendment.json", amend)
 
     def sign(i):
+        if kind == "exit-paid":
+            from exit_precheck import parent_of
+            approval = json.loads(remote(i, ["cat", "/etc/postfiat/sol-exit-paid-review.json"]))
+            if approval != dict(kind=amend["kind"], parent=parent_of(head)):
+                raise ValueError(f"Validator-{i} has not verified this payout and proposal parent.")
         if i:
             put(i, "amend", amend)
         tool(
