@@ -73,7 +73,10 @@ fn candidate_height_and_limits_cover_every_batch_and_non_atomic_attempt() {
     g.apply(amendment(&genesis, 6));
     assert!(check(&g, 5, &[&batch, &mixed]).is_err());
     for h in [6, 7] {
-        assert_eq!(check(&g, h, &[&mixed]).unwrap_err().to_string(), "pq_atomic_batch_required");
+        assert_eq!(
+            check(&g, h, &[&mixed]).unwrap_err().to_string(),
+            "pq_atomic_batch_required"
+        );
         check(&g, h, &[&batch, &batch]).unwrap();
         assert_eq!(
             check(&g, h, &[&batch, &batch, &batch])
@@ -299,25 +302,49 @@ fn pq_registry_threshold_applies_to_signed_schedule_and_withdrawal() {
     let validators = active_validator_ids(&governance).unwrap();
     let keys = read_validator_key_file(&dir.join(VALIDATOR_KEYS_FILE)).unwrap();
     let split = super::consensus_history::write_split_validator_key_files(&dir, &keys);
-    for kind in [postfiat_types::PQ_REHEARSAL_V1, "pq_payment_rehearsal_v1:fee:1",
-                 &format!("pq_private_fee_withdraw_v1:pf{}", "22".repeat(20))] {
+    for kind in [
+        postfiat_types::PQ_REHEARSAL_V1,
+        "pq_payment_rehearsal_v1:fee:1",
+        &format!("pq_private_fee_withdraw_v1:pf{}", "22".repeat(20)),
+    ] {
         let mut config = EssentialSubsetConfig::all_of(validators.clone());
         config.quorum = 1;
         let mut amendment = ratify_governance_amendment_with_lifecycle(
-            &cobalt_domain(&genesis), &config, kind, 2, vec![validators[0].clone()],
-            GovernanceAmendmentLifecycle { activation_height: 0, veto_until_height: 0, paused: false },
-        ).unwrap();
+            &cobalt_domain(&genesis),
+            &config,
+            kind,
+            2,
+            vec![validators[0].clone()],
+            GovernanceAmendmentLifecycle {
+                activation_height: 0,
+                veto_until_height: 0,
+                paused: false,
+            },
+        )
+        .unwrap();
         let file = dir.join("amendment.json");
         write_amendment_file(&file, &amendment).unwrap();
-        let authorization = sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
-            data_dir: dir.clone(), amendment_file: file, validator: validators[0].clone(),
-            validator_key_file: split.iter().find(|(id, _)| id == &validators[0]).unwrap().1.clone(), proposal_slot: 1,
-            expires_at_height: 8, authorization_file: dir.join("authorization.json"),
-        }).unwrap();
+        let authorization =
+            sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                data_dir: dir.clone(),
+                amendment_file: file,
+                validator: validators[0].clone(),
+                validator_key_file: split
+                    .iter()
+                    .find(|(id, _)| id == &validators[0])
+                    .unwrap()
+                    .1
+                    .clone(),
+                proposal_slot: 1,
+                expires_at_height: 8,
+                authorization_file: dir.join("authorization.json"),
+            })
+            .unwrap();
         amendment.signed_authorizations.push(authorization);
         let batch = GovernanceActionBatch::new("test", vec![amendment]);
-        let error = verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 1)
-            .expect_err("one signature cannot authorize PQ governance");
+        let error =
+            verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 1)
+                .expect_err("one signature cannot authorize PQ governance");
         assert!(error.to_string().contains("BFT threshold"), "{error}");
     }
     fs::remove_dir_all(dir).unwrap();
@@ -332,20 +359,34 @@ fn pq_replacement_fee_waits_for_activation_and_links_the_two_schedules() {
         let mut schedule = amendment(&genesis, height);
         schedule.kind = format!("pq_payment_rehearsal_v1:fee:{fee}");
         crate::execution_actions::apply_governance_amendment_with_lifecycle_records(
-            &mut g, schedule, "fee-batch", u64::from(height - 2));
+            &mut g,
+            schedule,
+            "fee-batch",
+            u64::from(height - 2),
+        );
     }
     assert_eq!(g.pq_issued_fee(PQ_REHEARSAL_ISSUE, 2), None);
     assert_eq!(g.pq_issued_fee(PQ_REHEARSAL_ISSUE, 8), Some(1));
     assert_eq!(g.pq_issued_fee(PQ_REHEARSAL_ISSUE, 9), Some(7));
-    let [record] = g.amendment_supersession_records.as_slice() else { panic!("missing schedule history") };
+    let [record] = g.amendment_supersession_records.as_slice() else {
+        panic!("missing schedule history")
+    };
     assert_eq!(record.superseded_amendment_id, g.amendments[0].amendment_id);
     assert_eq!(record.previous_value, 3);
-    crate::execution_actions::verify_governance_amendment_supersession_records(&genesis, &g).unwrap();
+    crate::execution_actions::verify_governance_amendment_supersession_records(&genesis, &g)
+        .unwrap();
     let bare = GovernanceActionBatch::new("bare", vec![amendment(&genesis, 12)]);
-    let receipts = crate::execution_actions::execute_governance_batch(&mut g, None, Some(&genesis), &bare, 10);
+    let receipts =
+        crate::execution_actions::execute_governance_batch(&mut g, None, Some(&genesis), &bare, 10);
     assert_eq!(receipts[0].code, "pq_fee_unconfigured");
     let pause = GovernanceActionBatch::new("pause", vec![amendment(&genesis, 0)]);
-    let receipts = crate::execution_actions::execute_governance_batch(&mut g, None, Some(&genesis), &pause, 11);
+    let receipts = crate::execution_actions::execute_governance_batch(
+        &mut g,
+        None,
+        Some(&genesis),
+        &pause,
+        11,
+    );
     assert!(receipts[0].accepted);
     assert_eq!(g.pq_issued_fee(PQ_REHEARSAL_ISSUE, 12), None);
 }
@@ -359,25 +400,52 @@ fn pq_governance_archive_requires_signatures_before_execution() {
     let mut governance = disk.read_governance().unwrap();
     let validators = active_validator_ids(&governance).unwrap();
     let schedule = ratify_governance(RatifyGovernanceOptions {
-        data_dir: dir.clone(), validators: validators.clone(), support: validators,
-        kind: "pq_payment_rehearsal_v1:fee:4".into(), value: 10, activation_height: 0,
-        veto_until_height: 0, paused: false, amendment_file: dir.join("schedule.json"),
-    }).unwrap();
+        data_dir: dir.clone(),
+        validators: validators.clone(),
+        support: validators,
+        kind: "pq_payment_rehearsal_v1:fee:4".into(),
+        value: 10,
+        activation_height: 0,
+        veto_until_height: 0,
+        paused: false,
+        amendment_file: dir.join("schedule.json"),
+    })
+    .unwrap();
     let batch = GovernanceActionBatch::new("test", vec![schedule]);
-    let entry = BatchArchiveEntry { batch_kind: "governance".into(), batch_id: batch.batch_id.clone(),
-        payload_hash: String::new(), payload_json: serde_json::to_string(&batch).unwrap() };
+    let entry = BatchArchiveEntry {
+        batch_kind: "governance".into(),
+        batch_id: batch.batch_id.clone(),
+        payload_hash: String::new(),
+        payload_json: serde_json::to_string(&batch).unwrap(),
+    };
     let mut block = super::dummy_block_record(1);
     block.header.batch_kind = "governance".into();
     block.header.batch_id = batch.batch_id.clone();
-    let historical = update_governance_for_certificate_replay(&mut governance, &registry, &genesis, &block, &entry);
-    let replay = block_replay_wallet::replay_archived_payload(&genesis, &block, &entry,
+    let historical = update_governance_for_certificate_replay(
+        &mut governance,
+        &registry,
+        &genesis,
+        &block,
+        &entry,
+    );
+    let replay = block_replay_wallet::replay_archived_payload(
+        &genesis,
+        &block,
+        &entry,
         block_replay_wallet::ArchivedReplayState {
-            governance: &mut governance, ledger: &mut disk.read_ledger().unwrap(),
-            shielded: &mut disk.read_shielded().unwrap(), bridge: &mut disk.read_bridge().unwrap(),
+            governance: &mut governance,
+            ledger: &mut disk.read_ledger().unwrap(),
+            shielded: &mut disk.read_shielded().unwrap(),
+            bridge: &mut disk.read_bridge().unwrap(),
             validator_registry: &registry,
-        });
+        },
+    );
     for err in [historical.unwrap_err(), replay.unwrap_err()] {
-        assert!(err.to_string().contains("one signed governance authorization"), "{err}");
+        assert!(
+            err.to_string()
+                .contains("one signed governance authorization"),
+            "{err}"
+        );
     }
     assert_eq!(governance, disk.read_governance().unwrap());
     fs::remove_dir_all(dir).unwrap();

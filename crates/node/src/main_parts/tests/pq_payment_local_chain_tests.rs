@@ -39,7 +39,11 @@ mod pq_payment_local_chain_tests {
         )
     }
 
-    pub(super) fn proposal(data_dir: &Path, dir: &Path, batch: &ShieldedActionBatch) -> BatchProposalOptions {
+    pub(super) fn proposal(
+        data_dir: &Path,
+        dir: &Path,
+        batch: &ShieldedActionBatch,
+    ) -> BatchProposalOptions {
         let batch_file = dir.join(format!("{}.json", batch.batch_id));
         fs::write(&batch_file, serde_json::to_vec(batch).unwrap()).unwrap();
         BatchProposalOptions {
@@ -317,24 +321,219 @@ mod pq_payment_local_chain_tests {
 
     #[test]
     fn pq_active_pool_requires_atomic_inclusion_at_proposal_and_commit() {
-        let fleet = fleet_on_chain(CHAIN, FleetOptions {
-            pricing: false, max_nav_age_blocks: None, extra_asset: false,
-        });
+        let fleet = fleet_on_chain(
+            CHAIN,
+            FleetOptions {
+                pricing: false,
+                max_nav_age_blocks: None,
+                extra_asset: false,
+            },
+        );
         while fleet.height() + 1 < ATOMIC_ACTIVATION {
             fleet.transparent_round();
         }
         let peer = &fleet.data_dirs[fleet.proposer_index(fleet.height() + 1)];
         let genesis = NodeStore::new(peer).read_genesis().unwrap();
         let actions = vec![l1_action("pfusdc-shield")];
-        let encoded = serde_json::to_vec(&(&genesis.chain_id, postfiat_execution::genesis_hash(&genesis),
-            genesis.protocol_version, "shielded", &actions)).unwrap();
-        let batch = ShieldedActionBatch::new(hash_hex("postfiat.shielded_action_batch.v1", &encoded), actions);
+        let encoded = serde_json::to_vec(&(
+            &genesis.chain_id,
+            postfiat_execution::genesis_hash(&genesis),
+            genesis.protocol_version,
+            "shielded",
+            &actions,
+        ))
+        .unwrap();
+        let batch = ShieldedActionBatch::new(
+            hash_hex("postfiat.shielded_action_batch.v1", &encoded),
+            actions,
+        );
         let opts = proposal(peer, &fleet.root, &batch);
-        assert_eq!(propose_batch_with_timings(opts.clone()).unwrap_err().to_string(), "pq_atomic_batch_required");
+        assert_eq!(
+            propose_batch_with_timings(opts.clone())
+                .unwrap_err()
+                .to_string(),
+            "pq_atomic_batch_required"
+        );
         let err = postfiat_node::apply_shielded_batch(postfiat_node::ApplyBatchOptions {
-            data_dir: peer.clone(), batch_file: opts.batch_file, certificate_file: None,
-        }).unwrap_err();
+            data_dir: peer.clone(),
+            batch_file: opts.batch_file,
+            certificate_file: None,
+        })
+        .unwrap_err();
         assert_eq!(err.to_string(), "pq_atomic_batch_required");
+    }
+
+    #[test]
+    fn pq_signed_deposit_archive_finalizes_and_replays_from_snapshot() {
+        use postfiat_node::{
+            export_snapshot, import_snapshot, SnapshotExportOptions, SnapshotImportOptions,
+        };
+        use postfiat_types::pq_payment::PqPayment;
+        let fleet = fleet_on_chain(
+            CHAIN,
+            FleetOptions {
+                pricing: false,
+                max_nav_age_blocks: None,
+                extra_asset: false,
+            },
+        );
+        let peer = &fleet.data_dirs[1];
+        let store = NodeStore::new(peer);
+        let genesis = store.read_genesis().unwrap();
+        let bytes =
+            include_bytes!("../../../../../tools/pft-binius-shielded-pq/l1-vectors/pft-shield.bin");
+        let payment = PqPayment::from_bytes(bytes.to_vec()).unwrap();
+        let id = payment.digest();
+        let funding = fleet.root.join("fund-depositor.json");
+        postfiat_node::create_transfer_batch(postfiat_node::BatchTransferOptions {
+            data_dir: fleet.data_dirs[0].clone(),
+            key_file: Some(fleet.data_dirs[0].join("faucet_key.json")),
+            to: format!(
+                "pf{}",
+                bytes_to_hex(&payment.parts().unwrap().0.account.unwrap().id)
+            ),
+            amount: 1000,
+            batch_file: funding.clone(),
+        })
+        .unwrap();
+        fleet.round("transparent", funding);
+        while fleet.height() + 1 < ATOMIC_ACTIVATION {
+            fleet.transparent_round();
+        }
+        let batch = build_atomic_shielded_action_batch(
+            &genesis,
+            vec![ShieldedAction::PqPaymentV1(payment)],
+        )
+        .unwrap();
+        let proposer = &fleet.data_dirs[fleet.proposer_index(fleet.height() + 1)];
+        let mut corrupt = bytes.to_vec();
+        *corrupt.last_mut().unwrap() ^= 1;
+        let bad = build_atomic_shielded_action_batch(
+            &genesis,
+            vec![ShieldedAction::PqPaymentV1(
+                PqPayment::from_bytes(corrupt).unwrap(),
+            )],
+        )
+        .unwrap();
+        assert!(
+            propose_batch_with_timings(proposal(proposer, &fleet.root, &bad))
+                .unwrap_err()
+                .to_string()
+                .contains("PQ L1 verification failed")
+        );
+        let mut foreign = genesis.clone();
+        foreign.chain_id.push('x');
+        assert!(
+            postfiat_node::verify_shielded_action_batch_id(&foreign, &batch)
+                .unwrap_err()
+                .to_string()
+                .contains("development genesis")
+        );
+        let opts = proposal(proposer, &fleet.root, &batch);
+        let proposed = propose_batch_with_timings(opts.clone()).unwrap();
+        let bad_opts = proposal(proposer, &fleet.root, &bad);
+        let mut direct = proposed.proposal;
+        direct.batch_id = bad.batch_id.clone();
+        direct.payload_hash = batch_archive_payload_hash(
+            &genesis,
+            "shielded",
+            &bad.batch_id,
+            &serde_json::to_string(&bad).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            &bad_opts.proposal_file,
+            serde_json::to_vec(&direct).unwrap(),
+        )
+        .unwrap();
+        let vote_file = fleet.root.join("bad-l1.vote");
+        let vote = BlockVoteOptions {
+            data_dir: peer.clone(),
+            verify_block_log: false,
+            key_file: peer.join(VALIDATOR_KEYS_FILE),
+            validator_id: Some("validator-1".into()),
+            batch_file: Some(bad_opts.batch_file.clone()),
+            proposal_file: Some(bad_opts.proposal_file),
+            timeout_certificate_file: None,
+            block_height: Some(fleet.height() + 1),
+            vote_file: vote_file.clone(),
+        };
+        assert!(create_block_vote(vote.clone())
+            .unwrap_err()
+            .to_string()
+            .contains("PQ L1 verification failed"));
+        fs::remove_file(bad_opts.batch_file).unwrap();
+        assert!(create_block_vote(vote).is_err());
+        assert!(!vote_file.exists());
+        fleet.round("shielded", opts.batch_file);
+        let entry = store.read_batch_archive().unwrap().batches.pop().unwrap();
+        assert_eq!(entry.batch_id, batch.batch_id);
+        let history = serde_json::to_value(&entry).unwrap();
+        assert!(history["pq_reference_v1"].as_str().unwrap().contains(&id));
+        assert_eq!(
+            serde_json::from_value::<postfiat_types::BatchArchiveEntry>(history).unwrap(),
+            entry
+        );
+        assert_eq!(
+            serde_json::from_str::<ShieldedActionBatch>(&entry.payload_json).unwrap(),
+            batch
+        );
+        assert!(
+            verify_blocks(NodeOptions {
+                data_dir: peer.clone()
+            })
+            .unwrap()
+            .verified
+        );
+        let block = store.read_blocks().unwrap().blocks.pop().unwrap();
+        assert!(
+            block
+                .header
+                .certificate
+                .votes
+                .iter()
+                .filter(|v| v.accept)
+                .count()
+                >= 5
+        );
+        assert!(store.read_receipts().unwrap().last().unwrap().accepted);
+        let snapshot = fleet.root.join("pq-snapshot");
+        let restored = fleet.root.join("pq-restored");
+        export_snapshot(SnapshotExportOptions {
+            data_dir: peer.clone(),
+            snapshot_dir: snapshot.clone(),
+        })
+        .unwrap();
+        let portable: serde_json::Value =
+            serde_json::from_slice(&fs::read(snapshot.join("batch_archive.json")).unwrap())
+                .unwrap();
+        assert_eq!(portable["pq_bodies_v1"].as_object().unwrap().len(), 1);
+        assert!(portable["pq_bodies_v1"].get(&id).is_some());
+        import_snapshot(SnapshotImportOptions {
+            data_dir: restored.clone(),
+            snapshot_dir: snapshot,
+            node_id: None,
+        })
+        .unwrap();
+        assert!(
+            verify_blocks(NodeOptions {
+                data_dir: restored.clone()
+            })
+            .unwrap()
+            .verified
+        );
+        let body = restored.join("pq_bodies_v1").join(id);
+        assert_eq!(fs::read(&body).unwrap(), bytes);
+        let mut bad = bytes.to_vec();
+        *bad.last_mut().unwrap() ^= 1;
+        fs::write(&body, bad).unwrap();
+        assert!(verify_blocks(NodeOptions {
+            data_dir: restored.clone()
+        })
+        .is_err());
+        fs::remove_file(body).unwrap();
+        assert!(verify_blocks(NodeOptions { data_dir: restored }).is_err());
+        println!("Verified authorized L1 archive: {} body bytes, certified height {}, snapshot restored, missing and mismatched bodies rejected",bytes.len(),block.header.height);
     }
 
     #[test]
