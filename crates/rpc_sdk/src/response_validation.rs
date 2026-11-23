@@ -7041,3 +7041,26 @@ fn validate_vault_bridge_status_redemption_row(
     clean_string_field_allow_empty(row, "withdrawal_packet_evm_digest")?;
     Ok(())
 }
+
+/// Authenticate a forward page against its predecessor. The final digest and
+/// count must match the independently pinned finalized snapshot.
+pub fn validate_pq_pairs(
+    pairs: &[postfiat_types::pq_payment::PqPair],
+    previous: &str,
+    height: u64,
+) -> Result<String, &'static str> {
+    if pairs.len() > 32 {
+        return Err("oversize PQ page");
+    }
+    let mut digest = previous.to_owned();
+    for pair in pairs {
+        if pair.previous != digest || pair.height == 0 || pair.height > height {
+            return Err("PQ page coverage mismatch");
+        }
+        for output in &pair.outputs {
+            output.envelope()?;
+        }
+        digest = pair.digest();
+    }
+    Ok(digest)
+}

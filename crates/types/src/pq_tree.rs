@@ -75,6 +75,7 @@ pub struct PqIndexes {
     // Completed subtrees never change. Partial right edges at any historical
     // count are obtained by padding these subtrees with the recursive empties.
     nodes: OrdMap<(Node, u64, u8, u32), Node>,
+    ordered_pages: OrdMap<u64, String>,
     pages: OrdMap<(Node, u64, u32), String>,
 }
 
@@ -84,6 +85,9 @@ impl PqIndexes {
     }
     pub fn contains_commitment(&self, commitment: &str) -> bool {
         node(commitment).is_ok_and(|c| self.commitments.contains(&c))
+    }
+    pub fn page_at(&self, ordinal: u64) -> Option<&str> {
+        self.ordered_pages.get(&ordinal).map(String::as_str)
     }
     pub fn page_for_output(&self, asset: &str, epoch: u64, index: u32) -> Option<&str> {
         self.pages
@@ -312,6 +316,7 @@ impl PqPool {
             ),
         );
         head.last_page = page.clone();
+        next.indexes.ordered_pages.insert(self.head.pairs, page.clone());
         next.indexes
             .pages
             .insert((asset, pair.epoch, pair.first_index / 2), page);

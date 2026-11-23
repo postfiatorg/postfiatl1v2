@@ -4913,3 +4913,19 @@ pub fn error_response(
 }
 
 include!("protocol_response_helpers.rs");
+
+/// Resume at a global public pair ordinal from an authenticated wallet checkpoint.
+pub fn pq_pairs_request(id: impl Into<String>, token: &str, offset: u64) -> RpcRequest {
+    let section = "pq_pairs";
+    let digest = postfiat_crypto_provider::hash_hex(
+        "postfiat.private_pool_page.cursor.v1",
+        format!("{token}\n{section}").as_bytes(),
+    );
+    RpcRequest::empty(id, "private_pool_page")
+        .with_param_value("snapshot_token", string_value(token))
+        .with_param_value("section", string_value(section))
+        .with_param_value(
+            "cursor",
+            string_value(format!("ppc1:{section}:{offset}:{}", &digest[..16])),
+        )
+}

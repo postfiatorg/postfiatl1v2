@@ -97,6 +97,8 @@ pub struct PrivatePoolCompleteness {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PrivatePoolSnapshotReport {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pq_last_page: Option<String>,
     pub schema: String,
     pub chain_id: String,
     pub genesis_hash: String,
@@ -167,6 +169,9 @@ pub enum PrivatePoolPageItems {
     Anchors(Vec<PrivatePoolAnchorRow>),
     Outputs(Vec<PrivatePoolOutputRow>),
     Assets(Vec<PrivatePoolAssetRow>),
+    PqPairs(Vec<postfiat_types::pq_payment::PqPair>),
+    PqAssets(Vec<(String, postfiat_types::pq_payment::PqAsset)>),
+    PqEpochs(Vec<(String, u64, postfiat_types::pq_payment::PqEpoch)>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -507,6 +512,13 @@ pub fn private_pool_snapshot(
         validate_address(address)?;
     }
     let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
+    private_pool_snapshot_from(options, &snapshot)
+}
+
+pub(super) fn private_pool_snapshot_from(
+    options: PrivatePoolSnapshotOptions,
+    snapshot: &FinalizedPairSnapshot,
+) -> io::Result<PrivatePoolSnapshotReport> {
     let pool = snapshot_pool(&snapshot, &options.pool_id);
     let inclusion_height = options
         .inclusion_height
@@ -567,7 +579,7 @@ pub fn private_pool_snapshot(
         .map(serde_json::to_string)
         .transpose()
         .map_err(invalid_data)?;
-    let counts = match pool {
+    let mut counts = match pool {
         Some(pool) => PrivatePoolCounts {
             commitments: pool.output_commitments.len() as u64,
             nullifiers: pool.nullifiers.len() as u64,
@@ -583,7 +595,28 @@ pub fn private_pool_snapshot(
             assets: 0,
         },
     };
+    let pq_read = options.pool_id == postfiat_types::pq_payment::POOL_ID;
+    let pq_head = snapshot.shielded.pq_pool_v1.as_ref().map(|p| &p.head);
+    if pq_read {
+        let outputs = pq_head.map_or(0, |h| h.pairs * 2);
+        counts = PrivatePoolCounts {
+            commitments: outputs,
+            nullifiers: outputs,
+            outputs,
+            assets: pq_head.map_or(0, |h| h.assets.len() as u64),
+            accepted_anchors: pq_head.map_or(0, |h| {
+                h.assets
+                    .values()
+                    .map(|a| {
+                        a.epoch * postfiat_types::pq_payment::PQ_WINDOW as u64
+                            + a.writable.anchors.len() as u64
+                    })
+                    .sum()
+            }),
+        };
+    }
     Ok(PrivatePoolSnapshotReport {
+        pq_last_page: pq_read.then(|| pq_head.map_or(String::new(), |h| h.last_page.clone())),
         schema: PRIVATE_POOL_SNAPSHOT_SCHEMA.to_string(),
         chain_id: snapshot.genesis.chain_id.clone(),
         genesis_hash: genesis_hash(&snapshot.genesis),
@@ -594,7 +627,11 @@ pub fn private_pool_snapshot(
         finalized_block_hash: snapshot.tip.block_hash.clone(),
         finalized_state_root: snapshot.tip.state_root.clone(),
         pool_id: options.pool_id,
-        pool_present: pool.is_some(),
+        pool_present: if pq_read {
+            pq_head.is_some()
+        } else {
+            pool.is_some()
+        },
         counts,
         page_limits: PrivatePoolPageLimits {
             items: PRIVATE_POOL_PAGE_MAX_ITEMS as u64,
@@ -612,7 +649,17 @@ pub fn private_pool_snapshot(
         egress_status,
         policy_id,
         disclosure_hash,
-        completeness: completeness(pool)?,
+        completeness: if pq_read {
+            PrivatePoolCompleteness {
+                empty_pool_before_ingress: pq_head.is_none(),
+                history_complete: true,
+                outputs_complete: true,
+                anchors_from_retained_prefixes: true,
+                complete: true,
+            }
+        } else {
+            completeness(pool)?
+        },
     })
 }
 
@@ -644,6 +691,8 @@ pub(super) fn parse_cursor(cursor: &str, token: &str, section: &str) -> Option<u
 
 fn section_max(section: &str) -> usize {
     match section {
+        "pq_pairs" => PRIVATE_POOL_PAGE_MAX_OUTPUTS / 2,
+        "pq_assets" | "pq_epochs" => PRIVATE_POOL_PAGE_MAX_ASSETS,
         "outputs" => PRIVATE_POOL_PAGE_MAX_OUTPUTS,
         "assets" => PRIVATE_POOL_PAGE_MAX_ASSETS,
         _ => PRIVATE_POOL_PAGE_MAX_ITEMS,
@@ -654,6 +703,13 @@ fn section_max(section: &str) -> usize {
 /// the committed tip, or a retained older point whose append-only lists are
 /// the current ones truncated to its lengths and whose asset rows it keeps.
 pub fn private_pool_page(options: PrivatePoolPageOptions) -> io::Result<PrivatePoolPageReport> {
+    private_pool_page_with(options, read_finalized_pair_snapshot)
+}
+
+pub(super) fn private_pool_page_with(
+    options: PrivatePoolPageOptions,
+    read: impl FnOnce(&Path) -> io::Result<FinalizedPairSnapshot>,
+) -> io::Result<PrivatePoolPageReport> {
     let max = section_max(&options.section);
     let limit = options.limit.unwrap_or(max).clamp(1, max);
     let mut report = PrivatePoolPageReport {
@@ -674,7 +730,11 @@ pub fn private_pool_page(options: PrivatePoolPageOptions) -> io::Result<PrivateP
         report.refusal = Some(read_refusal(code, reason));
         Ok(report)
     };
-    if !PRIVATE_POOL_SECTIONS.contains(&options.section.as_str()) {
+    let pq_section = matches!(
+        options.section.as_str(),
+        "pq_assets" | "pq_pairs" | "pq_epochs"
+    );
+    if !pq_section && !PRIVATE_POOL_SECTIONS.contains(&options.section.as_str()) {
         let reason = format!(
             "section must be one of {}",
             PRIVATE_POOL_SECTIONS.join(", ")
@@ -688,7 +748,7 @@ pub fn private_pool_page(options: PrivatePoolPageOptions) -> io::Result<PrivateP
             "snapshot token is not a private_pool_snapshot token".to_string(),
         );
     };
-    let snapshot = read_finalized_pair_snapshot(&options.data_dir)?;
+    let snapshot = read(&options.data_dir)?;
     let point = match resolve_snapshot_token(&options.data_dir, &token, &snapshot.tip) {
         Ok(point) => point,
         Err(refusal) => return refuse(report, &refusal.code, refusal.reason),
@@ -706,6 +766,103 @@ pub fn private_pool_page(options: PrivatePoolPageOptions) -> io::Result<PrivateP
             }
         },
     };
+    if pq_section != (token.pool_id == postfiat_types::pq_payment::POOL_ID) {
+        return refuse(
+            report,
+            "section_unknown",
+            "section does not belong to pool".into(),
+        );
+    }
+    if pq_section {
+        let pool = snapshot.shielded.pq_pool_v1.as_ref();
+        let head = match &point {
+            Some(older) => older.pq_head.as_ref(),
+            None => pool.map(|p| &p.head),
+        };
+        if point.is_some() && head.is_none() {
+            if let Some(id) = pool.and_then(|p| p.indexes.page_at(0)) {
+                if postfiat_storage::pq_pool::read_page(&options.data_dir, id)?.height
+                    <= token.height
+                {
+                    return refuse(
+                        report,
+                        "snapshot_unavailable",
+                        "snapshot predates PQ read support".into(),
+                    );
+                }
+            }
+        }
+        let total = if options.section == "pq_epochs" {
+            head.into_iter()
+                .flat_map(|h| h.assets.values())
+                .map(|a| a.epoch as usize + 1)
+                .sum()
+        } else if options.section == "pq_pairs" {
+            head.map_or(0, |h| h.pairs as usize)
+        } else {
+            head.map_or(0, |h| h.assets.len())
+        };
+        if offset > total {
+            return refuse(
+                report,
+                "cursor_out_of_range",
+                "past finalized coverage".into(),
+            );
+        }
+        let end = offset.saturating_add(limit).min(total);
+        let items = if options.section == "pq_pairs" {
+            let mut rows = Vec::new();
+            for n in offset..end {
+                let id = pool
+                    .and_then(|p| p.indexes.page_at(n as u64))
+                    .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing PQ pair"))?;
+                rows.push(postfiat_storage::pq_pool::read_page(&options.data_dir, id)?);
+            }
+            PrivatePoolPageItems::PqPairs(rows)
+        } else if options.section == "pq_epochs" {
+            let mut rows = Vec::new();
+            let mut skip = offset as u64;
+            for (id, asset) in head.into_iter().flat_map(|h| &h.assets) {
+                if skip > asset.epoch {
+                    skip -= asset.epoch + 1;
+                    continue;
+                }
+                for epoch in skip..=asset.epoch {
+                    let tree = if epoch == asset.epoch {
+                        &asset.writable
+                    } else {
+                        pool.and_then(|p| p.tree(id, epoch))
+                            .ok_or_else(|| io::Error::other("missing closed PQ epoch"))?
+                    };
+                    rows.push((id.clone(), epoch, tree.clone()));
+                    if rows.len() == limit {
+                        break;
+                    }
+                }
+                if rows.len() == limit {
+                    break;
+                }
+                skip = 0;
+            }
+            PrivatePoolPageItems::PqEpochs(rows)
+        } else {
+            PrivatePoolPageItems::PqAssets(
+                head.into_iter()
+                    .flat_map(|h| h.assets.iter())
+                    .skip(offset)
+                    .take(end - offset)
+                    .map(|(id, a)| (id.clone(), a.clone()))
+                    .collect(),
+            )
+        };
+        report.total = total as u64;
+        report.offset = offset as u64;
+        report.item_count = (end - offset) as u64;
+        report.items = Some(items);
+        report.next_cursor =
+            (end < total).then(|| encode_cursor(&options.snapshot_token, &options.section, end));
+        return Ok(report);
+    }
     // An older point where this pool did not yet exist serves it empty.
     let present = snapshot_pool(&snapshot, &token.pool_id).filter(|_| {
         point
