@@ -27,7 +27,8 @@ class FifthReview(unittest.TestCase):
             return transaction
 
         response = Mock()
-        response.json.return_value = dict(stage="paid", solana_tx="sig")
+        job = c.read(Path(__file__).parent / "fixtures/agave-withdrawal.json")["job"]
+        response.json.return_value = dict(job, burn_tx_id=burn)
         with tempfile.TemporaryDirectory() as d, contextlib.ExitStack() as st:
             out = Path(d)
             (out / "signed.json").write_text("{}")
@@ -49,7 +50,7 @@ class FifthReview(unittest.TestCase):
             ).return_value.call.return_value = {"slot": 10}
             for name, val in [
                 ("token_deltas", {}),
-                ("signature", "sig"),
+                ("signature", job["solana_tx"]),
                 ("finalized_reference", {}),
             ]:
                 st.enter_context(patch.object(c, name, return_value=val))

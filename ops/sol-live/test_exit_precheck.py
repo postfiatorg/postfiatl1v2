@@ -9,40 +9,16 @@ import exit_setup as s
 
 class BootstrapTests(unittest.TestCase):
     def test_vault_snapshot_rejects_wrong_route_and_frozen_ata(self):
-        from exit_precheck import inspect_vault, PHANTOM, MINT_AUTH, FREEZE_AUTH
-        from route_binding import route_binding
+        from exit_precheck import inspect_vault, PHANTOM
 
-        def acc(program, data):
-            return dict(
-                owner=str(program),
-                executable=False,
-                data=[base64.b64encode(data).decode(), "base64"],
-            )
-
-        config = s.pda(s.VAULT, b"config")
-
-        def token(owner):
-            return bytes(s.MINT) + bytes(owner) + bytes(44) + bytes([1]) + bytes(56)
-
-        mint = (
-            b"\1\0\0\0"
-            + bytes(MINT_AUTH)
-            + bytes(8)
-            + bytes([6, 1, 1, 0, 0, 0])
-            + bytes(FREEZE_AUTH)
-        )
-        rows = [
-            acc(s.VAULT, bytes(s.MINT) + route_binding(s.GENESIS, s.VAULT) + bytes(32)),
-            acc(s.TOKEN, token(config)),
-            acc(s.TOKEN, mint),
-            acc(s.TOKEN, token(PHANTOM)),
-        ]
+        snapshot = s.read(Path(__file__).parent / "fixtures/mainnet-vault.json")
+        rows = snapshot["value"]
         c = Mock()
         for idx, offset in [(0, 32), (1, 32), (1, 72), (2, 44), (2, 4), (3, 108)]:
             altered = copy.deepcopy(rows)
             data = bytearray(base64.b64decode(altered[idx]["data"][0]))
             data[offset] ^= 1
-            altered[idx] = acc(altered[idx]["owner"], data)
+            altered[idx]["data"][0] = base64.b64encode(data).decode()
             c.call.return_value = dict(context={"slot": 42}, value=altered)
             with self.assertRaises(ValueError):
                 inspect_vault(c, PHANTOM)
@@ -78,14 +54,8 @@ class BootstrapTests(unittest.TestCase):
 
         cfg = s.read(s.CONFIG)
         empty = dict(owner=str(s.SYSTEM), data=b"", executable=False)
-        light = dict(
-            owner=str(s.VERIFIER), data=s.expected_light(cfg), executable=False
-        )
-        anchor = dict(
-            owner=str(s.VERIFIER),
-            data=bytes.fromhex(cfg["initial_committee"]),
-            executable=False,
-        )
+        simulated = s.read(Path(__file__).parent / "fixtures/mainnet-bootstrap-simulation.json")
+        light, anchor = [dict(a, data=base64.b64decode(a["data"][0])) for a in simulated]
         self.assertEqual(bootstrap_state(cfg, [None, empty]), "empty")
         self.assertEqual(bootstrap_state(cfg, [light, anchor]), "initialized")
         for pair in (

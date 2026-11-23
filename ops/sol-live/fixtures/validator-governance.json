@@ -1,0 +1,28 @@
+{
+  "batch": {
+    "batch_kind": "governance",
+    "batch_id": "38d44ce3d65d189158a037e65023c2027b49f04f71061b0d08308ec3f5ec363bb4e1a9cf061823c117f607198785136d",
+    "payload_json": "{\"amendments\":[{\"amendment_id\":\"5c200a5016c594f4484ad81907f5213a897d3dbafd7f3b5efd05631597e1edb562b4a6c9bfa448203b04cd55ce6e4f60\",\"kind\":\"vault_bridge_route_authority_activation_height\"}]}"
+  },
+  "transaction": {
+    "block": {
+      "header": {
+        "height": 62,
+        "batch_kind": "governance",
+        "batch_id": "38d44ce3d65d189158a037e65023c2027b49f04f71061b0d08308ec3f5ec363bb4e1a9cf061823c117f607198785136d"
+      }
+    },
+    "receipt": {
+      "accepted": true,
+      "account_reserve": 0,
+      "code": "accepted",
+      "fee_burned": 0,
+      "fee_charged": 0,
+      "message": "governance amendment applied",
+      "minimum_fee": 0,
+      "state_expansion_fee": 0,
+      "tx_id": "5c200a5016c594f4484ad81907f5213a897d3dbafd7f3b5efd05631597e1edb562b4a6c9bfa448203b04cd55ce6e4f60"
+    },
+    "confirmed": true
+  }
+}

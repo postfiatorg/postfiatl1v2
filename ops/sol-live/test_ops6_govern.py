@@ -14,8 +14,8 @@ class GovernanceTest(unittest.TestCase):
     def setUp(self):
         self.head = dict(block_height=1761, block_tip_hash="tip", state_root="root",
                          build_git_revision="reviewed")
-        self.route = dict(active=True, burns_open=False, current_height=1761,
-                          profile_hash=g.EXIT, profile=g.read(g.PROFILE))
+        self.route = g.read(Path(__file__).parent / "fixtures/fork-open-route.json")
+        self.route.update(burns_open=False, current_height=1761)
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.mock(g, "fleet", return_value=self.head)
