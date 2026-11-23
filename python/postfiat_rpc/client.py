@@ -1262,8 +1262,13 @@ class PostFiatRpcClient:
         limit: int | None = None,
         cursor: str | None = None,
         omit_owner_keys: bool = False,
+        include_inventory_revision: bool = False,
     ) -> dict[str, Any]:
-        """One page of owned objects; pass the previous `next_cursor` as `cursor`."""
+        """One page of owned objects; pass the previous `next_cursor` as `cursor`.
+
+        `include_inventory_revision` asks for `node_id` and `inventory_revision`;
+        nodes before it ignore the parameter and send neither.
+        """
         params: dict[str, Any] = {"owner_public_key_hex": owner_public_key_hex}
         if asset is not None:
             params["asset"] = asset
@@ -1273,6 +1278,8 @@ class PostFiatRpcClient:
             params["cursor"] = cursor
         if omit_owner_keys:
             params["omit_owner_keys"] = True
+        if include_inventory_revision:
+            params["include_inventory_revision"] = True
         return self._call("owned_objects", params)
 
     def owned_objects_all(
@@ -1282,6 +1289,7 @@ class PostFiatRpcClient:
         asset: str | None = None,
         page_limit: int = 128,
         omit_owner_keys: bool = False,
+        include_inventory_revision: bool = False,
         max_restarts: int = OWNED_OBJECTS_ALL_MAX_RESTARTS,
     ) -> dict[str, Any]:
         """Every owned object from one object view, or an error.
@@ -1301,12 +1309,17 @@ class PostFiatRpcClient:
         `None`, `view_digest` of the view read, and `pages` (pages read).
         The pages are bound by the view digest, not by one revision: the
         revision can grow between pages of one view. `height`, `state_root`,
-        and, when the node sends them, `inventory_revision` and `node_id` are
-        the last page read's; see `owned_objects_revision`.
+        and, when `include_inventory_revision` is set and the node sends them,
+        `inventory_revision` and `node_id` are the last page read's; see
+        `owned_objects_revision`.
         """
         for _ in range(max_restarts + 1):
             first = self.owned_objects(
-                owner_public_key_hex, asset=asset, limit=page_limit, omit_owner_keys=omit_owner_keys
+                owner_public_key_hex,
+                asset=asset,
+                limit=page_limit,
+                omit_owner_keys=omit_owner_keys,
+                include_inventory_revision=include_inventory_revision,
             )
             _require_owned_objects_paging(first)
             view = first.get("view_digest")
@@ -1322,6 +1335,7 @@ class PostFiatRpcClient:
                         limit=page_limit,
                         cursor=page["next_cursor"],
                         omit_owner_keys=omit_owner_keys,
+                        include_inventory_revision=include_inventory_revision,
                     )
                 except RpcError as error:
                     if error.error.get("code") != OWNED_OBJECTS_VIEW_CHANGED:

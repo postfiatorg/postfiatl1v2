@@ -1183,6 +1183,8 @@ pub struct OwnedObjectsParams {
     pub cursor: Option<String>,
     /// Omit the per-object owner key (sent only when `true`).
     pub omit_owner_keys: bool,
+    /// Ask for `node_id` and `inventory_revision` (sent only when `true`).
+    pub include_inventory_revision: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1229,6 +1231,9 @@ pub fn owned_objects_request(id: impl Into<String>, params: OwnedObjectsParams) 
     }
     if params.omit_owner_keys {
         request = request.with_param_value("omit_owner_keys", Value::Bool(true));
+    }
+    if params.include_inventory_revision {
+        request = request.with_param_value("include_inventory_revision", Value::Bool(true));
     }
     request
 }
@@ -4456,6 +4461,7 @@ fn validate_owned_objects_request_params(
             "limit",
             "cursor",
             "omit_owner_keys",
+            "include_inventory_revision",
         ],
     )?;
     // The node decodes the key case-insensitively (crypto_provider hex_to_bytes)
@@ -4499,12 +4505,11 @@ fn validate_owned_objects_request_params(
             ));
         }
     }
-    if let Some(value) = params.get("omit_owner_keys") {
-        if !value.is_boolean() {
-            return Err(invalid_request_params(
-                "omit_owner_keys",
-                "expected a boolean",
-            ));
+    for name in ["omit_owner_keys", "include_inventory_revision"] {
+        if let Some(value) = params.get(name) {
+            if !value.is_boolean() {
+                return Err(invalid_request_params(name, "expected a boolean"));
+            }
         }
     }
     Ok(())
