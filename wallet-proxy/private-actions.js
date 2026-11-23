@@ -277,20 +277,60 @@ function loadConfig(env, fleet = []) {
 
 // One record per intent, written like the bridge jobs: temp file, fsync, rename, fsync the directory.
 function createStore(dir) {
-    for (const sub of ['intents', 'by-action', 'by-batch', 'by-statement']) fs.mkdirSync(path.join(dir, sub), { recursive: true, mode: 0o700 });
+    for (const sub of ['intents', 'by-action', 'by-batch', 'by-statement', 'capabilities']) fs.mkdirSync(path.join(dir, sub), { recursive: true, mode: 0o700 });
     const fsyncDir = (directory) => {
         const fd = fs.openSync(directory, 'r');
         try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
     };
-    function atomicWrite(file, value) {
+    function atomicWrite(file, value, createOnly = false) {
         const temporary = `${file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
         const fd = fs.openSync(temporary, 'wx', 0o600);
         try { fs.writeFileSync(fd, `${JSON.stringify(value)}\n`); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-        fs.renameSync(temporary, file);
+        if (createOnly) {
+            try { fs.linkSync(temporary, file); }
+            catch (err) { if (err.code !== 'EEXIST') throw err; }
+            finally { fs.unlinkSync(temporary); }
+        } else { fs.renameSync(temporary, file); }
         fsyncDir(path.dirname(file));
     }
     const recordFile = (intentId) => path.join(dir, 'intents', `${intentId}.json`);
+    // Legacy payerless records have no wallet-held credential. Keep their
+    // history, remove old owner labels, and refuse access through these routes.
+    const legacy = new Set();
+    for (const file of fs.readdirSync(path.join(dir, 'intents'))) {
+        if (!/^[0-9a-f]{96}\.json$/.test(file)) continue;
+        const target = path.join(dir, 'intents', file);
+        const record = JSON.parse(fs.readFileSync(target, 'utf8'));
+        if (record.kind !== 'pq_payment_v1' || record.capability_hash) continue;
+        const action = JSON.parse(record.action_json);
+        if (Buffer.from(action.body, 'base64')[71] !== 0) continue;
+        legacy.add(record.intent_id);
+        if (Object.hasOwn(record, 'principal') || record.address || Object.hasOwn(record, 'session_scope')) {
+            delete record.principal;
+            delete record.session_scope;
+            record.address = null;
+            atomicWrite(target, record);
+        }
+    }
+    const owners = path.join(dir, 'by-statement');
+    if (legacy.size) {
+        for (const file of fs.readdirSync(owners).filter(name => HEX96.test(name))) {
+            const target = path.join(owners, file);
+            if (legacy.has(JSON.parse(fs.readFileSync(target, 'utf8')).intent_id)) fs.unlinkSync(target);
+        }
+        fsyncDir(owners);
+    }
     return {
+        bindCapability(intent, hash) {
+            atomicWrite(path.join(dir, 'capabilities', intent), { capability_hash:hash }, true);
+            this.checkCapability(intent, hash);
+        },
+        checkCapability(intent, hash) {
+            let saved;
+            try { saved = JSON.parse(fs.readFileSync(path.join(dir, 'capabilities', intent), 'utf8')); }
+            catch (err) { if (err.code === 'ENOENT') throw refusal(403, 'private_capability_missing'); throw err; }
+            if (saved.capability_hash !== hash) throw refusal(403, 'private_capability_invalid');
+        },
         read(intentId) {
             try { return JSON.parse(fs.readFileSync(recordFile(intentId), 'utf8')); } catch (error) {
                 if (error.code === 'ENOENT') return null;
@@ -352,7 +392,8 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
         && result.action_hash === record.action_hash && result.batch_id === record.batch_id;
 
     function validateRequest(body, principal) {
-        if (!exactKeys(body, ['address', 'intent_id', 'action_json'])) throw refusal(400, 'private_request_invalid');
+        const fields = ['address', 'intent_id', 'action_json'];
+        if (!exactKeys(body, fields) && !exactKeys(body, [...fields, 'capability'])) throw refusal(400, 'private_request_invalid');
         const { address, intent_id: intentId, action_json: actionJson } = body;
         if (!HEX96.test(String(intentId)) || typeof actionJson !== 'string') {
             throw refusal(400, 'private_request_invalid');
@@ -361,6 +402,9 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
         const action = parsePublicAction(actionJson);
         const payerless = action.kind === 'pq_payment_v1' && !action.payer;
         if (payerless && address !== null) throw refusal(403, 'private_action_address_mismatch');
+        if (payerless ? typeof body.capability !== 'string' || !/^[0-9a-f]{64}$/.test(body.capability)
+                : Object.hasOwn(body, 'capability')) throw refusal(403, 'private_capability_invalid');
+        const capabilityHash = payerless ? sha3Hex('postfiat.gateway.capability.v1', body.capability) : undefined;
         if (!payerless && !ADDRESS_RE.test(String(address))) {
             throw refusal(400, 'private_request_invalid');
         }
@@ -384,8 +428,8 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
         const assetIds = action.kind === 'shielded_swap_v1' ? [] : [action.assetId || action.value.asset_id];
         if (allowed.length && assetIds.some((id) => !allowed.includes(id))) throw refusal(403, 'private_action_asset_refused');
         return {
-            address, principal: payerless ? sha3Hex('postfiat.gateway.private-owner.v1', principal) : principal,
-            scope: payerless ? PRIVATE_SPEND_SCOPE : principal,
+            address, principal: payerless ? undefined : principal, capabilityHash,
+            scope: payerless ? PRIVATE_SPEND_SCOPE + ':' + capabilityHash : principal,
             intentId, actionJson, kind: action.kind,
             canonical: action.canonical, statement: action.statement,
             actionHash: sha3Hex(ACTION_DOMAIN, action.canonical),
@@ -395,6 +439,11 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
 
     function checkOwner(record, request) {
         if (record.action_json !== request.actionJson) throw refusal(409, 'private_intent_conflict');
+        if (request.capabilityHash) {
+            if (!record.capability_hash) throw refusal(403, 'private_legacy_record');
+            if (record.capability_hash !== request.capabilityHash) throw refusal(403, 'private_capability_invalid');
+            return;
+        }
         if (record.principal !== request.principal || record.address !== request.address) throw refusal(403, 'private_session_mismatch');
     }
 
@@ -486,8 +535,23 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
         config.domain, config.poolId, request.address, request.principal, request.statement,
     ]));
 
+    function authorize(body) {
+        if (config.poolId !== PQ_POOL || !exactKeys(body, ['intent_id', 'capability_hash'])
+            || !HEX96.test(body.intent_id) || !HEX96.test(body.capability_hash))
+            throw refusal(400, 'private_request_invalid');
+        const prior = store.read(body.intent_id);
+        if (prior && !prior.capability_hash) throw refusal(403, 'private_legacy_record');
+        if (prior && prior.capability_hash !== body.capability_hash) throw refusal(403, 'private_capability_invalid');
+        store.bindCapability(body.intent_id, body.capability_hash);
+        return {schema:SCHEMA, intent_id:body.intent_id, capability_hash:body.capability_hash};
+    }
+
     async function submit(body, principal) {
         let request = validateRequest(body, principal);
+        // Bind this exact intent before a submit or a concurrent retry can reach a node.
+        const previous = store.read(request.intentId);
+        if (previous) checkOwner(previous, request);
+        if (request.capabilityHash && !previous) store.checkCapability(request.intentId, request.capabilityHash);
         let authoritative;
         if (request.kind === 'pq_payment_v1') {
             // Let one authoritative admission transaction select the retry's
@@ -498,7 +562,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
             });
             if (!result.ok) {
                 // A retry can hit a changed fee after a lost acknowledgement. Only
-                // release the wallet's notes if the authority has no reservation.
+                // report a refusal hint when every configured peer reports a miss.
                 if (/^pq_[a-z0-9_]+$/.test(result.code) || result.final
                     || ['private_action_queue_full', 'private_action_stale_tip'].includes(result.code)) {
                     const receipts = await allSources('private_action_receipt', {intent_id: request.intentId});
@@ -515,7 +579,9 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
             if (result.result?.schema !== NODE_RECORD_SCHEMA || owner?.schema !== NODE_RECORD_SCHEMA || !NODE_STATES.has(owner.state)
                 || owner.domain?.session_scope !== request.scope || owner.domain.pool_id !== PQ_POOL
                 || !Object.entries(config.domain).every(([k, v]) => owner.domain[k] === v)) throw refusal(502, 'private_action_source_mismatch');
-            const original = validateRequest({ address: request.address, intent_id: owner.intent_id, action_json: owner.action_json }, principal);
+            if (request.capabilityHash && (owner.intent_id !== request.intentId || owner.action_json !== request.actionJson))
+                throw refusal(409, 'private_intent_conflict');
+            const original = validateRequest({ ...body, intent_id: owner.intent_id, action_json: owner.action_json }, principal);
             if (original.statement !== request.statement || owner.action_hash !== original.actionHash || owner.batch_id !== original.batchId)
                 throw refusal(502, 'private_action_source_mismatch');
             request = original;
@@ -549,7 +615,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
             }
             const record = {
                 schema: RECORD_SCHEMA, intent_id: request.intentId, domain: config.domain, address: request.address,
-                principal: request.principal, session_scope: request.scope, pool_id: config.poolId, kind: request.kind, action_json: request.actionJson,
+                principal: request.principal, capability_hash: request.capabilityHash, session_scope: request.scope, pool_id: config.poolId, kind: request.kind, action_json: request.actionJson,
                 action_hash: request.actionHash, batch_id: request.batchId,
                 batch_json: `{"batch_id":${JSON.stringify(request.batchId)},"atomic":true,"actions":[${request.canonical}]}`,
                 state: 'queued', code: null, acknowledged: false, created_at_ms: Date.now(), updated_at_ms: Date.now(),
@@ -566,7 +632,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
             store.write(record);
             return { record, fresh: true };
         });
-        if (request.kind === 'pq_payment_v1') store.rememberPqOwner(pqOwnerKey(request), request.intentId);
+        if (request.kind === 'pq_payment_v1' && !request.capabilityHash) store.rememberPqOwner(pqOwnerKey(request), request.intentId);
         if (env[FAULT_ENV] === 'after-reservation') process.kill(process.pid, 'SIGKILL');
         // The identical reserved bytes go only to sources that do not hold them yet; a refused,
         // mismatched or fully reserved record is returned as it stands.
@@ -587,7 +653,8 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
 
     async function receipt(body, principal) {
         let request = validateRequest(body, principal);
-        if (request.kind === 'pq_payment_v1') {
+        if (request.capabilityHash && !store.read(request.intentId)) throw refusal(404, 'private_receipt_missing');
+        if (request.kind === 'pq_payment_v1' && !request.capabilityHash) {
             const intentId = store.pqOwner(pqOwnerKey(request));
             if (intentId && intentId !== request.intentId) {
                 const original = store.read(intentId);
@@ -695,7 +762,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
             }
         }
         const pinned = (report) => JSON.stringify([report.snapshot_token, report.finalized_height,
-            report.finalized_block_hash, report.finalized_state_root, report.counts]);
+            report.finalized_block_hash, report.finalized_state_root, report.counts, report.inclusion_height, report.pq_issued_fee]);
         if (!reports[0].snapshot_token || reports.some((report) => pinned(report) !== pinned(reports[0]))) {
             throw refusal(503, 'private_snapshot_sources_diverged');
         }
@@ -846,7 +913,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
     async function handleHttp(req, res, url, auth) {
         if (!url.pathname.startsWith(prefix)) return false;
         const route = url.pathname.slice(prefix.length);
-        if (!['snapshot', 'submit', 'receipt'].includes(route) && !(route === 'page' && config.poolId === PQ_POOL)) return send(res, 404, error('private_route_unknown'));
+        if (!['snapshot', 'submit', 'receipt'].includes(route) && !(['page','authorize'].includes(route) && config.poolId === PQ_POOL)) return send(res, 404, error('private_route_unknown'));
         if (req.method !== 'POST') return send(res, 405, error('method_not_allowed'));
         if (!auth.originAllowed(req, true)) return send(res, 403, error('origin_not_allowed'));
         const authentication = auth.authenticate(req);
@@ -854,12 +921,13 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
             return send(res, authentication?.failure?.statusCode || 401, error(authentication?.failure?.code || 'proxy_auth_required'));
         }
         let admission = null;
-        if (route === 'submit') {
+        if (route === 'submit' || route === 'authorize') {
             admission = auth.admitMutation(authentication.principal);
             if (!admission.ok) return send(res, 429, { ...error(admission.code), retry_after_ms: admission.retry_after_ms });
         }
         try {
             const body = JSON.parse((await readBody(req, config.poolId === PQ_POOL && route === 'submit' ? MAX_ACTION_BYTES : MAX_REQUEST_BYTES)).toString('utf8'));
+            if (route === 'authorize') return send(res, 200, authorize(body));
             if (route === 'page') return send(res, 200, await pqPage(body));
             if (route === 'snapshot') return send(res, 200, await snapshot(body));
             if (route === 'receipt') return send(res, 200, await receipt(body, authentication.principal));
@@ -873,7 +941,7 @@ function createPrivateActions({ env = process.env, fleet = [], rpcRequest, prefi
         }
     }
 
-    return { enabled: true, config, submit, receipt, snapshot, handleHttp, store };
+    return { enabled: true, config, authorize, submit, receipt, snapshot, handleHttp, store };
 }
 
 function readBody(req, limit) {
