@@ -7,9 +7,11 @@ from tempfile import TemporaryDirectory
 
 
 def check_tunnels():
-    from live import CHAIN, PFTL_GENESIS, PEERS, rpc, six
+    from live import CHAIN, PFTL_GENESIS, PEERS, rpc, six, verify_node_ids
 
-    for peer, status in zip(PEERS, six(lambda i: rpc(i, "status")), strict=True):
+    rows = six(lambda i: rpc(i, "status"))
+    verify_node_ids(rows)
+    for peer, status in zip(PEERS, rows, strict=True):
         if (status["chain_id"], status["genesis_hash"]) != (
             CHAIN.decode(),
             PFTL_GENESIS.hex(),

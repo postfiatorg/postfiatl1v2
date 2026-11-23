@@ -9,7 +9,7 @@ import re
 import subprocess
 import time
 
-from live import CHAIN, PFTL_GENESIS, HOSTS, read, rpc, save, six
+from live import CHAIN, PFTL_GENESIS, HOSTS, read, rpc, save, six, verify_node_ids
 from exit_precheck import parent_of
 from exit_setup import require
 from exit_release_kit import KIT as OLD_KIT
@@ -17,6 +17,7 @@ from exit_release_kit import KIT as OLD_KIT
 
 def snapshot():
     rows = six(lambda i: rpc(i, "status"))
+    verify_node_ids(rows)
     require(
         len(rows) == 6
         and all(
@@ -30,7 +31,7 @@ def snapshot():
     return dict(
         time=time.time(),
         validators=[
-            dict(parent_of(row), revision=row["build_git_revision"]) for row in rows
+            dict(parent_of(row), node_id=row["node_id"], revision=row["build_git_revision"]) for row in rows
         ],
     )
 

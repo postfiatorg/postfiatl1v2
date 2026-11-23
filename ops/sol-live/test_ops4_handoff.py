@@ -112,6 +112,7 @@ class OperatorReviewTest(unittest.TestCase):
                 chain_id=CHAIN.decode(),
                 genesis_hash=PFTL_GENESIS.hex(),
                 block_height=41 + i % 2,
+                node_id=f"validator-{i}",
             )
 
         with (
