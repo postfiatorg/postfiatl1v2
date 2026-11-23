@@ -1062,10 +1062,33 @@ pub fn apply_validator_registry_update(
     let previous_registry_path = options
         .previous_registry_file
         .unwrap_or_else(|| store.data_dir().join(VALIDATOR_REGISTRY_FILE));
-    let live_registry_path = store.data_dir().join(VALIDATOR_REGISTRY_FILE);
-    let output_registry_path = options
-        .output_registry_file
-        .unwrap_or_else(|| live_registry_path.clone());
+    let output = options.output_registry_file.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "registry projection requires an explicit offline output file",
+        )
+    })?;
+    let parent = output
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."))
+        .canonicalize()?;
+    let name = output.file_name().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "missing offline registry filename",
+        )
+    })?;
+    if parent.starts_with(store.data_dir().canonicalize()?)
+        || name == VALIDATOR_REGISTRY_FILE
+        || name == VALIDATOR_REGISTRY_GENESIS_FILE
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "use an offline output outside the node directory with a non-resident filename",
+        ));
+    }
+    let output_registry_path = parent.join(name);
     let mut registry = read_validator_registry_file(&previous_registry_path)?;
     apply_verified_validator_registry_update_to_registry(
         &genesis,
@@ -1074,16 +1097,11 @@ pub fn apply_validator_registry_update(
         options.current_height,
         "validator registry update apply",
     )?;
-    if output_registry_path == live_registry_path {
-        if let Ok(expected) = local_validator_ids(new_validators.len() as u32) {
-            if expected == new_validators {
-                let mut governance = store.read_governance()?;
-                governance.active_validator_count = new_validators.len() as u32;
-                store.write_governance(&governance)?;
-            }
-        }
-    }
-    write_validator_registry_file(&output_registry_path, &registry)?;
+    crate::storage_activation_cli::write_exclusive_json(
+        &output_registry_path,
+        &registry,
+        "offline registry",
+    )?;
 
     Ok(ValidatorRegistryUpdateApplyReport {
         schema: "postfiat-validator-registry-update-apply-v1".to_string(),

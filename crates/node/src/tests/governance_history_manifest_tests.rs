@@ -181,6 +181,42 @@
             update_file: update_file.clone(),
         })
         .expect("create registry update");
+        let offline = unique_test_dir("offline-registry-output");
+        fs::create_dir_all(&offline).unwrap();
+        let apply = |output_registry_file| {
+            apply_validator_registry_update(ValidatorRegistryUpdateApplyOptions {
+                data_dir: data_dir.clone(),
+                update_file: update_file.clone(),
+                current_height: 4,
+                previous_registry_file: Some(previous_registry_file.clone()),
+                output_registry_file,
+            })
+        };
+        let resident = data_dir.join(VALIDATOR_REGISTRY_FILE);
+        let original = fs::read(&resident).unwrap();
+        let governance_before = store.read_governance().unwrap();
+        assert!(apply(None).is_err(), "implicit resident write");
+        assert!(apply(Some(resident.clone())).is_err(), "explicit resident write");
+        #[cfg(unix)]
+        {
+            let alias = offline.join("linked-data");
+            std::os::unix::fs::symlink(&data_dir, &alias).unwrap();
+            assert!(apply(Some(alias.join(VALIDATOR_REGISTRY_FILE))).is_err());
+            assert!(apply(Some(alias.join("new.json"))).is_err());
+            let link = offline.join("aliased-output");
+            std::os::unix::fs::symlink(&resident, &link).unwrap();
+            assert!(apply(Some(link)).is_err());
+            let hardlink = offline.join("hard-linked-output");
+            fs::hard_link(&resident, &hardlink).unwrap();
+            assert!(apply(Some(hardlink)).is_err());
+        }
+        let projected = offline.join("next.json");
+        apply(Some(projected.clone())).unwrap();
+        assert!(read_validator_registry_file(&projected).unwrap() == new_registry);
+        assert!(apply(Some(projected)).is_err());
+        assert!(fs::read(&resident).unwrap() == original);
+        assert!(store.read_governance().unwrap() == governance_before);
+        fs::remove_dir_all(offline).unwrap();
         let governance_batch_file = data_dir.join("governance-batch.json");
         let batch = create_governance_batch(GovernanceBatchOptions {
             data_dir: data_dir.clone(),

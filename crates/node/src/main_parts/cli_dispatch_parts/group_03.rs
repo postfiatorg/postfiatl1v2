@@ -2936,8 +2936,10 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 .map_err(|_| "--current-height must be a u64".to_string())?;
             let previous_registry_file =
                 flag_value(flags, "--previous-registry-file").map(PathBuf::from);
-            let output_registry_file =
-                flag_value(flags, "--output-registry-file").map(PathBuf::from);
+            let output_registry_file = Some(PathBuf::from(
+                flag_value(flags, "--output-registry-file")
+                    .ok_or("missing offline --output-registry-file")?,
+            ));
             let report = apply_validator_registry_update(ValidatorRegistryUpdateApplyOptions {
                 data_dir: PathBuf::from(data_dir),
                 update_file: PathBuf::from(update_file),

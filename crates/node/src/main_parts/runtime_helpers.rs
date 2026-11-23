@@ -790,7 +790,7 @@ fn print_usage() {
   postfiat-node validator-registry-authorization-sign [--data-dir PATH] --update-file PATH --validator NODE_ID --validator-key-file PATH --proposal-slot H --expires-at-height H --authorization-file PATH
   postfiat-node validator-registry-update-assemble [--data-dir PATH] --update-file PATH --authorization-files CSV --proposal-slot H --output PATH
   postfiat-node validator-registry-update-verify [--data-dir PATH] --update-file PATH [--previous-registry-file PATH] [--new-registry-file PATH]
-  postfiat-node validator-registry-update-apply [--data-dir PATH] --update-file PATH --current-height N [--previous-registry-file PATH] [--output-registry-file PATH]
+  postfiat-node validator-registry-update-apply [--data-dir PATH] --update-file PATH --current-height N [--previous-registry-file PATH] --output-registry-file NEW_OFFLINE_PATH
   postfiat-node validator-registry-lifecycle-replay-verify --bundle-file PATH
   postfiat-node governance-replay-build [--data-dir PATH] [--genesis-bundle-file PATH] --previous-registry-file PATH --update-file PATH --new-registry-file PATH [--amendment-replay-bundle-file PATH] [--governance-batch-file PATH] [--post-change-block-file PATH --post-change-batch-file PATH --post-change-certificate-file PATH] --output PATH [--overwrite]
   postfiat-node governance-replay-verify [--data-dir PATH] --package-file PATH
