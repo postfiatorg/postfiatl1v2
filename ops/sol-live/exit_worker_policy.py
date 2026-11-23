@@ -34,7 +34,7 @@ def check():
                             capture_output=True, text=True)
     denial = re.fullmatch(r"User pf-sol-exit is not allowed to run sudo on [^\n]+\.",
                           (policy.stdout + policy.stderr).strip())
-    if policy.returncode != 1 or not denial:
+    if policy.returncode not in (0, 1) or not denial:
         raise RuntimeError("Cannot confirm the worker has no sudo permissions.")
     print("Worker host policy verified.")
 

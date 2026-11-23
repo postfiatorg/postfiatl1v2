@@ -17,7 +17,7 @@ class WorkerPolicyTest(unittest.TestCase):
         def lookup(name):
             return {"postfiat": admin, "pf-sol-exit": worker}[name]
 
-        for hazard in ("none", "docker group", "socket", "sudo", "sudo error", "read home", "traverse home"):
+        for hazard in ("none", "listed denial", "docker group", "socket", "sudo", "sudo error", "read home", "traverse home"):
             with self.subTest(hazard=hazard):
                 def run(args, **kw):
                     if args[0] == "/usr/bin/sudo":
@@ -25,7 +25,7 @@ class WorkerPolicyTest(unittest.TestCase):
                             return subprocess.CompletedProcess(args, 0, "permitted", "")
                         message = ("configuration error" if hazard == "sudo error" else
                                    "User pf-sol-exit is not allowed to run sudo on fixture.")
-                        return subprocess.CompletedProcess(args, 1, message, "")
+                        return subprocess.CompletedProcess(args, 0 if hazard == "listed denial" else 1, message, "")
                     self.assertEqual(args[:2], ["/usr/bin/test", args[1]])
                     self.assertEqual((kw["user"], kw["group"]), (501, 502))
                     present = {("-w", "/run/docker.sock"): "socket",
@@ -37,7 +37,7 @@ class WorkerPolicyTest(unittest.TestCase):
                       patch.object(policy.grp, "getgrnam", return_value=SimpleNamespace(gr_gid=503)),
                       patch.object(os, "getgrouplist", return_value=[502, 503] if hazard == "docker group" else [502]),
                       patch.object(policy.subprocess, "run", side_effect=run)):
-                    if hazard == "none":
+                    if hazard in ("none", "listed denial"):
                         policy.check()
                     else:
                         with self.assertRaises(RuntimeError):
