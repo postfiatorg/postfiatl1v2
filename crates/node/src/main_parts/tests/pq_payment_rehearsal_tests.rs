@@ -309,8 +309,8 @@ mod pq_payment_rehearsal_tests {
                 &eligible,
             )
         };
-        // Competing candidates at P: this atomic deposit executes on P-1, but
-        // the fleet finalizes the signed pause instead.
+        // Both candidates extend P-1. The deposit is valid at P, where the
+        // fleet chooses to finalize the signed pause.
         propose_batch_with_timings(candidate(pause)).expect("valid before pause");
         let file = governance_batch(
             &fleet.data_dirs[0],
@@ -431,8 +431,14 @@ mod pq_payment_rehearsal_tests {
         if let Some(post) = std::env::var_os("PQ_POST_H_NODE") {
             let post = PathBuf::from(post);
             let pre = PathBuf::from(std::env::var_os("PQ_PRE_H_NODE").expect("pre-upgrade node"));
-            let restarted = cli(&post, &restored, &["verify-blocks"]);
-            assert_eq!(restarted["state_root"], expected.state_root);
+            for path in [peer, &restored] {
+                let cold = cli(&post, path, &["verify-blocks"]);
+                assert_eq!(cold["verified"], true);
+                assert_eq!(cold["block_count"], expected.block_count);
+                assert_eq!(cold["tip_hash"], expected.tip_hash);
+                assert_eq!(cold["state_root"], expected.state_root);
+            }
+            println!("COLD START original replica and signed import independently verified all {} blocks", expected.block_count);
             let args = ["blocks", "--from-height", "1", "--limit", "512"];
             let rows = cli(&post, &before, &args);
             assert_eq!(rows.as_array().unwrap().len() as u64, ATOMIC_ACTIVATION - 1);
