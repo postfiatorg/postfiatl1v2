@@ -17,11 +17,15 @@ echo -n '{}' > "$4/proof-report.json"
 echo -n proof > "$4/proof-calldata.bin"
 """)
             fake.chmod(0o700)
-            with (
-                patch.object(exit_proof, "prover_ssh", return_value=["bash", "-c"]),
-                patch.object(exit_proof, "REMOTE", tmp),
-                patch.object(exit_proof, "GPU_LOCK", str(path / "gpu.lock")),
-            ):
+            runner = path / "runner"
+            script = (Path(__file__).parent / "exit-prover-command.sh").read_text()
+            runner.write_text(script.replace("/workspace/b23-withdraw-20261116", tmp)
+                               .replace("/workspace/b23-gpu/prover.lock", str(path / "gpu.lock")))
+            runner.chmod(0o700)
+            transport = path / "ssh"
+            transport.write_text(f'#!/bin/sh\nSSH_ORIGINAL_COMMAND="$1" exec "{runner}"\n')
+            transport.chmod(0o700)
+            with patch.object(exit_proof, "prover_ssh", return_value=[str(transport)]):
                 self.assertEqual(
                     exit_proof.remote_proof("checkpoint", b"{}"),
                     [b"values", b"{}", b"proof"],

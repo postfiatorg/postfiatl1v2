@@ -34,11 +34,11 @@ class OperatorReviewTest(unittest.TestCase):
             self.assertTrue(text in after.split("## 10.")[1], text)
 
     def test_port_and_restart_branch_precede_move(self):
-        before = DOC.split('sudo mv -T "$fee"')[0]
+        before = (HERE/"install-exit-system.sh").read_text().split('mv -T "$fee"')[0]
         self.assertIn("sport = :18089", before)
-        self.assertIn('if sudo test -f "$svc/fee-payer.json"', before)
+        self.assertIn('if [[ -f "$svc/fee-payer.json"', before)
 
-    def test_default_user_unit_runs_same_sandbox_for_preflight_and_service(self):
+    def test_alternative_user_unit_runs_same_sandbox_for_preflight_and_service(self):
         unit = (HERE / "pft-sol-mainnet-withdraw-user.service").read_text()
         start = [
             line.split("=", 1)[1].rsplit(" ", 1)
@@ -84,10 +84,8 @@ class OperatorReviewTest(unittest.TestCase):
         import os
         import tempfile
 
-        block = DOC.split(
-            'fee="$HOME/.config/postfiat/sol-bridge/exit-fee-payer.json"'
-        )[1]
-        check = block.split("if sudo test -f")[0].split('test -f "$fee"')[0]
+        script = (HERE / "install-exit-system.sh").read_text()
+        check = "check_port() {" + script.split("check_port() {",1)[1].split("\n}",1)[0] + "\n}\ncheck_port"
         with tempfile.TemporaryDirectory() as tmp:
             ss = Path(tmp) / "ss"
             for body in ("exit 1", "echo LISTEN"):
