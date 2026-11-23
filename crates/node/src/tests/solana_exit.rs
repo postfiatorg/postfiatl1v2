@@ -3,7 +3,7 @@ use crate::consensus_artifacts::{
     governance_amendment_authorization_signing_bytes, verify_live_signed_governance_batch,
     GOVERNANCE_AUTHORIZATION_SIGNATURE_CONTEXT_V2,
 };
-use postfiat_crypto_provider::ml_dsa_65_sign_with_context;
+use postfiat_crypto_provider::ml_dsa_65_sign_with_context_seed;
 use postfiat_types::{solana_exit, VaultBridgeBurnToRedeemOperation, VaultBridgeRouteProfileV1};
 
 const ETH_HASH: &str = "29c91daa1c8d707ea3245db091976219266c5deca82b2d4571fafb221fd2dd092eb8833a28f4422bf0b4bbde44069e28";
@@ -320,7 +320,10 @@ struct LocalCommittee {
 
 impl LocalCommittee {
     fn new(names: &[String]) -> Self {
-        let keys: Vec<_> = names.iter().map(|_| ml_dsa_65_keygen().unwrap()).collect();
+        // Reproduce the same locally signed registration across release builds.
+        let keys: Vec<_> = (0..names.len())
+            .map(|i| postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[i as u8; 32]))
+            .collect();
         let registry = ValidatorRegistry {
             validators: names
                 .iter()
@@ -360,10 +363,11 @@ impl LocalCommittee {
                 };
                 let message = governance_amendment_authorization_signing_bytes(a, &auth).unwrap();
                 auth.signature_hex = bytes_to_hex(
-                    &ml_dsa_65_sign_with_context(
+                    &ml_dsa_65_sign_with_context_seed(
                         &k.private_key,
                         &message,
                         GOVERNANCE_AUTHORIZATION_SIGNATURE_CONTEXT_V2,
+                        &[0; 32],
                     )
                     .unwrap(),
                 );
@@ -409,14 +413,83 @@ impl LocalCommittee {
 #[test]
 #[ignore = "copied WAN ledger, release height 1760"]
 fn signed_solana_exit_registration_checks_release_slot() {
-    let (g, gov, _) = archived_parent();
+    let (g, mut gov, mut ledger) = archived_parent();
+    // The deterministic fork committee signs for its own registry.
+    gov.validator_registry_updates.clear();
     let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
     let before = committee.registration(&g, &gov, H - 1);
-    let err = verify_live_signed_governance_batch(&g, &gov, &committee.registry, &before, H - 1)
-        .expect_err("registration before release");
-    assert!(err.to_string().contains("Solana exit release"), "{err}");
-    let at = committee.registration(&g, &gov, H);
-    verify_live_signed_governance_batch(&g, &gov, &committee.registry, &at, H).unwrap();
+    verify_live_signed_governance_batch(&g, &gov, &committee.registry, &before, H - 1)
+        .expect("the legacy block reaches execution before release");
+    let mut state = gov.clone();
+    let original = ledger.clone();
+    let receipts = crate::execution_actions::execute_governance_batch(
+        &mut state,
+        Some(&mut ledger),
+        Some(&g),
+        &before,
+        H - 1,
+    );
+    assert_eq!(receipts.len(), 1);
+    assert!(!receipts[0].accepted);
+    assert!(
+        receipts[0].message.contains("advance monotonically"),
+        "{}",
+        receipts[0].message
+    );
+    assert!(ledger == original && state == gov);
+    let source = NodeStore::new("/var/lib/postfiat/validator-3");
+    let dir = unique_test_dir("early-registration");
+    let store = NodeStore::new(&dir);
+    store.init(&g, &source.read_node_state().unwrap()).unwrap();
+    store
+        .write_storage_backend_mode(postfiat_storage::StorageBackendMode::LegacyJsonl)
+        .unwrap();
+    let mut ordered = source.read_ordered_batches().unwrap();
+    for height in (ordered.len() as u64 + 1)..=H - 2 {
+        ordered.push(postfiat_crypto_provider::hash_hex(
+            "local history",
+            &height.to_be_bytes(),
+        ));
+    }
+    store.write_ordered_batches(&ordered).unwrap();
+    store.write_governance(&gov).unwrap();
+    store.write_ledger(&ledger).unwrap();
+    store
+        .write_shielded(&source.read_shielded().unwrap())
+        .unwrap();
+    store.write_bridge(&source.read_bridge().unwrap()).unwrap();
+    let mut tip = source.read_chain_tip().unwrap();
+    tip.height = H - 2;
+    tip.ordered_batch_count = tip.height;
+    store.write_chain_tip(&tip).unwrap();
+    crate::storage_commit::write_validator_registry_file(
+        &dir.join(VALIDATOR_REGISTRY_FILE),
+        &committee.registry,
+    )
+    .unwrap();
+    let path = dir.join("early.json");
+    write_governance_action_batch_file(&path, &before).unwrap();
+    let (proposal, _) = crate::mempool_proposals::build_ordered_batch_proposal_with_timings(
+        &store,
+        BATCH_KIND_GOVERNANCE,
+        &path,
+        Some(0),
+        None,
+    )
+    .unwrap();
+    assert_eq!(proposal.block_height, H - 1);
+    assert_eq!(proposal.receipt_ids, vec![receipts[0].tx_id.clone()]);
+    assert!(crate::check_operator_batch_submission(&proposal, &path).is_err());
+    println!(
+        "H-1 comparison {}",
+        serde_json::json!({
+            "proposal_digest": postfiat_crypto_provider::hash_hex(
+                "test proposal", &serde_json::to_vec(&proposal).unwrap()),
+            "height": proposal.block_height, "state_root": proposal.state_root,
+            "payload_hash": proposal.payload_hash, "receipts": receipts,
+        })
+    );
+    fs::remove_dir_all(dir).unwrap();
 }
 
 fn bucket_amounts(l: &LedgerState) -> (u64, u64, u64, u64) {
@@ -726,21 +799,23 @@ fn certified_fork(output: Option<&Path>) {
     let mut next = 1754;
     while next < h {
         if next == h - 1 {
-            let early = registration(next);
+            let draft = descriptor_batch()
+                .vault_bridge_route_profile_activations
+                .remove(0)
+                .amendment;
             let path = temp.join("early.json");
-            write_governance_action_batch_file(&path, &early).unwrap();
-            let denied = propose_batch(BatchProposalOptions {
-                data_dir: dir.clone(),
-                verify_block_log: false,
-                batch_kind: Some(BATCH_KIND_GOVERNANCE.into()),
-                batch_file: path,
-                proposal_file: temp.join("early-proposal.json"),
-                view: Some(0),
-                timeout_certificate_file: None,
-                key_file: None,
-                validator_id: None,
-            })
-            .unwrap_err();
+            write_amendment_file(&path, &draft).unwrap();
+            let denied =
+                sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                    data_dir: dir.clone(),
+                    amendment_file: path,
+                    validator: names[0].clone(),
+                    validator_key_file: key_file.clone(),
+                    proposal_slot: next,
+                    expires_at_height: next,
+                    authorization_file: temp.join("early-authorization.json"),
+                })
+                .unwrap_err();
             assert!(
                 denied.to_string().contains("Solana exit release"),
                 "{denied}"

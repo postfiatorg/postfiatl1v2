@@ -3389,6 +3389,7 @@ pub fn certify_batch_round(
         validator_id: None,
     })?;
     let store = NodeStore::new(&options.data_dir);
+    crate::check_operator_batch_submission(&proposal, &options.batch_file)?;
     let proposer = proposal.proposer.clone();
     let proposer_key_file = options
         .validator_key_dir

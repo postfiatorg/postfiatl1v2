@@ -3052,21 +3052,7 @@ pub(super) fn verify_external_lane_amendment_admission(
     }
 }
 
-pub(super) fn verify_live_signed_governance_batch(
-    genesis: &Genesis,
-    governance: &GovernanceState,
-    registry: &ValidatorRegistry,
-    batch: &GovernanceActionBatch,
-    proposal_slot: u64,
-) -> io::Result<()> {
-    if crate::solana_exit_governance::registers_descriptor(batch)
-        && postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
-            .is_some_and(|h| proposal_slot < h)
-    {
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Solana exit release height has not been reached"));
-    }
-    verify_signed_governance_batch(genesis, governance, registry, batch, proposal_slot)
-}
+pub(super) use verify_signed_governance_batch as verify_live_signed_governance_batch;
 
 pub(super) fn verify_signed_governance_batch(
     genesis: &Genesis,

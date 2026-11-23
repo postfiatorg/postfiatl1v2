@@ -2940,6 +2940,22 @@ pub fn create_signed_asset_transaction_batch(
     Ok(batch)
 }
 
+/// Local round submission policy. Peers validating a proposed block must still
+/// reproduce the predecessor's execution receipt below the release height.
+pub fn check_operator_batch_submission(proposal: &BlockProposalFile, file: &Path) -> io::Result<()> {
+    if proposal.batch_kind == BATCH_KIND_GOVERNANCE {
+        let batch = read_governance_action_batch_file(file)?;
+        if batch.batch_id != proposal.batch_id {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "governance submission batch changed"));
+        }
+        if crate::solana_exit_governance::registers_descriptor(&batch) {
+            crate::solana_exit_governance::require_operator_release(
+                &proposal.chain_id, &proposal.genesis_hash, proposal.block_height)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn propose_batch(options: BatchProposalOptions) -> io::Result<BlockProposalFile> {
     Ok(propose_batch_with_timings(options)?.proposal)
 }
@@ -3065,6 +3081,7 @@ fn propose_batch_with_optional_required_parent(
     timings.timeout_evidence_ms = node_timing_elapsed_ms(stage_start);
 
     if let Some(key_file) = options.key_file.as_ref() {
+        check_operator_batch_submission(&proposal, &options.batch_file)?;
         let stage_start = std::time::Instant::now();
         let signer_id = options
             .validator_id

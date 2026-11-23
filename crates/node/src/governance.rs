@@ -110,6 +110,10 @@ pub fn sign_governance_amendment_authorization(
             ),
         ));
     }
+    if crate::solana_exit_governance::is_registration_amendment(&amendment.kind) {
+        crate::solana_exit_governance::require_operator_release(
+            &genesis.chain_id, &genesis_hash(&genesis), options.proposal_slot)?;
+    }
     if options.expires_at_height < options.proposal_slot {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -781,6 +785,10 @@ pub fn assemble_signed_vault_bridge_route_profile_governance(
         activation,
     )?;
     verify_governance_action_batch_id(&genesis, &batch)?;
+    if crate::solana_exit_governance::registers_descriptor(&batch) {
+        crate::solana_exit_governance::require_operator_release(
+            &genesis.chain_id, &genesis_hash(&genesis), options.proposal_slot)?;
+    }
     verify_live_signed_governance_batch(
         &genesis,
         &governance,

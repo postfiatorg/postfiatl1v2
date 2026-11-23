@@ -1,14 +1,33 @@
 use super::*;
 use postfiat_types::solana_exit;
 
+pub(super) fn is_registration_amendment(kind: &str) -> bool {
+    kind.strip_suffix(solana_exit::PROFILE_HASH).is_some_and(|prefix|
+        prefix == postfiat_types::vault_bridge_route_amendment_prefix(solana_exit::FAMILY))
+}
+
 pub(super) fn registers_descriptor(batch: &GovernanceActionBatch) -> bool {
     batch
         .vault_bridge_route_profile_activations
         .iter()
         .any(|a| {
-            a.amendment.kind.ends_with(solana_exit::PROFILE_HASH)
+            is_registration_amendment(&a.amendment.kind)
                 && a.profile == solana_exit::descriptor()
         })
+}
+
+pub(super) fn require_operator_release(
+    chain: &str,
+    genesis_hash: &str,
+    height: u64,
+) -> io::Result<()> {
+    if solana_exit::release_height(chain, genesis_hash).is_none_or(|release| height < release) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Solana exit release height has not been reached",
+        ));
+    }
+    Ok(())
 }
 
 /// Historical pre-release registration attempts must reproduce their original
