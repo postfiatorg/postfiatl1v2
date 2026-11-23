@@ -14,7 +14,7 @@ mod pq_payment_local_chain_tests {
     use sha2::{Digest, Sha384};
     use std::{fs, path::Path, process::Command};
 
-    const CHAIN: &str = "postfiat-pfsh02-m1-disposable";
+    pub(super) const CHAIN: &str = "postfiat-pfsh02-m1-disposable";
     const HOP: &[u8] =
         include_bytes!("../../../../../tools/pft-binius-shielded-pq/payments/tx_hop1.bin");
 
@@ -39,7 +39,7 @@ mod pq_payment_local_chain_tests {
         )
     }
 
-    fn proposal(data_dir: &Path, dir: &Path, batch: &ShieldedActionBatch) -> BatchProposalOptions {
+    pub(super) fn proposal(data_dir: &Path, dir: &Path, batch: &ShieldedActionBatch) -> BatchProposalOptions {
         let batch_file = dir.join(format!("{}.json", batch.batch_id));
         fs::write(&batch_file, serde_json::to_vec(batch).unwrap()).unwrap();
         BatchProposalOptions {
@@ -55,14 +55,14 @@ mod pq_payment_local_chain_tests {
         }
     }
 
-    fn l1_action(name: &str) -> ShieldedAction {
+    pub(super) fn l1_action(name: &str) -> ShieldedAction {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tools/pft-binius-shielded-pq/l1-vectors")
             .join(format!("{name}.bin"));
         ShieldedAction::PqPaymentV1(PqPayment::from_bytes(fs::read(path).unwrap()).unwrap())
     }
 
-    fn assert_inactive_proposal(fleet: &Fleet, genesis: &Genesis, height: u64) {
+    pub(super) fn assert_inactive_proposal(fleet: &Fleet, genesis: &Genesis, height: u64) {
         let proposer = &fleet.data_dirs[fleet.proposer_index(height)];
         let template = propose_batch_with_timings(proposal(
             proposer,
@@ -156,8 +156,6 @@ mod pq_payment_local_chain_tests {
 
     #[test]
     fn pq_activation_rejects_direct_votes_then_finalizes_one_spend() {
-        use postfiat_node::{create_transfer_batch, BatchTransferOptions, PrivateActionState};
-        use postfiat_types::pq_payment::POOL_ID;
         let fleet = fleet_on_chain(
             CHAIN,
             FleetOptions {
@@ -166,6 +164,12 @@ mod pq_payment_local_chain_tests {
                 extra_asset: false,
             },
         );
+        exercise_active_traffic(&fleet, |_| {});
+    }
+
+    pub(super) fn exercise_active_traffic(fleet: &Fleet, before_h: impl FnOnce(&Fleet)) {
+        use postfiat_node::{create_transfer_batch, BatchTransferOptions, PrivateActionState};
+        use postfiat_types::pq_payment::POOL_ID;
         let genesis = NodeStore::new(&fleet.data_dirs[0]).read_genesis().unwrap();
         let ShieldedAction::PqPaymentV1(mint) = l1_action("pft-shield") else {
             unreachable!()
@@ -188,13 +192,14 @@ mod pq_payment_local_chain_tests {
         }
         let height = fleet.height() + 1;
         assert_eq!(height, ATOMIC_ACTIVATION - 1);
-        assert_inactive_proposal(&fleet, &genesis, height);
+        assert_inactive_proposal(fleet, &genesis, height);
         let timer = std::time::Instant::now();
         fleet.round("transparent", file);
         println!(
             "ordinary six-validator round {:.2} ms",
             timer.elapsed().as_secs_f64() * 1e3
         );
+        before_h(fleet);
         for (offset, name) in ["pft-shield", "pft-pay"].into_iter().enumerate() {
             let mut request = fleet.request(&serde_json::to_string(&l1_action(name)).unwrap());
             request.domain.pool_id = POOL_ID.into();
