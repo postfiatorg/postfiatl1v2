@@ -3415,6 +3415,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "postfiat-privacy-binius-wallet"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "hex",
+ "hmac",
+ "libc",
+ "pft-binius-shielded",
+ "postfiat-crypto-provider",
+ "postfiat-privacy-binius",
+ "postfiat-types",
+ "rand 0.8.6",
+ "rand_chacha 0.3.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
 name = "postfiat-privacy-orchard"
 version = "0.1.0"
 dependencies = [

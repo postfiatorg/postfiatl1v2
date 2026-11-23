@@ -21,6 +21,7 @@ members = [
     "crates/ordering_fast",
     "crates/privacy",
     "crates/privacy_binius",
+    "crates/privacy_binius_wallet",
     "crates/privacy_orchard",
     "crates/pfusdc_proofs",
     "crates/pft_lane_proofs",

@@ -1,0 +1,25 @@
+[package]
+name = "postfiat-privacy-binius-wallet"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+aes-gcm = "0.10"
+base64.workspace = true
+hex = "0.4"
+hmac = "0.12"
+libc.workspace = true
+pft-binius-shielded = {path = "../../tools/pft-binius-shielded-pq/rust-prover", features = ["prover"]}
+postfiat-crypto-provider = {path = "../crypto_provider"}
+postfiat-privacy-binius = {path = "../privacy_binius"}
+postfiat-types = {path = "../types"}
+rand = "0.8"
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile = "3"
+
+[dev-dependencies]
+rand_chacha = "0.3"

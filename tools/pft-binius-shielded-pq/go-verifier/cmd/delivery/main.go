@@ -48,6 +48,35 @@ func deriveAEADKeyNonce(ss, ctKem, coin []byte) ([]byte, []byte) {
 	return derive("PFT-SH-KEM-KEY-V2")[:32], derive("PFT-SH-KEM-NONCE-V2")[:12]
 }
 
+func tryOpen(dk *mlkem.DecapsulationKey1024, addr [48]byte, coin, env []byte) (uint64, []byte, bool) {
+	ctKem := env[:1568]
+	ctAEAD := env[1568:]
+	ss, err := dk.Decapsulate(ctKem)
+	if err != nil {
+		return 0, nil, false
+	}
+	key, nonce := deriveAEADKeyNonce(ss, ctKem, coin)
+	blk, err := aes.NewCipher(key)
+	if err != nil {
+		return 0, nil, false
+	}
+	gcm, err := cipher.NewGCM(blk)
+	if err != nil {
+		return 0, nil, false
+	}
+	pt, err := gcm.Open(nil, nonce, ctAEAD, coin)
+	if err != nil || len(pt) != 86 {
+		return 0, nil, false
+	}
+	val := binary.LittleEndian.Uint64(pt[:8])
+	rBlind := pt[8:86]
+	gotCoin := shake48([]byte{0x01}, addr[:], pt[:8], rBlind)
+	if hex.EncodeToString(gotCoin[:]) != hex.EncodeToString(coin) {
+		return 0, nil, false
+	}
+	return val, rBlind, true
+}
+
 func main() {
 	txPath := flag.String("tx", "", "tx binary path")
 	walletPath := flag.String("wallet", "", "wallet fixture json path")
@@ -94,37 +123,8 @@ func main() {
 	env0 := txBytes[304 : 304+1670]
 	env1 := txBytes[304+1670 : 304+3340]
 
-	tryOpen := func(coin, env []byte) (uint64, []byte, bool) {
-		ctKem := env[:1568]
-		ctAEAD := env[1568:]
-		ss, err := dk.Decapsulate(ctKem)
-		if err != nil {
-			return 0, nil, false
-		}
-		key, nonce := deriveAEADKeyNonce(ss, ctKem, coin)
-		blk, err := aes.NewCipher(key)
-		if err != nil {
-			return 0, nil, false
-		}
-		gcm, err := cipher.NewGCM(blk)
-		if err != nil {
-			return 0, nil, false
-		}
-		pt, err := gcm.Open(nil, nonce, ctAEAD, coin)
-		if err != nil || len(pt) != 86 {
-			return 0, nil, false
-		}
-		val := binary.LittleEndian.Uint64(pt[:8])
-		rBlind := pt[8:86]
-		gotCoin := shake48([]byte{0x01}, addr[:], pt[:8], rBlind)
-		if hex.EncodeToString(gotCoin[:]) != hex.EncodeToString(coin) {
-			return 0, nil, false
-		}
-		return val, rBlind, true
-	}
-
-	val0, r0, ok0 := tryOpen(coin0, env0)
-	_, _, ok1 := tryOpen(coin1, env1)
+	val0, r0, ok0 := tryOpen(dk, addr, coin0, env0)
+	_, _, ok1 := tryOpen(dk, addr, coin1, env1)
 	if !ok0 || ok1 {
 		fmt.Fprintf(os.Stderr, "ERROR: expected output 0 match only, got ok0=%v ok1=%v\n", ok0, ok1)
 		os.Exit(1)
