@@ -729,6 +729,71 @@ def compatible_prior(headers, states):
     raise ValueError("No compatible checkpoint precedes this burn.")
 
 
+def egress_witness(c, red, prior, h, work):
+    """Assemble the withdrawal witness from replies that fit the node's 4 MB frame.
+
+    The node sends nothing when a reply exceeds its frame limit, and one block of
+    finality ancestry is about 200 KB. Ask the node for the burn block alone, then
+    rebuild the ancestry from the prior checkpoint in eight-block pages. The result
+    equals the node's own single reply. The frozen guest runs on it before proving.
+    """
+    target = rpc(0, "blocks", from_height=h, limit=1)[0]["header"]
+    require(target["height"] == h, "Unexpected burn height.")
+    parent = target["parent_hash"]
+    w = rpc(
+        0,
+        "pfusdc_egress_witness",
+        withdrawal_id=red["redemption_id"],
+        prior_checkpoint=parent,
+    )
+    require(
+        w["prior_checkpoint_block_id"] == parent
+        and not w.get("finality_ancestry")
+        and w["block"]["header"] == target,
+        "Unexpected single-block witness.",
+    )
+    if prior == parent:
+        return w
+    start = max(1, h - 65)
+    blocks = []
+    for first in range(start, h, 8):
+        count = min(8, h - first)
+        page = rpc(0, "blocks", from_height=first, limit=count)
+        require(
+            len(page) == count and page[0]["header"]["height"] == first,
+            "Incomplete ancestry page.",
+        )
+        blocks.extend(page)
+    first = next(
+        (i for i, b in enumerate(blocks) if b["header"]["parent_hash"] == prior), None
+    )
+    require(first is not None, "Prior checkpoint outside the guest ancestry bound.")
+    blocks = blocks[first:]
+    last = blocks[-1]["header"]
+    require(
+        last["block_hash"] == parent
+        and committee(last) == committee(target),
+        "Ancestry does not reach the burn block under one committee.",
+    )
+    cache = work.parent / "committee.json"
+    saved = read(cache) if cache.exists() else {}
+    members = saved.get(c.account(checkpoint_pda(prior))["data"].hex())
+    if members is None:
+        members = [dict(row, active=True) for row in rpc(0, "validators")["validators"]]
+    segment = public_checkpoint(
+        rpc, blocks[0]["header"]["height"] - 1, prior, last, members, read(CONFIG)
+    )
+    steps = list(segment.get("finality_ancestry", []))
+    steps.append(
+        dict(
+            block=segment["block"],
+            committee=segment["committee"],
+            committee_epoch=segment["committee_epoch"],
+        )
+    )
+    return dict(w, prior_checkpoint_block_id=prior, finality_ancestry=steps)
+
+
 def process(burn, work, update, *, attempt=None, before_send=None):
     update("reading")
     c = cluster()
@@ -838,12 +903,7 @@ def process(burn, work, update, *, attempt=None, before_send=None):
         )
         prune_work(c, work)
         raise CheckpointAdvanced()
-    w = rpc(
-        0,
-        "pfusdc_egress_witness",
-        withdrawal_id=red["redemption_id"],
-        prior_checkpoint=prior,
-    )
+    w = egress_witness(c, red, prior, h, work)
     require(
         w["receipt"]["tx_id"] == burn
         and w["receipt"]["accepted"]
