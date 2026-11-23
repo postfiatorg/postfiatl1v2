@@ -1788,6 +1788,8 @@ fn validate_vault_bridge_route_result(result: &Value) -> Result<(), RpcResponseV
         if u64_field(backing, "revision")? != u64::from(route_epoch) {
             return Err(invalid_result("source_backing.revision", "expected the source revision"));
         }
+        u64_field(backing, "series_supply_atoms")?;
+        u64_field(backing, "outstanding_vault_bridge_atoms")?;
         expect_string_eq(backing, "bucket_id", solana_exit::BUCKET)?;
         expect_string_eq(backing, "policy_hash", solana_exit::POLICY)?;
         bool_field(result, "burns_open")?;
@@ -6790,8 +6792,9 @@ fn validate_vault_bridge_status_result(result: &Value) -> Result<(), RpcResponse
         validate_vault_bridge_status_allocation_row(allocation, index)?;
     }
     let redemptions = array_field(result, "redemptions")?;
+    let asset_id = string_field(result, "asset_id")?;
     for redemption in redemptions {
-        validate_vault_bridge_status_redemption_row(redemption)?;
+        validate_vault_bridge_status_redemption_row(redemption, asset_id)?;
     }
 
     vault_bridge_status_count_matches(result, "bucket_count", buckets.len())?;
@@ -7034,7 +7037,11 @@ fn validate_vault_bridge_status_allocation_row(
 
 fn validate_vault_bridge_status_redemption_row(
     row: &Value,
+    asset_id: &str,
 ) -> Result<(), RpcResponseValidationError> {
+    if row.get("asset_id").is_some() {
+        expect_string_eq(row, "asset_id", asset_id)?;
+    }
     clean_string_field(row, "redemption_id")?;
     clean_string_field(row, "owner")?;
     u64_field(row, "owner_sequence")?;

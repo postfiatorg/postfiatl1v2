@@ -4246,6 +4246,28 @@
     }
 
     #[test]
+    fn solana_route_requires_unsigned_supply_and_outstanding() {
+        let mut report: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../ops/sol-live/fixtures/fork-open-route.json"
+        )).unwrap();
+        fn validate(report: &serde_json::Value) -> Result<(), RpcResponseValidationError> {
+            let response = success_response("route", report, vec![]).unwrap();
+            validate_health_response(&response, RpcResponseKind::VaultBridgeRoute)
+        }
+        report["source_backing"]["series_supply_atoms"] = json!(0);
+        validate(&report).expect("unequal numeric totals remain reportable");
+        for key in ["series_supply_atoms", "outstanding_vault_bridge_atoms"] {
+            let mut invalid = report.clone();
+            invalid["source_backing"].as_object_mut().unwrap().remove(key);
+            assert!(validate(&invalid).unwrap_err().to_string().contains(key));
+            for value in [json!("1"), json!(-1), json!(1.5), json!(true), json!(null)] {
+                invalid["source_backing"][key] = value;
+                assert!(validate(&invalid).unwrap_err().to_string().contains(key));
+            }
+        }
+    }
+
+    #[test]
     fn vault_bridge_route_rejects_substituted_descriptor_hash_and_binding() {
         let mut report = vault_route_report();
         let profile = postfiat_types::solana_exit::descriptor();
