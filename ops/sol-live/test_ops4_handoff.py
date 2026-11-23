@@ -104,7 +104,7 @@ class OperatorReviewTest(unittest.TestCase):
         from contextlib import redirect_stdout
         import io
         import exit_sandbox_check as check
-        from route_binding import CHAIN, PFTL_GENESIS
+        from live import CHAIN, PFTL_GENESIS
 
         def status(i, method):
             self.assertEqual(method, "status")
