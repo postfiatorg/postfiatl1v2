@@ -1571,7 +1571,13 @@ impl GovernanceState {
         }
         let mut latest = None::<&VaultBridgeRouteProfileRecordV1>;
         for record in &self.vault_bridge_route_profiles {
-            if record.profile.solana.is_some() || record.profile.asset_id != asset_id
+            if record.profile_hash == solana_exit::PROFILE_HASH
+                && solana_exit::registered(self).is_some()
+            {
+                continue;
+            }
+            if record.profile.solana.is_some()
+                || record.profile.asset_id != asset_id
                 || record.profile.activation_height > current_height
             {
                 continue;

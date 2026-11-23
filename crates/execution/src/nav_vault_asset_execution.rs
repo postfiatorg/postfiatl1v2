@@ -7228,13 +7228,19 @@ fn apply_vault_bridge_burn_to_redeem(
                 .to_string(),
         ));
     }
-    let profile = vault_bridge_profile_for_pinned_policy(
-        ledger,
-        &nav_asset,
-        &bucket.source_domain,
-        &bucket.policy_hash,
-    )?;
-    ensure_vault_bridge_source_policy(profile, &bucket.source_domain, &bucket.policy_hash)?;
+    let solana_exit = compatibility
+        .solana_exit_heights
+        .is_some_and(|(start, end)| (start..end).contains(&block_height))
+        && postfiat_types::solana_exit::matches_bucket(&bucket);
+    if !solana_exit {
+        let profile = vault_bridge_profile_for_pinned_policy(
+            ledger,
+            &nav_asset,
+            &bucket.source_domain,
+            &bucket.policy_hash,
+        )?;
+        ensure_vault_bridge_source_policy(profile, &bucket.source_domain, &bucket.policy_hash)?;
+    }
     let movement_asset = if compatibility.pfusdc_source_series_active(block_height) {
         let mut matches = ledger.asset_definitions.iter().filter(|asset| {
             asset.asset_family_id == operation.asset_id
@@ -7280,7 +7286,8 @@ fn apply_vault_bridge_burn_to_redeem(
         ));
     }
 
-    let mut redemption = VaultBridgeRedemption::new(
+    let mut redemption = VaultBridgeRedemption::new_for_exit(
+        solana_exit,
         &genesis.chain_id,
         operation.owner.clone(),
         operation.issuer.clone(),

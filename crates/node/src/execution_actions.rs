@@ -486,6 +486,7 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
         .with_bridge_verification_activation_height(
             bridge_verification_activation_height_for_chain(genesis, governance),
         )
+        .with_governed_solana_exit(genesis, governance)
         .with_orchard_aware_bridge_claim_activation_height(
             orchard_aware_bridge_claim_activation_height_for_chain(genesis, governance),
         )
@@ -519,6 +520,7 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
         .with_bridge_verification_activation_height(
             bridge_verification_activation_height_for_chain(genesis, governance),
         )
+        .with_governed_solana_exit(genesis, governance)
         .with_orchard_aware_bridge_claim_activation_height(
             orchard_aware_bridge_claim_activation_height_for_chain(genesis, governance),
         )
@@ -1813,12 +1815,42 @@ fn execute_governance_batch_with_replay(
             {
                 return Err("vault bridge route profile already recorded".to_string());
             }
+            if profile_hash == postfiat_types::solana_exit::PROFILE_HASH
+                && genesis.is_some_and(|g| {
+                    postfiat_types::solana_exit::release_height(&g.chain_id, &genesis_hash(g))
+                        .is_some_and(|height| block_height >= height)
+                })
+            {
+                if !ledger.as_deref().is_some_and(|l| {
+                    l.vault_bridge_bucket_states
+                        .iter()
+                        .any(postfiat_types::solana_exit::matches_bucket)
+                }) || activation.beacon_finality_bootstrap.is_some()
+                    || postfiat_types::solana_exit::registered(governance).is_some()
+                {
+                    return Err(
+                        "Solana exit requires its original bucket and a single authorization"
+                            .into(),
+                    );
+                }
+                return postfiat_types::VaultBridgeRouteProfileRecordV1::new(
+                    activation,
+                    block_height,
+                );
+            }
             if governance
                 .vault_bridge_route_profiles
                 .iter()
-                .filter(|existing| existing.profile.asset_id == activation.profile.asset_id
-                    && existing.profile.solana.is_some() == activation.profile.solana.is_some()
-                    && (activation.profile.solana.is_none() || existing.profile.route_id == activation.profile.route_id))
+                .filter(|existing| {
+                    existing.profile_hash != postfiat_types::solana_exit::PROFILE_HASH
+                        || postfiat_types::solana_exit::registered(governance).is_none()
+                })
+                .filter(|existing| {
+                    existing.profile.asset_id == activation.profile.asset_id
+                        && existing.profile.solana.is_some() == activation.profile.solana.is_some()
+                        && (activation.profile.solana.is_none()
+                            || existing.profile.route_id == activation.profile.route_id)
+                })
                 .any(|existing| {
                     existing.profile.route_epoch >= activation.profile.route_epoch
                         || existing.profile.activation_height

@@ -1170,28 +1170,78 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
     let governance = store.read_governance()?;
     let ledger = store.read_ledger()?;
     let tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
+    vault_bridge_route_at_height(
+        &genesis,
+        &governance,
+        &ledger,
+        tip.height,
+        &options.asset_id,
+    )
+}
+
+pub(super) fn vault_bridge_route_at_height(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    height: u64,
+    asset_id: &str,
+) -> io::Result<VaultBridgeRouteReport> {
     validate_lower_hex_len(
         "vault bridge route asset id",
-        &options.asset_id,
+        asset_id,
         ISSUED_ASSET_ID_HEX_LEN,
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-    let record = governance
-        .active_vault_bridge_route_profile(&options.asset_id, tip.height)
-        .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error))?;
+    // The existing RPC accepts either the family id or an individual source-series id.
+    let series = ledger
+        .asset_definition(asset_id)
+        .filter(|asset| !asset.source_bucket_id.is_empty() && asset.source_series_id == asset_id);
+    let bucket = series
+        .map(|asset| {
+            ledger
+                .vault_bridge_bucket(&asset.source_bucket_id)
+                .filter(|b| b.asset_id == asset.asset_family_id)
+                .ok_or_else(|| io::Error::other("source series has no matching backing bucket"))
+        })
+        .transpose()?;
+    let family = bucket.map_or(asset_id, |b| b.asset_id.as_str());
+    let deny = |error: String| io::Error::new(io::ErrorKind::PermissionDenied, error);
+    let is_solana = bucket.is_some_and(|b| b.source_domain.starts_with("spl:"));
+    let (record, amendment) = if is_solana {
+        let released =
+            postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis));
+        let (isolated, amendment) =
+            postfiat_types::solana_exit::active(governance, height).map_err(deny)?;
+        if !released.is_some_and(|h| h <= isolated.authorized_height)
+            || !bucket.is_some_and(postfiat_types::solana_exit::matches_bucket)
+        {
+            return Err(deny("Solana source bucket has no active exit route".into()));
+        }
+        (isolated, amendment)
+    } else {
+        let record = governance
+            .active_vault_bridge_route_profile(family, height)
+            .map_err(deny)?;
+        if bucket.is_some_and(|b| b.source_domain != record.profile.source_domain()) {
+            return Err(deny("source bucket has no matching exit route".into()));
+        }
+        (
+            record,
+            governance
+                .active_vault_bridge_route_amendment(&record.profile, height)
+                .map_err(deny)?,
+        )
+    };
     record
         .validate()
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     let route = &record.profile;
-    let amendment = governance
-        .active_vault_bridge_route_amendment(route, tip.height)
-        .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error))?;
-    let nav_asset = ledger.nav_asset(&options.asset_id).ok_or_else(|| {
+    let nav_asset = ledger.nav_asset(family).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::NotFound,
             format!(
                 "missing NAV asset `{}` for governed vault bridge route",
-                options.asset_id
+                asset_id
             ),
         )
     })?;
@@ -1206,8 +1256,10 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
                 ),
             )
         })?;
-    validate_vault_bridge_route_profile_against_ledger(&ledger, route, &record.profile_hash)
-        .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error))?;
+    if !is_solana {
+        validate_vault_bridge_route_profile_against_ledger(ledger, route, &record.profile_hash)
+            .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error))?;
+    }
     let beacon_finality_anchor = VaultBridgeRouteReport::select_beacon_anchor(
         &ledger.beacon_finality_states,
         &record.profile_hash,
@@ -1217,8 +1269,8 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
         beacon_finality_anchor,
         schema: "postfiat.vault_bridge.route_report.v1".to_string(),
         chain_id: genesis.chain_id.clone(),
-        genesis_hash: genesis_hash(&genesis),
-        current_height: tip.height,
+        genesis_hash: genesis_hash(genesis),
+        current_height: height,
         profile: route.clone(),
         profile_hash: record.profile_hash.clone(),
         route_binding: vault_bridge_route_binding(&record.profile_hash, record.profile.route_epoch)
