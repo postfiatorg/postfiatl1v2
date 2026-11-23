@@ -1,180 +1,265 @@
-# Solana pfUSDC exit, orchestrator runbook
+# Solana pfUSDC exit cutover
 
-Run from the reviewed revision. The checkout is prepared with the WAN release height unset. The seven earlier Solana series need a separate migration. The current immutable light client covers revision 8 only.
+Orchestrator only. Use one shell from the reviewed release checkout. Keep the public relay flag disabled through the real payout and its L1 settlement. Starting at step 8, direct L1 clients can burn. The immutable Solana binding supports only the revision-8 source bucket.
 
-## 1. Build and qualify the release
+## 1. Qualify the release with burns closed
 
-Choose H with enough lead for six sequential restarts. Release scheduling uses Post Fiat block height. The descriptor's earliest valid height is 1754. Keep H at or above that value. Use a fresh release id. In a bash shell on the orchestrator:
+Choose an agreed future block height H greater than 1754, with time to roll six validators. Integrate the reviewed chain and ops fixes in a fresh release checkout. The two fixes must both be present. The checked-in development release height is unset.
 
 ```bash
 set -euo pipefail
+umask 077
 export EXIT_WORK=/home/postfiat/var/sol-exit
-export CARGO_TARGET_DIR=$EXIT_WORK/target
+export REL=${REL:?set a fresh sol-exit release name}
 export H=${H:?set the agreed future height}
-export REL=sol-exit-r1
+export CHAIN_FIX=${CHAIN_FIX:?set the reviewed chain commit}
+export OPS_FIX=${OPS_FIX:?set the reviewed ops commit}
+export CARGO_TARGET_DIR="$EXIT_WORK/target-release"
 git -C "$EXIT_WORK/l1" fetch public refs/heads/main:refs/remotes/public/main
-git -C "$EXIT_WORK/l1" worktree add -b "release/$REL" "$EXIT_WORK/release" public/main
-cd "$EXIT_WORK/release"
-git merge --no-ff --no-edit sol/exit-tasknode
+git -C "$EXIT_WORK/l1" worktree add -b "release/$REL" "$EXIT_WORK/$REL" public/main
+cd "$EXIT_WORK/$REL"
+git merge --no-ff --no-edit "$CHAIN_FIX" "$OPS_FIX"
+export PYTHONPATH="$PWD/ops/sol-live"
 python3 - <<'PY'
-import os,pathlib,sys
-sys.path.insert(0,'ops/sol-live')
+from pathlib import Path
 from live import fleet
-h=int(os.environ['H'])
-assert h>fleet()['block_height'] and h>=1754
-p=pathlib.Path('crates/types/src/solana_exit.rs')
+import os
+h=int(os.environ["H"])
+assert h>max(1754,fleet()["block_height"])
+p=Path("crates/types/src/solana_exit.rs")
 s=p.read_text()
-old='None, // Release sets the agreed future height here.'
-assert s.count(old)==1
-p.write_text(s.replace(old,f'Some({h}), // Reviewed WAN release height.'))
+marker="None, // Release sets the agreed future height here."
+assert s.count(marker)==1
+p.write_text(s.replace(marker,f"Some({h}), // Agreed WAN release height."))
 PY
-git commit -am "Activate the governed Solana exit at height $H"
+git add crates/types/src/solana_exit.rs
+git commit -m "Schedule the closed Solana exit release at block $H"
 cargo build --locked --release -p postfiat-node --bin postfiat-node
-export B=$CARGO_TARGET_DIR/release/postfiat-node
-export KIT=$HOME/var/$REL
+export B="$CARGO_TARGET_DIR/release/postfiat-node" KIT="$HOME/var/$REL"
+export REV=$(git rev-parse --short=8 HEAD)
 python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
-cp -a --reflink=auto "$EXIT_WORK/replay/source" "$KIT/replay"
-bash "$HOME/var/main-r64-20261121/run-copy.sh" "$KIT/bin/postfiat-node" "$KIT/replay" verify-state > "$KIT/evidence/release-replay.json"
-jq -e --slurpfile old "$EXIT_WORK/evidence/old-state.json" '.verified and .block_log==$old[0].block_log' "$KIT/evidence/release-replay.json"
+export ARCHIVE="$KIT/anchor-replay" INTEGRITY="$EXIT_WORK/replay/source/.integrity.key"
+mkdir -m700 "$ARCHIVE"
+rsync -a --exclude='*key*' "$EXIT_WORK/replay/source/" "$ARCHIVE/"
+replay() {
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+    -u "$(id -u):$(id -g)" -v "$2:/var/lib/postfiat/validator-3" \
+    -v "$3:/var/lib/postfiat/validator-3/.integrity.key:ro" -v "$1:/opt/node:ro" ubuntu:24.04 \
+    /opt/node verify-state --data-dir /var/lib/postfiat/validator-3
+}
+replay "$B" "$ARCHIVE" "$INTEGRITY" > "$KIT/evidence/anchor-replay.json"
+jq -e --slurpfile prev "$EXIT_WORK/evidence/old-state.json" \
+  '.verified and .block_log==$prev[0].block_log and .block_log.block_count==1753' "$KIT/evidence/anchor-replay.json"
+```
+
+Verify both the predecessor and the release against a private snapshot of the **current** committed generation before staging. At height 1753 the scratch archive above serves both purposes. At a later height set TIP_STORE and TIP_KEY to a consistent scratch snapshot and its matching integrity file. Take both binaries through the same generation. Preserve the original height-1753 archive for tag 3.
+
+```bash
+TIP_STORE=${TIP_STORE:-$ARCHIVE}
+TIP_KEY=${TIP_KEY:-$INTEGRITY}
+replay "$HOME/var/main-r64-20261121/bin/postfiat-node" "$TIP_STORE" "$TIP_KEY" > "$KIT/evidence/tip-old.json"
+replay "$B" "$TIP_STORE" "$TIP_KEY" > "$KIT/evidence/tip-new.json"
+python3 - <<'PY'
+import os
+from pathlib import Path
+from live import fleet,read
+p=Path(os.environ["KIT"])/"evidence"
+a,b=[read(p/f"tip-{v}.json") for v in ("old","new")]
+assert a["verified"] and b["verified"] and a["block_log"]==b["block_log"]
+r=b["block_log"]; f=fleet()
+assert (r["block_count"],r["tip_hash"],r["state_root"])==(f["block_height"],f["block_tip_hash"],f["state_root"])
+PY
 bash "$KIT/stage.sh"
 ```
 
-If the tip has advanced, qualify the fresh archive before installing any release units. This uses the same file allowlist and the active generation named by validator 3. The store integrity key stays in the private copy.
+The publisher credential stays at `~/.postfiat/trusted-deployment-publisher.private.json`. If the snapshot and the converged tip differ, refresh the snapshot and qualify both binaries again.
 
-```bash
-export SNAP=$(mktemp -d "$KIT/replay-refresh-XXXXXXXX")
-export SOURCE_HOST=$(PYTHONPATH=ops/sol-live python3 -c 'from live import HOSTS;print(HOSTS[3])')
-export VD=/var/lib/postfiat/validator-3
-ssh -oBatchMode=yes "root@$SOURCE_HOST" "cat $VD/transactional_generation.json" > "$SNAP/pointer"
-GEN=$(jq -er '.database_directory|split("/")|last|select(test("^transactional-generation-[0-9]+$"))' "$SNAP/pointer")
-sed '/^transactional-generation-/d' "$EXIT_WORK/replay/files" > "$SNAP/files"
-printf '%s\n' "$GEN/" .integrity.key >> "$SNAP/files"
-mkdir -m700 "$SNAP/source"
-rsync -azr --files-from="$SNAP/files" "root@$SOURCE_HOST:$VD/" "$SNAP/source/"
-cmp "$SNAP/pointer" "$SNAP/source/transactional_generation.json"
-cp -a --reflink=auto "$SNAP/source" "$SNAP/old"
-cp -a --reflink=auto "$SNAP/source" "$SNAP/new"
-for version in old new; do
-  BIN="$KIT/bin/postfiat-node"
-  if [ "$version" = old ]; then BIN="$HOME/var/main-r64-20261121/bin/postfiat-node"; fi
-  bash "$HOME/var/main-r64-20261121/run-copy.sh" "$BIN" "$SNAP/$version" verify-state > "$SNAP/$version.json"
-done
-PYTHONPATH=ops/sol-live python3 - <<'PYTHON'
-import os
-from pathlib import Path
-from live import fleet, read
-p = Path(os.environ["SNAP"])
-a, b = [read(p / (x + ".json")) for x in ("old", "new")]
-f = fleet()
-assert a["verified"] and b["verified"] and a["block_log"] == b["block_log"]
-r = a["block_log"]
-assert (r["block_count"], r["tip_hash"], r["state_root"]) == (f["block_height"], f["block_tip_hash"], f["state_root"])
-PYTHON
-```
-
-A moving tip or unsuccessful verification requires a fresh copy. The publisher key used by stage.sh is `~/.postfiat/trusted-deployment-publisher.private.json`. Rollback before staging or deployment consists of discarding this isolated candidate.
-
-## 2. Roll the six validators
+## 2. Roll validator 0, then the other five
 
 ```bash
 bash "$KIT/roll-rest.sh" 0
 bash "$KIT/roll-rest.sh" 1 2 3 4 5
-PYTHONPATH=ops/sol-live python3 -c 'from live import fleet; import json; print(json.dumps(fleet()))'
-test "$(PYTHONPATH=ops/sol-live python3 -c 'from live import fleet;print(fleet()["build_git_revision"])')" = "$(git rev-parse --short=8 HEAD)"
+python3 - <<'PY'
+import os
+from live import fleet
+f=fleet()
+assert f["build_git_revision"]==os.environ["REV"]
+print(f["block_height"],f["block_tip_hash"],f["state_root"])
+PY
 ```
 
-The r64 kit verifies each host's staged SHA and manifest, restores its watchdog settings, and checks six-way tip/root convergence after each restart. Read the per-host log before continuing after a failure. Before activation, restore a changed host using its saved predecessor units. Set N to the affected validator index.
+Inspect the canary's staged SHA, manifest verification, restored watchdog state and fleet convergence before rolling validator 1. Check the per-host evidence after each restart. Restore predecessor units only while the predecessor can replay every committed block. Use the saved units at `/etc/postfiat/releases/main-r64-20261121/rollback-units/` and the kit's `restore-watchdog.sh` on each affected host, then recheck root convergence. After a new decision or burn requires this release, repair forward.
+
+## 3. Register the descriptor with burns closed
+
+At or after H, review the registration batch and submit through the six resident validator signers. The prepare command needs a writable scratch store with its matching integrity file accessible to the node. Run it inside the same store and key mounts used above.
 
 ```bash
-export N=${N:?set the affected validator index}
-HOST=$(PYTHONPATH=ops/sol-live python3 -c 'import os;from live import HOSTS;print(HOSTS[int(os.environ["N"])])')
-ssh "root@$HOST" "set -e; cp -a /etc/postfiat/releases/main-r64-20261121/rollback-units/postfiat-validator-$N.service /etc/postfiat/releases/main-r64-20261121/rollback-units/postfiat-validator-$N-rpc.service /etc/systemd/system/; systemctl daemon-reload; systemctl restart postfiat-validator-$N.service; systemctl restart postfiat-validator-$N-rpc.service"
-bash "$KIT/restore-watchdog.sh" "$N" "$HOST"
-```
-
-Recheck convergence after each restored host. Once a newly accepted governance or burn block exists, keep a release able to replay it and roll forward. An older validator can reject that history.
-
-## 3. Register the exit descriptor
-
-```bash
-python3 ops/sol-live/exit_govern.py prepare --binary "$KIT/bin/postfiat-node" --copied-store "$KIT/replay" --output "$KIT/governance"
+mkdir -m700 "$KIT/governance"
+docker run --rm --network none -u "$(id -u):$(id -g)" --cap-drop ALL \
+  -v "$ARCHIVE:/var/lib/postfiat/validator-3" -v "$INTEGRITY:/var/lib/postfiat/validator-3/.integrity.key:ro" \
+  -v "$B:/opt/node:ro" -v "$PWD/crates/types/src/solana_exit_profile.json:/profile:ro" -v "$KIT/governance:/draft" \
+  ubuntu:24.04 /opt/node vault-bridge-route-profile-governance --data-dir /var/lib/postfiat/validator-3 \
+  --validators validator-0,validator-1,validator-2,validator-3,validator-4,validator-5 \
+  --profile-file /profile --amendment-file /draft/amendment.json --batch-file /draft/batch.json
 cmp "$KIT/governance/batch.json" crates/node/tests/fixtures/solana-exit/governance-batch.json
-python3 ops/sol-live/exit_govern.py submit --revision "$(git rev-parse --short=8 HEAD)" --release-height "$H"
+python3 ops/sol-live/exit_govern.py submit --revision "$REV" --release-height "$H"
 ```
 
-Submit when the pending governance block can be at or beyond H. The six resident validators sign the amendment for the current proposal slot with their own `/var/lib/postfiat/validator-N/validator_keys.json`. The wrapper assembles and submits through the existing governed round and checks both routes. A prepared unsigned batch can be discarded. If the submission response is lost, check the amendment by ID and the series RPC before attempting another round. A committed amendment is historical. A subsequent issue requires pausing payout and a forward governance/release correction.
+Require all six series RPCs to report the reviewed descriptor hash, `active=true` and `burns_open=false`. Confirm the Ethereum descriptor still matches epoch 11. On a lost governance response check the amendment ID and receipts on the six validators before proposing another round.
 
-## 4. Initialize the Solana checker
+## 4. Precheck the immutable binding
 
 ```bash
-python3 ops/sol-live/exit_setup.py --output "$KIT/evidence/init-simulation.json"
-python3 ops/sol-live/exit_setup.py --execute --output "$KIT/evidence/init-final-simulation.json"
+setup_args=(--binary "$B" --archive "$ARCHIVE" --integrity-file "$INTEGRITY")
+mkdir -p "$KIT/evidence/solana"
+python3 ops/sol-live/exit_setup.py "${setup_args[@]}" --output "$KIT/evidence/solana/unsigned.json"
+jq -e '.guest.forward and .guest.start==.config.initial_committee and .simulation.value.err==null' "$KIT/evidence/solana/unsigned.json"
 ```
 
-The first command builds an unsigned transaction, simulates it on mainnet and verifies every byte of both returned accounts. The second repeats those checks, requires the exact governed descriptor on six validators, then signs with `~/.config/postfiat/sol-bridge/egress-verifier.json` and `~/.config/postfiat/sol-bridge/mainnet-payer.json`. The latter key also holds pause authority. To independently verify the original checkpoint, run `bash "$HOME/var/main-r64-20261121/run-copy.sh" "$KIT/bin/postfiat-node" "$KIT/replay" verify-finalized-checkpoint` against the retained height-1753 copy and compare it with ops/sol-live/fixtures/exit-checkpoint.json. The tag-3 transaction commits the checkpoint and committee recorded in ops/sol-live/fixtures/exit-setup.json. The instruction bytes and ordered accounts are in the simulation JSON. Discarding the transaction is sufficient before broadcast. Initialization is one-time. Tag 4 lets the pause authority suspend/resume withdrawals. Valid proofs can advance checkpoints. The program has no instruction to replace the route, bucket, trusted initial committee or pause key. Recovery from a mistaken binding requires a separately reviewed program change. The finalized loader records show the verifier and vault remain upgradeable under the mainnet payer authority. Initialization itself performs no loader upgrade.
+Setup re-verifies the archived certificate and compares the authenticated committee, accepted ingress record and bucket across six validators. It checks finalized Solana vault config, custody, USDC mint and canary ATA at one slot, deployed programs and loader authorities, executes the frozen checkpoint guest and checks the simulated PDA bytes. At a stationary 1753 tip the guest can prove ancestry ending there. Wait for a later finalized block before signing.
 
-The historical anchor is the accepted transaction in block 1753. The builder reads its block ID and precommit QC committee root on all six validators and checks the exported, verified finalized checkpoint against that block. It obtains the family and ingress authorization from revision 8, checks the full bucket domain against the mainnet genesis, vault and USDC mint, and hashes the deployed verifier, vault and token program images. The descriptor's verifier policy hashes the raw 48-byte bucket ID with SHA-256. The two signers are checked against their public addresses. The payer covers 3,012,440 lamports in rent plus the simulated 10,000-lamport transaction fee.
+The tag-3 instruction is 317 bytes. Its SHA-256 is `bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4`. The dedicated pause authority is `ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx`. Its signing file stays offline from the payout service. Review the instruction, ordered accounts and simulated bindings in `unsigned.json`.
 
-| Tag 3 account, in instruction order | Address | Access |
-| --- | --- | --- |
-| Fee payer and pause authority | 4JJEuaYtJvgtMVixTbXfppHJPh6tcU5g7g7UtkvxK3sB | Writable signer |
-| Verifier deployment key | 8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF | Read-only signer |
-| Light PDA | FQe34dCQg9m6yEW6NjbjoR8LfWwKGLX2hBvTdY2Lu6s1 | Writable |
-| Checkpoint PDA | BATyPAkKcpPBjFAttaHAVR9raxdNuWtQUNrdKgaWkait | Writable |
-| System program | 11111111111111111111111111111111 | Read-only |
-
-Emergency pause after initialization, from the reviewed checkout:
+Fund the dedicated fee payer once. This orchestrator command sends **0.10 SOL**. Check the finalized balance first to recover a lost funding response. The checkout and precheck do not fund it.
 
 ```bash
-PYTHONPATH=ops/sol-live python3 - <<'PYTHON'
-from exit_payout import cluster
-from exit_setup import Instruction, VERIFIER, LIGHT, ro, rw
-c = cluster()
-print(c.send("egress.pause", [Instruction(VERIFIER, bytes([4, 1]), [ro(c.owner, True), rw(LIGHT)])]))
-assert c.account(LIGHT)["data"][-1] == 1
-PYTHON
+python3 - <<'PY'
+from exit_setup import DIRECTORY, ExitCluster, FEE_PAYER, MAINNET_PAYER, check_payout_authorities, require
+from solders.system_program import transfer
+c=ExitCluster(MAINNET_PAYER)
+check_payout_authorities(c)
+require(c.call("getBalance",str(FEE_PAYER),c.level)["value"]==0,"Fee payer already funded; reconcile first.")
+c.unlock(DIRECTORY/"mainnet-payer.json")
+ix=transfer(dict(from_pubkey=c.owner,to_pubkey=FEE_PAYER,lamports=100_000_000))
+print(c.send("exit.fund",[ix]))
+PY
 ```
 
-Resume after review with the same command using flag 0 in both places. A pause preserves all used burn markers and withdrawals already finalized.
+The recipient is `8EiSLnZQv23HtA5adokE6xfKyCK6mf4HGkpxSPpop1fs`. Readiness quotes peak proof-buffer, checkpoint, marker and ATA rents and transaction fees above the 20,000,000-lamport floor. All Solana buckets sharing this custody must remain covered, including queued redemptions pending L1 settlement.
 
-## 5. Install the payout service
-
-Use the reviewed release in the live checkout. Verify the existing GPU SSH connection, native proof host and frozen ELF are available to the systemd user. The relayer uses the mainnet payer key and has a 20,000,000-lamport balance floor.
+## 5. Initialize Solana
 
 ```bash
-export REV=$(git rev-parse HEAD)
-cd ~/repos/postfiatl1v2-live
-git diff --quiet
-git diff --cached --quiet
-git fetch "$EXIT_WORK/release" HEAD
-test "$(git rev-parse FETCH_HEAD)" = "$REV"
-git merge --ff-only "$REV"
-test "$(git rev-parse HEAD)" = "$REV"
+python3 ops/sol-live/exit_setup.py "${setup_args[@]}" --execute --output "$KIT/evidence/solana/initialized.json"
+jq -e '.finalized_readback and .signature' "$KIT/evidence/solana/initialized.json"
+```
+
+Only this step opens the setup payer and verifier deployment signers at `~/.config/postfiat/sol-bridge/{mainnet-payer,egress-verifier}.json`. Empty system-owned prefunded PDAs are eligible for creation. If RPC times out, repeat the unsigned setup command first. It recognizes both exact finalized accounts and the exact historical tag-3 instruction. For deep history provide `--init-signature` and an archival mainnet RPC. Stop on a conflicting binding. A permanent binding error needs a reviewed forward repair.
+
+## 6. Verify the initialized checker
+
+```bash
+python3 ops/sol-live/exit_setup.py "${setup_args[@]}" --output "$KIT/evidence/solana/readback.json"
+jq -e '.finalized_readback and .guest.forward' "$KIT/evidence/solana/readback.json"
+tag8=(--guest "$KIT/evidence/solana/guest" --work "$KIT/evidence/tag8")
+python3 ops/sol-live/exit_tag8.py stage "${tag8[@]}"
+python3 ops/sol-live/exit_tag8.py simulate "${tag8[@]}"
+jq -e '.value.err==null' "$KIT/evidence/tag8/simulation.json"
+python3 ops/sol-live/exit_tag8.py reclaim "${tag8[@]}"
+```
+
+Staging obtains the Groth16 proof and signs only the buffer allocation and uploads. Simulation sends an unsigned tag 8 to `simulateTransaction` and checks its returned light and checkpoint bytes. Reclaim the buffer rent after successful simulation. Keep burns closed if any check fails.
+
+## 7. Install the isolated payout service
+
+Install a **system** service under `pf-sol-exit`. Keep the code, pinned ELF and proof host root-owned. Provision a separate SSH identity for this service account on the existing prover and verify its host key out of band. Its home must permit batch SSH to the configured prover and the remote account must support the shared GPU lock. Keep the deployment account's SSH and Solana credentials out of the service home.
+
+```bash
+app=/opt/postfiat/sol-exit
+svc=/var/lib/pf-sol-exit
+id pf-sol-exit >/dev/null 2>&1 || sudo useradd --system --user-group --home-dir "$svc" --shell /usr/sbin/nologin pf-sol-exit
+sudo install -d -m700 -o pf-sol-exit -g pf-sol-exit "$svc"
+sudo install -d -m755 "$app" "$app/proof/bin" "$app/proof/historical"
+git archive HEAD ops/sol-live solana/deploy solana/pfusdc-egress-verifier/bootstrap.py crates/types/src/solana_exit_profile.json | sudo tar -x -C "$app" --no-same-owner
+sudo install -m755 "$HOME/repos/b23-coord/evidence/withdraw/bin/proof-host" "$app/proof/bin/proof-host"
+sudo install -m644 "$HOME/repos/b23-coord/evidence/withdraw/historical/egress.elf" "$app/proof/historical/egress.elf"
+sudo install -m644 "$KIT/evidence/solana/guest/witness.json" "$app/anchor-witness.json"
+sudo python3 -m venv "$app/venv"
+sudo "$app/venv/bin/pip" install solders==0.28.0 base58==2.1.1 requests==2.31.0
+fee="$HOME/.config/postfiat/sol-bridge/exit-fee-payer.json"
+test -f "$fee" && test ! -L "$fee" && test "$(stat -c %a "$fee")" = 600
+test "$(stat -c %d "$fee")" = "$(stat -c %d "$svc")"
+sudo test ! -e "$svc/fee-payer.json"
+sudo mv -T "$fee" "$svc/fee-payer.json"
+sudo chown pf-sol-exit:pf-sol-exit "$svc/fee-payer.json"
 test -z "$(ss -H -ltn 'sport = :18089')"
-install -Dm644 ops/sol-live/pft-sol-mainnet-withdraw.service ~/.config/systemd/user/pft-sol-mainnet-withdraw.service
-systemctl --user daemon-reload
-systemctl --user enable --now pft-sol-mainnet-withdraw.service
-curl -fsS http://127.0.0.1:18089/solana/withdrawals/readiness | tee "$KIT/evidence/readiness.json" | jq -e '.ready'
+sudo install -m644 ops/sol-live/pft-sol-mainnet-withdraw.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pft-sol-mainnet-withdraw.service
+export API=http://127.0.0.1:18089/solana/withdrawals
+curl -fsS "$API/readiness" | tee "$KIT/evidence/closed-readiness.json" | jq -e '.payout_ready and (.burns_open==false) and (.ready==false)'
 ```
 
-If the checkout has diverged or contains runtime edits, reconcile it into the reviewed release first. Keep the ETH upstream on port 18084. For the reviewed Task Node withdrawal relay, set `L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089` and `L1_SOLANA_WITHDRAWALS_ENABLED=true` in its deployment environment after readiness succeeds. The faucet uses port 18085. The gateway forwards through its existing authenticated relay. A service rollback stops the Solana unit with `systemctl --user disable --now pft-sol-mainnet-withdraw.service`. Preserve `~/.local/state/postfiat/sol-exit`; its journal and pending burn IDs support recovery. Disabling a relay does not reverse accepted burns.
+The same-filesystem move places the original fee-payer inode under the service account. On recovery use the already-provisioned key after checking its owner, mode and public address. `ProtectHome=yes` hides the operator's home from the unit. The withdrawal journal is under `/var/lib/pf-sol-exit/jobs`. The Ethereum service and faucet keep their existing ports.
 
-## 6. Prove one real payout
+## 8. Open burns in a separate unanimous decision
 
-The signing helper opens StakeHub's named wallet b23-bob with `~/.pft/b23-bob.passphrase` and the encrypted wallet under `~/.pft/wallets/4eca662d469907e4/`. Use the same output directory for this canary throughout. It binds the operation to revision 8, 20,000 atoms and Phantom owner Ce5Yv528pKVrVq4JbQchZ8zasCAzxT3f9uCfatTZcfo8.
+The frozen checker requires old-quorum V2 `signed_authorizations` in a supported single-update governance payload. Historical block 924 contains five Cobalt authorizations and zero V2 authorizations. That block predates the trusted anchor. A future Cobalt-only rotation after 1753 blocks payment across it. Readiness screens finalized batches, up to eight blocks per check. Let that scan finish. Coordinate future registry changes with the validator operators before opening burns. A rotation format the frozen guest cannot verify requires a reviewed verifier repair. An HTTP flag cannot stop direct L1 burns after opening.
+
+```bash
+python3 ops/sol-live/exit_govern.py open --revision "$REV" --release-height "$H"
+curl -fsS "$API/readiness" | tee "$KIT/evidence/open-readiness.json" | jq -e '.ready and .burns_open'
+```
+
+The wrapper checks the closed descriptor on six validators and the installed payout service. It invokes `ratify-solana-exit-open --data-dir "$VD" --validators "$VALIDATORS" --height "$H_NEXT" --amendment-file open.json` on the resident node for the next proposal height. It obtains all six authorizations and submits a separate ordinary governance batch. Check six accepted receipts and open flags. At this point a direct L1 client can burn. Keep the public relay disabled.
+
+## 9. Pay and settle one 0.02 pfUSDC canary
+
+The source is StakeHub's encrypted b23-bob wallet under `~/.pft/wallets/4eca662d469907e4/` with passphrase at `~/.pft/b23-bob.passphrase`. The destination is `Ce5Yv528pKVrVq4JbQchZ8zasCAzxT3f9uCfatTZcfo8`. Preserve the same canary directory across retries.
 
 ```bash
 python3 ops/sol-live/exit_canary.py prepare --output "$KIT/canary"
 jq '{before,fields}' "$KIT/canary/plan.json"
 python3 ops/sol-live/exit_canary.py burn --output "$KIT/canary"
 python3 ops/sol-live/exit_canary.py check --output "$KIT/canary"
-jq '{burn_tx_id,height,solana_tx,recipient,before,after,marker}' "$KIT/canary/paid.json"
+jq -e '.token_deltas=={"custody":-20000,"recipient":20000} and .withdrawal_packet_hash and .solana_tx' "$KIT/canary/paid.json"
 ```
 
-A signed but unsubmitted intent can be withheld. After acceptance the burn is irreversible. If submission or payout times out, run `check` with the original directory. It finds the original sequence/recipient/amount, requires six confirmations, tracks the existing job, and verifies the finalized Solana signature, one-use PDA and exact 20,000-atom balance changes. Investigate ambiguous submission from the preserved signed transaction before taking any further action.
+The checker compares the signed envelope including fee and sequence, the six finalized burn confirmations, the permanent Solana marker, the transaction-local custody debit and ATA credit, and the L1 series debit. On timeout, recover the original signed burn and use `check` in the original directory. A paid marker with unavailable history proves payment; obtain the finalized transaction from an archival RPC before attesting settlement.
 
-## Earlier and future series
+Each validator independently verifies the exact finalized tag-2 payout against the L1 packet, including program IDs, route, burn marker, full owner and ATA, mint, amount and slot. Use the zero-based ordinal among successful tag-2 payouts in execution order. The canary worker emits one tag 2, at ordinal zero. Confirm that in the actual transaction. On a validator in a fresh round directory, prepare the unsigned settlement decision at the next proposal height.
 
-At the rehearsal tip the seven earlier mainnet Solana buckets had 5,967,032 outstanding atoms between them. Their holders keep their balances. The validator refuses a burn from any of those buckets to this checker. The same rule applies to a new ingress revision after 8. The vault pins the verifier program ID and the verifier has one light PDA, so deploying an additional independent checker alone would not release from this vault.
+```bash
+postfiat-node ratify-solana-exit-paid --data-dir "$VD" --validators "$VALIDATORS" --height "$H_NEXT" \
+  --packet-hash "$PACKET" --solana-slot "$SLOT" --payout-index "$INDEX" --signature-hex "$SIG_HEX" --amendment-file paid.json
+```
 
-The smallest change that preserves the deployed checker is a governed one-for-one migration into bucket 4c045e28. Authorize explicit source and target bucket IDs with the same family, full genesis, vault, mint and custody binding. Require both buckets healthy and redeemable at par. In one signed, atomic state transition, debit the holder's old series line, credit their revision-8 line, and move the same outstanding liability and its counted backing. Record the paired adjustments in the backing ledger so the source root can be independently reconstructed. Leave queued redemptions and their backing in the old bucket. Reject amounts above free, fully backed outstanding and any impaired or cross-domain balance. Preserve aggregate issued supply, counted reserves, NAV and outstanding plus queues. Cover transparent and shielded holdings through the existing series-specific unshield path before conversion. This is a separate governed change with new conservation and replay tests.
+PACKET is the 96-hex withdrawal packet hash. SIG_HEX is the raw 64-byte transaction signature decoded from base58. Distribute the identical unsigned amendment to all six resident signers. Each uses `governance-authorization-sign` at H_NEXT with its local `/var/lib/postfiat/validator-N/validator_keys.json`. Assemble all six authorizations with `governance-amendment-assemble`, build the ordinary `governance-batch`, then run `transport-peer-certified-batch-round` on the scheduled proposer. The commands and propagation flags follow the ordinary-amendment branch in `ops/sol-live/govern.py`. A changed proposal height requires a fresh draft and signatures.
+
+Require six accepted settlement receipts. On each validator verify that the original redemption is settled for 20,000 atoms with `settlement_receipt_hash` equal to the accepted amendment ID. Reconcile the revision-8 queue, counted reserves and supply allocations against their pre-settlement values. An outstanding signature or accounting discrepancy keeps the public relay disabled.
+
+## 10. Enable the public relay
+
+After the canary's finalized payout and verified L1 settlement, set `L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089` and `L1_SOLANA_WITHDRAWALS_ENABLED=true` in the reviewed relay deployment. Read readiness and the original paid job through the authenticated relay.
+
+## Recovery
+
+Disabling public admission or pausing Solana leaves finalized L1 burns pending. Keep the replay-capable validator release, restore payout and reuse the original burn ID. The worker records the payout signature and its expiry before broadcast and reconciles the finalized marker on restart. To rebuild a damaged SQLite journal, stop the payout unit, run the following as the service account, and restart only after recovery succeeds.
+
+```bash
+sudo systemctl stop pft-sol-mainnet-withdraw.service
+sudo -u pf-sol-exit env EXIT_FEE_KEY=/var/lib/pf-sol-exit/fee-payer.json \
+  /opt/postfiat/sol-exit/venv/bin/python /opt/postfiat/sol-exit/ops/sol-live/exit_service.py \
+  --state /var/lib/pf-sol-exit/jobs --rebuild
+sudo systemctl start pft-sol-mainnet-withdraw.service
+```
+
+A rebuild checks L1 redemptions and finalized Solana markers, retains the old database and its SQLite sidecars, and atomically selects the recovered database through `jobs.current`. Pending jobs wait for potentially in-flight blockhashes to expire before resuming. Keep buffer keys whose on-chain rent has yet to be reclaimed.
+
+For an emergency Solana pause the offline operator uses the dedicated pause signer. Use flag 0 to resume only after repair and review.
+
+```bash
+python3 - <<'PY'
+from exit_setup import DIRECTORY, ExitCluster, Instruction, LIGHT, MAINNET_PAYER, PAUSE, VERIFIER, load, require, ro, rw
+c=ExitCluster(MAINNET_PAYER)
+c.unlock(DIRECTORY/"mainnet-payer.json")
+admin=load(DIRECTORY/"exit-pause-authority.json")
+require(admin.pubkey()==PAUSE,"Pause signer mismatch.")
+flag=1
+print(c.send("exit.pause",[Instruction(VERIFIER,bytes([4,flag]),[ro(PAUSE,True),rw(LIGHT)])],admin))
+assert c.account(LIGHT)["data"][-1]==flag
+PY
+```
+
+The seven earlier Solana series retain their own liabilities. Migration requires separate governance and conservation tests for outstanding amounts, queued redemptions, counted reserves and allocations. This release binds only revision 8.

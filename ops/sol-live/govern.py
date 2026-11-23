@@ -172,6 +172,19 @@ def govern(kind, profile=None, compatible=None):
             "--batch-file",
             work[0] + "/draft",
         )
+    elif kind == "exit-open":
+        tool(
+            0,
+            "ratify-solana-exit-open",
+            "--data-dir",
+            dirs[0],
+            "--validators",
+            ",".join(names),
+            "--height",
+            h,
+            "--amendment-file",
+            work[0] + "/amend",
+        )
     elif kind == "activation":
         tool(
             0,
@@ -188,6 +201,15 @@ def govern(kind, profile=None, compatible=None):
     else:
         raise ValueError(kind)
     amend = get(0, "amend")
+    if kind == "exit-open" and (
+        amend["kind"] != "solana_exit_r8_open"
+        or amend["activation_height"] != h
+        or amend["value"] != 1
+        or amend.get("paused", False)
+        or amend["quorum"] != 6
+        or amend["validators"] != names
+    ):
+        raise ValueError("Unexpected open-burn amendment.")
     save(local / "amendment.json", amend)
 
     def sign(i):
