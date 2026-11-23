@@ -502,7 +502,7 @@ fn pq_wallet_replaces_reserved_notes_across_a_fee_change() {
         .to_string()
         .contains("matching payment"));
     // An unrelated payment can consume the other note while the first remains reserved.
-    let (_, other) = prove(&mut wallet, order(4, 3));
+    let (other_hash, other) = prove(&mut wallet, order(4, 3));
     assert!(f.apply(&[other]).unwrap()[0].accepted);
     private_action_service_step(
         &f.dir,
@@ -513,10 +513,10 @@ fn pq_wallet_replaces_reserved_notes_across_a_fee_change() {
     let refused = private_action_receipt(&f.dir, &original.intent_id).unwrap();
     assert_eq!(refused.state, "rejected");
     assert!(private_action_submit(&f.dir, &original).unwrap().existing);
-    let (_, next) = prove(
+    let (replacement_hash, next) = prove(
         &mut wallet,
         Order {
-            replace: Some(hash),
+            replace: Some(hash.clone()),
             ..order(13, 2)
         },
     );
@@ -541,5 +541,49 @@ fn pq_wallet_replaces_reserved_notes_across_a_fee_change() {
             .reserve,
         0
     );
+    let snapshot = private_pool_snapshot(PrivatePoolSnapshotOptions {
+        data_dir: f.dir.clone(),
+        pool_id: pq::POOL_ID.into(),
+        address: None,
+        base_asset_id: None,
+        quote_asset_id: None,
+        inclusion_height: None,
+    })
+    .unwrap();
+    let page = private_pool_page(PrivatePoolPageOptions {
+        data_dir: f.dir.clone(),
+        snapshot_token: snapshot.snapshot_token,
+        section: "pq_pairs".into(),
+        cursor: None,
+        limit: Some(8),
+    })
+    .unwrap();
+    let Some(crate::private_pool_reads::PrivatePoolPageItems::PqPairs(all)) = page.items else {
+        panic!("missing settled pairs")
+    };
+    let settled = &all[wallet.point.pairs as usize..];
+    fs::write(&rows, serde_json::to_vec(settled).unwrap()).unwrap();
+    let before = serde_json::to_vec(&wallet).unwrap();
+    let mut incomplete = point();
+    incomplete.pairs += 1;
+    assert!(wallet.sync(incomplete, &rows).is_err());
+    assert!(
+        serde_json::to_vec(&wallet).unwrap() == before,
+        "an incomplete scan changed the wallet or an attempt"
+    );
+    wallet.sync(point(), &rows).unwrap();
+    let reopened: Wallet = serde_json::from_slice(&serde_json::to_vec(&wallet).unwrap()).unwrap();
+    let attempts = reopened.balance()["attempts"].as_array().unwrap().clone();
+    for (id, phase) in [
+        (&hash, "replaced"),
+        (&replacement_hash, "final"),
+        (&other_hash, "final"),
+    ] {
+        let stored = attempts
+            .iter()
+            .find(|a| a["action_hash"] == id.as_str())
+            .unwrap();
+        assert_eq!(stored["phase"], phase);
+    }
     fs::remove_dir_all(&f.dir).unwrap();
 }

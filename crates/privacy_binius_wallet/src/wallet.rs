@@ -225,6 +225,12 @@ impl Wallet {
         let mut scanned = 0;
         let mut trial_time = std::time::Duration::ZERO;
         let mut pages = 0;
+        // Stage only changes since the checkpoint. A truncated page or invalid
+        // root must not release reservations, even for an in-memory caller.
+        let mut point = self.point.clone();
+        let mut appended = BTreeMap::<(String, u64), History>::new();
+        let mut note_changes = BTreeMap::new();
+        let mut resolutions = BTreeMap::new();
         let mut reader = BufReader::new(private_file(rows)?);
         let mut line = String::new();
         while {
@@ -239,41 +245,52 @@ impl Wallet {
                 return Err("empty intermediate page".into());
             }
             let last =
-                postfiat_rpc_sdk::validate_pq_pairs(&pairs, &self.point.last_page, target.height)?;
+                postfiat_rpc_sdk::validate_pq_pairs(&pairs, &point.last_page, target.height)?;
             for pair in pairs {
                 if pair.height <= self.recovery.birthday.height
-                    || pair.height < self.point.height
-                    || self.point.pairs >= target.pairs
+                    || pair.height < point.height
+                    || point.pairs >= target.pairs
                 {
                     return Err("pair out of coverage".into());
                 }
                 let terminal = crate::tree::advance(
-                    self.point.assets.entry(pair.asset.clone()).or_default(),
+                    point.assets.entry(pair.asset.clone()).or_default(),
                     &pair,
                 )?;
-                let epochs = self.trees.entry(pair.asset.clone()).or_default();
-                let history = epochs.entry(pair.epoch).or_default();
-                if history.count() != pair.first_index as usize
-                    || history.count() > PQ_CAPACITY as usize - 2
-                {
+                let base_count = self
+                    .trees
+                    .get(&pair.asset)
+                    .and_then(|epochs| epochs.get(&pair.epoch))
+                    .map_or(0, History::count);
+                let history = appended
+                    .entry((pair.asset.clone(), pair.epoch))
+                    .or_default();
+                let position = base_count + history.leaves.len();
+                if position != pair.first_index as usize || position > PQ_CAPACITY as usize - 2 {
                     return Err("output position mismatch".into());
                 }
                 for serial in &pair.serials {
-                    self.notes.remove(serial);
+                    if self.notes.contains_key(serial) || note_changes.contains_key(serial) {
+                        note_changes.insert(serial.clone(), None);
+                    }
                 }
-                for attempt in self.attempts.values_mut().filter(|a| {
-                    !a.conflict_final && a.serials.iter().any(|sn| pair.serials.contains(sn))
-                }) {
+                for (id, attempt) in &self.attempts {
+                    if attempt.conflict_final
+                        || resolutions.contains_key(id)
+                        || !attempt.serials.iter().any(|sn| pair.serials.contains(sn))
+                    {
+                        continue;
+                    }
                     let (_, _, wire) = attempt.payment.parts()?;
                     let matches = attempt.serials == pair.serials
                         && pair.outputs[0].commitment == hex::encode(&wire[208..256])
                         && pair.outputs[1].commitment == hex::encode(&wire[256..304]);
-                    attempt.phase = if matches {
+                    let phase = if matches {
                         Phase::Final
                     } else {
                         Phase::Replaced
                     };
-                    attempt.conflict_final = true;
+                    resolutions.insert(id.clone(), phase);
                 }
                 for output in &pair.outputs {
                     let coin = digest(&output.commitment)?;
@@ -282,16 +299,16 @@ impl Wallet {
                     for (i, k) in &keys {
                         if let Some((value, blind)) = k.try_scan_output(&coin, &envelope) {
                             if value > 0 {
-                                self.notes.insert(
+                                note_changes.insert(
                                     hex::encode(nullifier(&k.spend_secret, &coin)),
-                                    Note {
-                                        index: history.count() as u32,
+                                    Some(Note {
+                                        index: (base_count + history.leaves.len()) as u32,
                                         key: *i,
                                         value,
                                         blind: hex::encode(blind),
                                         epoch: pair.epoch,
                                         asset: pair.asset.clone(),
-                                    },
+                                    }),
                                 );
                             }
                         }
@@ -301,26 +318,48 @@ impl Wallet {
                     history.leaves.push(output.commitment.clone());
                 }
                 history.terminal = terminal;
-                self.point.height = pair.height;
-                self.point.pairs += 1;
+                point.height = pair.height;
+                point.pairs += 1;
             }
-            self.point.last_page = last;
+            point.last_page = last;
             pages += 1;
         }
-        if target.pairs != self.point.pairs || target.last_page != self.point.last_page {
+        if target.pairs != point.pairs || target.last_page != point.last_page {
             return Err("incomplete public history".into());
         }
-        if target.assets.len() != self.point.assets.len() {
+        if target.assets.len() != point.assets.len() {
             return Err("asset coverage mismatch".into());
         }
         for (asset, a) in &target.assets {
-            let rebuilt = self.point.assets.get(asset).ok_or("missing asset")?;
+            let rebuilt = point.assets.get(asset).ok_or("missing asset")?;
             if rebuilt.epoch != a.epoch
                 || rebuilt.writable != a.writable
                 || rebuilt.frozen_epochs_root != a.frozen_epochs_root
             {
                 return Err("finalized root mismatch".into());
             }
+        }
+        for ((asset, epoch), mut addition) in appended {
+            let history = self
+                .trees
+                .entry(asset)
+                .or_default()
+                .entry(epoch)
+                .or_default();
+            history.leaves.append(&mut addition.leaves);
+            history.terminal = addition.terminal;
+        }
+        for (serial, change) in note_changes {
+            if let Some(note) = change {
+                self.notes.insert(serial, note);
+            } else {
+                self.notes.remove(&serial);
+            }
+        }
+        for (id, phase) in resolutions {
+            let attempt = self.attempts.get_mut(&id).expect("scanned wallet attempt");
+            attempt.phase = phase;
+            attempt.conflict_final = true;
         }
         self.point = target;
         Ok(
