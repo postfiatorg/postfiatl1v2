@@ -36,7 +36,7 @@ helpers.NATIVE=NATIVE
 helpers.ELF=DEPLOYMENT/'b24-nav.elf'
 
 # b24-release5-20261117, ac91a1f42. Both processes on every validator must match.
-DAILY_NODE_SHA = '69de5ce01bbda92ac5507565388d9e9655457be9bdd37582efd5d38f969bcd18'
+DAILY_NODE_SHA = 'd46376ff131e941cd271632d79eb5cfe4a22269d31588bd24caddda962d3e39e'  # sol-exit-r1 (71dbc9b3, from main incl. B24 line)
 
 def require_runtime():
     paths=[SEED/'manifest.json',SEED/'profile.json',DEPLOYMENT/'profile-template.json',DEPLOYMENT/'capture-plan.json',NATIVE,GPU_NATIVE,helpers.ELF]
