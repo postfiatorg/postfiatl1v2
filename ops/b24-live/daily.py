@@ -13,7 +13,7 @@ from datetime import datetime,timezone
 from decimal import Decimal,ROUND_CEILING
 from sign import *
 from snapshot import export
-from live import run_operations,LOCK
+from live import run_operations,LOCK,read_six,points,receipt_rows
 from reading_alert import record_failure
 ROOT=Path(__file__).resolve().parents[2]
 NAV=ROOT/'tools/nav-reserve-proof/schwab-tee'
@@ -172,6 +172,28 @@ def submit(d,capture,manifest,budget,p):
         finally:
             lock.seek(0)
             if lock.read().strip()=='NOW':lock.seek(0);lock.truncate();lock.flush()
+def continue_after_submit(d,p):
+    """The submit landed (accepted on all six) but the run stopped before finalize and route pricing; run only those."""
+    p.stage='continue-inputs';capture=d/'capture';manifest=load(capture/'manifest.json');budget=load(d/'budget.json')
+    ops=load(d/'canary/operations.json');assert [o['label'] for o in ops]==['daily-submit','daily-finalize','daily-route-pricing']
+    txid=load(d/'live/01-daily-submit/expected-state.json')['canary_receipts'][0]['receipt']['tx_id']
+    six=read_six(txid);save(d/'continue-submit-six.json',six);assert len(points(six))==1
+    assert all(any(x['tx_id']==txid and x['accepted'] for x in receipt_rows(r['receipts'])) for r in six),'submit not accepted on all six'
+    p.stage='chain-lock'
+    with LOCK.open('a+') as lock:
+        wait_lock(lock,time.monotonic()+LOCK_WAIT,'chain lock');lock.seek(0)
+        if lock.read().strip():raise RuntimeError('chain lock held')
+        lock.seek(0);lock.truncate();lock.write('NOW\n');lock.flush()
+        try:
+            p.stage='runtime-check';runtime_check(d,'continue-runtimes.json')
+            p.stage='continue-submission';current=d/'continue-before.json';export(current)
+            final,receipts=run_operations(ops[1:],current,d/'live-continue',lock_owner='NOW')
+            p.stage='landing-check';nav=confirm_landed(d,manifest['observation_epoch'],ops[0]['operation']['reserve_packet_hash'])
+            save(d/'complete.json',dict(epoch=manifest['observation_epoch'],six_validator_verified=True,landed_on_chain=True,budget=budget,final_snapshot=str(final),submit_tx_id=txid,receipts=receipts))
+            with STATUS.open('a') as status:status.write(f"\nREADING COMPLETE {datetime.now(timezone.utc).isoformat()}: epoch {nav['finalized_epoch']}, NAV {nav['nav_per_unit']/1e6:.6f}; six validators and full ledger verified. Evidence: {d}\n")
+        finally:
+            lock.seek(0)
+            if lock.read().strip()=='NOW':lock.seek(0);lock.truncate();lock.flush()
 def resume(d,progress=None):
     """Submit an already captured and proven reading; no AWS. Same lock, runtime check, rehearsal and landing check."""
     p=progress or Progress();p.mode='resume';p.directory=d
@@ -179,6 +201,7 @@ def resume(d,progress=None):
     for path in (capture/'manifest.json',capture/'final-inventory.json',d/'budget.json',d/'archive-verification.json',d/'negative-reading',d/'proof/public-values.bin',d/'proof/proof-calldata.bin'):
         if not path.exists():raise FileNotFoundError(str(path))
     if (d/'complete.json').exists():raise ValueError('reading already landed')
+    if (d/'live/01-daily-submit').exists():return continue_after_submit(d,p)
     assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
     p.stage='pre-submit-runtime-check';runtime_check(d,'resume-runtimes.json')
     if (d/'canary').exists():(d/'canary').rename(d/('canary-failed-'+datetime.now(timezone.utc).strftime('%Y%m%dt%H%M%S')))
