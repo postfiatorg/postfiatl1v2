@@ -186,8 +186,16 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
     elif kind in ("exit-open", "exit-close", "exit-paid"):
         extra = []
         if kind == "exit-paid":
-            extra = ["--packet-hash", payout["packet"], "--solana-slot", payout["slot"],
-                     "--payout-index", payout["ordinal"], "--signature-hex", payout["signature_hex"]]
+            extra = [
+                "--packet-hash",
+                payout["packet"],
+                "--solana-slot",
+                payout["slot"],
+                "--payout-index",
+                payout["ordinal"],
+                "--signature-hex",
+                payout["signature_hex"],
+            ]
         tool(
             0,
             "ratify-solana-" + kind,
@@ -219,24 +227,33 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
     amend = get(0, "amend")
     if kind == "exit-paid":
         from exit_canary import match_reference
+
         match_reference(amend, payout)
-    if kind in ("exit-open","exit-close","exit-paid") and (
-        (kind != "exit-paid" and amend["kind"] != "solana_exit_r8_" + kind.split("-")[1])
+    if kind in ("exit-open", "exit-close", "exit-paid") and (
+        (
+            kind != "exit-paid"
+            and amend["kind"] != "solana_exit_r8_" + kind.split("-")[1]
+        )
         or amend["activation_height"] != h
         or amend["value"] != 1
         or amend.get("paused", False)
         or amend["quorum"] != 6
         or amend["validators"] != names
     ):
-        raise ValueError("Unexpected open-burn amendment.")
+        raise ValueError("Unexpected Solana exit amendment.")
     save(local / "amendment.json", amend)
 
     def sign(i):
         if kind == "exit-paid":
             from exit_precheck import parent_of
-            approval = json.loads(remote(i, ["cat", "/etc/postfiat/sol-exit-paid-review.json"]))
+
+            approval = json.loads(
+                remote(i, ["cat", "/etc/postfiat/sol-exit-paid-review.json"])
+            )
             if approval != dict(kind=amend["kind"], parent=parent_of(head)):
-                raise ValueError(f"Validator-{i} has not verified this payout and proposal parent.")
+                raise ValueError(
+                    f"Validator-{i} has not verified this payout and proposal parent."
+                )
         if i:
             put(i, "amend", amend)
         tool(

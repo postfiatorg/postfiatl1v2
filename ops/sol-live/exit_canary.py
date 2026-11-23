@@ -146,7 +146,10 @@ def prepare(out, *, allow_closed=False):
         and q["genesis_hash"] == head["genesis_hash"],
         "Unexpected fee quote",
     )
-    require(q.get("sender_meets_reserve_after_fee") is True, "Insufficient native reserve after fee.")
+    require(
+        q.get("sender_meets_reserve_after_fee") is True,
+        "Insufficient native reserve after fee.",
+    )
     return dict(
         before=before,
         parent=head,
@@ -375,53 +378,100 @@ def finalized_reference(paid, tx):
 
     sig = paid["solana_tx"]
     packet = paid["withdrawal_packet_hash"]
-    require(tx and tx["transaction"]["signatures"] == [sig]
-            and type(tx["slot"]) is int and tx["slot"] == paid["finalized_slot"] > 0
-            and re.fullmatch("[0-9a-f]{96}", packet), "Wrong finalized payout reference.")
+    require(
+        tx
+        and tx["transaction"]["signatures"] == [sig]
+        and type(tx["slot"]) is int
+        and tx["slot"] == paid["finalized_slot"] > 0
+        and re.fullmatch("[0-9a-f]{96}", packet),
+        "Wrong finalized payout reference.",
+    )
     raw = base58.b58decode(sig)
     require(len(raw) == 64 and any(raw), "Invalid transaction signature.")
     token_deltas(tx)
     msg = tx["transaction"]["message"]
     keys = msg["accountKeys"]
     require(not msg.get("addressTableLookups"), "Unexpected lookup-table payout.")
+
     def tag2(ix):
-        return keys[ix["programIdIndex"]] == str(VERIFIER) and base58.b58decode(ix["data"])[:1] == b"\x02"
+        return (
+            keys[ix["programIdIndex"]] == str(VERIFIER)
+            and base58.b58decode(ix["data"])[:1] == b"\x02"
+        )
+
     # A worker transaction has a single top-level withdrawal. Reject traces with
     # additional withdrawals (including CPI), so its execution ordinal must be zero.
     inner = tx["meta"]["innerInstructions"]
-    require(isinstance(inner, list) and not any(tag2(ix) for group in inner for ix in group["instructions"]),
-            "Cannot establish a single top-level payout.")
+    require(
+        isinstance(inner, list)
+        and not any(tag2(ix) for group in inner for ix in group["instructions"]),
+        "Cannot establish a single top-level payout.",
+    )
     withdrawals = [ix for ix in msg["instructions"] if tag2(ix)]
     require(len(withdrawals) == 1, "Unexpected payout ordinal or multiplicity.")
     ix = withdrawals[0]
     keys_used = [keys[i] for i in ix["accounts"]]
     ata = pda(ATA, bytes(PHANTOM), bytes(TOKEN), bytes(MINT))
-    tail = [SYSTEM, marker(paid["burn_tx_id"]), VAULT, pda(VERIFIER, b"egress-release", bytes(VAULT)),
-            pda(VAULT,b"config"), pda(VAULT,b"custody"), ata, PHANTOM, MINT, TOKEN]
-    require(len(base58.b58decode(ix["data"])) == 357 and len(keys_used) == 15
-            and keys_used[:2] == [str(FEE_PAYER),str(LIGHT)] and keys_used[5:] == list(map(str,tail)),
-            "Payout instruction names different accounts or route.")
-    return dict(packet=packet, slot=tx["slot"], ordinal=0, signature_hex=raw.hex(),
-                kind=f"solana_exit_r8_paid:{packet}:{tx['slot']}:0:{raw.hex()}")
+    tail = [
+        SYSTEM,
+        marker(paid["burn_tx_id"]),
+        VAULT,
+        pda(VERIFIER, b"egress-release", bytes(VAULT)),
+        pda(VAULT, b"config"),
+        pda(VAULT, b"custody"),
+        ata,
+        PHANTOM,
+        MINT,
+        TOKEN,
+    ]
+    require(
+        len(base58.b58decode(ix["data"])) == 357
+        and len(keys_used) == 15
+        and keys_used[:2] == [str(FEE_PAYER), str(LIGHT)]
+        and keys_used[5:] == list(map(str, tail)),
+        "Payout instruction names different accounts or route.",
+    )
+    return dict(
+        packet=packet,
+        slot=tx["slot"],
+        ordinal=0,
+        signature_hex=raw.hex(),
+        kind=f"solana_exit_r8_paid:{packet}:{tx['slot']}:0:{raw.hex()}",
+    )
 
 
 def match_reference(amendment, ref):
-    require(amendment["kind"] == ref["kind"], "Settlement draft differs from paid.json.")
+    require(
+        amendment["kind"] == ref["kind"], "Settlement draft differs from paid.json."
+    )
 
 
 def review_paid(paid):
     from exit_precheck import agreement
+
     c = cluster()
-    tx = c.call("getTransaction", paid["solana_tx"],
-                dict(c.level, encoding="json", maxSupportedTransactionVersion=0))
+    tx = c.call(
+        "getTransaction",
+        paid["solana_tx"],
+        dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
+    )
     ref = finalized_reference(paid, tx)
-    require(signature(c, paid["burn_tx_id"], paid["solana_tx"]) == paid["solana_tx"],
-            "Finalized marker differs from payout.")
+    require(
+        signature(c, paid["burn_tx_id"], paid["solana_tx"]) == paid["solana_tx"],
+        "Finalized marker differs from payout.",
+    )
+
     def verify(i):
         status = rpc(i, "vault_bridge_status", asset_id=ASSET)
-        (red,) = [r for r in status["redemptions"] if r["burn_tx_id"] == paid["burn_tx_id"]]
-        require(red["owner"] == OWNER and red["destination_ref"] == DEST, "Wrong burn owner or destination.")
+        (red,) = [
+            r for r in status["redemptions"] if r["burn_tx_id"] == paid["burn_tx_id"]
+        ]
+        require(
+            red["owner"] == OWNER and red["destination_ref"] == DEST,
+            "Wrong burn owner or destination.",
+        )
         return settlement_state(status, paid)
+
     agreement(six(verify))
     return ref
 
@@ -492,13 +542,24 @@ def settlement(out, amendment=None, height=None):
         "Settlement ID and height required.",
     )
     ref = review_paid(paid)
+
     def verify_archive(i):
         h = rpc(i, "tx", tx_id=amendment)["block"]["header"]
-        require(h["height"] == height and h["batch_kind"] == "governance", "Wrong settlement block.")
-        (batch,) = rpc(i, "batch_archive", batch_kind="governance", batch_id=h["batch_id"], limit=1)
-        (decision,) = [a for a in json.loads(batch["payload_json"])["amendments"] if a["amendment_id"] == amendment]
+        require(
+            h["height"] == height and h["batch_kind"] == "governance",
+            "Wrong settlement block.",
+        )
+        (batch,) = rpc(
+            i, "batch_archive", batch_kind="governance", batch_id=h["batch_id"], limit=1
+        )
+        (decision,) = [
+            a
+            for a in json.loads(batch["payload_json"])["amendments"]
+            if a["amendment_id"] == amendment
+        ]
         match_reference(decision, ref)
         return decision["kind"]
+
     agreement(six(verify_archive))
     receipts = receipt_at(amendment, height)
     check_settlement(read(before_path), state, amendment)
@@ -536,6 +597,7 @@ def main():
             save(out / "preflight.json", prepare(out, allow_closed=True))
         elif args.action == "settlement-review":
             from exit_precheck import parent_of
+
             parent = parent_of(fleet())
             ref = review_paid(read(out / "paid.json"))
             require(parent_of(fleet()) == parent, "Tip changed during payout review.")

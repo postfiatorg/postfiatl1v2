@@ -57,16 +57,35 @@ def rotation_clearance(head):
     from govern import remote
 
     require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
+
     def inspect(i):
         directory = f"/var/lib/postfiat/validator-{i}/consensus-v2-safety"
-        files = remote(i, ["find", directory, "-maxdepth", "1", "-type", "f",
-                           "-name", "*.json", "-printf", "%f\\n"]).splitlines()
+        files = remote(
+            i,
+            [
+                "find",
+                directory,
+                "-maxdepth",
+                "1",
+                "-type",
+                "f",
+                "-name",
+                "*.json",
+                "-printf",
+                "%f\\n",
+            ],
+        ).splitlines()
         require(files, f"Missing resident signing history on validator-{i}.")
         for name in files:
             match = re.fullmatch(r"epoch-\d+-[a-f0-9]{96}-height-(\d+)\.json", name)
-            require(match and int(match[1]) <= head["block_height"],
-                    f"Unknown or uncommitted signing round on validator-{i}.")
-        return json.loads(remote(i, ["cat", "/etc/postfiat/sol-exit-rotation-clearance.json"]))
+            require(
+                match and int(match[1]) <= head["block_height"],
+                f"Unknown or uncommitted signing round on validator-{i}.",
+            )
+        return json.loads(
+            remote(i, ["cat", "/etc/postfiat/sol-exit-rotation-clearance.json"])
+        )
+
     rows = six(inspect)
     for i, row in enumerate(rows):
         require(
@@ -78,7 +97,9 @@ def rotation_clearance(head):
             and row["outstanding_signed_rotation_rounds"] == [],
             f"Missing, stale or outstanding rotation clearance on validator-{i}.",
         )
-    require(parent_of(fleet()) == parent_of(head), "Tip advanced during rotation checks.")
+    require(
+        parent_of(fleet()) == parent_of(head), "Tip advanced during rotation checks."
+    )
     return rows
 
 
@@ -203,6 +224,7 @@ def main():
             )
     elif args.action == "paid":
         from exit_canary import review_paid
+
         ref = review_paid(read(args.paid))
         save(args.output, govern("exit-paid", compatible=args.revision, payout=ref))
     elif args.action == "close":
