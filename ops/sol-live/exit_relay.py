@@ -87,7 +87,15 @@ def set_flag(cfg, enabled):
                  "L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089\n")
 
 
+def require_supported_node(node):
+    version = subprocess.check_output([node, "--version"], text=True).strip()
+    match = re.fullmatch(r"v24\.(\d+)\.\d+", version)
+    if not match or int(match[1]) < 21:
+        raise ValueError(f"Unsupported relay Node version {version}.")
+
+
 def verify_process(cfg, enabled):
+    require_supported_node(cfg["node"])
     relay(cfg["unit"], True, release=Path(cfg["release"]), enabled=enabled,
           node=Path(cfg["node"]), probe_module=Path(cfg["probe_module"]))
 
@@ -117,6 +125,7 @@ def main():
             raise ValueError("Gateway must be the browser's HTTPS origin.")
         for k in ("release", "node", "probe_module", "flag_file", "cookie_file"):
             cfg[k] = str(Path(cfg[k]).resolve())
+        require_supported_node(cfg["node"])
         CONFIG.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         set_flag(cfg, False)
         atomic_write(CONFIG, json.dumps(cfg))

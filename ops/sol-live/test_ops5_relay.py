@@ -53,10 +53,53 @@ class FifthReview(unittest.TestCase):
             systemctl.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$HOME/systemctl.args"\nexit 1\n')
             systemctl.chmod(0o755)
             result = subprocess.run(["env", "-i", "HOME="+d, "PATH="+d+":/usr/bin:/bin", "/bin/bash",
-                                     "--noprofile", "--norc", "-c", '"$1"', "_", command],
+                                     "--login", "-c", 'export PATH="$1:/usr/bin:/bin"; exec "$2"', "_", d, command],
                                     capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("L1_SOLANA_WITHDRAWALS_ENABLED=false", flag.read_text())
             self.assertEqual((home / "systemctl.args").read_text().splitlines(), ["--user","restart","fixture.service"])
         self.assertIn('bash -lc', BOOK)
         self.assertIn('disable-sol-exit', BOOK)
+
+    def test_relay_rejects_unsupported_node_before_install_or_restart(self):
+        from exit_relay import require_supported_node
+        for version in ("v18.20.8", "v24.20.0", "v25.0.0"):
+            with patch("exit_relay.subprocess.check_output", return_value=version), self.assertRaises(ValueError):
+                require_supported_node("/fixture/node")
+        with patch("exit_relay.subprocess.check_output", return_value="v24.22.1\n"):
+            require_supported_node("/fixture/node")
+        self.assertIn('"$NODE" "$node_bin/npm" ci && "$NODE" --test', BOOK)
+        self.assertIn('ExecStart=\\"$NODE\\" --require', BOOK)
+
+    def test_paid_repost_uses_the_browser_origin_and_original_json_body(self):
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        import threading
+        from exit_relay import verify_paid, ROUTE
+        burn, sig = "ab"*48, "original"
+        paid = dict(stage="paid", burn_tx_id=burn, solana_tx=sig)
+        seen = []
+        class Handler(BaseHTTPRequestHandler):
+            def reply(self, result):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode())
+            def do_GET(self):
+                self.reply(dict(ok=True, ready=True) if self.path.endswith("/readiness") else paid)
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                seen.append((self.path, self.headers["Origin"], self.headers["Sec-Fetch-Site"], body))
+                self.reply(paid)
+            def log_message(self, *args):
+                pass
+        with HTTPServer(("127.0.0.1", 0), Handler) as server, tempfile.TemporaryDirectory() as tmp:
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                origin = f"http://127.0.0.1:{server.server_port}"
+                cookie = Path(tmp)/"cookie"
+                cookie.touch()
+                verify_paid(dict(gateway=origin, cookie_file=str(cookie)), burn, sig)
+                self.assertEqual(seen, [(ROUTE, origin, "same-origin", {"burn_tx_id":burn})])
+            finally:
+                server.shutdown()
+                thread.join()
