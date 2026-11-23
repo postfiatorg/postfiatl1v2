@@ -1,0 +1,16 @@
+[Unit]
+Description=Solana USDC withdrawal worker in a private filesystem
+After=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/pf-sol-exit/prover.env
+UMask=0077
+NoNewPrivileges=yes
+LimitCORE=0
+ExecStartPre=%h/.local/lib/pf-sol-exit/ops/sol-live/exit-sandbox.sh self-test
+ExecStart=%h/.local/lib/pf-sol-exit/ops/sol-live/exit-sandbox.sh serve
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

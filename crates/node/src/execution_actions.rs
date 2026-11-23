@@ -41,6 +41,28 @@ pub(super) fn execute_fastlane_primary_for_chain(
             );
         }
     }
+    if let postfiat_types::FastLanePrimaryOperationV1::AnchorCheckpoint { certificate } =
+        &transaction.operation
+    {
+        if postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
+            .is_some_and(|h| block_height >= h)
+            && certificate.votes.first().is_some_and(|vote| {
+                vote.checkpoint.pending_fee_burn_totals.iter().any(|row| {
+                    row.amount_atoms > 0
+                        && bytes_to_hex(&row.asset_id.0) == postfiat_types::solana_exit::SERIES
+                })
+            })
+        {
+            return Receipt::rejected(
+                transaction
+                    .tx_id()
+                    .map(|id| bytes_to_hex(&id.0))
+                    .unwrap_or_else(|_| "fastlane-invalid-id".into()),
+                "solana_exit_unmatched_supply_change",
+                "FastLane checkpoint fees cannot burn revision-8 reserves",
+            );
+        }
+    }
     execute_fastlane_primary_transaction(ledger, transaction, block_height)
 }
 
@@ -486,6 +508,7 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
         .with_bridge_verification_activation_height(
             bridge_verification_activation_height_for_chain(genesis, governance),
         )
+        .with_governed_solana_exit(genesis, governance)
         .with_orchard_aware_bridge_claim_activation_height(
             orchard_aware_bridge_claim_activation_height_for_chain(genesis, governance),
         )
@@ -519,6 +542,7 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
         .with_bridge_verification_activation_height(
             bridge_verification_activation_height_for_chain(genesis, governance),
         )
+        .with_governed_solana_exit(genesis, governance)
         .with_orchard_aware_bridge_claim_activation_height(
             orchard_aware_bridge_claim_activation_height_for_chain(genesis, governance),
         )
@@ -1165,9 +1189,18 @@ pub(super) fn execute_governance_batch(
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, ledger, genesis, batch, block_height, false)
+    execute_governance_batch_with_replay(
+        governance,
+        ledger,
+        genesis,
+        batch,
+        block_height,
+        false,
+        &[],
+    )
 }
 
+#[cfg(test)]
 pub(super) fn execute_archived_governance_batch(
     governance: &mut GovernanceState,
     ledger: Option<&mut LedgerState>,
@@ -1175,7 +1208,15 @@ pub(super) fn execute_archived_governance_batch(
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, ledger, genesis, batch, block_height, true)
+    execute_governance_batch_with_replay(
+        governance,
+        ledger,
+        genesis,
+        batch,
+        block_height,
+        true,
+        &[],
+    )
 }
 
 /// An archived governance batch executed with no ledger, as the certificate
@@ -1188,16 +1229,25 @@ pub(super) fn execute_ledgerless_archived_governance_batch(
     batch: &GovernanceActionBatch,
     block_height: u64,
 ) -> Vec<Receipt> {
-    execute_governance_batch_with_replay(governance, None, Some(genesis), batch, block_height, true)
+    execute_governance_batch_with_replay(
+        governance,
+        None,
+        Some(genesis),
+        batch,
+        block_height,
+        true,
+        &[],
+    )
 }
 
-fn execute_governance_batch_with_replay(
+pub(super) fn execute_governance_batch_with_replay(
     governance: &mut GovernanceState,
     mut ledger: Option<&mut LedgerState>,
     genesis: Option<&Genesis>,
     batch: &GovernanceActionBatch,
     block_height: u64,
     historical_replay: bool,
+    orchard_balances: &[postfiat_types::AssetOrchardAssetBalance],
 ) -> Vec<Receipt> {
     let genesis_lanes = genesis.map(Genesis::external_lanes);
     let mut receipts = Vec::with_capacity(
@@ -1280,6 +1330,23 @@ fn execute_governance_batch_with_replay(
                 "governance amendment already applied",
             ));
         } else {
+            if postfiat_types::solana_exit::is_decision(&amendment.kind) {
+                if let Err(message) = crate::solana_exit_governance::apply_decision(
+                    genesis,
+                    governance,
+                    ledger.as_deref_mut(),
+                    orchard_balances,
+                    amendment,
+                    block_height,
+                ) {
+                    receipts.push(Receipt::rejected(
+                        amendment.amendment_id.clone(),
+                        "solana_exit_decision_rejected",
+                        message,
+                    ));
+                    continue;
+                }
+            }
             apply_governance_amendment_with_lifecycle_records(
                 governance,
                 amendment.clone(),
@@ -1813,9 +1880,42 @@ fn execute_governance_batch_with_replay(
             {
                 return Err("vault bridge route profile already recorded".to_string());
             }
+            if let Some(genesis) = genesis.filter(|g| {
+                profile_hash == postfiat_types::solana_exit::PROFILE_HASH
+                    && postfiat_types::solana_exit::release_height(&g.chain_id, &genesis_hash(g))
+                        .is_some_and(|height| block_height >= height)
+            }) {
+                crate::solana_exit_governance::require_unanimity(
+                    amendment,
+                    &active_validator_ids(governance).map_err(|e| e.to_string())?,
+                )?;
+                if activation.beacon_finality_bootstrap.is_some()
+                    || postfiat_types::solana_exit::registered(governance).is_some()
+                {
+                    return Err(
+                        "Solana exit requires its original bucket and a single authorization"
+                            .into(),
+                    );
+                }
+                crate::solana_exit_governance::verify_checkpoint_history(genesis, governance)?;
+                crate::solana_exit_governance::require_reconciled_bucket(
+                    ledger
+                        .as_deref()
+                        .ok_or("Solana exit registration requires the committed ledger")?,
+                    orchard_balances,
+                )?;
+                return postfiat_types::VaultBridgeRouteProfileRecordV1::new(
+                    activation,
+                    block_height,
+                );
+            }
             if governance
                 .vault_bridge_route_profiles
                 .iter()
+                .filter(|existing| {
+                    existing.profile_hash != postfiat_types::solana_exit::PROFILE_HASH
+                        || postfiat_types::solana_exit::registered(governance).is_none()
+                })
                 .filter(|existing| {
                     existing.profile.asset_id == activation.profile.asset_id
                         && existing.profile.solana.is_some() == activation.profile.solana.is_some()
@@ -2017,6 +2117,14 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
     let profile = ledger
         .nav_proof_profile(&nav_asset.proof_profile)
         .ok_or_else(|| "vault bridge route NAV proof profile is missing".to_string())?;
+    validate_route_nav_profile(route, route_hash, profile)
+}
+
+pub(super) fn validate_route_nav_profile(
+    route: &postfiat_types::VaultBridgeRouteProfileV1,
+    route_hash: &str,
+    profile: &postfiat_types::NavProofProfile,
+) -> Result<(), String> {
     let expected_source_class = format!("vault_bridge:{}", route.source_domain());
     let effective_route_policy_hash = if profile.vault_bridge_route_policy_hash.is_empty() {
         &profile.valuation_policy_hash

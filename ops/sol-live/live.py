@@ -78,8 +78,18 @@ def six(fn):
         return list(pool.map(fn, range(6)))
 
 
+def verify_node_ids(rows):
+    if len(rows) != len(PEERS):
+        raise ValueError("Six validator statuses are required.")
+    for i, status in enumerate(rows):
+        expected = f"validator-{i}"
+        if status.get("node_id") != expected:
+            raise ValueError(f"Expected {expected} on port {PEERS[i][1]}")
+
+
 def fleet():
     rows = six(lambda i: rpc(i, "status"))
+    verify_node_ids(rows)
     keys = (
         "chain_id",
         "genesis_hash",

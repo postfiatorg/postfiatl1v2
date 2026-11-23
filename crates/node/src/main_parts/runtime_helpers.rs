@@ -733,6 +733,10 @@ fn print_usage() {
   postfiat-node ratify-require-memo-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-orchard-aware-bridge-claim-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-pfusdc-source-series-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
+  postfiat-node ratify-solana-exit-open [--data-dir PATH] --validators CSV --height H --amendment-file PATH
+  postfiat-node ratify-solana-exit-retire [--data-dir PATH] --validators CSV --height H --amendment-file PATH
+  postfiat-node ratify-solana-exit-close [--data-dir PATH] --validators CSV --height H --amendment-file PATH
+  postfiat-node ratify-solana-exit-paid [--data-dir PATH] --validators CSV --height H --packet-hash HEX --solana-slot SLOT --payout-index N --signature-hex HEX --amendment-file PATH
   postfiat-node ratify-solana-bridge-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-shielded-atomic-batch-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-asset-orchard-pricing-enforcement-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
@@ -786,7 +790,7 @@ fn print_usage() {
   postfiat-node validator-registry-authorization-sign [--data-dir PATH] --update-file PATH --validator NODE_ID --validator-key-file PATH --proposal-slot H --expires-at-height H --authorization-file PATH
   postfiat-node validator-registry-update-assemble [--data-dir PATH] --update-file PATH --authorization-files CSV --proposal-slot H --output PATH
   postfiat-node validator-registry-update-verify [--data-dir PATH] --update-file PATH [--previous-registry-file PATH] [--new-registry-file PATH]
-  postfiat-node validator-registry-update-apply [--data-dir PATH] --update-file PATH --current-height N [--previous-registry-file PATH] [--output-registry-file PATH]
+  postfiat-node validator-registry-update-apply [--data-dir PATH] --update-file PATH --current-height N [--previous-registry-file PATH] --output-registry-file NEW_OFFLINE_PATH
   postfiat-node validator-registry-lifecycle-replay-verify --bundle-file PATH
   postfiat-node governance-replay-build [--data-dir PATH] [--genesis-bundle-file PATH] --previous-registry-file PATH --update-file PATH --new-registry-file PATH [--amendment-replay-bundle-file PATH] [--governance-batch-file PATH] [--post-change-block-file PATH --post-change-batch-file PATH --post-change-certificate-file PATH] --output PATH [--overwrite]
   postfiat-node governance-replay-verify [--data-dir PATH] --package-file PATH

@@ -1637,6 +1637,55 @@ pub fn pftl_uniswap_non_consumption_proof_hash(
     ))
 }
 
+/// Fixed transport discriminator in the frozen egress V1 packet. The full SPL
+/// source domain is authenticated by the source bucket, including the genesis,
+/// program, mint and ingress policy. These 20-byte aliases never receive funds.
+pub const SOLANA_EGRESS_PACKET_CHAIN: u64 = u64::from_be_bytes(*b"SOLANA01");
+
+pub fn solana_egress_packet_alias(key: &str) -> Result<String, String> {
+    validate_lower_hex_len("Solana public key", key, 64)?;
+    let digest = hash_hex_domain("postfiat.solana.packet_alias.v1", key.as_bytes());
+    Ok(format!("0x{}", &digest[..40]))
+}
+
+fn solana_destination_parts(destination: &str) -> Result<(&str, &str), String> {
+    let mut parts = destination.split(':');
+    let (Some("solana-spl"), Some(genesis), Some(owner), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return Err("expected solana-spl:<genesis-hex>:<owner-hex>".into());
+    };
+    validate_lower_hex_len("Solana genesis", genesis, 64)?;
+    validate_lower_hex_len("Solana owner", owner, 64)?;
+    Ok((genesis, owner))
+}
+
+fn solana_packet_destination(
+    source: &str,
+    destination: &str,
+) -> Result<(u64, String, String, String), String> {
+    let mut fields = source.split(':');
+    let (Some("spl"), Some(source_genesis), Some(vault), Some(mint), None) = (
+        fields.next(),
+        fields.next(),
+        fields.next(),
+        fields.next(),
+        fields.next(),
+    ) else {
+        return Err("expected an SPL source bucket".into());
+    };
+    let (genesis, owner) = solana_destination_parts(destination)?;
+    if source_genesis != genesis {
+        return Err("Solana destination must match the source bucket genesis".into());
+    }
+    Ok((
+        SOLANA_EGRESS_PACKET_CHAIN,
+        solana_egress_packet_alias(vault)?,
+        solana_egress_packet_alias(mint)?,
+        solana_egress_packet_alias(owner)?,
+    ))
+}
+
 fn vault_bridge_evm_recipient_from_destination_ref(destination_ref: &str) -> Result<String, String> {
     validate_text_field("vault_bridge_redemption.destination_ref", destination_ref)?;
     let parts = destination_ref.split(':').collect::<Vec<_>>();
@@ -3801,6 +3850,11 @@ impl LedgerState {
         self.solana_route.iter().chain(self.additional_solana_routes.values())
     }
 
+    pub fn solana_route_superseded(&self, profile: &VaultBridgeRouteProfileV1) -> bool {
+        self.solana_clients().any(|other| other.profile.route_id == profile.route_id
+            && other.profile.route_epoch > profile.route_epoch)
+    }
+
     fn solana_policies(&self) -> Result<BTreeMap<String, &SolanaRouteState>, String> {
         let mut policies = BTreeMap::new();
         let mut names = BTreeSet::new();
@@ -3871,18 +3925,32 @@ impl LedgerState {
         }
         for redemption in self.vault_bridge_redemptions.iter().filter(|r| r.asset_id == asset_id) {
             let Some(bucket) = self.vault_bridge_bucket(&redemption.bucket_id) else { continue; };
-            let route_id = self.vault_bridge_deposits.iter().find(|deposit| {
-                deposit.asset_id == asset_id
-                    && deposit.policy_hash == bucket.policy_hash
-                    && deposit.evidence.source_domain() == bucket.source_domain
-            })
-            .and_then(|deposit| {
-                vault_bridge_route_id_for_source(
-                    &deposit.source_proof_kind,
-                    deposit.evidence.source_chain_id,
-                    &deposit.evidence.token_address,
-                )
-            });
+            let route_id = if bucket.source_domain.starts_with("spl:") {
+                let route = policies
+                    .get(&bucket.policy_hash)
+                    .ok_or("missing Solana withdrawal policy")?;
+                if route.profile.asset_id != asset_id
+                    || route.profile.source_domain() != bucket.source_domain
+                {
+                    return Err("Solana withdrawal bucket does not match its pinned route".into());
+                }
+                Some(route.profile.route_id.as_str())
+            } else {
+                self.vault_bridge_deposits
+                    .iter()
+                    .find(|deposit| {
+                        deposit.asset_id == asset_id
+                            && deposit.policy_hash == bucket.policy_hash
+                            && deposit.evidence.source_domain() == bucket.source_domain
+                    })
+                    .and_then(|deposit| {
+                        vault_bridge_route_id_for_source(
+                            &deposit.source_proof_kind,
+                            deposit.evidence.source_chain_id,
+                            &deposit.evidence.token_address,
+                        )
+                    })
+            };
             if let Some(route_id) = route_id {
                 if let Some(row) = routes.get_mut(route_id) {
                     row.withdrawals_reserved = row.withdrawals_reserved.checked_add(redemption.amount_atoms)

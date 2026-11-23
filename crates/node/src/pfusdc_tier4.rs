@@ -108,10 +108,20 @@ pub fn pfusdc_egress_witness(
         .iter()
         .find(|bucket| bucket.bucket_id == redemption.bucket_id)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "withdrawal bucket is absent"))?;
-    let route_profile = governance
-        .authorized_vault_bridge_route_profile(&redemption.asset_id, &bucket.policy_hash)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?
-        .clone();
+    let route_profile = if redemption.withdrawal_packet.source_chain_id
+        == postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
+        && postfiat_types::solana_exit::matches_bucket(bucket)
+        && postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(&genesis))
+            .is_some_and(|h| h <= block.header.height)
+    {
+        postfiat_types::solana_exit::active(&governance, block.header.height)
+            .map(|(r, _)| r.clone())
+    } else {
+        governance
+            .authorized_vault_bridge_route_profile(&redemption.asset_id, &bucket.policy_hash)
+            .cloned()
+    }
+    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     let commit = block.header.consensus_v2_commit.as_ref().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
