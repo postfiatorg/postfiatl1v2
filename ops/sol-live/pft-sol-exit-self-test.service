@@ -14,6 +14,7 @@ Environment=EXIT_ANCHOR_WITNESS=/opt/postfiat/sol-exit/anchor-witness.json
 Type=oneshot
 TimeoutStartSec=35min
 StandardOutput=truncate:/var/log/pf-sol-exit/self-test.log
+ExecStartPre=+/usr/bin/python3 -I /opt/postfiat/sol-exit/ops/sol-live/exit_worker_policy.py
 ExecStart=/opt/postfiat/sol-exit/venv/bin/python -Bu ops/sol-live/exit_sandbox_check.py system-self-test
 ReadWritePaths=/var/lib/pf-sol-exit/jobs
 LimitCORE=0

@@ -1,6 +1,6 @@
 # Solana pfUSDC exit cutover
 
-The orchestrator runs this cutover on the trusted relay host. The machine owner runs the single privileged installation in step 4. Set REL, CHAIN_FIX and OPS_FIX to the approved release name and reviewed local commit IDs. The public gateway URL, its existing session cookie jar and six operator reviews are deployment inputs. Keep the public relay flag explicitly disabled through the real payout and its L1 settlement. Starting at step 8, direct L1 clients can burn. The immutable Solana binding supports only the revision-8 source bucket.
+The postfiat login on this host belongs to the trusted administrator who orchestrates the cutover. It holds deployment keys and Docker access equivalent to host root. The network-facing payout worker runs as pf-sol-exit. Its separate account limits a compromised worker to its operational credentials, jobs and service permissions. The administrator can access those credentials and control the host. The machine owner runs the single privileged installation in step 4. Set REL, CHAIN_FIX and OPS_FIX to the approved release name and reviewed local commit IDs. The public gateway URL, its existing session cookie jar and six operator reviews are deployment inputs. Keep the public relay flag explicitly disabled through the real payout and its L1 settlement. Starting at step 8, direct L1 clients can burn. The immutable Solana binding supports only the revision-8 source bucket.
 
 ## 1. Qualify the release with burns closed
 
@@ -270,7 +270,7 @@ From the reviewed checkout, run the following command with the operator's existi
 bash ops/sol-live/authorize-exit-prover.sh
 ```
 
-On the orchestrator's trusted build account, use an independent, clean checkout of the approved full release commit. Keep this checkout, toolchain, build cache and GitHub publishing credential outside the relay operator's write access. Stage the reviewed public inputs under the builder's own KIT. Verify the role signatures, witness against the archived checkpoint and host fingerprint before packaging. Package the committed worker files, hash-pinned wheels, frozen proof host and ELF, verifier, public role record, witness and approved host trust. The two private credentials stay outside the tar. After publication, place a copy of the tar at an absolute path readable by `postfiat` on the relay host. Use a fresh output path on each build.
+On the orchestrator's trusted build account, use an independent, clean checkout of the approved full release commit. Keep this checkout, toolchain, build cache and GitHub publishing credential outside the worker account’s write access. Stage the reviewed public inputs under the builder's own KIT. Verify the role signatures, witness against the archived checkpoint and host fingerprint before packaging. Package the committed worker files, hash-pinned wheels, frozen proof host and ELF, verifier, public role record, witness and approved host trust. The two private credentials stay outside the tar. After publication, place a copy of the tar at an absolute path readable by `postfiat` on the relay host. Use a fresh output path on each build.
 
 ```bash
 set -euo pipefail
@@ -293,9 +293,9 @@ Inspect the tar inventory and release inputs. In the **private GitHub repository
 sudo /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root /bin/bash -ceu 'cd /; [[ $1 =~ ^[0-9a-f]{64}$ && $2 == /* ]]; umask 077; d=$(mktemp -d /var/lib/pf-sol-install.XXXXXXXX); trap '\''rm -rf -- "$d"'\'' EXIT; cd "$d"; runuser -u postfiat -- /bin/cat -- "$2" > bundle.tar; printf "%s  bundle.tar\n" "$1" | sha256sum --strict -c -; umask 022; tar -xf bundle.tar --no-same-owner --no-same-permissions; /bin/bash ./install-exit-system.sh' _ "${SHA256:?digest from private GitHub commit}" "${BUNDLE:?absolute tar path}"
 ```
 
-The installer checks the installed revision, disabled/stopped withdrawal unit, inactive self-test and free port before invalidating earlier proof. A same-revision reinstall keeps the installed payer inode. On first install it copies the two checked source descriptors into private staging, validates the staged identities under the worker UID, and publishes them. Retire the operator's original fee-payer copy under the owner's key-custody procedure before funding.
+The installer checks the installed revision, disabled/stopped withdrawal unit, inactive self-test and free port before invalidating earlier proof. A same-revision reinstall keeps the installed payer inode. On first install it copies the two checked source descriptors into private staging, validates the staged identities under the worker UID, and publishes them. Retire the administrator’s original fee-payer copy under the owner’s key-custody procedure before funding. Any retained copy can still spend that key’s SOL.
 
-**First orchestrator step after the owner returns.** Run the installed oneshot. Its systemd settings use the worker UID, dedicated prover identity, protected home, read-only runtime and writable jobs directory. It binds port 18089 briefly, checks the installed payer, six distinct validator tunnels and finalized Solana network, and verifies the returned proof and public values locally with the pinned Solana tag-7 verifier. Stop here on failure. Both funding and tag 3 independently verify the saved possession signatures and the root-owned self-test log before signing.
+**First orchestrator step after the owner returns.** Run the installed oneshot. Its root preflight checks the worker’s actual host identity and sudo policy. It refuses Docker group membership, write access to /run/docker.sock, any sudo grant, and permission to read or traverse the administrator’s home. The remaining proof runs unprivileged. Its systemd settings use the worker UID, dedicated prover identity, protected home, read-only runtime and writable jobs directory. It binds port 18089 briefly, checks the installed payer, six distinct validator tunnels and finalized Solana network, and verifies the returned proof and public values locally with the pinned Solana tag-7 verifier. Stop here on failure. Both funding and tag 3 independently verify the saved possession signatures and the root-owned self-test log before signing.
 
 ```bash
 sudo -n /usr/bin/systemctl start pft-sol-exit-self-test.service
@@ -303,7 +303,7 @@ cp /var/log/pf-sol-exit/self-test.log "$KIT/evidence/service-proof.log"
 python3 -c 'from exit_setup import CONFIG, read, require_installed_self_test; require_installed_self_test(read(CONFIG))'
 ```
 
-The owner script leaves the withdrawal unit disabled. The operator may start the self-test and start, stop or inspect the withdrawal unit. The machine owner controls boot enablement and offline journal rebuild.
+The owner script leaves the withdrawal unit disabled. The service-specific sudo rule covers the self-test and start, stop or status for the withdrawal unit. Boot enablement and offline journal rebuild are owner procedures. The administrator retains host-wide access through Docker.
 
 Fund the dedicated fee payer once. Preserve the journal at `~/var/sol-exit/funding-attempt.json` through retries and releases. This command persists the signature, blockhash and expiry before sending 0.10 SOL. After a timeout rerun it with the same journal and an RPC serving finalized transaction history. A pending signature blocks a second transfer.
 
@@ -311,7 +311,7 @@ Fund the dedicated fee payer once. Preserve the journal at `~/var/sol-exit/fundi
 python3 ops/sol-live/exit_fund.py --execute
 ```
 
-The funding recipient is the operational fee payer `8EiSLnZQv23HtA5adokE6xfKyCK6mf4HGkpxSPpop1fs`. Only the pause authority is encoded in tag 3. Both role-specific signatures cover the reviewed instruction digest and a fresh random challenge. Readiness quotes peak proof-buffer, checkpoint, marker and ATA rents and transaction fees above the 20,000,000-lamport floor. All Solana buckets sharing this custody must remain covered, including queued redemptions pending L1 settlement.
+The funding recipient is the operational fee payer `8EiSLnZQv23HtA5adokE6xfKyCK6mf4HGkpxSPpop1fs`. This low-value operational key receives 100,000,000 lamports (0.10 SOL) in the funding step. The worker reserves 20,000,000 lamports (0.02 SOL) before spending on rent and fees. A holder of the key can spend its SOL. It has no authority over the vault, verifier or pause flag. Vault release requires the pinned verifier’s signed PDA (solana/pfusdc-vault/src/lib.rs:30 and solana/pfusdc-egress-verifier/src/vault.rs:26). Tag 3 requires the deployment signer, stores the separate pause authority, and tag 4 checks that signer (solana/pfusdc-egress-verifier/src/lib.rs:152, :180 and :376). The reviewed tag-3 accounts and payload exclude the worker payer (ops/sol-live/exit_setup.py:211 and :247). The upgrade-authority check rejects either program naming the worker payer (ops/sol-live/exit_setup.py:122). Both role-specific signatures cover the reviewed instruction digest and a fresh random challenge. Readiness quotes peak proof-buffer, checkpoint, marker and ATA rents and transaction fees above the 20,000,000-lamport floor. All Solana buckets sharing this custody must remain covered, including queued redemptions pending L1 settlement.
 
 ## 5. Initialize Solana
 
