@@ -12,7 +12,7 @@ pub const FAMILY: &str = "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9
 const RELEASES: &[(&str, &str, Option<u64>)] = &[(
     "postfiat-wan-devnet-2",
     "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
-    None, // Release sets the agreed future height here.
+    Some(1841), // Agreed WAN release height.
 )];
 
 pub fn release_height(chain: &str, genesis: &str) -> Option<u64> {
