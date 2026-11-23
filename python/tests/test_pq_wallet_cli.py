@@ -141,6 +141,21 @@ class PqIssuedFee(unittest.TestCase):
                     cap = row["capability"]
                     w.gateway.call.assert_not_called()
 
+    def test_only_unsubmitted_legacy_rows_can_enroll_a_new_capability(self):
+        with contextlib.ExitStack() as stack:
+            open_wallet, _, _, _ = self.browser_fixture(stack, True)
+            wallet = open_wallet()
+            for phase in ("prepared", "submitted"):
+                with contextlib.closing(wallet.connection()) as db:
+                    db.execute("UPDATE payments SET phase=?, capability=NULL", (phase,))
+                wallet = open_wallet()
+                with contextlib.closing(wallet.connection()) as db:
+                    cap = db.execute("SELECT capability FROM payments").fetchone()[0]
+                    if phase == "prepared":
+                        self.assertRegex(cap, "^[a-f0-9]{64}$")
+                    else:
+                        self.assertIsNone(cap)
+
     def test_lost_or_refused_submission_retains_identical_bytes(self):
         import sqlite3
         from http.client import RemoteDisconnected

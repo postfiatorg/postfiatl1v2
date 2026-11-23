@@ -130,8 +130,14 @@ class BrowserWallet:
                 continue
             key = attempt["action_hash"]
             row = rows.get(key)
-            if row is not None and row["terms"] and row["statement_id"]:
-                continue
+            if row is not None:
+                if row["phase"] == attempt["phase"] == "prepared" and not row["capability"]:
+                    raw = base64.b64decode(json.loads(row["wire"])["body"], validate=True)
+                    if raw[71] == 0:
+                        db.execute("UPDATE payments SET capability=? WHERE intent=? AND capability IS NULL",
+                                   (secrets.token_hex(32), row["intent"]))
+                if row["terms"] and row["statement_id"]:
+                    continue
             saved = local(self.home, "saved_review", action_hash=key)
             action = dict(kind=saved["action"]["kind"], body=saved["action"]["body"])
             check(private_action_hash(compact(action)) == key, "Daemon returned a different saved payment.")
