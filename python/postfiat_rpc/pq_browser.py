@@ -124,6 +124,27 @@ class BrowserWallet:
             db.execute("CREATE UNIQUE INDEX IF NOT EXISTS migration_step ON payments(migration,network) "
                        "WHERE migration IS NOT NULL")
 
+            self.reconcile(db)
+
+    def reconcile(self, db):
+        rows = {private_action_hash(r["wire"]): r for r in db.execute(
+            "SELECT * FROM payments WHERE network=? AND pool=?", (compact(self.net), PQ_POOL_ID))}
+        for attempt in local(self.home, "balance")["attempts"]:
+            if attempt["phase"] == "final" or not attempt.get("unresolved", True):
+                continue
+            key = attempt["action_hash"]
+            row = rows.get(key)
+            if row is not None and row["terms"] and row["statement_id"]:
+                continue
+            saved = local(self.home, "saved_review", action_hash=key)
+            action = dict(kind=saved["action"]["kind"], body=saved["action"]["body"])
+            check(private_action_hash(compact(action)) == key, "Daemon returned a different saved payment.")
+            if row is None:
+                self.action_row(db, action, PQ_POOL_ID, saved["migration"], saved["statement_id"], saved["terms"])
+            else:
+                db.execute("UPDATE payments SET terms=COALESCE(terms,?), statement_id=COALESCE(statement_id,?) "
+                           "WHERE intent=?", (compact(saved["terms"]), saved["statement_id"], row["intent"]))
+
     def connection(self):
         conn = sqlite3.connect(self.db, isolation_level=None)
         conn.row_factory = sqlite3.Row
@@ -260,7 +281,7 @@ class BrowserWallet:
             action_hash = private_action_hash(row["wire"])
             attempt = attempts.get(action_hash, {})
             phase = attempt.get("phase", row["phase"])
-            if phase in ("final", "replaced") and phase != row["phase"]:
+            if phase == "final" and phase != row["phase"]:
                 db.execute("UPDATE payments SET phase=? WHERE intent=?", (phase, row["intent"]))
             if phase in ("prepared", "submitted", "replaced"):
                 wire = base64.b64decode(json.loads(row["wire"])["body"])
@@ -366,11 +387,12 @@ class BrowserWallet:
             order.update(amount=int(order["amount"]), fee=int(order["fee"]),
                          sequence=int(order["sequence"]) if order["payer"] else None,
                          account_key=self.key if order["payer"] else None)
+            migration = self.exit_id() + "/shield" if terms["migration"] else None
+            order["migration"] = migration
             metrics = local(self.home, "prove", order=order)
             action = local(self.home, "prepared", action_hash=metrics["action_hash"])
             action = dict(kind=action["kind"], body=action["body"])
             check(private_action_hash(compact(action)) == metrics["action_hash"], "Prepared payment changed.")
-            migration = self.exit_id() + "/shield" if terms["migration"] else None
             row = self.action_row(db, action, PQ_POOL_ID, migration, metrics["statement_id"], terms)
             return dict(intent=row["intent"], action_json=row["wire"], action_hash=metrics["action_hash"])
         if cmd in ("resume_review", "complete_review"):
@@ -379,8 +401,13 @@ class BrowserWallet:
             check(row["terms"], "Original terms unavailable. Enter the intended terms to review this saved payment.")
             terms = json.loads(row["terms"])
             action_hash = private_action_hash(row["wire"])
+            if cmd == "resume_review" and terms.get("needs_original") and body.get("entered"):
+                saved = local(self.home, "saved_review", action_hash=action_hash, entered=body["entered"])
+                terms = saved["terms"]
+                db.execute("UPDATE payments SET terms=?,review_hash=NULL WHERE intent=?", (compact(terms), row["intent"]))
             if cmd == "resume_review":
                 return dict(intent=row["intent"], terms=terms, action_json=row["wire"], action_hash=action_hash)
+            check(not terms.get("needs_original"), "Enter the original private amount and recipient first.")
             expected = dict(mode=terms["mode"], asset=terms["asset"], fee=terms["fee"],
                 payer=terms["payer"], sequence=terms["sequence"], action_hash=action_hash,
                 mint=terms["amount"] if terms["mode"] == "Shield" else "0",

@@ -101,6 +101,10 @@ struct Pending {
     supersedes: Vec<String>,
     #[serde(default)]
     order_id: Option<String>,
+    #[serde(default)]
+    review_terms: Option<Value>,
+    #[serde(default)]
+    migration: Option<String>,
 }
 // This local record has no conversion to a submittable action.
 #[derive(Serialize, Deserialize)]
@@ -422,6 +426,46 @@ impl Wallet {
         }
         Ok(())
     }
+    pub fn saved_review(&self, id: &str, entered: Option<&Value>) -> Result<Value> {
+        use sha2::{Digest, Sha384};
+        let p = self.attempts.get(id).ok_or("unknown payment")?;
+        let (public, _, inner) = p.payment.parts()?;
+        let net = &self.point.network;
+        let chain = pq::Chain { id:&net.chain_id, genesis:net.genesis()?, protocol:net.protocol_version };
+        let mut raw = Sha384::new();
+        raw.update(b"PFT-SH-TXCTX-V2");
+        raw.update(&inner[..pq::INNER_PREFIX - 4]);
+        let statement_id = hex::encode(public.statement_context(chain, raw.finalize().into()));
+        let terms = if let Some(terms) = &p.review_terms {
+            terms.clone()
+        } else {
+            // Old internal wires expose neither private output. Where possible
+            // authenticate the user's recollection with the original order ID.
+            let atoms = |start| u64::from_le_bytes(inner[start..start+8].try_into().unwrap());
+            let mut amount = match public.mode {
+                Mode::Internal => None, Mode::Shield => Some(atoms(56)), Mode::Exit => Some(atoms(64)),
+            };
+            let mut recipient = (public.mode == Mode::Exit).then(|| format!("pf{}", hex::encode(&inner[84..104])));
+            if public.mode == Mode::Internal && p.order_id.is_some() {
+                if let Some(entered) = entered {
+                    let n = entered["amount"].as_str().ok_or("enter the original amount")?.parse::<u64>()?;
+                    recipient = Some(entered["recipient"].as_str().ok_or("enter the original recipient")?.to_owned());
+                    let order = serde_json::to_vec(&(public.mode, &p.asset, n, &recipient))?;
+                    if p.order_id.as_deref() != Some(&postfiat_crypto_provider::hash_hex("postfiat.wallet.payment-order.v1", &order)) {
+                        return Err("amount or recipient differs from the saved order".into());
+                    }
+                    amount = Some(n);
+                }
+            }
+            json!({"mode":public.mode,"asset":p.asset,"amount":amount.map(|n| n.to_string()),
+                "recipient":recipient,"fee":public.public_fee.checked_add(atoms(104)).ok_or("invalid payment fee")?.to_string(),
+                "payer":public.account.as_ref().map(|a| format!("pf{}",hex::encode(a.id))),
+                "sequence":public.account.as_ref().map(|a| a.sequence.to_string()),"migration":false,
+                "needs_original":public.mode == Mode::Internal && p.order_id.is_some() && amount.is_none()})
+        };
+        Ok(json!({"action":self.prepared(Some(id))?,"terms":terms,"statement_id":statement_id,"migration":p.migration}))
+    }
+
     pub fn prepared(&self, hash: Option<&str>) -> Result<Value> {
         let id = hash
             .or(self.latest.as_deref())
@@ -441,6 +485,8 @@ pub struct Order {
     pub different_payment: bool,
     #[serde(default)]
     pub also_replace: Option<String>,
+    #[serde(default)]
+    pub migration: Option<String>,
     pub mode: Mode,
     pub asset: String,
     pub amount: u64,
@@ -738,6 +784,12 @@ impl Wallet {
             parent.other_shared_input = pins.get(1).cloned();
             parent.phase = Phase::Replaced;
         }
+        let mut review_terms = json!({"mode":o.mode,"asset":o.asset,"amount":o.amount.to_string(),
+            "fee":o.fee.to_string(),"recipient":o.recipient,"payer":o.payer,
+            "sequence":o.sequence.map(|n| n.to_string()),"migration":o.migration.is_some()});
+        if let Some(id) = &o.replace { review_terms["replace"] = json!(id); }
+        if let Some(id) = &o.also_replace { review_terms["also_replace"] = json!(id); }
+        if o.different_payment { review_terms["different_payment"] = json!(true); }
         self.latest = Some(hash.clone());
         self.attempts.insert(
             hash.clone(),
@@ -748,6 +800,8 @@ impl Wallet {
                 other_shared_input: required.get(1).cloned(),
                 supersedes,
                 order_id,
+                review_terms: Some(review_terms),
+                migration: o.migration,
                 payment,
                 asset: o.asset,
                 delta,
@@ -905,6 +959,7 @@ mod fee_tests {
                 format!("pf{}", "33".repeat(20))
             };
             let order = |fee| Order {
+                migration: None,
                 also_replace: None,
                 different_payment: false,
                 replace: None,
@@ -958,6 +1013,7 @@ mod fee_tests {
         wallet.notes.retain(|_, note| note.value == 2);
         let metrics = wallet
             .prove(Order {
+                migration: None,
                 also_replace: None,
                 different_payment: false,
                 replace: None,

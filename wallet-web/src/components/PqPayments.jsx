@@ -189,13 +189,14 @@ export default function PqPayments() {
       </>}
     </section>}
     {review && <section aria-label="Signer review"><h2>Signer review</h2>
-      <Field label="Action">{modes[review.terms.mode]} {review.terms.amount} {review.terms.asset === NATIVE ? 'PFT' : 'pfUSDC'} atoms</Field>
+      <Field label="Action">{modes[review.terms.mode]} {review.terms.amount ?? '(original private amount unknown)'} {review.terms.asset === NATIVE ? 'PFT' : 'pfUSDC'} atoms</Field>
       <Field label="Asset / issue">{review.terms.asset === NATIVE ? 'PFT' : review.terms.asset}</Field>
       {review.terms.different_payment && <p>This is a different payment from the imported unresolved spend.</p>}
       {review.terms.replace && <Field label="Replaces payment">{review.terms.replace}</Field>}
       {review.terms.also_replace && <Field label="Also replaces payment">{review.terms.also_replace}</Field>}
       {review.terms.recipient && <details><summary>Destination · {review.terms.recipient.slice(0,18)}…</summary><code>{review.terms.recipient}</code></details>}
       <Field label="Fee">{review.terms.fee} {review.terms.mode === 'Shield' || review.terms.asset === NATIVE ? 'PFT' : 'pfUSDC'} atoms · {review.terms.mode !== 'Shield' ? 'paid from private notes' : review.terms.asset === NATIVE ? 'deducted from deposit' : 'paid by depositor'}</Field>
+      {review.terms.mode === 'Internal' && !review.terms.recipient && <p>The imported wallet has no original recipient or amount. Confirm only to retry this saved payment.</p>}
       {review.terms.payer && <Field label="Depositor">{review.terms.payer}</Field>}
       {review.terms.sequence && <Field label="Account sequence">{review.terms.sequence}</Field>}
       <button className="pq-primary" disabled={!!busy} onClick={() => work('Proving locally', confirm)}>{review.action_json ? 'Confirm saved payment and send' : 'Confirm and prove locally'}</button>
@@ -203,7 +204,11 @@ export default function PqPayments() {
     {!migrating && wallet.payments.length > 0 && <section><h2>Saved payments</h2>{wallet.payments.map(p =>
       <div key={p.intent}><Field label={p.phase}>{p.intent}</Field>
         {!p.reviewed ? <button disabled={!!busy} onClick={() => work('Reviewing', async () => {
-          setReview(await call('resume_review', {intent:p.intent}));
+          const saved = await call('resume_review', {intent:p.intent});
+          if (saved.terms.needs_original) {
+            if (!amount || !recipient) throw Error('Enter the original private payment amount and recipient, then resume signer review.');
+            setReview(await call('resume_review', {intent:p.intent, entered:{amount, recipient}}));
+          } else setReview(saved);
         })}>Resume signer review</button> :
         <button disabled={!!busy} onClick={() => work('Submitting', async () => {
           try { setResult(await call('submit', {intent:p.intent, action_hash:p.action_hash})); }

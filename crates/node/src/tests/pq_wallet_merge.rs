@@ -439,6 +439,7 @@ fn pq_wallet_replaces_reserved_notes_across_a_fee_change() {
         sequence: None,
         payer: None,
         account_key: None,
+        migration: None,
         also_replace: None,
         different_payment: false,
         replace: None,

@@ -77,6 +77,7 @@ pub fn execute(home: &Path, store: &Store, cmd: Value) -> Result<Value> {
                 json!({"network":w.point.network,"height":w.point.height,"pairs":w.point.pairs,"last_page":w.point.last_page}),
             )
         }
+        "saved_review" => return w.saved_review(text("action_hash")?, cmd.get("entered")),
         "prepared" => return w.prepared(cmd["action_hash"].as_str()),
         "submitted" => {
             w.submitted(text("action_hash")?)?;
