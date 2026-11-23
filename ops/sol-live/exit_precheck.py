@@ -56,9 +56,10 @@ def accounts(c, addresses):
 
 
 def token_atoms(acc, owner, *, allow_empty=False):
-    if allow_empty and (acc is None or (
-        not acc["executable"] and acc["owner"] == str(SYSTEM) and not acc["data"]
-    )):
+    if allow_empty and (
+        acc is None
+        or (not acc["executable"] and acc["owner"] == str(SYSTEM) and not acc["data"])
+    ):
         return 0
     require(
         acc
@@ -115,7 +116,11 @@ def inspect_vault(c, recipient=None):
         route=route.hex(),
         decimals=6,
         custody_atoms=int.from_bytes(custody["data"][64:72], "little"),
-        **({"ata_exists": bool(rows[3] and rows[3]["data"])} if recipient is not None else {}),
+        **(
+            {"ata_exists": bool(rows[3] and rows[3]["data"])}
+            if recipient is not None
+            else {}
+        ),
         mint_authority=str(MINT_AUTH),
         freeze_authority=str(FREEZE_AUTH),
     )
@@ -306,17 +311,26 @@ def check_unproved_updates(w):
         h = step["block"]["header"]
         if h["batch_kind"] != "governance" or "governance_payload_json" in step:
             continue
-        (batch,) = rpc(0, "batch_archive", batch_kind="governance", batch_id=h["batch_id"], limit=1)
+        (batch,) = rpc(
+            0, "batch_archive", batch_kind="governance", batch_id=h["batch_id"], limit=1
+        )
         payload = batch["payload_json"]
         fields = [w[k] for k in ("chain_id", "genesis_hash", "protocol_version")]
         fields.extend(["governance", h["batch_id"], payload])
         encoded = json.dumps(fields, ensure_ascii=False, separators=(",", ":")).encode()
-        digest = hashlib.sha3_384(b"postfiat.batch_archive_payload.v1\0" + encoded).hexdigest()
-        require(batch["batch_id"] == h["batch_id"] and
-                digest == h["consensus_v2_commit"]["precommit_qc"]["block"]["payload_hash"],
-                "Governance archive differs from finalized payload.")
-        require(not json.loads(payload).get("validator_registry_updates"),
-                "Registry rotation requires a verified transition and successor.")
+        digest = hashlib.sha3_384(
+            b"postfiat.batch_archive_payload.v1\0" + encoded
+        ).hexdigest()
+        require(
+            batch["batch_id"] == h["batch_id"]
+            and digest
+            == h["consensus_v2_commit"]["precommit_qc"]["block"]["payload_hash"],
+            "Governance archive differs from finalized payload.",
+        )
+        require(
+            not json.loads(payload).get("validator_registry_updates"),
+            "Registry rotation requires a verified transition and successor.",
+        )
 
 
 def qualify_path(members, anchor, head, out, *, simulation_height=None):
@@ -325,7 +339,10 @@ def qualify_path(members, anchor, head, out, *, simulation_height=None):
     require(tip >= height, "Finalized tip precedes trusted checkpoint.")
     if simulation_height is None:
         simulation_height = height
-    require(height <= simulation_height <= tip, "Current checkpoint is outside the finalized path.")
+    require(
+        height <= simulation_height <= tip,
+        "Current checkpoint is outside the finalized path.",
+    )
     segments = []
     simulation = None
     state = anchor["root"]
@@ -343,20 +360,39 @@ def qualify_path(members, anchor, head, out, *, simulation_height=None):
             validate_segment(witness, block, target, root)
             use_for_simulation = height == simulation_height
             values = execute_guest(witness, out if use_for_simulation else Path(tmp))
-            require((values["prior"], values["start"], values["result"], values["end"], values["height"])
-                    == (block, root, target["block_hash"], committee(target), target["height"]),
-                    "Frozen checkpoint endpoints differ from finalized path.")
+            require(
+                (
+                    values["prior"],
+                    values["start"],
+                    values["result"],
+                    values["end"],
+                    values["height"],
+                )
+                == (
+                    block,
+                    root,
+                    target["block_hash"],
+                    committee(target),
+                    target["height"],
+                ),
+                "Frozen checkpoint endpoints differ from finalized path.",
+            )
             if use_for_simulation:
                 simulation = values
             segments.append(values)
             height, block, root = values["height"], values["result"], values["end"]
             members, state = witness["committee"], target["state_root"]
-    require((height, block, state) == (tip, head["block_tip_hash"], head["state_root"]),
-            "Frozen path differs from the agreed finalized tip.")
-    return dict(qualified_parent=parent_of(head), segments=segments,
-                guest=dict(simulation or {}, forward=simulation is not None),
-                cursor=dict(anchor, height=height, block=block, root=state, committee=root),
-                members=members)
+    require(
+        (height, block, state) == (tip, head["block_tip_hash"], head["state_root"]),
+        "Frozen path differs from the agreed finalized tip.",
+    )
+    return dict(
+        qualified_parent=parent_of(head),
+        segments=segments,
+        guest=dict(simulation or {}, forward=simulation is not None),
+        cursor=dict(anchor, height=height, block=block, root=state, committee=root),
+        members=members,
+    )
 
 
 def bootstrap_state(cfg, rows):
@@ -366,26 +402,39 @@ def bootstrap_state(cfg, rows):
         for a in rows
     ):
         return "empty"
-    require(len(rows) == 2 and all(a and not a["executable"] and a["owner"] == str(VERIFIER)
-                                   for a in rows), "Conflicting bootstrap accounts.")
-    require(rows[1]["data"] == bytes.fromhex(cfg["initial_committee"]),
-            "Conflicting original checkpoint.")
+    require(
+        len(rows) == 2
+        and all(
+            a and not a["executable"] and a["owner"] == str(VERIFIER) for a in rows
+        ),
+        "Conflicting bootstrap accounts.",
+    )
+    require(
+        rows[1]["data"] == bytes.fromhex(cfg["initial_committee"]),
+        "Conflicting original checkpoint.",
+    )
     light_fields(cfg, rows[0])
     return "initialized"
 
 
 def light_fields(cfg, account):
     expected = expected_light(cfg)
-    require(account and not account["executable"] and account["owner"] == str(VERIFIER),
-            "Unexpected light account owner.")
+    require(
+        account and not account["executable"] and account["owner"] == str(VERIFIER),
+        "Unexpected light account owner.",
+    )
     raw = account["data"]
-    require(len(raw) == len(expected) and raw[:-57] == expected[:-57] and raw[-1] in (0, 1),
-            "Conflicting immutable light fields.")
+    require(
+        len(raw) == len(expected) and raw[:-57] == expected[:-57] and raw[-1] in (0, 1),
+        "Conflicting immutable light fields.",
+    )
     height = int.from_bytes(raw[-9:-1], "little")
     block = raw[-57:-9].hex()
-    require(height >= cfg["initial_height"] and
-            ((height == cfg["initial_height"]) == (block == cfg["initial_checkpoint"])),
-            "Invalid latest checkpoint.")
+    require(
+        height >= cfg["initial_height"]
+        and ((height == cfg["initial_height"]) == (block == cfg["initial_checkpoint"])),
+        "Invalid latest checkpoint.",
+    )
     return height, block
 
 
@@ -401,11 +450,23 @@ def recover_bootstrap(c, cfg, ix, known=None):
     (record,) = agreement(six(lambda i: rpc(i, "blocks", from_height=height, limit=1)))
     h = record["header"]
     cp = snapshot[2]
-    require((h["height"], h["block_hash"]) == (height, block)
-            and cp and not cp["executable"] and cp["owner"] == str(VERIFIER)
-            and cp["data"].hex() == committee(h), "Current checkpoint disagrees with finalized history.")
-    return dict(signature=sig, finalized_readback=True, slot=slot, block=block, height=height,
-                committee=committee(h), paused=bool(rows[0]["data"][-1]))
+    require(
+        (h["height"], h["block_hash"]) == (height, block)
+        and cp
+        and not cp["executable"]
+        and cp["owner"] == str(VERIFIER)
+        and cp["data"].hex() == committee(h),
+        "Current checkpoint disagrees with finalized history.",
+    )
+    return dict(
+        signature=sig,
+        finalized_readback=True,
+        slot=slot,
+        block=block,
+        height=height,
+        committee=committee(h),
+        paused=bool(rows[0]["data"][-1]),
+    )
 
 
 def bootstrap_history(c, ix, known=None):

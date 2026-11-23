@@ -51,12 +51,19 @@ def require_closed(rows):
 
 
 def verify_open_parent(rows, tx_id, parent):
-    require(len(rows) == 6 and all(
-        r["confirmed"] and r["receipt"]["tx_id"] == tx_id and r["receipt"]["accepted"]
-        and r["block"]["header"]["height"] == parent["block_height"] + 1
-        and r["block"]["header"]["parent_hash"] == parent["block_tip_hash"]
-        and r["block"]["header"] == rows[0]["block"]["header"] for r in rows
-    ), "Open receipts disagree with the qualified parent.")
+    require(
+        len(rows) == 6
+        and all(
+            r["confirmed"]
+            and r["receipt"]["tx_id"] == tx_id
+            and r["receipt"]["accepted"]
+            and r["block"]["header"]["height"] == parent["block_height"] + 1
+            and r["block"]["header"]["parent_hash"] == parent["block_tip_hash"]
+            and r["block"]["header"] == rows[0]["block"]["header"]
+            for r in rows
+        ),
+        "Open receipts disagree with the qualified parent.",
+    )
 
 
 def main():
@@ -112,7 +119,8 @@ def main():
             start = parent_of(fleet())
             require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))
             status = requests.get(
-                "http://127.0.0.1:18089/solana/withdrawals/readiness/qualify", timeout=600
+                "http://127.0.0.1:18089/solana/withdrawals/readiness/qualify",
+                timeout=600,
             )
             status.raise_for_status()
             state = status.json()
@@ -127,14 +135,21 @@ def main():
             try:
                 if state["qualified_parent"] != parent_of(fleet()):
                     continue
-                accepted = govern("exit-open", compatible=args.revision, qualified_parent=state["qualified_parent"])
+                accepted = govern(
+                    "exit-open",
+                    compatible=args.revision,
+                    qualified_parent=state["qualified_parent"],
+                )
             except ParentChanged:
                 continue
             break
         else:
             raise ParentChanged("Tip advanced repeatedly. Restart the open command.")
-        verify_open_parent(six(lambda i: rpc(i, "tx", tx_id=accepted["tx_id"])),
-                           accepted["tx_id"], state["qualified_parent"])
+        verify_open_parent(
+            six(lambda i: rpc(i, "tx", tx_id=accepted["tx_id"])),
+            accepted["tx_id"],
+            state["qualified_parent"],
+        )
         rows = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
         require(
             all(
@@ -146,7 +161,10 @@ def main():
             "Open-burn readback failed.",
         )
         if args.output:
-            save(args.output, dict(accepted, qualified_parent=state["qualified_parent"], routes=rows))
+            save(
+                args.output,
+                dict(accepted, qualified_parent=state["qualified_parent"], routes=rows),
+            )
     else:
         govern("route", read(PROFILE), compatible=args.revision)
         require_closed(six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES)))

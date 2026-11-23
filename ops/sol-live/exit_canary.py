@@ -97,8 +97,11 @@ def balances(c):
     acc = c.account(addr)
     line = rpc(0, "account_assets", account=OWNER, asset_id=SERIES, limit=1)["assets"]
     require(
-        len(line) == 1 and line[0]["source_bucket_id"] == BUCKET
-        and line[0]["authorized"] and not line[0]["frozen"], "missing test series"
+        len(line) == 1
+        and line[0]["source_bucket_id"] == BUCKET
+        and line[0]["authorized"]
+        and not line[0]["frozen"],
+        "missing test series",
     )
     return dict(
         ata=str(addr),
@@ -111,7 +114,8 @@ def prepare(out, *, allow_closed=False):
     r = requests.get(API + "/readiness", timeout=60).json()
     require(
         (r["ready"] or (allow_closed and r["payout_ready"] and not r["burns_open"]))
-        and r["bucket_id"] == BUCKET and r["series_asset_id"] == SERIES,
+        and r["bucket_id"] == BUCKET
+        and r["series_asset_id"] == SERIES,
         "Payout is unavailable",
     )
     before = balances(cluster())
@@ -185,14 +189,24 @@ def verified_burn_id(raw, fields):
     signed = json.loads(raw)
     check_unsigned(signed["unsigned"], fields)
     op = fields["operation"]
-    require(set(signed) == {"unsigned", "algorithm_id", "public_key_hex", "signature_hex"}
-            and fields["source"] == op["owner"] == OWNER and op["asset_id"] == ASSET
-            and op["destination_ref"] == DEST and op["bucket_id"] == BUCKET
-            and op["amount_atoms"] == 20000, "Unexpected canary intent.")
+    require(
+        set(signed) == {"unsigned", "algorithm_id", "public_key_hex", "signature_hex"}
+        and fields["source"] == op["owner"] == OWNER
+        and op["asset_id"] == ASSET
+        and op["destination_ref"] == DEST
+        and op["bucket_id"] == BUCKET
+        and op["amount_atoms"] == 20000,
+        "Unexpected canary intent.",
+    )
     result = subprocess.run(
-        [Path.home() / "repos/StakeHub/.venv/bin/python",
-         Path(__file__).with_name("verify_canary_envelope.py")],
-        input=raw, text=True, capture_output=True, check=True,
+        [
+            Path.home() / "repos/StakeHub/.venv/bin/python",
+            Path(__file__).with_name("verify_canary_envelope.py"),
+        ],
+        input=raw,
+        text=True,
+        capture_output=True,
+        check=True,
     ).stdout.strip()
     require(re.fullmatch("[a-f0-9]{96}", result), "Invalid signed burn ID.")
     return result
@@ -200,8 +214,10 @@ def verified_burn_id(raw, fields):
 
 def recover(out):
     plan = read(out / "plan.json")
-    require(read(out / "sign-request.json") == dict(kind="asset", fields=plan["fields"]),
-            "Original signing request and plan differ.")
+    require(
+        read(out / "sign-request.json") == dict(kind="asset", fields=plan["fields"]),
+        "Original signing request and plan differ.",
+    )
     with (out / "signed.json").open("rb") as f:
         raw = f.read().decode()
         os.fsync(f.fileno())
@@ -213,7 +229,9 @@ def recover(out):
     else:
         if (out / "submission.json").exists():
             receipt = read(out / "submission.json")["finality"]["receipt"]
-            require(receipt["tx_id"] == tx_id, "Stored submission names another envelope.")
+            require(
+                receipt["tx_id"] == tx_id, "Stored submission names another envelope."
+            )
         save(seal_path, seal)
     fd = os.open(out, os.O_DIRECTORY)
     try:
@@ -231,12 +249,21 @@ def recover(out):
 
     rows = six(status)
     if any(row is not None for row in rows):
-        require(all(r and r.get("confirmed") and r["receipt"]["accepted"]
-                    and r["receipt"]["tx_id"] == tx_id for r in rows),
-                "Original burn is pending, rejected or validators disagree.")
+        require(
+            all(
+                r
+                and r.get("confirmed")
+                and r["receipt"]["accepted"]
+                and r["receipt"]["tx_id"] == tx_id
+                for r in rows
+            ),
+            "Original burn is pending, rejected or validators disagree.",
+        )
         return
     current = prepare(out)
-    require(current["fields"] == plan["fields"], "Original envelope is no longer eligible.")
+    require(
+        current["fields"] == plan["fields"], "Original envelope is no longer eligible."
+    )
     head = current["parent"]
     params = dict(
         signed_asset_transaction_json=raw,
@@ -279,8 +306,10 @@ def check(out):
     require(len(rows) == 1, "Unique finalized canary burn not found")
     row = rows[0]
     tx = row["burn_tx_id"]
-    require(tx == verified_burn_id((out / "signed.json").read_text(), plan["fields"]),
-            "Finalized redemption differs from original signed envelope.")
+    require(
+        tx == verified_burn_id((out / "signed.json").read_text(), plan["fields"]),
+        "Finalized redemption differs from original signed envelope.",
+    )
     confirmations = six(lambda i: rpc(i, "tx", tx_id=tx))
     require(
         all(
@@ -340,23 +369,40 @@ def check(out):
 
 def settlement_state(status, paid):
     (row,) = [r for r in status["redemptions"] if r["burn_tx_id"] == paid["burn_tx_id"]]
-    require(row["bucket_id"] == BUCKET and row["amount_atoms"] == 20000
-            and row["withdrawal_packet_hash"] == paid["withdrawal_packet_hash"],
-            "Settlement does not identify the original withdrawal packet.")
+    require(
+        row["bucket_id"] == BUCKET
+        and row["amount_atoms"] == 20000
+        and row["withdrawal_packet_hash"] == paid["withdrawal_packet_hash"],
+        "Settlement does not identify the original withdrawal packet.",
+    )
     (bucket,) = [b for b in status["buckets"] if b["bucket_id"] == BUCKET]
-    supply = sum(a["remaining_atoms"] for a in status["allocations"]
-                 if a["purpose"] == "vault_bridge_supply" and a["bucket_id"] == BUCKET)
-    return dict(state=row["state"], settled=row["settled_atoms"], receipt=row["settlement_receipt_hash"],
-                counted=bucket["counted_value_atoms"], queue=bucket["redemption_queue_atoms"],
-                outstanding=bucket["outstanding_vault_bridge_atoms"], supply=supply)
+    supply = sum(
+        a["remaining_atoms"]
+        for a in status["allocations"]
+        if a["purpose"] == "vault_bridge_supply" and a["bucket_id"] == BUCKET
+    )
+    return dict(
+        state=row["state"],
+        settled=row["settled_atoms"],
+        receipt=row["settlement_receipt_hash"],
+        counted=bucket["counted_value_atoms"],
+        queue=bucket["redemption_queue_atoms"],
+        outstanding=bucket["outstanding_vault_bridge_atoms"],
+        supply=supply,
+    )
 
 
 def check_settlement(before, after, amendment):
-    require(before["state"] == "pending" and before["settled"] == 0
-            and after["state"] == "settled" and after["settled"] == 20000
-            and after["receipt"] == amendment and after["outstanding"] == before["outstanding"]
-            and all(before[k] - after[k] == 20000 for k in ("counted", "queue", "supply")),
-            "Settlement receipt or revision-8 accounting differs.")
+    require(
+        before["state"] == "pending"
+        and before["settled"] == 0
+        and after["state"] == "settled"
+        and after["settled"] == 20000
+        and after["receipt"] == amendment
+        and after["outstanding"] == before["outstanding"]
+        and all(before[k] - after[k] == 20000 for k in ("counted", "queue", "supply")),
+        "Settlement receipt or revision-8 accounting differs.",
+    )
 
 
 def settlement(out, amendment=None, height=None):
@@ -365,23 +411,49 @@ def settlement(out, amendment=None, height=None):
 
     paid = read(out / "paid.json")
     before_path = out / "settlement-before.json"
-    state = agreement(six(lambda i: settlement_state(rpc(i, "vault_bridge_status", asset_id=ASSET), paid)))
+    state = agreement(
+        six(
+            lambda i: settlement_state(
+                rpc(i, "vault_bridge_status", asset_id=ASSET), paid
+            )
+        )
+    )
     if amendment is None:
-        require(state["state"] == "pending" and state["settled"] == 0, "Expected pending redemption.")
+        require(
+            state["state"] == "pending" and state["settled"] == 0,
+            "Expected pending redemption.",
+        )
         if before_path.exists():
             require(read(before_path) == state, "Pre-settlement accounting changed.")
         else:
             save(before_path, state)
         return
-    require(re.fullmatch("[0-9a-f]{96}", amendment) and height, "Settlement ID and height required.")
+    require(
+        re.fullmatch("[0-9a-f]{96}", amendment) and height,
+        "Settlement ID and height required.",
+    )
     receipts = receipt_at(amendment, height)
     check_settlement(read(before_path), state, amendment)
-    save(out / "settled.json", dict(state=state, validators=receipts, amendment=amendment))
+    save(
+        out / "settled.json",
+        dict(state=state, validators=receipts, amendment=amendment),
+    )
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action", choices=("preflight", "prepare", "burn", "recover", "check", "settlement-before", "settlement-check"))
+    p.add_argument(
+        "action",
+        choices=(
+            "preflight",
+            "prepare",
+            "burn",
+            "recover",
+            "check",
+            "settlement-before",
+            "settlement-check",
+        ),
+    )
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--amendment")
     p.add_argument("--height", type=int)
@@ -396,7 +468,10 @@ def main():
         elif args.action == "settlement-before":
             settlement(out)
         elif args.action == "settlement-check":
-            require(args.amendment and args.height, "Specify the accepted amendment and its height.")
+            require(
+                args.amendment and args.height,
+                "Specify the accepted amendment and its height.",
+            )
             settlement(out, args.amendment, args.height)
         elif args.action == "prepare":
             require(

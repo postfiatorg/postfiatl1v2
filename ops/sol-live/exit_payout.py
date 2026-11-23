@@ -161,7 +161,9 @@ def proof_count(latest, burn_height, finalized):
     count = 1
     while burn_height - latest > 65:
         target = select_target(latest, rpc, end=min(latest + 65, finalized - 1))
-        require(latest < target["height"] <= latest + 65, "Invalid checkpoint selection.")
+        require(
+            latest < target["height"] <= latest + 65, "Invalid checkpoint selection."
+        )
         latest = target["height"]
         count += 1
     return count
@@ -193,16 +195,31 @@ class FinalizedPath:
             cert = read(CONFIG.with_name("exit-checkpoint.json"))
             witness = read(Path(os.environ["EXIT_ANCHOR_WITNESS"]))
             h = witness["block"]["header"]
-            require(h["block_hash"] == cfg["initial_checkpoint"] and
-                    committee(h) == cfg["initial_committee"], "Wrong anchor witness.")
+            require(
+                h["block_hash"] == cfg["initial_checkpoint"]
+                and committee(h) == cfg["initial_committee"],
+                "Wrong anchor witness.",
+            )
             from exit_precheck import execute_guest
+
             with tempfile.TemporaryDirectory() as tmp:
                 anchor = execute_guest(witness, Path(tmp))
-            require((anchor["height"], anchor["result"], anchor["end"]) ==
-                    (cfg["initial_height"], cfg["initial_checkpoint"], cfg["initial_committee"]),
-                    "Frozen checker disagrees with the trusted anchor.")
-            self.cursor = dict(cfg, height=cfg["initial_height"], block=cfg["initial_checkpoint"],
-                               root=cert["checkpoint_state_root"], committee=cfg["initial_committee"])
+            require(
+                (anchor["height"], anchor["result"], anchor["end"])
+                == (
+                    cfg["initial_height"],
+                    cfg["initial_checkpoint"],
+                    cfg["initial_committee"],
+                ),
+                "Frozen checker disagrees with the trusted anchor.",
+            )
+            self.cursor = dict(
+                cfg,
+                height=cfg["initial_height"],
+                block=cfg["initial_checkpoint"],
+                root=cert["checkpoint_state_root"],
+                committee=cfg["initial_committee"],
+            )
             self.members = witness["committee"]
         with tempfile.TemporaryDirectory() as tmp:
             path = qualify_path(self.members, self.cursor, head, Path(tmp))
@@ -214,19 +231,31 @@ FINALIZED_PATH = FinalizedPath()
 
 
 def check_light_path(c, height, block, tip):
-    require(read(CONFIG)["initial_height"] <= height <= tip, "Light checkpoint outside finalized path.")
+    require(
+        read(CONFIG)["initial_height"] <= height <= tip,
+        "Light checkpoint outside finalized path.",
+    )
     count = 1 if height == tip else 2
     page = rpc(0, "blocks", from_height=height, limit=count)
     require(len(page) == count, "Missing light checkpoint header.")
     h = page[0]["header"]
     account = c.account(checkpoint_pda(block))
-    require((h["block_hash"], h["height"]) == (block, height) and account
-            and not account["executable"] and account["owner"] == str(VERIFIER)
-            and account["data"].hex() == committee(h), "Light checkpoint differs from finalized path.")
+    require(
+        (h["block_hash"], h["height"]) == (block, height)
+        and account
+        and not account["executable"]
+        and account["owner"] == str(VERIFIER)
+        and account["data"].hex() == committee(h),
+        "Light checkpoint differs from finalized path.",
+    )
     if height < tip:
         next_h = page[1]["header"]
-        require(next_h["height"] == height + 1 and next_h["parent_hash"] == block
-                and committee(next_h) == committee(h), "Light checkpoint cannot verify its successor.")
+        require(
+            next_h["height"] == height + 1
+            and next_h["parent_hash"] == block
+            and committee(next_h) == committee(h),
+            "Light checkpoint cannot verify its successor.",
+        )
 
 
 def readiness():
@@ -248,7 +277,10 @@ def readiness():
         message = "Relayer cannot fund the payout above its balance floor."
         head = fleet()
         tip = head["block_height"]
-        require(all(r["current_height"] == tip for r in routes), "Descriptor and tip differ.")
+        require(
+            all(r["current_height"] == tip for r in routes),
+            "Descriptor and tip differ.",
+        )
         budget = payout_budget(c, proof_count(latest, tip + 1, tip))
         lamports = balance(c, budget)
         message = "Withdrawal prover unavailable."
@@ -354,7 +386,9 @@ def signature(c, burn, known=None, *, history_limit=100):
     try:
         if known and matches_payout(c, key, known):
             return known
-        history = c.call("getSignaturesForAddress", str(key), dict(c.level, limit=history_limit))
+        history = c.call(
+            "getSignaturesForAddress", str(key), dict(c.level, limit=history_limit)
+        )
         for row in history[:history_limit]:
             if row["err"] is None and matches_payout(c, key, row["signature"]):
                 return row["signature"]
@@ -473,8 +507,10 @@ def rent_shortfall(c, account, size, owner):
     require(not account["executable"], "Unexpected executable account.")
     if account["owner"] == str(SYSTEM) and not account["data"]:
         return max(0, c.rent(size) - account["lamports"])
-    require(account["owner"] == str(owner) and len(account["data"]) == size,
-            "Unexpected allocated account.")
+    require(
+        account["owner"] == str(owner) and len(account["data"]) == size,
+        "Unexpected allocated account.",
+    )
     return 0
 
 
@@ -485,19 +521,53 @@ def finalized_reclaim(c, buffer):
     if not history or history[0]["err"] is not None:
         return False
     sig = history[0]["signature"]
-    tx = c.call("getTransaction", sig, dict(c.level, encoding="json", maxSupportedTransactionVersion=0))
-    if not tx or tx["meta"]["err"] is not None or tx["transaction"]["signatures"][0] != sig:
+    tx = c.call(
+        "getTransaction",
+        sig,
+        dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
+    )
+    if (
+        not tx
+        or tx["meta"]["err"] is not None
+        or tx["transaction"]["signatures"][0] != sig
+    ):
         return False
     msg = tx["transaction"]["message"]
     keys = msg["accountKeys"]
-    return any(keys[ix["programIdIndex"]] == str(VERIFIER)
-               and [keys[i] for i in ix["accounts"]] == [str(buffer), str(c.owner)]
-               and base58.b58decode(ix["data"]) == b"\x06" for ix in msg["instructions"])
+    return any(
+        keys[ix["programIdIndex"]] == str(VERIFIER)
+        and [keys[i] for i in ix["accounts"]] == [str(buffer), str(c.owner)]
+        and base58.b58decode(ix["data"]) == b"\x06"
+        for ix in msg["instructions"]
+    )
 
 
 def reclaim_completed(c, work):
     from exit_precheck import checkpoint_values
 
+    def completed(raw):
+        try:
+            values = checkpoint_values(raw)
+        except ValueError:
+            return False
+        result = c.account(checkpoint_pda(values["result"]))
+        return (
+            result
+            and result["owner"] == str(VERIFIER)
+            and result["data"].hex() == values["end"]
+        )
+
+    for cache in work.glob("[a-f0-9]" * 64):
+        native = cache / "native-public-values.bin"
+        if (
+            cache.is_dir()
+            and not cache.is_symlink()
+            and native.is_file()
+            and not native.is_symlink()
+            and native.stat().st_size <= 2048
+            and completed(native.read_bytes())
+        ):
+            shutil.rmtree(cache)
     for path in work.glob("*.key"):
         signer = load(path)
         account = c.account(signer.pubkey())
@@ -511,16 +581,14 @@ def reclaim_completed(c, work):
         raw = account["data"]
         if hashlib.sha256(raw).hexdigest() != path.stem:
             continue
-        try:
-            values = checkpoint_values(raw)
-        except ValueError:
+        if not completed(raw):
             continue
-        result = c.account(checkpoint_pda(values["result"]))
-        if not result or result["owner"] != str(VERIFIER) or result["data"].hex() != values["end"]:
-            continue
-        funded_send(c, "exit.reclaim", [
-            Instruction(VERIFIER, b"\x06", [rw(signer.pubkey(), True), rw(c.owner)])
-        ], signer)
+        funded_send(
+            c,
+            "exit.reclaim",
+            [Instruction(VERIFIER, b"\x06", [rw(signer.pubkey(), True), rw(c.owner)])],
+            signer,
+        )
         if c.account(signer.pubkey()) is None:
             path.unlink()
 

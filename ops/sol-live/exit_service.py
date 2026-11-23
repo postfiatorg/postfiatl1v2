@@ -255,9 +255,13 @@ def checked_row(journal, burn):
             journal.update(burn, "queued", solana_tx=None, detail=None, error=None)
             return journal.get(burn)
         if result is PAID_NO_HISTORY and known:
-            verified = dict(row, solana_tx=None, detail="Finalized marker. Signature unavailable.")
+            verified = dict(
+                row, solana_tx=None, detail="Finalized marker. Signature unavailable."
+            )
         else:
-            finish_payment(lambda stage, **kw: journal.update(burn, stage, **kw), result)
+            finish_payment(
+                lambda stage, **kw: journal.update(burn, stage, **kw), result
+            )
             verified = journal.get(burn)
         expiry = time.monotonic() + 300 if result is PAID_NO_HISTORY else float("inf")
         with journal.marker_lock:
@@ -362,8 +366,11 @@ def prune_terminal(journal, directory, retain=1024):
         ).fetchall()
     burns = {r["burn_tx_id"]: r["stage"] for r in rows}
     # Rotate through retained work even when a different due job needs its rent.
-    paths = sorted(p for p in directory.glob("[0-9a-f]" * 96)
-                   if p.name not in burns and not p.is_symlink() and p.is_dir())
+    paths = sorted(
+        p
+        for p in directory.glob("[0-9a-f]" * 96)
+        if p.name not in burns and not p.is_symlink() and p.is_dir()
+    )
     if paths:
         path = next((p for p in paths if p.name > journal.last_buffer_job), paths[0])
         journal.last_buffer_job = path.name
@@ -373,6 +380,7 @@ def prune_terminal(journal, directory, retain=1024):
                 prune_work(cluster(), path, reclaim=True)
         elif row and any(path.glob("*.key")):
             from exit_payout import reclaim_completed
+
             reclaim_completed(cluster(), path)
     for burn, stage in burns.items():
         if not BURN.fullmatch(burn):
@@ -445,7 +453,9 @@ def service_readiness(server, *, fresh=False):
             message="Withdrawal worker or journal unavailable.",
         )
     if not server.journal.has_capacity():
-        return dict(ok=True, ready=False, payout_ready=False, message="Withdrawal queue full.")
+        return dict(
+            ok=True, ready=False, payout_ready=False, message="Withdrawal queue full."
+        )
     with server.ready_lock:
         if fresh or time.monotonic() >= server.valid_until:
             server.ready = readiness()

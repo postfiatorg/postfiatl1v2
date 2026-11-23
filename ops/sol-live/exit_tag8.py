@@ -83,11 +83,20 @@ def simulate(c, values, proof, buffer, light):
 
 def require_forward(c, cfg, light, values):
     height, block = light_fields(cfg, light)
-    require(values["prior"] == block and values["height"] > height and not light["data"][-1],
-            "A forward witness from the current unpaused checkpoint is required.")
+    require(
+        values["prior"] == block
+        and values["height"] > height
+        and not light["data"][-1],
+        "A forward witness from the current unpaused checkpoint is required.",
+    )
     cp = c.account(checkpoint_pda(block))
-    require(cp and not cp["executable"] and cp["owner"] == str(VERIFIER)
-            and cp["data"].hex() == values["start"], "Current checkpoint committee differs.")
+    require(
+        cp
+        and not cp["executable"]
+        and cp["owner"] == str(VERIFIER)
+        and cp["data"].hex() == values["start"],
+        "Current checkpoint committee differs.",
+    )
 
 
 def main():

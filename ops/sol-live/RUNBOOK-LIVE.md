@@ -74,6 +74,35 @@ bash "$KIT/stage.sh"
 
 The publisher credential stays at `~/.postfiat/trusted-deployment-publisher.private.json`. If the snapshot and the converged tip differ, refresh the snapshot and qualify both binaries again.
 
+Exercise the integrated rotation interlock on the copied archive. The chain regression models activation at 1760. Build its test executable in a scratch tree with that fixture height. Keep the scheduled release binary for the exact release replay above.
+
+```bash
+git merge-base --is-ancestor "$CHAIN_FIX" HEAD
+scratch="$KIT/interlock-source"
+mkdir "$scratch"
+git archive HEAD | tar -x -C "$scratch"
+(
+  cd "$scratch"
+  python3 - <<'HEIGHT'
+import os
+from pathlib import Path
+p=Path("crates/types/src/solana_exit.rs")
+marker=f'Some({os.environ["H"]}), // Agreed WAN release height.'
+s=p.read_text()
+assert s.count(marker)==1
+p.write_text(s.replace(marker,"Some(1760), // Archived interlock regression"))
+HEIGHT
+  CARGO_TARGET_DIR="$KIT/interlock-target" cargo test --locked --release -p postfiat-node --lib --no-run --message-format=json > "$KIT/evidence/interlock-build.jsonl"
+)
+testbin=$(jq -r 'select(.target.name=="postfiat_node" and .executable)|.executable' "$KIT/evidence/interlock-build.jsonl")
+for case in exit_review_open_checks_checkpoint_history exit_review_close_drain_rotate_and_reopen; do
+  docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges -u "$(id -u):$(id -g)" \
+    -v "$ARCHIVE:/var/lib/postfiat/validator-3" -v "$INTEGRITY:/var/lib/postfiat/validator-3/.integrity.key:ro" \
+    -v "$testbin:/opt/test:ro" ubuntu:24.04 /opt/test "tests::solana_exit::$case" --ignored --exact | tee "$KIT/evidence/$case.log"
+  grep -Fq '1 passed; 0 failed' "$KIT/evidence/$case.log"
+done
+```
+
 ## 2. Roll validator 0, then the other five
 
 ```bash
@@ -228,7 +257,7 @@ Check the first eight lines before opening. Perform the last two at their number
 - [ ] The exact scheduled release and predecessor replay the current archive. Run both step 1 tip replays, `cmp "$KIT/evidence/tip-old.json" "$KIT/evidence/tip-new.json"`, and the step 1 six-way tip comparison.
 - [ ] Validator 0 passes the separate step 2 `deploy-v0` image, manifest, process and watchdog inspection. Roll the remaining five and run the step 2 `fleet()` revision, tip and state check.
 - [ ] All six show the reviewed closed descriptor. Run `python3 -c 'from exit_govern import *; require_closed(six(lambda i:rpc(i,"vault_bridge_route",asset_id=SERIES)))'`.
-- [ ] The release enforces the reviewed rotation interlock. Set `INTERLOCK_TEST` to the fully qualified test from the chain worker's signed-off report. Run `git merge-base --is-ancestor "$CHAIN_FIX" HEAD` and `cargo test --locked --release -p postfiat-node --lib "$INTERLOCK_TEST" -- --exact --include-ignored | tee "$KIT/evidence/interlock.log"`. Require `grep -Fq '1 passed; 0 failed' "$KIT/evidence/interlock.log"` and inspect the case for both open burns and pending claims. An absent case holds opening.
+- [ ] The integrated release contains the reviewed chain interlock. Run the two step 1 Docker cases and require `grep -F '1 passed; 0 failed' "$KIT/evidence/exit_review_close_drain_rotate_and_reopen.log"` and the same result in `exit_review_open_checks_checkpoint_history.log`. They cover a rotation before opening, open admission, and a closed queue with a pending claim.
 - [ ] Before funding and initialization, run step 4 `exit_setup.py prove-roles` and the unsigned setup. Both public signatures must verify. Step 4 checks deployed image digests, the finalized vault snapshot and guest execution through the agreed tip.
 - [ ] Run step 6 readback and tag-8 simulation from the current PDA. Require the exact finalized tag-3 history, original PDA and `jq -e '.value.err==null' "$KIT/evidence/tag8/simulation.json"`. The simulation command verifies both returned account bodies.
 - [ ] The isolated identity proves the known witness (`grep -Fxq 'service-proof verified' "$KIT/evidence/service-proof.log"`). Run `curl -fsS "$API/readiness/qualify" | jq -e '.payout_ready and (.burns_open==false) and .qualified_parent and (.relayer_lamports >= .relayer_floor_lamports + .payout_budget_lamports)'`. Success requires a working journal and worker, queue capacity, shared custody covering liabilities, and the verified path from 1753.

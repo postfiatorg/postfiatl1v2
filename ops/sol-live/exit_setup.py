@@ -73,7 +73,9 @@ class ExitCluster(Cluster):
 
 
 def prove_roles(config):
-    require(config["pause_authority"] == bytes(PAUSE).hex(), "Unreviewed pause authority.")
+    require(
+        config["pause_authority"] == bytes(PAUSE).hex(), "Unreviewed pause authority."
+    )
     digest = hashlib.sha256(b"\x03" + encode(config)).hexdigest()
     nonce = os.urandom(32).hex()
     roles = {}
@@ -84,7 +86,9 @@ def prove_roles(config):
         challenge = f"postfiat.sol-exit.offline-possession.v1/{digest}/{nonce}/{role}/{expected}".encode()
         sig = load(DIRECTORY / name).sign_message(challenge)
         require(sig.verify(expected, challenge), f"Offline {role} challenge failed.")
-        roles[role] = dict(address=str(expected), challenge_hex=challenge.hex(), signature=str(sig))
+        roles[role] = dict(
+            address=str(expected), challenge_hex=challenge.hex(), signature=str(sig)
+        )
     return dict(tag3_sha256=digest, nonce=nonce, roles=roles)
 
 
@@ -191,6 +195,26 @@ def build_initialize(config, payer):
     )
 
 
+def send_initialize(c, ix, deployment, qualified_parent):
+    from exit_precheck import parent_of
+
+    recent = c.call("getLatestBlockhash", c.level)["value"]
+    block = Hash.from_string(recent["blockhash"])
+    require(
+        parent_of(fleet()) == qualified_parent, "Tip advanced. Repeat qualification."
+    )
+    tx = Transaction.new_signed_with_payer([ix], c.owner, [c.payer, deployment], block)
+    sig = str(tx.signatures[0])
+    result = c.call(
+        "sendTransaction",
+        base64.b64encode(bytes(tx)).decode(),
+        dict(encoding="base64", preflightCommitment="finalized", maxRetries=0),
+    )
+    require(result == sig, "Initialization signature mismatch.")
+    c.confirm([("egress.initialize", sig)])
+    return sig
+
+
 def check_reviewed_instruction(config, ix):
     expected = [
         (MAINNET_PAYER, True, True),
@@ -284,7 +308,6 @@ def main():
         committee,
         qualify_path,
         execute_guest,
-        parent_of,
         inspect_vault,
         records,
         certified_witness,
@@ -341,14 +364,21 @@ def main():
     check_reviewed_instruction(config, ix)
     anchor = ix.accounts[3].pubkey
     initialized = recover_bootstrap(c, config, ix, args.init_signature)
-    path = qualify_path(archived["committee"], anchor_row, head, args.output.parent / "guest",
-                        simulation_height=initialized["height"] if initialized else None)
+    path = qualify_path(
+        archived["committee"],
+        anchor_row,
+        head,
+        args.output.parent / "guest",
+        simulation_height=initialized["height"] if initialized else None,
+    )
     guest = path["guest"]
     if head["block_height"] == anchor_row["height"]:
         values = execute_guest(archived, args.output.parent / "guest")
-        require((values["result"], values["end"], values["height"]) ==
-                (anchor_row["block"], anchor_row["committee"], anchor_row["height"]),
-                "Frozen guest disagrees with the archived anchor.")
+        require(
+            (values["result"], values["end"], values["height"])
+            == (anchor_row["block"], anchor_row["committee"], anchor_row["height"]),
+            "Frozen guest disagrees with the archived anchor.",
+        )
         guest = dict(values, forward=False)
     evidence = dict(
         vault=vault,
@@ -424,8 +454,7 @@ def main():
         c.unlock(DIRECTORY / "mainnet-payer.json")
         deployment = load(DIRECTORY / "egress-verifier.json")
         require(deployment.pubkey() == VERIFIER, "incorrect program signer")
-        require(parent_of(fleet()) == path["qualified_parent"], "Tip advanced. Repeat qualification.")
-        sig = c.send("egress.initialize", [ix], deployment)
+        sig = send_initialize(c, ix, deployment, path["qualified_parent"])
         initialized = recover_bootstrap(c, config, ix, sig)
         require(initialized, "Waiting for finalized bootstrap readback.")
         save(args.output, dict(record, **initialized))
