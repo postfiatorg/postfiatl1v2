@@ -49,7 +49,6 @@ class PqIssuedFee(unittest.TestCase):
             request = browser.request(dict(pool=PQ_POOL_ID, intent="example", wire=json.dumps(action)))
             self.assertIsNone(request["address"])
 
-
     def test_cli_refuses_a_caller_selected_issued_fee(self):
         from postfiat_rpc.pq_wallet import parser, run
         for command in ("pay", "unshield"):
@@ -60,8 +59,10 @@ class PqIssuedFee(unittest.TestCase):
 
     def test_only_confirmed_pre_reservation_refusal_releases_pending_payment(self):
         import sqlite3
-        from unittest.mock import Mock, patch
-        from postfiat_rpc.pq_browser import BrowserWallet, AdmissionRefused, PQ_POOL_ID
+        from http.client import RemoteDisconnected
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from unittest.mock import patch
+        from postfiat_rpc.pq_browser import BrowserWallet, Gateway, PQ_POOL_ID, SCHEMA
         from postfiat_rpc.client import private_action_hash
 
         vector = ROOT / "tools/pft-binius-shielded-pq/l1-vectors/pfusdc-pay.bin"
@@ -69,23 +70,47 @@ class PqIssuedFee(unittest.TestCase):
         row = dict(intent="test", phase="prepared", wire=wire, pool=PQ_POOL_ID)
         wallet = object.__new__(BrowserWallet)
         wallet.account, wallet.home = "pf" + "11"*20, Path(".")
-        wallet.gateway = Mock()
-        with contextlib.closing(sqlite3.connect(":memory:")) as db:
+        action_hash = private_action_hash(wire)
+
+        class Response(BaseHTTPRequestHandler):
+            def log_message(self, *_):
+                pass
+
+            def do_POST(self):
+                request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                if self.server.outcome == "lost":
+                    return  # The request arrived. Close the socket without an HTTP response.
+                self.send_response(409)
+                self.end_headers()
+                self.wfile.write(json.dumps(dict(schema=SCHEMA, code="pq_fee_mismatch",
+                    reserved=False, intent_id=request["intent_id"],
+                    action_hash=action_hash if self.server.outcome == "refused" else "different"
+                )).encode())
+
+        with tempfile.TemporaryDirectory() as tmp, HTTPServer(("127.0.0.1", 0), Response) as server, \
+                contextlib.closing(sqlite3.connect(":memory:")) as db:
+            token = Path(tmp) / "token"
+            token.write_text("fixture")
+            wallet.gateway = Gateway(f"http://127.0.0.1:{server.server_port}", token, "http://localhost")
             db.execute("CREATE TABLE payments (intent,phase)")
-            for exc in [ConnectionResetError(), AdmissionRefused("pq_fee_mismatch")]:
+            for outcome in ("lost", "mismatched", "refused"):
+                server.outcome = outcome
+                request = threading.Thread(target=server.handle_request, daemon=True)
+                request.start()
                 db.execute("DELETE FROM payments")
                 db.execute("INSERT INTO payments VALUES ('test', 'prepared')")
-                wallet.gateway.call.side_effect = exc
                 with patch("postfiat_rpc.pq_browser.local") as daemon:
-                    with self.assertRaises((ConnectionResetError, ValueError)):
+                    with self.assertRaises(RemoteDisconnected if outcome == "lost" else ValueError):
                         wallet.send(db, row)
+                    request.join(2)
+                    self.assertFalse(request.is_alive())
                     saved = db.execute("SELECT phase FROM payments").fetchone()
-                    if isinstance(exc, ConnectionResetError):
+                    if outcome == "refused":
+                        daemon.assert_called_once_with(Path("."), "rejected", action_hash=action_hash)
+                        self.assertIsNone(saved)
+                    else:
                         daemon.assert_not_called()
                         self.assertEqual(saved, ("submitted",))
-                    else:
-                        daemon.assert_called_once_with(Path("."), "rejected", action_hash=private_action_hash(wire))
-                        self.assertIsNone(saved)
 
     def test_rehearsal_release_contract_is_visible_to_wallets_and_reviewers(self):
         spec = (ROOT / "docs/specs/pq-private-payments-integration.md").read_text()
