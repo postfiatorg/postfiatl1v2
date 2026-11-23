@@ -5,6 +5,11 @@
 > venue are deployed and functionally proven. The service remains limited
 > availability rather than production GA. Start with
 > [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+>
+> **B24 (Schwab-backed), 2026-11-23:** epoch 9 finalized at NAV 1.006419. The TEE
+> Schwab reader and the reading pipeline are in this repository under
+> `tools/nav-reserve-proof/schwab-tee/` and `ops/b24-live/`; operating guide:
+> [B24 Schwab NAV Reading](../runbooks/b24-schwab-nav-reading.md).
 
 NAVCoins are floating-NAV issued assets whose supply, minting, redemption, and
 halt behavior are tied to machine-checkable reserve packets. They are not

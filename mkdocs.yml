@@ -186,6 +186,7 @@ nav:
       - Python Example: business/navcoin-python-example.md
       - PFTL Tools: navcoins/pftl-tools.md
       - YOLO Options Reserve Profile: navcoins/yolo-options-reserve-profile.md
+      - B24 Schwab NAV Reading: runbooks/b24-schwab-nav-reading.md
       - YOLO Target Receipt v1: yolo/target-receipt-v1.md
       - Legacy a651 Uniswap Pool: navcoins/uniswap-pool.md
       - Reference Posts: navcoins/references.md

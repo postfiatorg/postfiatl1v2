@@ -102,8 +102,29 @@ The source for each deployed contract, Solana program and proof key is mapped in
   validators.
 - **The daily price-reading job is failing.** It refuses to run because the validator binary
   is not the one it pins. The corrected checks are on `main`; the next scheduled run has not
-  happened yet.
+  happened yet. *Update 2026-11-23:* it kept failing through 23 November; fixed and a reading
+  landed the same day. See "B24 Schwab reading" below.
 - **Not checked:** a real Ethereum deposit and a real withdrawal after the move.
+
+## B24 Schwab reading
+
+Recorded 2026-11-23 from a live read of all six validators.
+
+- **Fleet observed.** All six ran `sol-exit-r1`: binary `d46376ff131e941cd271632d79eb5cfe4a22269d31588bd24caddda962d3e39e`,
+  source `71dbc9b3`, which is on `main`. This supersedes the table above for the binary. Its
+  own record belongs to the Solana exit release.
+- **Last reading.** B24 epoch 9, NAV 1.006419, finalized at height 1844 (submit 1842, finalize
+  1843, pricing 1844, each accepted on all six).
+- **Where the code is.** The TEE Schwab reader moved from the `navstrategies` repository into
+  `tools/nav-reserve-proof/schwab-tee/`, and the pipeline in `ops/` uses only this repository
+  ([PR #220](https://github.com/postfiatorg/postfiatl1v2/pull/220), not merged on 2026-11-23).
+  Operating guide: [B24 Schwab NAV Reading](../runbooks/b24-schwab-nav-reading.md).
+- **Still on the old path.** Until PR #220 is merged and a new proof profile for the moved
+  enclave is qualified, the 17:55 UTC timer captures from the `navstrategies-now` checkout.
+- **Validator outboxes.** Five validators had `certified-send-outbox` entries owned by `root`
+  since 21 November 13:30, which blocked proposals through them. Ownership was corrected on
+  2026-11-23; the cause is not established.
+- Details: [handoff 2026-11-23](../handoffs/2026-11-23___claude__b24_schwab_reading_restored_and_reader_moved_into_l1.md).
 
 ## Keeping it true
 

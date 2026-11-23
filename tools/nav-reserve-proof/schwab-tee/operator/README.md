@@ -1,7 +1,7 @@
 # YOLO Nitro parent IAM identity
 
-This is the administrator bootstrap for Phase 5 of
-[`yolo_e2e_tee_proof_runbook.md`](../../../docs/pre_production/yolo_e2e_tee_proof_runbook.md).
+This is the administrator bootstrap for the EC2 parent identity used by
+[B24 Schwab NAV Reading](../../../../docs/runbooks/b24-schwab-nav-reading.md).
 It targets account `146575258003` and the existing `yolosetup` group.
 The group already grants `boxpft` EC2 access, KMS power-user access and IAM
 inspection. It does not grant IAM role creation. No existing EC2 instance
