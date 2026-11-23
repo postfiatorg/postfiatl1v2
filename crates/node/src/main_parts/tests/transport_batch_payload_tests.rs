@@ -1096,13 +1096,17 @@ mod transport_batch_payload_tests {
 
     #[test]
     fn activated_consensus_v2_transport_survives_failed_view_zero_proposer_n4() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         run_activated_consensus_v2_transport_failed_proposer(4);
     }
 
     #[test]
     fn activated_consensus_v2_transport_survives_failed_view_zero_proposer_n6() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         run_activated_consensus_v2_transport_failed_proposer(6);
     }
 
@@ -1198,7 +1202,9 @@ mod transport_batch_payload_tests {
     /// between rounds.
     #[test]
     fn transactional_six_validator_round_opens_each_database_a_bounded_number_of_times() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("transactional open-count test").expect("prewarm");
         let fleet = consensus_v2_transport_fleet("transactional-open-count", 6, Some(2));
         let _ = transactional_six_validator_round(&fleet, 1, 1);
@@ -1313,7 +1319,9 @@ mod transport_batch_payload_tests {
     /// is stored once, and the next proposal is not refused.
     #[test]
     fn certified_send_redelivery_after_a_lost_ack_completes_as_already_applied() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("duplicate certified send test").expect("prewarm");
         let fleet = consensus_v2_transport_fleet("duplicate-certified-send", 4, Some(2));
         let _ = transactional_six_validator_round(&fleet, 1, 1);
@@ -1542,7 +1550,9 @@ mod transport_batch_payload_tests {
     /// matches: the job stays pending with `certified_send_duplicate_conflict`.
     #[test]
     fn certified_send_redelivery_with_a_different_consensus_v2_commit_stays_pending() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("duplicate v2 commit test").expect("prewarm");
         let fleet = consensus_v2_transport_fleet("duplicate-v2-commit", 4, Some(2));
         let _ = transactional_six_validator_round(&fleet, 1, 1);
@@ -1610,7 +1620,9 @@ mod transport_batch_payload_tests {
 
     #[test]
     fn peer_round_routes_to_remote_proposer_with_host_local_keys() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("remote proposer transport test")
             .expect("prewarm verifier");
         let validator_count = 4usize;
@@ -1850,7 +1862,9 @@ mod transport_batch_payload_tests {
     /// must apply the block through the store it holds and send only to peers.
     #[test]
     fn default_peer_round_applies_locally_without_sending_to_its_own_validator() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("no self-delivery test").expect("prewarm");
         let fleet = consensus_v2_transport_fleet("certified-round-no-self-send", 4, None);
         let proposer =
@@ -2098,7 +2112,9 @@ mod transport_batch_payload_tests {
     /// vote that arrives after the quorum.
     #[test]
     fn peer_round_keeps_a_vote_outcome_record_for_every_requested_validator() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("vote record test").expect("prewarm");
         // Ten validators: a quorum of seven still forms with one refusing,
         // one silent and one late validator.
@@ -2326,7 +2342,9 @@ mod transport_batch_payload_tests {
     /// round's certified send to its timeout).
     #[test]
     fn peer_round_records_a_vote_after_the_quorum_when_the_writer_runs_at_the_deadline() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("vote record deadline test").expect("prewarm");
         // Seven validators: a quorum of five forms from the proposer and four
         // prompt validators, before the late one and without the hanging one.
@@ -5320,7 +5338,9 @@ mod transport_batch_payload_tests {
     /// mempool mutation lock for the whole wait.
     #[test]
     fn height_1453_round_certifies_at_precommit_quorum_without_late_refusing_peer() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("height 1453 stall test").expect("prewarm verifier");
         let validator_count = 6usize;
         // The incident's transport timeout was 900 s; 60 s keeps the failing
