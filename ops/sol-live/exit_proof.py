@@ -18,24 +18,23 @@ REMOTE = "/workspace/b23-withdraw-20261116"
 LOCAL = Path(
     os.getenv("EXIT_PROOF_HOME", Path.home() / "repos/b23-coord/evidence/withdraw")
 )
-SSH_OPTIONS = []
-if os.getenv("EXIT_PROVER_SSH") == "sandbox":
-    SSH_OPTIONS = [
-        "-F", "none", "-oIdentitiesOnly=yes", "-oIdentityAgent=none",
-        "-i", "/credentials/prover", "-oStrictHostKeyChecking=yes",
-        "-oUserKnownHostsFile=/credentials/known_hosts", "-oUpdateHostKeys=no",
-    ]
-SSH = [
-    "ssh",
-    *SSH_OPTIONS,
-    "-oBatchMode=yes",
-    "-oConnectTimeout=8",
-    "-oServerAliveInterval=20",
-    "-p",
-    PORT,
-    HOST,
-]
-SCP = ["scp", *SSH_OPTIONS, "-q", "-oBatchMode=yes", "-oConnectTimeout=8", "-P", PORT]
+def prover_ssh():
+    mode = os.getenv("EXIT_PROVER_SSH", "operator")
+    directory, identity_name, trust_name = {
+        "system": (Path("/var/lib/pf-sol-exit"), "prover", "known_hosts"),
+        "sandbox": (Path("/credentials"), "prover", "known_hosts"),
+        "operator": (Path.home()/".config/postfiat/sol-bridge", "exit-prover-ssh", "exit-prover-known_hosts"),
+    }[mode]
+    identity, trust = directory / identity_name, directory / trust_name
+    ops = Path(__file__).resolve().parent
+    if mode != "sandbox":  # The sandbox launcher verifies both before the read-only mounts.
+        run(["bash", ops / "check-prover-identity.sh", identity,
+             (ops / "exit-prover.fingerprint").read_text().strip()], 10)
+        run(["bash", ops / "check-prover-host.sh", trust], 10)
+    return ["ssh", "-F", "/dev/null", "-oIdentitiesOnly=yes", "-oIdentityAgent=none",
+            "-i", str(identity), "-oStrictHostKeyChecking=yes", "-oGlobalKnownHostsFile=/dev/null",
+            f"-oUserKnownHostsFile={trust}", "-oUpdateHostKeys=no", "-oBatchMode=yes",
+            "-oConnectTimeout=8", "-oServerAliveInterval=20", "-p", PORT, HOST]
 
 
 def run(args, timeout):
@@ -65,7 +64,7 @@ def verify_local_host():
 
 def available():
     verify_local_host()
-    run(SSH + [f"test -x {REMOTE}/proof-host && test -s {REMOTE}/egress.elf"], 15)
+    run(prover_ssh() + [f"test -x {REMOTE}/proof-host && test -s {REMOTE}/egress.elf"], 15)
 
 
 def remote_proof(kind, data):
@@ -90,7 +89,7 @@ done
 """
     command = f"flock -E 75 -n {shlex.quote(GPU_LOCK)} bash -c " + shlex.quote(script)
     result = subprocess.run(
-        SSH + [command], input=data, capture_output=True, timeout=1550
+        prover_ssh() + [command], input=data, capture_output=True, timeout=1550
     )
     if result.returncode:
         raise RuntimeError("Withdrawal prover unavailable.")

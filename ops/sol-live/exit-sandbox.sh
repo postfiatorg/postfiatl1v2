@@ -25,14 +25,9 @@ if [[ ! -f "$trust" || -L "$trust" ]]; then
     echo 'Expected a regular prover-only known_hosts file' >&2
     exit 1
 fi
-# Only a trust file dedicated to this endpoint may enter the sandbox. Permit
-# hashed OpenSSH host fields only if ssh-keygen matches every one to the prover.
-valid=$(awk 'NF && $1 !~ /^#/ { if ($1 != "[ssh8.vast.ai]:20628" && $1 !~ /^\|1\|/) exit 1; n++ } END {print n+0}' "$trust")
-matched=$(ssh-keygen -l -F '[ssh8.vast.ai]:20628' -f "$trust" | awk 'NF && $1 !~ /^#/ {n++} END {print n+0}')
-if (( valid == 0 || valid != matched )); then
-    echo 'Prover trust file must contain only the verified prover host' >&2
-    exit 1
-fi
+ops="$app/ops/sol-live"
+bash "$ops/check-prover-identity.sh" "$identity" "$(cat "$ops/exit-prover.fingerprint")"
+bash "$ops/check-prover-host.sh" "$trust"
 mounts=()
 while IFS= read -r file; do
     mounts+=(--ro-bind "$file" "$file")

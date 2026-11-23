@@ -18,7 +18,7 @@ echo -n proof > "$4/proof-calldata.bin"
 """)
             fake.chmod(0o700)
             with (
-                patch.object(exit_proof, "SSH", ["bash", "-c"]),
+                patch.object(exit_proof, "prover_ssh", return_value=["bash", "-c"]),
                 patch.object(exit_proof, "REMOTE", tmp),
                 patch.object(exit_proof, "GPU_LOCK", str(path / "gpu.lock")),
             ):
