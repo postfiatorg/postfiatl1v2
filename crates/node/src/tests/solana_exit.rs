@@ -1132,3 +1132,61 @@ fn exit_review_unanimous_close_stops_new_burns() {
         verify_live_signed_governance_batch(&g, &gov, &committee.registry, &repeat, H + 3).is_err()
     );
 }
+
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn exit_review_route_waits_for_committed_close() {
+    let source = NodeStore::new("/var/lib/postfiat/validator-3");
+    let (g, mut gov, mut ledger) = scheduled_parent(true);
+    let dir = unique_test_dir("route-commit");
+    let store = NodeStore::new(&dir);
+    store.init(&g, &source.read_node_state().unwrap()).unwrap();
+    store.write_governance(&gov).unwrap();
+    store.write_ledger(&ledger).unwrap();
+    let mut tip = source.read_chain_tip().unwrap();
+    tip.height = H + 2;
+    store.write_chain_tip(&tip).unwrap();
+    let guard = store.lock_ordered_commit().unwrap();
+    let (started, start_rx) = std::sync::mpsc::channel();
+    let (done, rx) = std::sync::mpsc::channel();
+    let path = dir.clone();
+    let reader = std::thread::spawn(move || {
+        started.send(()).unwrap();
+        done.send(vault_bridge_route(VaultBridgeRouteOptions {
+            data_dir: path,
+            asset_id: SERIES.into(),
+        }))
+        .unwrap();
+    });
+    start_rx.recv().unwrap();
+    assert!(
+        matches!(
+            rx.recv_timeout(std::time::Duration::from_millis(500)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ),
+        "route read returned during an open commit"
+    );
+    let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
+    let batch = committee.decision(&g, &gov, solana_exit::CLOSE, H + 3);
+    assert!(
+        crate::execution_actions::execute_governance_batch(
+            &mut gov,
+            Some(&mut ledger),
+            Some(&g),
+            &batch,
+            H + 3
+        )[0]
+        .accepted
+    );
+    store.write_governance(&gov).unwrap();
+    tip.height = H + 3;
+    store.write_chain_tip(&tip).unwrap();
+    drop(guard);
+    let report = rx.recv().unwrap().unwrap();
+    assert_eq!(
+        (report.current_height, report.burns_open),
+        (H + 3, Some(false))
+    );
+    reader.join().unwrap();
+    fs::remove_dir_all(dir).unwrap();
+}

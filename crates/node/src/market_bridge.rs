@@ -1167,9 +1167,33 @@ pub fn pfusdc_ingress_preflight(
 pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultBridgeRouteReport> {
     let store = NodeStore::new(options.data_dir);
     let genesis = store.read_genesis()?;
-    let governance = store.read_governance()?;
-    let ledger = store.read_ledger()?;
-    let tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
+    let (governance, ledger, tip) = if store.transactional_storage_active()? {
+        let snapshot = store.transactional_store()?.read_snapshot()?;
+        let tip = snapshot.chain_tip();
+        validate_chain_tip_domain(&tip, &genesis)?;
+        (
+            snapshot
+                .current_state("governance")?
+                .ok_or_else(|| io::Error::other("missing committed governance"))?,
+            snapshot
+                .current_state("ledger")?
+                .ok_or_else(|| io::Error::other("missing committed ledger"))?,
+            tip,
+        )
+    } else {
+        let _lock = store.lock_ordered_commit()?;
+        if store.read_ordered_commit_journal_raw()?.is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "ordered commit awaits recovery",
+            ));
+        }
+        (
+            store.read_governance()?,
+            store.read_ledger()?,
+            read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?,
+        )
+    };
     vault_bridge_route_at_height(
         &genesis,
         &governance,
