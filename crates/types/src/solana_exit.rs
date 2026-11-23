@@ -64,3 +64,66 @@ pub fn active(
     }
     Ok((record, amendment))
 }
+
+pub const OPEN: &str = "solana_exit_r8_open";
+pub const PAID: &str = "solana_exit_r8_paid:";
+
+pub fn is_decision(kind: &str) -> bool {
+    kind == OPEN || kind.starts_with(PAID)
+}
+
+/// The packet hash commits to the burn, amount and source bucket. The burn ID
+/// commits to the signed operation, including the full 32-byte destination.
+/// Solana transaction signatures use their raw 64 bytes encoded as lowercase hex.
+pub struct FinalizedPayout<'a> {
+    pub packet_hash: &'a str,
+    pub slot: u64,
+    pub index: u16,
+    pub signature_hex: &'a str,
+}
+
+pub fn payout_fields(kind: &str) -> Result<FinalizedPayout<'_>, String> {
+    let mut fields = kind
+        .strip_prefix(PAID)
+        .ok_or("expected Solana payout amendment")?
+        .split(':');
+    let packet = fields.next().ok_or("missing withdrawal packet hash")?;
+    let slot = fields.next().ok_or("missing finalized Solana slot")?;
+    let ordinal = fields.next().ok_or("missing payout index")?;
+    let index = ordinal.parse::<u16>().map_err(|_| "invalid payout index")?;
+    let signature = fields
+        .next()
+        .ok_or("missing Solana transaction signature")?;
+    validate_lower_hex_len("withdrawal packet hash", packet, 96)?;
+    validate_lower_hex_len("Solana transaction signature", signature, 128)?;
+    let number = slot
+        .parse::<u64>()
+        .map_err(|_| "invalid finalized Solana slot")?;
+    if fields.next().is_some()
+        || ordinal != index.to_string()
+        || number == 0
+        || number.to_string() != slot
+        || signature.bytes().all(|b| b == b'0')
+    {
+        return Err("invalid finalized Solana payout reference".into());
+    }
+    Ok(FinalizedPayout {
+        packet_hash: packet,
+        slot: number,
+        index,
+        signature_hex: signature,
+    })
+}
+
+pub fn open_height(g: &GovernanceState) -> Option<u64> {
+    let (descriptor, _) = registered(g)?;
+    g.amendment_activation_records
+        .iter()
+        .find(|a| {
+            a.kind == OPEN
+                && a.value == 1
+                && a.activated_height > descriptor.authorized_height
+                && a.activation_height == a.activated_height
+        })
+        .map(|a| a.activated_height)
+}

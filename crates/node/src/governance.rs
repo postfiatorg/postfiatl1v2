@@ -2669,7 +2669,8 @@ fn apply_governance_batch_internal(
         )?,
         None => fastpay_pre_state_effects_for_next_block(&store, &ledger)?,
     };
-    if historical_replay.is_none() && !allow_unsigned_test_fixture {
+    if crate::solana_exit_governance::needs_signatures(&genesis,&batch,block_height)
+        || (historical_replay.is_none() && !allow_unsigned_test_fixture) {
         let registry = due_activations.registry.clone().unwrap_or(
             read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?,
         );

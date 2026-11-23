@@ -3104,8 +3104,8 @@ pub(super) fn replay_archived_payload(
                     .vault_bridge_route_profile_activations
                     .iter()
                     .any(|activation| !activation.amendment.signed_authorizations.is_empty());
-            if has_v2_authorization {
-                verify_live_signed_governance_batch(
+            if has_v2_authorization || crate::solana_exit_governance::needs_signatures(genesis,&batch,block.header.height) {
+                crate::consensus_artifacts::verify_signed_governance_batch(
                     genesis,
                     state.governance,
                     state.validator_registry,

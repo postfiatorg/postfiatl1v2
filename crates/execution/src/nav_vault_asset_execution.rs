@@ -7232,7 +7232,40 @@ fn apply_vault_bridge_burn_to_redeem(
         .solana_exit_heights
         .is_some_and(|(start, end)| (start..end).contains(&block_height))
         && postfiat_types::solana_exit::matches_bucket(&bucket);
-    if !solana_exit {
+    if !solana_exit
+        && operation.destination_ref.starts_with("solana-spl:")
+        && postfiat_types::solana_exit::matches_bucket(&bucket)
+        && postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
+            .is_some_and(|h| h <= block_height)
+    {
+        return Err((
+            "solana_exit_burns_closed",
+            "Solana exit burns are closed outside the governed descriptor interval".into(),
+        ));
+    }
+    if solana_exit {
+        if compatibility
+            .solana_exit_open_height
+            .is_none_or(|h| block_height < h)
+        {
+            return Err((
+                "solana_exit_burns_closed",
+                "Solana exit burns are closed pending explicit governance opening".into(),
+            ));
+        }
+        if bucket.status != VAULT_BRIDGE_BUCKET_STATUS_ACTIVE
+            || bucket.impairment_factor_bps != 10_000
+            || bucket.counted_value_atoms
+                < bucket
+                    .allocated_atoms()
+                    .map_err(|e| ("bad_vault_bridge_bucket", e))?
+        {
+            return Err((
+                "solana_exit_requires_full_backing",
+                "Solana exit requires an active, fully backed source bucket".into(),
+            ));
+        }
+    } else {
         let profile = vault_bridge_profile_for_pinned_policy(
             ledger,
             &nav_asset,
@@ -7241,7 +7274,7 @@ fn apply_vault_bridge_burn_to_redeem(
         )?;
         ensure_vault_bridge_source_policy(profile, &bucket.source_domain, &bucket.policy_hash)?;
     }
-    let movement_asset = if compatibility.pfusdc_source_series_active(block_height) {
+    let movement_asset = if solana_exit || compatibility.pfusdc_source_series_active(block_height) {
         let mut matches = ledger.asset_definitions.iter().filter(|asset| {
             asset.asset_family_id == operation.asset_id
                 && asset.source_bucket_id == operation.bucket_id
@@ -7254,6 +7287,19 @@ fn apply_vault_bridge_burn_to_redeem(
                     .to_string(),
             )
         })?;
+        if solana_exit
+            && asset.asset_id
+                != postfiat_types::solana_source_series_id(
+                    &genesis.chain_id,
+                    &bucket.asset_id,
+                    &bucket.bucket_id,
+                )
+        {
+            return Err((
+                "solana_exit_series_mismatch",
+                "Solana exit requires its canonical revision-8 series".into(),
+            ));
+        }
         if matches.next().is_some() {
             return Err((
                 "pfusdc_source_series_asset_duplicate",
@@ -7470,6 +7516,79 @@ fn apply_vault_bridge_redeem_settle_with_compatibility(
         block_height,
         compatibility,
     )?;
+    apply_vault_bridge_settlement_accounting(
+        ledger,
+        operation,
+        bucket_index,
+        redemption_index,
+        block_height,
+        compatibility.pfusdc_source_series_active(block_height),
+    )
+}
+
+/// Applies the accounting side of a unanimous payout attestation. The caller
+/// verifies the governing signatures and release. Use a staged ledger because
+/// validation of an allocation or the resulting bucket can still fail.
+pub fn settle_governed_solana_payout(
+    ledger: &mut LedgerState,
+    chain_id: &str,
+    packet_hash: &str,
+    amendment_id: &str,
+    block_height: u64,
+) -> Result<(), String> {
+    use postfiat_types::solana_exit;
+    let bucket_index = ledger
+        .vault_bridge_bucket_states
+        .iter()
+        .position(solana_exit::matches_bucket)
+        .ok_or("missing governed Solana payout bucket")?;
+    let redemption_index = ledger
+        .vault_bridge_redemptions
+        .iter()
+        .position(|r| r.withdrawal_packet_hash == packet_hash)
+        .ok_or("unknown Solana withdrawal packet")?;
+    let red = &ledger.vault_bridge_redemptions[redemption_index];
+    red.validate_for_chain(chain_id)?;
+    if red.bucket_id != solana_exit::BUCKET
+        || red.asset_id != solana_exit::FAMILY
+        || red.withdrawal_packet.source_chain_id != postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
+        || !red.destination_ref.starts_with("solana-spl:")
+        || red.state != VAULT_BRIDGE_REDEMPTION_STATE_PENDING
+        || red.settled_atoms != 0
+        || red.created_at_height >= block_height
+    {
+        return Err("Solana settlement requires the exact pending revision-8 payout".into());
+    }
+    let op = VaultBridgeRedeemSettleOperation {
+        issuer_or_redemption_account: red.issuer.clone(),
+        asset_id: red.asset_id.clone(),
+        redemption_id: red.redemption_id.clone(),
+        settlement_receipt_hash: amendment_id.into(),
+        settled_atoms: red.amount_atoms,
+        withdrawal_observations: vec![],
+    };
+    let mut staged = ledger.clone();
+    apply_vault_bridge_settlement_accounting(
+        &mut staged,
+        &op,
+        bucket_index,
+        redemption_index,
+        block_height,
+        true,
+    )
+    .map_err(|(_, message)| message)?;
+    *ledger = staged;
+    Ok(())
+}
+
+fn apply_vault_bridge_settlement_accounting(
+    ledger: &mut LedgerState,
+    operation: &VaultBridgeRedeemSettleOperation,
+    bucket_index: usize,
+    redemption_index: usize,
+    block_height: u64,
+    release_supply: bool,
+) -> Result<(), (&'static str, String)> {
     if ledger.vault_bridge_bucket_states[bucket_index].redemption_queue_atoms
         < operation.settled_atoms
     {
@@ -7479,11 +7598,14 @@ fn apply_vault_bridge_redeem_settle_with_compatibility(
         ));
     }
 
-    if compatibility.pfusdc_source_series_active(block_height) {
+    if release_supply {
+        let bucket_id = ledger.vault_bridge_bucket_states[bucket_index]
+            .bucket_id
+            .clone();
         release_vault_bridge_supply_allocations(
             ledger,
             &operation.asset_id,
-            &redemption.bucket_id,
+            &bucket_id,
             operation.settled_atoms,
             block_height,
         )?;

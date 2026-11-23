@@ -1058,6 +1058,9 @@ pub struct VaultBridgeRouteReport {
     pub route_trust_class: String,
     pub live_value_enabled: bool,
     pub active: bool,
+    /// Admission status of the separately governed Solana exit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub burns_open: Option<bool>,
     /// Current ledger anchor for this exact governed profile and epoch.
     /// Null means 29-field proofs for this epoch are refused; old 26-field
     /// deposits are admitted only if the profile has no anchor in any epoch.

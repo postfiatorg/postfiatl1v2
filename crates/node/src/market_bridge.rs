@@ -1317,6 +1317,9 @@ pub(super) fn vault_bridge_route_at_height(
     )?;
     Ok(VaultBridgeRouteReport {
         beacon_finality_anchor,
+        burns_open: is_solana.then(|| {
+            postfiat_types::solana_exit::open_height(governance).is_some_and(|h| h <= height)
+        }),
         schema: "postfiat.vault_bridge.route_report.v1".to_string(),
         chain_id: genesis.chain_id.clone(),
         genesis_hash: genesis_hash(genesis),

@@ -3059,6 +3059,22 @@ pub(super) fn verify_live_signed_governance_batch(
     batch: &GovernanceActionBatch,
     proposal_slot: u64,
 ) -> io::Result<()> {
+    if crate::solana_exit_governance::registers_descriptor(batch)
+        && postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
+            .is_some_and(|h| proposal_slot < h)
+    {
+        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Solana exit release height has not been reached"));
+    }
+    verify_signed_governance_batch(genesis, governance, registry, batch, proposal_slot)
+}
+
+pub(super) fn verify_signed_governance_batch(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    registry: &ValidatorRegistry,
+    batch: &GovernanceActionBatch,
+    proposal_slot: u64,
+) -> io::Result<()> {
     verify_storage_commitment_action_bindings(genesis, batch)?;
     for activation in &batch.storage_commitment_activations {
         if activation.scheduling_block_height != proposal_slot {
@@ -3097,6 +3113,15 @@ pub(super) fn verify_live_signed_governance_batch(
         .filter(|update| update.activation_height < proposal_slot)
         .count() as u64;
     for amendment in &batch.amendments {
+        if postfiat_types::solana_exit::is_decision(&amendment.kind) {
+            crate::solana_exit_governance::validate_decision(
+                genesis,
+                governance,
+                amendment,
+                proposal_slot,
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e))?;
+        }
         verify_external_lane_amendment_admission(
             genesis,
             governance,

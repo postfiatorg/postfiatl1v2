@@ -159,6 +159,7 @@ mod tests {
             route_trust_class: "TRUSTLESS_FINALITY".into(),
             live_value_enabled: true,
             active: true,
+            burns_open: None,
             beacon_finality_anchor: VaultBridgeRouteReport::select_beacon_anchor(
                 &[state],
                 &profile_hash,

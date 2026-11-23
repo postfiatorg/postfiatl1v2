@@ -1282,6 +1282,22 @@ fn execute_governance_batch_with_replay(
                 "governance amendment already applied",
             ));
         } else {
+            if postfiat_types::solana_exit::is_decision(&amendment.kind) {
+                if let Err(message) = crate::solana_exit_governance::apply_decision(
+                    genesis,
+                    governance,
+                    ledger.as_deref_mut(),
+                    amendment,
+                    block_height,
+                ) {
+                    receipts.push(Receipt::rejected(
+                        amendment.amendment_id.clone(),
+                        "solana_exit_decision_rejected",
+                        message,
+                    ));
+                    continue;
+                }
+            }
             apply_governance_amendment_with_lifecycle_records(
                 governance,
                 amendment.clone(),
