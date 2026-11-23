@@ -2,7 +2,7 @@
 
 The review target is the Rust verifier used in candidate block execution, its independent Go implementation, the PFT and governed pfUSDC settlement rules, and the owner-local wallet. The integration is restricted to the disposable rehearsal genesis. No production activation height has been selected. No independent review has been obtained.
 
-The protocol and implementation at the start of the rehearsal are pinned to commit `f0a44680e6435fb87a7392f75677a86d3ba5d5fe` of `postfiatorg/postfiatl1v2`. The rehearsal record pins the test revision and executables. Use the earlier commit for the following specification sections and source counts. [Specification](../../security/peel-binius-shielded-pq-payments.md) · [Integration plan](../../specs/pq-private-payments-integration.md) · [Rehearsal record](rehearsal-record.md)
+The protocol and implementation at the start of the rehearsal are pinned to commit `f0a44680e6435fb87a7392f75677a86d3ba5d5fe` of `postfiatorg/postfiatl1v2`. The rehearsal record pins the test revision and executables. Use the earlier commit for the following specification sections and source counts. [Specification](../../security/peel-binius-shielded-pq-payments.md) · [Integration plan at the reviewed revision](https://github.com/postfiatorg/postfiatl1v2/blob/f0a44680e6435fb87a7392f75677a86d3ba5d5fe/docs/specs/pq-private-payments-integration.md) · [Rehearsal record](rehearsal-record.md)
 
 ## Claims to examine
 

@@ -1,6 +1,6 @@
 # PFSH02 M8 release rehearsal
 
-**Release held.** The candidate verified the full R64 archive and the fresh six-validator history. The M4 node rejected the signed height-2 amendment while validating the fresh five-block pre-activation prefix. A live activation height requires a compatible upgrade path, independent review and a founder decision.
+**Release held.** The candidate verified the full R64 archive and the fresh six-validator history. The M4 node rejected the signed height-2 amendment while validating the fresh five-block pre-activation prefix. A live activation height requires a compatible upgrade path, independent review and a founder decision. [External review package](external-review-package.md)
 
 | Input | Exact revision or SHA-256 |
 | --- | --- |
