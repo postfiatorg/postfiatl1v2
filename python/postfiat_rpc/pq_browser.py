@@ -292,9 +292,9 @@ class BrowserWallet:
             check(type(body["migration"]) is bool, "Invalid migration request.")
             if body["migration"]:
                 migration = state["migration"]
-                check(migration and migration["state"] == "Exit final — review new shield"
-                      and self.receipt(db, self.exit_id())["state"] == "final"
-                      and mode == "Shield" and body["amount"] == migration["amount"] and asset == migration["asset_id"],
+                check(mode == "Shield" and migration and migration["state"] == "Exit final — review new shield"
+                      and body["amount"] == migration["amount"] and asset == migration["asset_id"]
+                      and self.receipt(db, self.exit_id())["state"] == "final",
                       "Confirm the exact Orchard exit before shielding.")
             public = mode == "Shield"
             check(not public or self.account, "Configure a deposit account to shield funds.")

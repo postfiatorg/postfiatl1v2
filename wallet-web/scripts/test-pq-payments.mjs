@@ -62,6 +62,7 @@ async function exercise() {
   const relayCounts = {snapshot:0,page:0,submit:0,receipt:0};
   const boundaryErrors = [];
   let withholdBobPage = false;
+  let refuseNextSpend = false;
   const ports = {alice:await port(), bob:await port()};
   let height = 1;
   let browser;
@@ -212,6 +213,14 @@ async function exercise() {
     if(to) await p.getByLabel(mode==='Pay'?'Recipient receive address':'Public exit account',{exact:true}).fill(to);
     const start = validatorReads[w].length;
     await walletCall(p,'review','Review payment');
+    if (refuseNextSpend) {
+      const reply = action(p,'submit');
+      await click(p,'Confirm and prove locally');
+      assert.equal((await reply).status(), 409);
+      await p.getByRole('alert').filter({hasText:'pq_fee_mismatch'}).waitFor();
+      // Re-review the same notes without a restart or manual cancellation.
+      await walletCall(p,'review','Review payment');
+    }
     await check(w,await prove(w),name);
     if (mode !== 'Shield') {
       const reads = validatorReads[w].slice(start);
@@ -288,6 +297,12 @@ async function exercise() {
           } else assert.equal(action.kind,'asset_orchard_private_egress_v1');
         }
         assert.ok(!/"(?:seed|witness|spend_secret|scan_key|account_key|private_key_hex|leaf_index)"/.test(raw.toString()));
+        if (refuseNextSpend && route === 'submit') {
+          refuseNextSpend = false;
+          res.writeHead(409, {'Content-Type':'application/json'});
+          return res.end(JSON.stringify({ok:false, schema:'postfiat-private-actions-v1',
+            reserved:false, code:'pq_fee_mismatch'}));
+        }
         relayCounts[route]++;
         if (withholdBobPage && route === 'page' && body.section === 'pq_pairs'
             && req.headers.authorization === 'Bearer '+tokens.bob) {
@@ -352,6 +367,7 @@ async function exercise() {
     await click(a,'Shield');
     await a.getByText('0 matching pfUSDC shield actions in the latest 4 finalized pool actions.').waitFor();
     await transfer('alice',issue,'Shield',80,null,'pfusdc-01-alice-shield');
+    refuseNextSpend = true;
     await transfer('alice',issue,'Pay',25,receive.bob,'pfusdc-02-alice-pay');
     assert.equal((await sync('bob')).private[issue],'25');
     await transfer('bob',issue,'Pay',5,receive.alice,'pfusdc-03-bob-second-spend');
