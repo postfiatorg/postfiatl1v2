@@ -18,8 +18,16 @@ REMOTE = "/workspace/b23-withdraw-20261116"
 LOCAL = Path(
     os.getenv("EXIT_PROOF_HOME", Path.home() / "repos/b23-coord/evidence/withdraw")
 )
+SSH_OPTIONS = []
+if os.getenv("EXIT_PROVER_SSH") == "sandbox":
+    SSH_OPTIONS = [
+        "-F", "none", "-oIdentitiesOnly=yes", "-oIdentityAgent=none",
+        "-i", "/credentials/prover", "-oStrictHostKeyChecking=yes",
+        "-oUserKnownHostsFile=/credentials/known_hosts", "-oUpdateHostKeys=no",
+    ]
 SSH = [
     "ssh",
+    *SSH_OPTIONS,
     "-oBatchMode=yes",
     "-oConnectTimeout=8",
     "-oServerAliveInterval=20",
@@ -27,7 +35,7 @@ SSH = [
     PORT,
     HOST,
 ]
-SCP = ["scp", "-q", "-oBatchMode=yes", "-oConnectTimeout=8", "-P", PORT]
+SCP = ["scp", *SSH_OPTIONS, "-q", "-oBatchMode=yes", "-oConnectTimeout=8", "-P", PORT]
 
 
 def run(args, timeout):
