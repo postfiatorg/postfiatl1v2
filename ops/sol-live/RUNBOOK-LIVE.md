@@ -456,10 +456,14 @@ sudo -n /usr/bin/systemctl start pft-sol-mainnet-withdraw.service
 
 A rebuild checks L1 redemptions and finalized Solana markers, retains the old database and its SQLite sidecars, and atomically selects the recovered database through `jobs.current`. Pending jobs wait for potentially in-flight blockhashes to expire before resuming. Keep buffer keys whose on-chain rent has yet to be reclaimed.
 
-For an emergency Solana pause the offline operator uses the dedicated pause signer. Use flag 0 to resume only after repair and review.
+For an emergency Solana pause the offline operator uses the dedicated pause signer. On the pause host set PAUSE_CHECKOUT to the absolute path of the clean reviewed release checkout and RELEASE_COMMIT to its approved full commit ID. Use flag 0 to resume only after repair and review.
 
 ```bash
-python3 - <<'PY'
+set -euo pipefail
+cd -- "${PAUSE_CHECKOUT:?path to reviewed checkout on the pause host}"
+test "$(git rev-parse HEAD)" = "${RELEASE_COMMIT:?approved full release commit}"
+git diff --quiet HEAD --
+PYTHONPATH="$PWD/ops/sol-live" python3 - <<'PY'
 from exit_setup import DIRECTORY, ExitCluster, Instruction, LIGHT, MAINNET_PAYER, PAUSE, VERIFIER, load, require, ro, rw
 c=ExitCluster(MAINNET_PAYER)
 c.unlock(DIRECTORY/"mainnet-payer.json")
