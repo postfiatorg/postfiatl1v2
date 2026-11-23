@@ -75,8 +75,8 @@ It has eight milestones, each tested and merged on its own:
 | M3 | The pool's own ledger state: note trees, nullifiers, root history, tree rollover | Done 22 Nov: separate pool per asset; old notes spendable after two full-tree rollovers; restart, snapshot and genesis replay agree; a real 1,734-block archived chain replays to identical block hashes and state roots |
 | M4 | Deposits signed by the account's ML-DSA-65 key, payments and exits, for PFT and pfUSDC | Done 22 Nov on a test chain: deposit, private payment, partial and full exit for PFT and pfUSDC; supply reconciles at every block (public + private pool + burned fees = 1,000,000,000 PFT) |
 | M5 | Activation height, per-block verification limits, every public submission path | Done 23 Nov in rehearsal: off unless a signed amendment sets a height; blocks before it are invalid; at most 4 payments per block; 25 to 36 ms per payment inside a validator; a six-validator round takes 0.51 to 0.57 s with one payment (0.31 s without) |
-| M6 | A wallet that scans for its notes, recovers from backup and pays from the command line | Next |
-| M7 | The browser wallet flow; moving funds from the old Orchard pool | Planned |
+| M6 | A wallet that scans for its notes, recovers from backup and pays from the command line | Done 23 Nov on a local chain: two wallets shield, pay and unshield PFT and pfUSDC from the Python CLI; Bob restores from backup and spends across a tree rollover; no secrets in 89 RPC requests or logs; a payment takes about 25 s to prove on one core (585 MB) |
+| M7 | The browser wallet flow; moving funds from the old Orchard pool | Next |
 | M8 | Upgrade rehearsal on a six-validator chain and external review before activation | Planned |
 
 Closed on 22 November in the standalone tool:
