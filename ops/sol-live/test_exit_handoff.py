@@ -18,7 +18,9 @@ HERE = Path(__file__).parent
 class HandoffTest(unittest.TestCase):
     def test_contract_matches_the_wallet_intent(self):
         doc = (HERE / "TASKNODE-CONTRACT.md").read_text()
-        intent = json.loads(doc.split("```json\n")[1].split("\n```")[0])
+        intent = json.loads(
+            doc.split("## Wallet signature")[1].split("```json\n")[1].split("\n```")[0]
+        )
         with (
             patch.object(exit_canary, "cluster"),
             patch.object(exit_canary, "balances", return_value={"pfusdc_atoms": 20000}),

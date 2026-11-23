@@ -1,0 +1,271 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from exit_service import Journal, parse_request
+from exit_payout import marker, VERIFIER, validate_burn, BUCKET, PREFIX
+from bridge import pda
+import hashlib
+
+
+class JobsTest(unittest.TestCase):
+    def test_restart_and_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "jobs.sqlite"
+            j = Journal(path)
+            burn = "ab" * 48
+            self.assertEqual(j.enqueue(burn)["stage"], "queued")
+            j.update(burn, "paying", amount_atoms="20000")
+            self.assertEqual(j.enqueue(burn)["stage"], "paying")
+            j = Journal(path)
+            self.assertEqual(j.pending(), burn)
+            j.update(burn, "paid", solana_tx="signature")
+            self.assertEqual(j.enqueue(burn)["solana_tx"], "signature")
+            self.assertIsNone(j.pending())
+
+    def test_bounds(self):
+        for data in (
+            b"{}",
+            b"[]",
+            b'{"burn_tx_id":"../"}',
+            b'{"burn_tx_id":"aa","extra":2}',
+        ):
+            with self.assertRaises(ValueError):
+                parse_request(data)
+
+    def test_full_burn_address_and_bucket(self):
+        tx = "47" * 48
+        self.assertEqual(
+            marker(tx),
+            pda(VERIFIER, b"egress-burn", hashlib.sha256(bytes.fromhex(tx)).digest()),
+        )
+        row = dict(
+            burn_tx_id=tx,
+            bucket_id=BUCKET,
+            destination_ref=PREFIX + "12" * 32,
+            amount_atoms=20000,
+        )
+        self.assertTrue(validate_burn(row, tx))
+        for field, value in [
+            ("bucket_id", "ff" * 48),
+            ("destination_ref", "evm-erc20:1:0x12"),
+            ("burn_tx_id", "33" * 48),
+        ]:
+            with self.assertRaises(ValueError):
+                validate_burn(dict(row, **{field: value}), tx)
+
+    def test_failed_job_can_retry_and_queue_has_a_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            j = Journal(Path(directory) / "jobs.sqlite")
+            first = "01" * 48
+            j.enqueue(first)
+            j.update(first, "failed", error="prover busy")
+            self.assertIsNone(j.pending())
+            self.assertIsNone(j.enqueue(first)["error"])
+            for i in range(31):
+                j.enqueue(f"{i:096x}")
+            with self.assertRaises(OverflowError):
+                j.enqueue("ef" * 48)
+            self.assertEqual(j.enqueue(first)["stage"], "queued")
+
+    def test_unfunded_relayer_stops_before_proving(self):
+        from unittest.mock import Mock, patch
+        import exit_payout as payout
+
+        burn = "34" * 48
+        row = dict(
+            burn_tx_id=burn,
+            bucket_id=BUCKET,
+            amount_atoms=20000,
+            destination_ref=PREFIX + "88" * 32,
+            created_at_height=7,
+        )
+        c = Mock()
+        c.account.return_value = None
+        c.call.return_value = {"value": payout.FLOOR - 1}
+        with (
+            patch.object(payout, "cluster", return_value=c),
+            patch.object(payout, "rpc", return_value={"redemptions": [row]}),
+            patch.object(payout, "prove") as proof,
+        ):
+            with self.assertRaisesRegex(ValueError, "floor"):
+                payout.process(burn, Path("unused"), Mock())
+            proof.assert_not_called()
+
+    def test_wallet_example_is_the_reviewed_canary(self):
+        from exit_canary import DEST, PHANTOM
+
+        self.assertEqual(
+            str(
+                validate_burn(
+                    dict(
+                        burn_tx_id="ab" * 48,
+                        bucket_id=BUCKET,
+                        amount_atoms=20000,
+                        destination_ref=DEST,
+                    ),
+                    "ab" * 48,
+                )
+            ),
+            str(PHANTOM),
+        )
+        self.assertEqual(str(PHANTOM), "Ce5Yv528pKVrVq4JbQchZ8zasCAzxT3f9uCfatTZcfo8")
+
+    def test_http_errors_and_pending_job_shape(self):
+        import json
+        import threading
+        from http.client import HTTPConnection
+        from http.server import ThreadingHTTPServer
+        from exit_service import BASE, Handler
+
+        burn = "ac" * 48
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server,
+        ):
+            server.journal = Journal(Path(directory) / "jobs.sqlite")
+            server.wake = threading.Event()
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+
+                def request(method, path, body=b"", headers=None):
+                    conn = HTTPConnection("127.0.0.1", server.server_port, timeout=3)
+                    conn.putrequest(method, path)
+                    for name, value in (headers or {}).items():
+                        conn.putheader(name, value)
+                    conn.endheaders(body)
+                    reply = conn.getresponse()
+                    try:
+                        return reply.status, json.loads(reply.read())
+                    finally:
+                        conn.close()
+
+                hdr = {"Content-Type": "application/json"}
+                for expected, args in (
+                    (404, ("GET", BASE + "/" + burn)),
+                    (400, ("GET", BASE + "/invalid")),
+                    (415, ("POST", BASE)),
+                    (411, ("POST", BASE, b"", hdr)),
+                    (413, ("POST", BASE, b"", dict(hdr, **{"Content-Length": "257"}))),
+                    (400, ("POST", BASE, b"{}", dict(hdr, **{"Content-Length": "2"}))),
+                ):
+                    code, payload = request(*args)
+                    self.assertEqual(code, expected)
+                    self.assertTrue(payload["error"])
+                raw = json.dumps({"burn_tx_id": burn}).encode()
+                code, row = request(
+                    "POST", BASE, raw, dict(hdr, **{"Content-Length": str(len(raw))})
+                )
+                self.assertEqual(
+                    (code, row["stage"], row["burn_height"]), (202, "queued", None)
+                )
+                self.assertEqual(request("GET", BASE + "/" + burn), (200, row))
+            finally:
+                server.shutdown()
+
+    def test_readiness_requires_the_governed_series_and_vault_coverage(self):
+        from unittest.mock import Mock, patch
+        import exit_payout as payout
+
+        c = Mock()
+        b = dict(
+            bucket_id=BUCKET,
+            policy_hash=payout.POLICY,
+            source_series_id=payout.SERIES,
+            status="active",
+            outstanding_vault_bridge_atoms=40000,
+        )
+        live_status = dict(
+            buckets=[b],
+            issuer="issuer",
+            finalized_epoch=7,
+            finalized_reserve_packet_hash="15" * 48,
+        )
+        route = dict(
+            active=True,
+            profile_hash=payout.EXIT,
+            profile={"route_epoch": 8},
+            current_height=1755,
+        )
+
+        def rpc(index, method, asset_id):
+            if method == "vault_bridge_route":
+                self.assertEqual(asset_id, payout.SERIES)
+                return route
+            self.assertEqual((method, asset_id), ("vault_bridge_status", payout.ASSET))
+            return live_status
+
+        account = dict(
+            owner=str(payout.TOKEN),
+            data=bytes(payout.MINT) + bytes(32) + (40000).to_bytes(8, "little"),
+        )
+        c.account.return_value = account
+        with (
+            patch.object(payout, "cluster", return_value=c),
+            patch.object(payout, "light"),
+            patch.object(payout, "balance", return_value=payout.FLOOR + 10000000),
+            patch.object(payout, "available"),
+            patch.object(payout, "rpc", side_effect=rpc),
+        ):
+            value = payout.readiness()
+            self.assertTrue(value["ready"], value)
+            self.assertEqual(
+                (
+                    value["series_asset_id"],
+                    value["bucket_id"],
+                    value["destination_prefix"],
+                ),
+                (payout.SERIES, BUCKET, PREFIX),
+            )
+            b["outstanding_vault_bridge_atoms"] += 1
+            self.assertIn("custody", payout.readiness()["message"])
+            route["active"] = False
+            self.assertIn("six validators", payout.readiness()["message"])
+
+    def test_fees_and_rent_cannot_take_the_relayer_below_its_floor(self):
+        from unittest.mock import Mock
+        from solders.hash import Hash
+        from solders.keypair import Keypair
+        from exit_payout import FLOOR, funded_send
+
+        c = Mock()
+        c.owner = Keypair().pubkey()
+        c.call.side_effect = [
+            {"value": {"blockhash": str(Hash.default())}},
+            {"value": 5000},
+            {"value": FLOOR + 5900},
+        ]
+        with self.assertRaisesRegex(ValueError, "floor"):
+            funded_send(c, "test", [], rent=1000)
+        c.send.assert_not_called()
+
+    def test_reclaim_failure_preserves_finalized_transaction(self):
+        from unittest.mock import Mock, patch
+        from solders.keypair import Keypair
+        import exit_payout as payout
+
+        c = Mock()
+        c.owner = Keypair().pubkey()
+        c.account.return_value = None
+        c.rent.return_value = 1_000_000
+        w = {
+            "prior_checkpoint_block_id": "ae" * 48,
+            "block": {"header": {"block_hash": "cc" * 48}},
+        }
+
+        def send(cluster, label, *args, **kwargs):
+            if label == "exit.reclaim":
+                raise RuntimeError("RPC unavailable")
+            return "finalized"
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(payout, "prove", return_value=(bytes(8), bytes(356))),
+            patch.object(payout, "balance"),
+            patch.object(payout, "funded_send", side_effect=send),
+            self.assertLogs(level="WARNING"),
+        ):
+            self.assertEqual(
+                payout.submit(c, "checkpoint", w, Path(directory)), "finalized"
+            )
+            self.assertEqual(len(list(Path(directory).glob("*.key"))), 1)

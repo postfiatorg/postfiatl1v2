@@ -1,0 +1,12 @@
+[Unit]
+Description=Solana USDC withdrawal jobs on loopback port 18089
+
+[Service]
+WorkingDirectory=%h/repos/postfiatl1v2-live
+ExecStart=/usr/bin/python3 -u ops/sol-live/exit_service.py
+UMask=0077
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

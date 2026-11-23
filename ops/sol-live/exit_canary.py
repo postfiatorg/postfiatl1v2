@@ -26,7 +26,7 @@ from exit_payout import ATA, MINT, PREFIX, TOKEN, cluster, marker, pda, signatur
 
 OWNER = "pf5c266a1bdb18320e140961411a8c4d8383eaafb2"
 PHANTOM = pk("Ce5Yv528pKVrVq4JbQchZ8zasCAzxT3f9uCfatTZcfo8")
-API = "http://127.0.0.1:18085/solana/withdrawals"
+API = "http://127.0.0.1:18089/solana/withdrawals"
 DEST = PREFIX + bytes(PHANTOM).hex()
 
 

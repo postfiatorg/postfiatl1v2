@@ -149,13 +149,14 @@ git fetch "$EXIT_WORK/release" HEAD
 test "$(git rev-parse FETCH_HEAD)" = "$REV"
 git merge --ff-only "$REV"
 test "$(git rev-parse HEAD)" = "$REV"
+test -z "$(ss -H -ltn 'sport = :18089')"
 install -Dm644 ops/sol-live/pft-sol-mainnet-withdraw.service ~/.config/systemd/user/pft-sol-mainnet-withdraw.service
 systemctl --user daemon-reload
 systemctl --user enable --now pft-sol-mainnet-withdraw.service
-curl -fsS http://127.0.0.1:18085/solana/withdrawals/readiness | tee "$KIT/evidence/readiness.json" | jq -e '.ready'
+curl -fsS http://127.0.0.1:18089/solana/withdrawals/readiness | tee "$KIT/evidence/readiness.json" | jq -e '.ready'
 ```
 
-If the checkout has diverged or contains runtime edits, reconcile it into the reviewed release first. Keep the ETH upstream on port 18084. Configure Task Node to send only the Solana contract paths to 18085. A service rollback stops the Solana unit with `systemctl --user disable --now pft-sol-mainnet-withdraw.service`. Preserve `~/.local/state/postfiat/sol-exit`; its journal and pending burn IDs support recovery. Disabling a relay does not reverse accepted burns.
+If the checkout has diverged or contains runtime edits, reconcile it into the reviewed release first. Keep the ETH upstream on port 18084. For the reviewed Task Node withdrawal relay, set `L1_SOLANA_WITHDRAW_SERVICE_URL=http://127.0.0.1:18089` and `L1_SOLANA_WITHDRAWALS_ENABLED=true` in its deployment environment after readiness succeeds. The faucet uses port 18085. The gateway forwards through its existing authenticated relay. A service rollback stops the Solana unit with `systemctl --user disable --now pft-sol-mainnet-withdraw.service`. Preserve `~/.local/state/postfiat/sol-exit`; its journal and pending burn IDs support recovery. Disabling a relay does not reverse accepted burns.
 
 ## 6. Prove one real payout
 
