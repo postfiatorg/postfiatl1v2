@@ -136,7 +136,7 @@ class RecoveryTest(unittest.TestCase):
                     self.assertIsNone(j.pending(), "not retried at full speed")
                     self.make_due(j)
                 svc.process_next(j, Path(d))
-            self.assertTrue(all(abs(w - e) <= 2 for w, e in zip(waits, [300, 600, 1200, 2400, 4800, 9600])), waits)
+            self.assertTrue(all(abs(w - e) <= 2 for w, e in zip(waits, [300, 600, 1200, 2400, 3600, 3600])), waits)
             self.assertEqual(max(waits), svc.TOO_LARGE_CAP)
             self.assertEqual(waits, sorted(waits))
             row = self.row(j, BURN)
@@ -198,6 +198,65 @@ class RecoveryTest(unittest.TestCase):
             with patch.object(svc, "process"):
                 svc.process_next(j, Path(d))
             self.assertIsNone(j.status_fault)
+
+    def test_a_waiting_burn_shows_its_reason_tries_and_next_retry_and_fails_within_the_bound(self):
+        import io
+        from contextlib import redirect_stdout
+        from datetime import datetime, timezone
+        with tempfile.TemporaryDirectory() as d:
+            j = svc.Journal(Path(d) / "db")
+            j.enqueue(BURN)
+            waited = 0
+            with patch.object(svc, "process", side_effect=self.too_large("pfusdc_egress_witness")), \
+                    redirect_stdout(io.StringIO()):
+                for tries in range(1, svc.TOO_LARGE_TRIES + 1):
+                    svc.process_next(j, Path(d))
+                    public, row = j.get(BURN), self.row(j, BURN)
+                    self.assertEqual((public["stage"], public["detail"]), ("queued", svc.TOO_LARGE_DETAIL))
+                    self.assertEqual(public["too_large_tries"], tries)
+                    retry = datetime.strptime(public["retry_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                    self.assertEqual(int(retry.timestamp()), row["due"])
+                    waited += min(svc.TOO_LARGE_CAP, svc.TOO_LARGE_FIRST * 2 ** (tries - 1))
+                    self.make_due(j)
+                svc.process_next(j, Path(d))
+            self.assertEqual(j.get(BURN)["stage"], "failed")
+            self.assertIsNone(j.get(BURN)["retry_at"])
+            self.assertLessEqual(waited, svc.TOO_LARGE_BOUND, "filed as failed within the stated bound")
+            self.assertLessEqual(svc.TOO_LARGE_BOUND, 4 * 3600)
+
+    def test_a_too_large_status_read_survives_a_restart_shows_in_readiness_and_alerts_again(self):
+        import io
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as d:
+            j = svc.Journal(Path(d) / "db")
+            j.enqueue(BURN)
+            out = io.StringIO()
+            with patch.object(svc, "process", side_effect=self.too_large("vault_bridge_status")), redirect_stdout(out):
+                svc.process_next(j, Path(d))
+                restarted = svc.Journal(Path(d) / "db")
+                self.assertEqual(restarted.status_fault["tries"], 1)
+                server = Mock(journal=restarted, valid_until=0, ready_lock=__import__("threading").Lock())
+                server.thread.is_alive.return_value = True
+                with patch.object(svc, "readiness", return_value=dict(ok=True, ready=True, payout_ready=True)):
+                    ready = svc.service_readiness(server)
+                self.assertFalse(ready["payout_ready"])
+                self.assertIn("vault_bridge_status", ready["message"])
+                self.assertIn("next try", ready["message"])
+                # Within the interval no second alert; after it, one more.
+                restarted.status_fault["until"] = 0
+                self.make_due(restarted)
+                svc.process_next(restarted, Path(d))
+                self.assertEqual(sum(l.startswith("ALERT") for l in out.getvalue().splitlines()), 1)
+                restarted.status_fault["until"] = 0
+                restarted.status_fault["alerted"] -= svc.STATUS_ALERT_INTERVAL + 1
+                self.make_due(restarted)
+                svc.process_next(restarted, Path(d))
+                self.assertEqual(sum(l.startswith("ALERT") for l in out.getvalue().splitlines()), 2)
+            restarted.status_fault["until"] = 0
+            self.make_due(restarted)
+            with patch.object(svc, "process"):
+                svc.process_next(restarted, Path(d))
+            self.assertIsNone(svc.Journal(Path(d) / "db").status_fault, "the cleared fault stays cleared")
 
     def test_public_paid_status_is_reconciled_and_can_be_rebuilt(self):
         with tempfile.TemporaryDirectory() as d:
