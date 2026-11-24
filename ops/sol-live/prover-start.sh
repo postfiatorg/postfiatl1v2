@@ -3,9 +3,35 @@
 set -euo pipefail
 cd /workspace/sol-ingress/speed-i2
 # The deposit prover takes CUDA devices 0 to gpus-1. On a machine shared with the withdrawal
-# prover start it with SOL_DEPOSIT_GPUS=3 so device 3 stays free (RUNBOOK-LIVE.md, "One proving machine").
-gpus=${SOL_DEPOSIT_GPUS:-4}
-[[ $gpus =~ ^[1-9]$ ]]
+# prover both read their devices from one root-owned settings file (RUNBOOK-LIVE.md, "One proving
+# machine"): DEPOSIT_CUDA_DEVICES here, EXIT_CUDA_DEVICE (default 0) for the withdrawal. Without
+# the file the machine is the deposit prover's alone: four devices, or SOL_DEPOSIT_GPUS.
+conf=/etc/pf-sol-exit-prove.conf
+conf_owner=0
+refuse() { echo "prover-start: $*" >&2; exit 78; }
+if [[ -e $conf ]]; then
+    if [[ $(stat -c %u "$conf") != "$conf_owner" || -n $(find "$conf" -maxdepth 0 -perm /022) ]]; then
+        refuse "$conf must be owned by root and writable by no one else"
+    fi
+    withdraw=0 deposit=
+    while IFS='=' read -r key value || [[ -n $key ]]; do
+        case $key in
+            EXIT_CUDA_DEVICE) withdraw=$value ;;
+            DEPOSIT_CUDA_DEVICES) deposit=$value ;;
+        esac
+    done < "$conf"
+    [[ -n $deposit ]] || refuse "$conf names no DEPOSIT_CUDA_DEVICES"
+    gpus=$(( $(tr -cd , <<<"$deposit" | wc -c) + 1 ))
+    # serve.py takes a count and uses devices 0 to count-1, so the list must be exactly those.
+    [[ $deposit == "$(seq -s, 0 $(( gpus - 1 )))" ]] || refuse "DEPOSIT_CUDA_DEVICES=$deposit must list 0 to n-1"
+    [[ ,$deposit, != *,$withdraw,* ]] || refuse "DEPOSIT_CUDA_DEVICES=$deposit includes $withdraw, also the withdrawal device"
+    if [[ -n ${SOL_DEPOSIT_GPUS:-} && $SOL_DEPOSIT_GPUS != "$gpus" ]]; then
+        refuse "SOL_DEPOSIT_GPUS=$SOL_DEPOSIT_GPUS contradicts DEPOSIT_CUDA_DEVICES=$deposit in $conf; unset it"
+    fi
+else
+    gpus=${SOL_DEPOSIT_GPUS:-4}
+fi
+[[ $gpus =~ ^[1-9]$ ]] || refuse "bad device count $gpus"
 export RAYON_NUM_THREADS=32
 # Measured on a 19 MB mainnet block: 8 core workers per GPU cut leaves 36 s -> 28 s and the
 # final proof 39 s -> 29 s; the final proof is still verified before it is returned.
