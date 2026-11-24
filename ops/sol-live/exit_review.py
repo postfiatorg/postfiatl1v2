@@ -47,6 +47,11 @@ MAGIC = b"PFTL-PFUSDC-TIER4"
 EGRESS = b"postfiat.pfusdc.egress_public_values.v1"
 REVIEWER = "exit_review.py/1"
 REVIEW_MAX_AGE = 900
+# History reads: getSignaturesForAddress returns at most PAGE signatures per call, newest first.
+# The reviewer pages back at most MAX_PAGES (20,000 transactions naming one address) and refuses
+# by name beyond that; the timer reviews a marker within a minute of its creation.
+PAGE = 1000
+MAX_PAGES = 20
 EXIT_REFUSED, EXIT_RPC = 2, 3
 CONFIG = Path("/etc/postfiat/sol-exit-review.json")
 KEY = Path("/etc/postfiat/sol-exit-review.key")
@@ -143,6 +148,56 @@ def node_rpc(address):
     return call
 
 
+def signatures(sol, address, before=None):
+    """Finalized transactions naming `address`, newest first, paged back to its first one."""
+    for _ in range(MAX_PAGES):
+        params = dict(commitment="finalized", limit=PAGE)
+        if before:
+            params["before"] = before
+        page = sol("getSignaturesForAddress", [address, params])
+        yield from page
+        if len(page) < PAGE:
+            return
+        before = page[-1]["signature"]
+    raise Refused(f"history: more than {PAGE * MAX_PAGES} transactions name {address}")
+
+
+def account_keys(tx):
+    """Every account key of a transaction, including those loaded from lookup tables."""
+    loaded = tx["meta"].get("loadedAddresses") or {}
+    return tx["transaction"]["message"]["accountKeys"] + loaded.get("writable", []) + loaded.get("readonly", [])
+
+
+def verifier_instructions(tx, tag):
+    """The top-level instructions of the exit verifier with this tag."""
+    keys = account_keys(tx)
+    return [ix for ix in tx["transaction"]["message"]["instructions"]
+            if keys[ix["programIdIndex"]] == str(VERIFIER) and base58.b58decode(ix["data"])[:1] == bytes([tag])]
+
+
+def creating_transaction(sol, key, tag):
+    """The successful transaction whose verifier instruction created the marker `key`.
+
+    The verifier creates a marker once (`create` in its lib.rs transfers only the missing rent,
+    so a prefund does not stop it, and a second creation fails with Replay). The newest successful
+    transaction with a verifier instruction of this tag naming the marker as its seventh account is
+    therefore the only one. Lamport transfers to the address, before or after, and transactions
+    that only name it are skipped, as the program itself ignores them."""
+    failed = False
+    for row in signatures(sol, str(key)):
+        tx = transaction(sol, row["signature"])
+        keys = account_keys(tx)
+        creating = [ix for ix in verifier_instructions(tx, tag)
+                    if len(ix["accounts"]) >= 7 and keys[ix["accounts"][6]] == str(key)]
+        if creating and (row["err"] is not None or tx["meta"]["err"] is not None):
+            failed = True
+            continue
+        if creating:
+            return row["signature"], tx
+    require(not failed, "failed transaction: the marker's writer did not succeed")
+    raise Refused("program: no successful instruction of the exit verifier created the marker")
+
+
 def transaction(sol, sig):
     tx = sol("getTransaction", [sig, dict(commitment="finalized", encoding="json", maxSupportedTransactionVersion=0)])
     if tx is None:
@@ -150,18 +205,31 @@ def transaction(sol, sig):
     return tx
 
 
-def uploaded_values(sol, buffer):
-    """Rebuild the values buffer the proof was checked against from its tag-5 uploads."""
-    chunks = []
-    for row in reversed(sol("getSignaturesForAddress", [buffer, dict(commitment="finalized", limit=50)])):
+def uploaded_values(sol, buffer, payout):
+    """Rebuild the values the proof was checked against: the buffer's own uploads (tag 5, the
+    buffer as first account; the program requires it to sign) before the payout transaction,
+    back to the buffer's last reclaim (tag 6). Transactions that only name it are skipped."""
+    newest_first = []
+    for row in signatures(sol, buffer, before=payout):
         if row["err"] is not None:
             continue
         tx = transaction(sol, row["signature"])
-        keys = tx["transaction"]["message"]["accountKeys"]
-        for ix in tx["transaction"]["message"]["instructions"]:
+        if tx["meta"]["err"] is not None:
+            continue
+        keys = account_keys(tx)
+        own = [ix for ix in tx["transaction"]["message"]["instructions"]
+               if keys[ix["programIdIndex"]] == str(VERIFIER) and ix["accounts"] and keys[ix["accounts"][0]] == buffer]
+        reclaimed = False
+        for ix in reversed(own):
             data = base58.b58decode(ix["data"])
-            if keys[ix["programIdIndex"]] == str(VERIFIER) and data[:1] == b"\x05":
-                chunks.append((int.from_bytes(data[1:3], "little"), data[3:]))
+            if data[:1] == b"\x06":
+                reclaimed = True
+                break
+            if data[:1] == b"\x05":
+                newest_first.append((int.from_bytes(data[1:3], "little"), data[3:]))
+        if reclaimed:
+            break
+    chunks = list(reversed(newest_first))
     out = bytearray()
     for offset, chunk in chunks:
         out.extend(b"\0" * max(0, offset + len(chunk) - len(out)))
@@ -185,17 +253,11 @@ def review_burn(action, burn, node, sol):
             and base64.b64decode(account["data"][0]) == want_marker,
             f"marker: {key} does not read {want_marker[0]} at finalized")
     finalized = sol("getSlot", [dict(commitment="finalized")])
-    history = [r for r in sol("getSignaturesForAddress", [str(key), dict(commitment="finalized", limit=100)])]
-    require(len(history) >= 1, "marker: no transaction wrote it")
-    sig = history[-1]["signature"]
-    tx = transaction(sol, sig)
-    require(tx["meta"]["err"] is None, "failed transaction: the marker's writer did not succeed")
+    sig, tx = creating_transaction(sol, key, want_tag)
     require(0 < tx["slot"] <= finalized, "finalized: the transaction is not below the finalized slot")
-    message = tx["transaction"]["message"]
-    keys = message["accountKeys"]
-    tagged = [ix for ix in message["instructions"]
-              if base58.b58decode(ix["data"])[:1] == bytes([want_tag]) and len(ix["accounts"]) >= 7
-              and keys[ix["accounts"][6]] == str(key)]
+    keys = account_keys(tx)
+    tagged = [ix for ix in verifier_instructions(tx, want_tag)
+              if len(ix["accounts"]) >= 7 and keys[ix["accounts"][6]] == str(key)]
     require(len(tagged) == 1, "exactly one: the transaction has not exactly one such instruction for this marker")
     for group in tx["meta"].get("innerInstructions") or []:
         require(not any(keys[i["programIdIndex"]] == str(VERIFIER) for i in group["instructions"]),
@@ -204,7 +266,7 @@ def review_burn(action, burn, node, sol):
     require(keys[ix["programIdIndex"]] == str(VERIFIER), "program: the instruction is not the exit verifier's")
     used = [keys[i] for i in ix["accounts"]]
     require(used[1] == str(LIGHT), "program: the instruction names another light account")
-    values = fields(uploaded_values(sol, used[4]))
+    values = fields(uploaded_values(sol, used[4], sig))
     require(values[23].hex() == burn and values[20] == values[23], "public values: another burn")
     require(int.from_bytes(values[26], "big") == red["amount_atoms"], "public values: another amount")
     require(values[28] == destination_hash(owner), "public values: another destination")
