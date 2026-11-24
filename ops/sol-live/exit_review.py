@@ -24,6 +24,7 @@ import stat
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -54,6 +55,8 @@ REVIEW_MAX_AGE = 900
 # by name beyond that; the timer reviews a marker within a minute of its creation.
 PAGE = 1000
 MAX_PAGES = 20
+# Verdicts are rewritten every minute while a burn is pending; older ones are removed after a day.
+PRUNE_AGE = 86400
 EXIT_REFUSED, EXIT_RPC, EXIT_ACCESS = 2, 3, 4
 CONFIG = Path("/etc/postfiat/sol-exit-review.json")
 # The reviewer's verdict key: the keypair is readable only by the reviewer user; the signing step
@@ -349,7 +352,7 @@ def sealed_by(public, body, signature):
 def write_verdict(cfg, body):
     body = dict(body, validator=cfg.validator, reviewer=REVIEWER, verdict="approve",
                 decision_sha256=hashlib.sha256(body["decision"].encode()).hexdigest(),
-                solana_endpoint=getattr(cfg.solana, "endpoint", "unknown"),
+                solana_endpoint=endpoint_host(getattr(cfg.solana, "endpoint", "")),
                 time=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                 unix_time=int(time.time()))
     doc = dict(body, seal=seal(cfg.key, body))
@@ -360,6 +363,35 @@ def write_verdict(cfg, body):
     os.chmod(tmp, 0o640)
     os.replace(tmp, path)
     return path
+
+
+def endpoint_host(url):
+    """The endpoint's host only: a provider's API key in the URL stays out of every record."""
+    return urllib.parse.urlsplit(url).hostname or "unknown"
+
+
+def endpoints(configs):
+    """Print each host's configured Solana provider (host name only); warn, and return 1, when
+    fewer than three different providers serve the six hosts."""
+    hosts = {c["validator"]: endpoint_host(c["solana_rpc"]) for c in configs}
+    for validator, host in sorted(hosts.items()):
+        print(f"{validator} {host}")
+    different = len(set(hosts.values()))
+    if different < 3:
+        print(f"WARNING: only {different} different Solana providers serve these hosts; use at least three")
+        return 1
+    return 0
+
+
+def prune(cfg, now=None):
+    """Remove verdicts older than PRUNE_AGE."""
+    limit = (now or time.time()) - PRUNE_AGE
+    for path in cfg.review_dir.glob("*.json"):
+        try:
+            if path.stat().st_mtime < limit:
+                path.unlink()
+        except FileNotFoundError:
+            continue
 
 
 def run_review(cfg, action, burn):
@@ -527,8 +559,8 @@ def pending_burns(cfg, errors):
 
 
 def scan(cfg):
-    """The timer's job: review every pending burn whose marker is written, then the clearance.
-    One failing burn or read stops nothing else."""
+    """The timer's job: review every pending burn whose marker is written, then the clearance,
+    then prune old verdicts. One failing burn or read stops nothing else."""
     codes, errors, work = [0], [], []
     try:
         work = list(pending_burns(cfg, errors))
@@ -539,6 +571,7 @@ def scan(cfg):
         codes.append(EXIT_RPC)
     codes += [run_review(cfg, action, burn) for action, burn in work]
     codes.append(run_review(cfg, "clearance", None))
+    prune(cfg)
     return max(codes)
 
 
@@ -561,12 +594,15 @@ def command(argv=None):
     sub.add_parser("clearance")
     sub.add_parser("show-clearance", help="print this host's own fresh clearance for its node's current tip")
     sub.add_parser("scan", help="review every pending burn whose marker is written (the timer's job)")
+    sub.add_parser("endpoints", help="read six hosts' configs (JSON lines on stdin) and check their providers")
     s = sub.add_parser("sign", help="sign exactly a reviewed decision with this host's validator key")
     s.add_argument("--amendment-file", required=True, type=Path)
     s.add_argument("--proposal-slot", required=True, type=int)
     s.add_argument("--expires-at-height", required=True, type=int)
     s.add_argument("--authorization-file", required=True, type=Path)
     args = parser.parse_args(argv)
+    if args.command == "endpoints":
+        return endpoints([json.loads(line) for line in sys.stdin if line.strip()])
     cfg = load_config(reviewer=args.command not in ("sign", "show-clearance"))
     if args.command == "sign":
         try:
