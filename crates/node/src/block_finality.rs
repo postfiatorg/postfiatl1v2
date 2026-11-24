@@ -34,10 +34,9 @@ pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityRepo
     let tx_id = options.tx_id;
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let keyed = !options.audit_block_log && !archived_receipt_id_drift_possible(&genesis);
-    let history = match keyed {
-        true => keyed_finality_history(&store, &tx_id)?,
-        false => None,
+    let history = match options.audit_block_log {
+        false => keyed_finality_history(&store, &tx_id)?,
+        true => None,
     };
     let history = match history {
         Some(history) => history,
@@ -220,8 +219,8 @@ fn full_finality_history(store: &NodeStore, tx_id: &str) -> io::Result<FinalityH
 
 /// The same inputs by key: the transaction's receipt record, the blocks at
 /// its heights and the tip block. `None` unless transactional storage is
-/// active. Exact under the rule of `receipts_for_tx_id`, which the caller
-/// checks (no audit replay asked for, no chain with receipt-id drift).
+/// active. Exact for the reason given at `receipts_for_tx_id`; the caller
+/// keeps the full read when an audit replay is asked for.
 fn keyed_finality_history(store: &NodeStore, tx_id: &str) -> io::Result<Option<FinalityHistory>> {
     if !store.transactional_storage_active()? {
         return Ok(None);

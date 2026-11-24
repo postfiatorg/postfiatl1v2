@@ -1182,10 +1182,10 @@ impl TransactionalStore {
 
     /// The receipts `receipts_in_block_order` returns whose `tx_id` is
     /// `tx_id`, in block order, read from the receipt-id record instead of
-    /// decoding the whole history. Exact when every retained receipt is
-    /// stored under its own `tx_id`: every commit enforces that except a
-    /// legacy migration with `allow_legacy_receipt_id_mismatch`, so callers
-    /// must use the full scan for chains whose history may carry such drift.
+    /// decoding the whole history. Exact because every receipt is stored
+    /// under its own `tx_id`: a commit checks it, and the legacy migration
+    /// (the only caller of `allow_legacy_receipt_id_mismatch`) pairs each
+    /// block receipt id with the persisted receipt of that `tx_id`.
     pub fn receipts_for_tx_id(&self, tx_id: &str) -> StorageResult<Vec<Receipt>> {
         Ok(self
             .receipt_occurrences_for_tx_id(tx_id)?

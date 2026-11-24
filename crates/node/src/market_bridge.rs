@@ -29,16 +29,13 @@ pub fn receipts(options: ReceiptQueryOptions) -> io::Result<Vec<Receipt>> {
 }
 
 /// The receipts of one transaction by the store's receipt-id key, or `None`
-/// when only the full scan is exact: no transaction asked for, the legacy
-/// log, or a chain whose archived history may carry receipt-id drift.
+/// when only the full scan answers: no transaction asked for, or the legacy
+/// log.
 fn keyed_receipts(store: &NodeStore, tx_id: Option<&str>) -> io::Result<Option<Vec<Receipt>>> {
-    let Some(tx_id) = tx_id else {
-        return Ok(None);
-    };
-    if archived_receipt_id_drift_possible(&store.read_genesis()?) {
-        return Ok(None);
+    match tx_id {
+        Some(tx_id) => store.read_receipts_for_tx_id(tx_id),
+        None => Ok(None),
     }
-    store.read_receipts_for_tx_id(tx_id)
 }
 
 pub fn verify_state(options: NodeOptions) -> io::Result<StateVerificationReport> {
