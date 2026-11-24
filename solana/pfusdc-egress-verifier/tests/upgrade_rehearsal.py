@@ -29,6 +29,8 @@ sys.path.insert(0, str(HERE.parent))
 from bootstrap import migrate  # noqa: E402
 
 VERIFIER = Pubkey.from_string("8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF")
+# The deployed verifier's code (ProgramData tail), byte-identical to main's build.
+DEPLOYED_SHA256 = "3b16fc309501814e0bba718ecadb80f02993f6f355153a13f37ae9d47d29354c"
 LIGHT = Pubkey.from_string("FQe34dCQg9m6yEW6NjbjoR8LfWwKGLX2hBvTdY2Lu6s1")
 VAULT = Pubkey.from_string("GFkpeTibgdRAAAndgUMYsJnSTck91tUbrpuWBWan6z1G")
 LOADER = Pubkey.from_string("BPFLoaderUpgradeab1e11111111111111111111111")
@@ -229,6 +231,9 @@ def withdrawal(t, payer, buffer_key, changes=None):
 
 
 def run(args):
+    old_sha256 = hashlib.sha256(Path(args.old).read_bytes()).hexdigest()
+    if old_sha256 != DEPLOYED_SHA256:
+        raise SystemExit(f"--old is not the deployed verifier: sha256 {old_sha256}")
     snap, work = args.snapshot, args.work
     work.mkdir(parents=True, exist_ok=True)
     txs = json.loads((snap / "verifier-txs.json").read_text())
@@ -487,6 +492,7 @@ if __name__ == "__main__":
     f.add_argument("--rpc", default="https://api.mainnet-beta.solana.com")
     f.add_argument("--snapshot", type=Path, required=True)
     r = sub.add_parser("run")
+    # --test-verifier: the image of tests/build-no-proof-rehearsal.sh, never a deploy image.
     for name in ("snapshot", "work", "old", "new", "test_verifier", "tools", "config"):
         r.add_argument("--" + name.replace("_", "-"), type=Path, required=True)
     r.add_argument("--port", type=int, default=18899)
