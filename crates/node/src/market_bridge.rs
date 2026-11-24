@@ -599,7 +599,9 @@ pub fn vault_bridge_status(
             let route = governance
                 .authorized_vault_bridge_route_profile(&options.asset_id, &bucket.policy_hash)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-            let source_series_id = route.profile.bucket_source_series_id(&genesis.chain_id, bucket)
+            let source_series_id = route
+                .profile
+                .bucket_source_series_id(&genesis.chain_id, bucket)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
             let redeemable_claim_atoms = u64::try_from(
                 u128::from(allocated) * u128::from(bucket.impairment_factor_bps) / 10_000,
