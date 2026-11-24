@@ -165,6 +165,7 @@ def collect(kind, step, n=6, need=None):
 # "Independent settlement reviews"). Its `sign` runs the node's signing command only for a
 # decision that host's own reviewer approved within the last 15 minutes.
 REVIEWER = "/opt/postfiat/sol-exit-review/exit_review.py"
+REVIEWER_PYTHON = "/opt/postfiat/sol-exit-review/venv/bin/python"
 
 
 def independent_review(kind, rules):
@@ -372,7 +373,7 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         if independent:
             # The host checks its own fresh review of exactly this decision, then signs.
             def signer(*args):
-                return remote(i, ["runuser", "-u", "postfiat", "--", "/usr/bin/python3", "-I", REVIEWER,
+                return remote(i, ["runuser", "-u", "postfiat", "--", REVIEWER_PYTHON, "-I", REVIEWER,
                                   "sign", "--amendment-file", work[i] + "/amend", "--", runtime[i][0], *args])
         else:
             def signer(*args):

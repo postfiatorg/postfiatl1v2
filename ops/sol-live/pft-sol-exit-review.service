@@ -1,0 +1,23 @@
+[Unit]
+Description=Review this validator's pending Solana exit settlements and its rotation clearance
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Check only: reads this host's own node and the Solana endpoint in /etc/postfiat/sol-exit-review.json,
+# writes verdicts to /var/lib/postfiat-exit-review. It never signs; the signing step on this host
+# (exit_review.py sign) signs only a decision this reviewer approved within 15 minutes.
+ExecStart=/opt/postfiat/sol-exit-review/venv/bin/python -I /opt/postfiat/sol-exit-review/exit_review.py scan
+SuccessExitStatus=2
+TimeoutStartSec=10min
+StandardOutput=append:/var/log/pf-sol-exit-review.log
+StandardError=append:/var/log/pf-sol-exit-review.log
+ReadWritePaths=/var/lib/postfiat-exit-review /var/log
+ReadOnlyPaths=/var/lib/postfiat /etc/postfiat
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=

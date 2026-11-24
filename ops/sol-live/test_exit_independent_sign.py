@@ -29,7 +29,7 @@ class ReviewedFleet(Fleet):
         if i != LOST and args[-1] == "/etc/postfiat/sol-exit-paid-review.json":
             self.central_reads += 1
         rest = args[4:] if args[:1] == ["runuser"] else []
-        if i != LOST and rest[:3] == ["/usr/bin/python3", "-I", govern.REVIEWER]:
+        if i != LOST and rest[:3] == [govern.REVIEWER_PYTHON, "-I", govern.REVIEWER]:
             assert rest[3] == "sign" and rest[4] == "--amendment-file", rest
             self.wrapped.append(i)
             kind = json.loads(self.files[(i, rest[5])])["kind"]
