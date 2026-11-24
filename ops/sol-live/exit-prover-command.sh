@@ -53,6 +53,20 @@ timeout 30 head -c 25165825 > "$job/witness.json"
 test "$(wc -c < "$job/witness.json")" -le 25165824
 exec 9>"$lock"
 flock -E 75 -n 9
+# Holding the lock, no other proof of this prover runs. A GPU server on this device whose parent
+# is gone (adopted by init: its proof host was killed by the timeout or for memory) is stale and
+# stopped. One whose parent still lives belongs to a running prover: refuse, never share.
+for pid in $(pgrep -x sp1-gpu-server || true); do
+    dev=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^CUDA_VISIBLE_DEVICES=//p') || continue
+    [[ $dev == "${device:-0}" ]] || continue
+    parent=$(awk '{print $4}' "/proc/$pid/stat" 2>/dev/null) || continue
+    if [[ $parent != 1 ]]; then
+        echo "pf-sol-exit-prove: device ${device:-0} is used by GPU server $pid of live process $parent" >&2
+        exit 75
+    fi
+    kill -9 "$pid" 2>/dev/null || true
+    for _ in {1..50}; do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+done
 SP1_PROVER=cuda RAYON_NUM_THREADS=4 timeout 1500 env -u PROOF_HOST_CUDA_DEVICE ./proof-host ${device:+--cuda-device "$device"} "$kind" egress.elf "$job/witness.json" "$job/proof" prove > "$job/prove.log" 2>&1
 for file in public-values.bin proof-report.json proof-calldata.bin; do
     test "$(wc -c < "$job/proof/$file")" -le 8192
