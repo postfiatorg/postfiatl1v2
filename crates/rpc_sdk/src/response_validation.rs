@@ -1771,13 +1771,15 @@ mod solana_exit_backing_bucket_tests {
                 "redemption_id": "r", "owner": "o", "owner_sequence": 1, "issuer": "i",
                 "bucket_id": "b", "amount_atoms": 300000, "epoch": 1, "reserve_packet_hash": "",
                 "destination_ref": "", "settled_atoms": 0, "state": state, "created_at_height": 5,
-                "settlement_receipt_hash": "",
+                "settlement_receipt_hash": "", "burn_tx_id": "", "withdrawal_recipient": "",
+                "withdrawal_evidence_root": "", "withdrawal_packet_hash": "",
+                "withdrawal_packet_evm_digest": "",
             })
         };
         postfiat_types::solana_exit::set_second_release_for_tests(None);
         assert!(validate_vault_bridge_status_redemption_row(&row("pending"), "a").is_ok());
         assert!(validate_vault_bridge_status_redemption_row(&row("refunded"), "a").is_err());
-        assert!(validate_vault_bridge_status_redemption_row(&row("paid"), "a").is_err());
+        assert!(validate_vault_bridge_status_redemption_row(&row("queued"), "a").is_ok());
         postfiat_types::solana_exit::set_second_release_for_tests(Some(2000));
         assert!(validate_vault_bridge_status_redemption_row(&row("refunded"), "a").is_ok());
         postfiat_types::solana_exit::set_second_release_for_tests(None);
@@ -7129,7 +7131,13 @@ fn validate_vault_bridge_status_redemption_row(
     clean_string_field_allow_empty(row, "reserve_packet_hash")?;
     clean_string_field_allow_empty(row, "destination_ref")?;
     u64_field(row, "settled_atoms")?;
-    clean_string_field(row, "state")?;
+    // A Solana refund is a second-release state: before that release a node cannot report it.
+    if clean_string_field(row, "state")? == postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED
+        && (!postfiat_types::solana_exit::second_release_scheduled()
+            || row.get("settled_atoms").and_then(Value::as_u64) != Some(0))
+    {
+        return Err(invalid_result("state", "refunded redemption before the second Solana exit release"));
+    }
     u64_field(row, "created_at_height")?;
     clean_string_field_allow_empty(row, "settlement_receipt_hash")?;
     clean_string_field_allow_empty(row, "burn_tx_id")?;

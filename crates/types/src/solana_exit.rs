@@ -50,7 +50,11 @@ pub fn set_second_release_for_tests(height: Option<u64>) {
 /// Whether any chain of this build schedules the second release. While none does, the
 /// second release's records are refused exactly as the first release refuses them.
 pub fn second_release_scheduled() -> bool {
-    true
+    #[cfg(any(test, feature = "test-second-release"))]
+    if SECOND_RELEASE_FOR_TESTS.with(|h| h.get()).is_some() {
+        return true;
+    }
+    SECOND_RELEASES.iter().any(|(_, _, height)| height.is_some())
 }
 
 pub fn second_release_height(chain: &str, genesis: &str) -> Option<u64> {

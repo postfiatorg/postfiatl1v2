@@ -1114,6 +1114,9 @@ def process(burn, work, update, *, attempt=None, before_send=None):
     red = next((r for r in status["redemptions"] if r["burn_tx_id"] == burn), None)
     if red is None:
         raise UnknownBurn("No finalized redemption for this burn.")
+    if red.get("state") == "refunded":
+        # Refunded on Post Fiat after a cancel on Solana: nothing left to pay.
+        raise BurnCancelled()
     owner = validate_burn(red, burn, covered_buckets(status["buckets"], chain_rules()["covered"]))
     check_owner(c, owner)
     h = red["created_at_height"]
