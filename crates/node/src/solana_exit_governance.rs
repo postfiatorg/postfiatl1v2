@@ -35,15 +35,38 @@ pub(super) fn require_operator_release(
 /// Historical pre-release registration attempts must reproduce their original
 /// rejection receipt. Every successful registration and every later decision
 /// must cross the current validator signature boundary, including in replay.
+/// Whether the second Solana exit release's rules apply at `height` on this chain.
+pub(super) fn second_release(genesis: &Genesis, height: u64) -> bool {
+    solana_exit::second_release_active(&genesis.chain_id, &genesis_hash(genesis), height)
+}
+
+/// The minimum-withdrawal kind exists only where the second release is active at the block
+/// that includes it, whatever its activation height; elsewhere it is refused with the first
+/// release's text for an unknown kind.
+pub(super) fn refuse_unreleased_minimum(
+    genesis: &Genesis,
+    amendment: &GovernanceAmendment,
+    height: u64,
+) -> io::Result<()> {
+    if amendment.kind.starts_with(solana_exit::MIN_WITHDRAWAL) && !second_release(genesis, height) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("unsupported governance amendment kind `{}`", amendment.kind),
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn needs_signatures(
     genesis: &Genesis,
     batch: &GovernanceActionBatch,
     height: u64,
 ) -> bool {
+    let second = second_release(genesis, height);
     batch
         .amendments
         .iter()
-        .any(|a| solana_exit::is_decision(&a.kind))
+        .any(|a| solana_exit::is_decision(&a.kind, second))
         || ((!batch.validator_registry_updates.is_empty()
             || batch
                 .amendments
@@ -65,6 +88,61 @@ pub(super) fn require_unanimity(
         return Err("Solana exit governance requires every active validator signature".into());
     }
     Ok(())
+}
+
+/// Second release: closing, settlement and a re-opening after a close need the registry
+/// threshold; the first opening and retirement need every active validator
+/// (`solana_exit::required_quorum`). The declared set is
+/// always the full active set; the signature check enforces the declared quorum.
+pub(super) fn check_decision_signers(
+    kind: &str,
+    declared: &[String],
+    quorum: usize,
+    signatures: usize,
+    active: &[String],
+    reopening: bool,
+) -> Result<(), String> {
+    if kind == solana_exit::OPEN
+        && !reopening
+        && quorum < solana_exit::required_quorum(kind, false, active.len(), true)
+    {
+        return Err(
+            "Solana exit first opening needs every active validator; a re-opening after a close needs the close quorum"
+                .into(),
+        );
+    }
+    if declared != active
+        || quorum > active.len()
+        || quorum < solana_exit::required_quorum(kind, reopening, active.len(), true)
+        || signatures < quorum
+        || signatures > active.len()
+    {
+        return Err("Solana exit decision lacks its governance quorum of active validators".into());
+    }
+    Ok(())
+}
+
+/// The first release needs every active validator for every decision (`require_unanimity`);
+/// the second release's quorum applies from its height.
+pub(super) fn check_signers(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    amendment: &GovernanceAmendment,
+    height: u64,
+) -> Result<(), String> {
+    let active = active_validator_ids(governance).map_err(|e| e.to_string())?;
+    if second_release(genesis, height) {
+        check_decision_signers(
+            &amendment.kind,
+            &amendment.validators,
+            amendment.quorum,
+            amendment.signed_authorizations.len(),
+            &active,
+            solana_exit::closed_since_registration(governance),
+        )
+    } else {
+        require_unanimity(amendment, &active)
+    }
 }
 
 /// These are ordinary signed governance amendments. No relayer signature or
@@ -91,10 +169,7 @@ pub(super) fn validate_decision(
                 .into(),
         );
     }
-    require_unanimity(
-        amendment,
-        &active_validator_ids(governance).map_err(|e| e.to_string())?,
-    )?;
+    check_signers(genesis, governance, amendment, height)?;
     if solana_exit::retirement_height(governance).is_some() {
         return Err("Solana exit descriptor has been retired".into());
     }
@@ -113,22 +188,34 @@ pub(super) fn validate_decision(
         if solana_exit::open_height(governance).is_some() {
             return Err("close Solana burns before retiring the descriptor".into());
         }
+    } else if amendment.kind.starts_with(solana_exit::MIN_WITHDRAWAL) {
+        solana_exit::minimum_withdrawal(&amendment.kind)?;
     } else {
         solana_exit::payout_fields(&amendment.kind)?;
     }
     Ok(())
 }
 
+/// The revision-8 bucket exists and its series supply equals its outstanding; from the
+/// second release the same holds for every covered bucket of the shared custody.
 pub(super) fn require_reconciled_bucket(
+    genesis: &Genesis,
     ledger: &LedgerState,
     orchard_balances: &[postfiat_types::AssetOrchardAssetBalance],
+    height: u64,
 ) -> Result<(), String> {
+    let second = second_release(genesis, height);
     ledger
         .vault_bridge_bucket(solana_exit::BUCKET)
-        .filter(|b| solana_exit::matches_bucket(b))
+        .filter(|b| solana_exit::matches_bucket(b, false))
         .ok_or("missing governed Solana source bucket")?;
-    postfiat_execution::SolanaExitAccounting::read(ledger, orchard_balances)
-        .and_then(|claims| claims.require_reconciled())
+    postfiat_execution::SolanaExitAccounting::read(
+        &genesis.chain_id,
+        ledger,
+        orchard_balances,
+        second,
+    )
+    .and_then(|claims| claims.require_reconciled())
         .map_err(|(_, message)| message)
 }
 
@@ -144,16 +231,16 @@ pub(super) fn apply_decision(
     validate_decision(genesis, governance, amendment, height)?;
     if amendment.kind == solana_exit::OPEN {
         let ledger = ledger.ok_or("opening Solana burns requires the committed ledger")?;
-        return require_reconciled_bucket(ledger, orchard_balances);
+        return require_reconciled_bucket(genesis, ledger, orchard_balances, height);
     }
     if amendment.kind == solana_exit::RETIRE {
         let ledger = ledger.ok_or("Solana exit retirement requires canonical ledger")?;
-        if let Some(reason) = redemption_obligation(ledger, height)? {
+        if let Some(reason) = redemption_obligation(ledger, height, second_release(genesis, height))? {
             return Err(reason.into());
         }
         return Ok(());
     }
-    if amendment.kind == solana_exit::CLOSE {
+    if amendment.kind == solana_exit::CLOSE || amendment.kind.starts_with(solana_exit::MIN_WITHDRAWAL) {
         return Ok(());
     }
     let payout = solana_exit::payout_fields(&amendment.kind)?;
@@ -175,6 +262,7 @@ pub(super) fn apply_decision(
         payout.packet_hash,
         &amendment.amendment_id,
         height,
+        second_release(genesis, height),
     )
 }
 
@@ -292,10 +380,56 @@ pub(super) fn verify_checkpoint_history(
 fn redemption_obligation(
     ledger: &LedgerState,
     height: u64,
+    second: bool,
+) -> Result<Option<&'static str>, String> {
+    if !second {
+        return first_release_redemption_obligation(ledger, height);
+    }
+    // Every bucket of the shared custody can exit, so every one is protected.
+    let buckets = ledger
+        .vault_bridge_bucket_states
+        .iter()
+        .filter(|b| solana_exit::matches_bucket(b, true))
+        .collect::<Vec<_>>();
+    if buckets.is_empty() {
+        return Err("missing governed Solana source bucket".into());
+    }
+    if buckets.iter().any(|b| b.redemption_queue_atoms != 0)
+        || ledger.vault_bridge_redemptions.iter().any(|r| {
+            r.withdrawal_packet.source_chain_id == postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
+                && r.state == postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_PENDING
+        })
+    {
+        return Ok(Some(
+            "Solana redemptions are pending; pay and settle every queued redemption",
+        ));
+    }
+    if buckets
+        .iter()
+        .any(|b| b.outstanding_vault_bridge_atoms != 0)
+    {
+        return Ok(Some("Solana custody buckets have outstanding claims"));
+    }
+    // Bucket status and a stopped relayer do not permanently close proof admission.
+    if ledger.solana_clients().any(|r| {
+        r.profile.asset_id == solana_exit::FAMILY
+            && r.profile.source_domain() == solana_exit::SOURCE_DOMAIN
+            && height < r.profile.expires_at_height
+            && !ledger.solana_route_superseded(&r.profile)
+    }) {
+        return Ok(Some("the Solana custody can still receive deposits"));
+    }
+    Ok(None)
+}
+
+/// The first release protects the revision-8 bucket only.
+fn first_release_redemption_obligation(
+    ledger: &LedgerState,
+    height: u64,
 ) -> Result<Option<&'static str>, String> {
     let bucket = ledger
         .vault_bridge_bucket(solana_exit::BUCKET)
-        .filter(|b| solana_exit::matches_bucket(b))
+        .filter(|b| solana_exit::matches_bucket(b, false))
         .ok_or("missing governed Solana source bucket")?;
     if bucket.redemption_queue_atoms != 0
         || ledger.vault_bridge_redemptions.iter().any(|r| {
@@ -410,11 +544,15 @@ fn require_change_allowed<L: Borrow<LedgerState>>(
     {
         return Ok(());
     }
+    let second = second_release(genesis, height);
     let reason =
-        if solana_exit::open_height(governance).is_some() || opening {
+        if (solana_exit::open_height(governance).is_some() || opening) && second {
+            "Solana burns are open or opening; close burns first (the normal quorum suffices)"
+        } else if solana_exit::open_height(governance).is_some() || opening {
             "Solana burns are open or opening; close burns in a separate unanimous block"
-        } else if let Some(reason) = redemption_obligation(read_ledger()?.borrow(), height)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+        } else if let Some(reason) =
+            redemption_obligation(read_ledger()?.borrow(), height, second)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
         {
             reason
         } else if !governance.amendment_activation_records.iter().any(|r| {

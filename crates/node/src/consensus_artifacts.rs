@@ -3099,7 +3099,10 @@ pub(super) fn verify_signed_governance_batch(
         .filter(|update| update.activation_height < proposal_slot)
         .count() as u64;
     for amendment in &batch.amendments {
-        if postfiat_types::solana_exit::is_decision(&amendment.kind) {
+        if postfiat_types::solana_exit::is_decision(
+            &amendment.kind,
+            crate::solana_exit_governance::second_release(genesis, proposal_slot),
+        ) {
             crate::solana_exit_governance::validate_decision(
                 genesis,
                 governance,
@@ -3115,6 +3118,7 @@ pub(super) fn verify_signed_governance_batch(
             amendment,
             proposal_slot,
         )?;
+        crate::solana_exit_governance::refuse_unreleased_minimum(genesis, amendment, proposal_slot)?;
         verify_governance_amendment_evidence(genesis, amendment)?;
         if amendment.validators != validators {
             return Err(io::Error::new(
