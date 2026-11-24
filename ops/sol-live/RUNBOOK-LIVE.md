@@ -488,7 +488,7 @@ The script installs the reviewer and its venv (hash-pinned `exit-requirements.lo
 
 The deployed verifier (`0x3b16fc30…`, byte-identical to `solana/deploy/build.sh` of `main`) stores in its light account a route that also binds the revision-8 bucket. The new program computes the custody route without it, so the light's `route` (bytes 136–168 of 289) must change once. Instruction tag 9 does this. Its arguments must rebuild the stored route, so the new route is fixed by the account. It runs once and leaves the checkpoint, the pause state, the checkpoint accounts and every paid marker unchanged. `solana/pfusdc-egress-verifier/tests/upgrade_rehearsal.py` rehearses these steps on the dumped mainnet state. The same build adds tag 10, `cancel` ([refund design](../../docs/specs/solana-exit-refund-design-20261124.md)). It changes no stored data and needs no step of its own. At 122,976 bytes, the image still fits in the 10,240-byte extension.
 
-The L1 needs no close. The first release keeps running and revision-8 burns stay open. From the upgrade until the new service runs, the verifier or the old service refuses every payout, and burns wait unpaid. Stop the payout worker and disable public admission for that window. Revision-9 exits start only at the second release height.
+The L1 needs no close. The first release keeps running and revision-8 burns stay open. The new build can cancel from the upgrade on, but the pause key signs no cancel until the second release height is active (see "Cancel a burn with the pause key"). From the upgrade until the new service runs, the verifier or the old service refuses every payout, and burns wait unpaid. Stop the payout worker and disable public admission for that window. Revision-9 exits start only at the second release height.
 
 **Before each signing step (4, 5, 6, 8):** read ProgramData `D7YLTGrE…` and confirm that its upgrade authority (bytes 13–45, option byte 12 = 1) equals the key about to sign, `4JJEua…`. Record the transaction signature of every step in `$KIT/evidence/upgrade-signatures.txt`.
 
@@ -569,5 +569,33 @@ print(c.send("exit.pause",[Instruction(VERIFIER,bytes([4,flag]),[ro(PAUSE,True),
 assert c.account(LIGHT)["data"][-1]==flag
 PY
 ```
+
+### Cancel a burn with the pause key
+
+The verifier lets two parties cancel a proven, unpaid burn: its destination owner, or the pause authority. Nobody else can. A cancel moves no funds; it makes the burn refundable on Post Fiat instead of payable on Solana.
+
+**When:**
+- **Who asks:** the holder (through support) or the settlement on-call. Never on a stranger's request.
+- **Which burns:** a burn whose destination can never receive, for example a frozen or closed token account, a program-owned owner, or a mint rule change.
+- **Not before the second release height is active,** that is, before five agreeing validators report `exit_release` 2. Before that the chain has no refund, and a cancelled burn could be neither paid nor refunded. No user-facing cancel exists before then.
+
+**Check first** (two people):
+1. The burn is unpayable: its job shows a named refusal (`refused: destination not a wallet …`), or the destination check refuses it now.
+2. The burn is not in flight: its job is not `paying`, the journal holds no unexpired attempt signature, and the marker account does not exist at finalized.
+3. The worker is stopped for this burn until the cancel is final.
+
+**Then:** sign tag 10 on the pause host with the pause signer. Use the burn's own values and proof from the worker's work directory. The accounts are: payer, light, prior checkpoint, result checkpoint, values buffer, system program, the burn's marker, and the pause signer. Read back the marker: byte 2 at finalized. Record the signature, then follow "Refund a cancelled burn" below. No tool builds this transaction yet; it uses the worker's own proof artifacts.
+
+### Refund a cancelled burn
+
+1. On every validator host, the reviewer's timer finds the burn and writes that host's refund verdict. The reviewer reads the marker through that host's own Solana endpoint at finalized and derives its address from the burn ("Independent settlement reviews"). Confirm each verdict in `/var/lib/postfiat-exit-review/`.
+2. The burner must still hold a trust line for the burned series. If they removed it, ask them to re-create it; until then the refund is refused, and it can be repeated afterwards.
+3. On the relay, run the command below. It drafts the decision from the finalized cancelled marker, and each host signs only from its own review; five of six are needed.
+
+    ```bash
+    python3 ops/sol-live/exit_govern.py refund --revision "$REV" --release-height "$H" --burn "$BURN" --output "$KIT/evidence/refund-$BURN.json"
+    ```
+
+4. Read back on five agreeing validators: the redemption's state is `refunded`, and the burner's balance in the series rose by the amount.
 
 The seven earlier Solana series retain their own liabilities. The exit pays burns from every bucket of this shared custody whose ID derives from its own revision's policy, and the custody must cover all of them; moving liabilities between series requires separate governance and conservation tests for outstanding amounts, queued redemptions, counted reserves and allocations.
