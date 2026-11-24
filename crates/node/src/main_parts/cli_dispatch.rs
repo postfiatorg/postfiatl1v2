@@ -508,6 +508,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-solana-exit-retire" | "ratify-solana-exit-close"
         | "ratify-solana-exit-paid"
         | "ratify-solana-exit-min-withdrawal"
+        | "ratify-solana-exit-refund"
         | "ratify-solana-bridge-activation-height"
         | "ratify-replicated-state-v2-activation-height"
         | "ratify-bridge-exit-root-activation-height"

@@ -1717,7 +1717,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
-        "ratify-solana-exit-open" | "ratify-solana-exit-retire" | "ratify-solana-exit-close" | "ratify-solana-exit-paid" | "ratify-solana-exit-min-withdrawal" => {
+        "ratify-solana-exit-open" | "ratify-solana-exit-retire" | "ratify-solana-exit-close" | "ratify-solana-exit-paid" | "ratify-solana-exit-min-withdrawal" | "ratify-solana-exit-refund" => {
             let validators =
                 split_csv(flag_value(flags, "--validators").ok_or("missing --validators")?);
             let height = flag_value(flags, "--height")
@@ -1734,6 +1734,15 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 let atoms = flag_value(flags, "--atoms").ok_or("missing --atoms")?;
                 let kind = format!("{}{atoms}", postfiat_types::solana_exit::MIN_WITHDRAWAL);
                 postfiat_types::solana_exit::minimum_withdrawal(&kind)?;
+                kind
+            } else if command == "ratify-solana-exit-refund" {
+                let packet = flag_value(flags, "--packet-hash").ok_or("missing --packet-hash")?;
+                let slot = flag_value(flags, "--solana-slot").ok_or("missing --solana-slot")?;
+                let signature =
+                    flag_value(flags, "--signature-hex").ok_or("missing --signature-hex")?;
+                let kind =
+                    format!("{}{packet}:{slot}:{signature}", postfiat_types::solana_exit::REFUND);
+                postfiat_types::solana_exit::refund_fields(&kind)?;
                 kind
             } else {
                 let packet = flag_value(flags, "--packet-hash").ok_or("missing --packet-hash")?;

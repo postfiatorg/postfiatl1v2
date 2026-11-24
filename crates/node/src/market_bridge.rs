@@ -1444,7 +1444,9 @@ pub(super) fn vault_bridge_route_at_height(
 fn solana_exit_decision_signatures(
     governance: &GovernanceState,
 ) -> io::Result<std::collections::BTreeMap<String, usize>> {
-    use postfiat_types::solana_exit::{required_quorum, CLOSE, MIN_WITHDRAWAL, OPEN, PAID, RETIRE};
+    use postfiat_types::solana_exit::{
+        required_quorum, CLOSE, MIN_WITHDRAWAL, OPEN, PAID, REFUND, RETIRE,
+    };
     let n = active_validator_ids(governance)?.len();
     let reopening = postfiat_types::solana_exit::closed_since_registration(governance);
     Ok([
@@ -1452,6 +1454,7 @@ fn solana_exit_decision_signatures(
         ("close", CLOSE),
         ("paid", PAID),
         ("min_withdrawal", MIN_WITHDRAWAL),
+        ("refund", REFUND),
         ("retire", RETIRE),
     ]
     .into_iter()
