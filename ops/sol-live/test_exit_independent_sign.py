@@ -88,6 +88,20 @@ class IndependentSignTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d, self.assertRaisesRegex(RuntimeError, "required"):
             paid(fleet, d)
 
+    def test_a_refusing_reviewer_is_reported_with_its_reason_apart_from_an_unreachable_host(self):
+        import contextlib
+        import io
+
+        fleet = ReviewedFleet(approved=lambda i: set() if i == 4 else {fleet.kind})
+        out = io.StringIO()
+        with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(out), \
+                self.assertRaises(RuntimeError) as failed:
+            paid(fleet, d)
+        message = str(failed.exception)
+        self.assertIn("unavailable: validator-3", message)
+        self.assertIn("refused by its own reviewer: validator-4: refused: no review of this decision", message)
+        self.assertIn("refused by its own reviewer: validator-4", out.getvalue())
+
     def test_first_release_keeps_the_go_live_reviews_and_six_signatures(self):
         # A first-release chain reports no rules: every validator must answer and sign, and the
         # per-host reviewer is not involved (one lost validator stops the round as before).

@@ -220,7 +220,9 @@ class SignTest(unittest.TestCase):
         verdict = json.loads(path.read_text())
         self.assertEqual(path.name, hashlib.sha256(PAID_KIND.encode()).hexdigest() + ".json")
         self.assertEqual(verdict["decision_sha256"], hashlib.sha256(PAID_KIND.encode()).hexdigest())
-        self.assertEqual(verdict["solana_endpoint"], Solana.endpoint)
+        # The endpoint's host only: a provider's API key in the URL stays out of the verdict.
+        self.assertEqual(verdict["solana_endpoint"], "solana.example")
+        self.assertEqual(path.stat().st_mode & 0o777, 0o640)
         self.assertEqual((verdict["validator"], verdict["verdict"]), ("validator-3", "approve"))
         self.assertGreater(verdict["finalized_slot"], 0)
         self.assertIn("time", verdict)
@@ -403,6 +405,81 @@ class ClearanceAccessTest(unittest.TestCase):
         unit = (Path(rv.__file__).parent / "pft-sol-exit-review.service").read_text()
         self.assertIn("SuccessExitStatus=2\n", unit)
         self.assertNotEqual(rv.EXIT_ACCESS, rv.EXIT_REFUSED)
+
+
+class RobustScanTest(unittest.TestCase):
+    """Every failure is a named exit 2, 3 or 4 with one line; one bad burn stops nothing else."""
+
+    def cfg(self, d, node=None, sol=None):
+        safety = Path(d) / "consensus-v2-safety"
+        safety.mkdir(exist_ok=True)
+        (safety / "height-1899.json").write_text("{}")
+        return rv.Config(validator="validator-3", node=node or Node(), solana=sol or Solana(),
+                         review_dir=Path(d) / "r", key=HOST_KEY, data_dir=Path(d))
+
+    def test_an_unexpected_failure_is_a_named_exit_without_a_traceback(self):
+        import contextlib
+        import io
+
+        class Broken(Solana):
+            def __call__(self, method, params):
+                if method == "getTransaction":
+                    return dict(slot=SLOT)  # a reply of an unexpected shape
+                return super().__call__(method, params)
+
+        with tempfile.TemporaryDirectory() as d:
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code = rv.run_review(self.cfg(d, sol=Broken()), "paid", BURN)
+            self.assertEqual(code, rv.EXIT_RPC)
+            self.assertNotIn("Traceback", err.getvalue())
+            self.assertEqual(len(err.getvalue().strip().splitlines()), 1)
+            self.assertIn("KeyError", err.getvalue())
+
+    def test_one_bad_burn_does_not_stop_the_other_reviews_or_the_clearance(self):
+        class TwoBurns(Node):
+            def __call__(self, method, **params):
+                if method == "vault_bridge_status":
+                    return dict(redemptions=[dict(self.red, burn_tx_id="zz"), self.red])
+                if method == "status":
+                    return dict(block_height=1900, block_tip_hash="ab" * 48, state_root="cd" * 48,
+                                build_git_revision="rev")
+                return super().__call__(method, **params)
+
+        with tempfile.TemporaryDirectory() as d:
+            cfg = self.cfg(d, node=TwoBurns())
+            code = rv.scan(cfg)
+            self.assertEqual(code, rv.EXIT_RPC)
+            names = sorted(p.name for p in (Path(d) / "r").iterdir())
+            self.assertIn(hashlib.sha256(PAID_KIND.encode()).hexdigest() + ".json", names)
+            self.assertEqual(len(names), 2, "the good burn and the clearance were still reviewed")
+
+    def test_verdicts_older_than_a_day_are_pruned(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = self.cfg(d)
+            rv.run_review(cfg, "paid", BURN)
+            (old,) = (Path(d) / "r").iterdir()
+            past = time.time() - rv.PRUNE_AGE - 60
+            os.utime(old, (past, past))
+            rv.prune(cfg)
+            self.assertFalse(old.exists())
+
+    def test_endpoints_prints_the_hosts_and_warns_when_fewer_than_three_differ(self):
+        import contextlib
+        import io
+
+        configs = [dict(validator=f"validator-{i}", solana_rpc=url) for i, url in enumerate(
+            ["https://a.example/k1", "https://a.example/k2", "https://b.example/", "https://a.example/",
+             "https://b.example/x", "https://a.example/y"])]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(rv.endpoints(configs), 1)
+        self.assertIn("validator-0 a.example", out.getvalue())
+        self.assertIn("WARNING: only 2 different Solana providers", out.getvalue())
+        self.assertNotIn("k1", out.getvalue())
+        configs[3]["solana_rpc"] = "https://c.example/"
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(rv.endpoints(configs), 0)
 
 
 if __name__ == "__main__":
