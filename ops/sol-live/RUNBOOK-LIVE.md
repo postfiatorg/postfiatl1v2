@@ -455,18 +455,23 @@ The deployed verifier (`0x3b16fc30…`, byte-identical to `solana/deploy/build.s
 
 The L1 needs no close. The first release keeps running and revision-8 burns stay open. From the upgrade until the new service runs, the verifier or the old service refuses every payout, and burns wait unpaid. Stop the payout worker and disable public admission for that window. Revision-9 exits start only at the second release height.
 
+**Before each signing step (4, 5, 6, 8):** read ProgramData `D7YLTGrE…` and confirm that its upgrade authority (bytes 13–45, option byte 12 = 1) equals the key about to sign, `4JJEua…`. Record the transaction signature of every step in `$KIT/evidence/upgrade-signatures.txt`.
+
+**No authority change:** do not run `solana program set-upgrade-authority`, and never `--final`, until step 8 has been read back. Tag 9 reads the current upgrade authority, so removing it before the migration locks withdrawals for good.
+
 | Step | Signer | Check |
 | --- | --- | --- |
 | 1. Build the reviewed commit twice with `solana/deploy/build.sh` (platform-tools v1.58) | none | Both builds equal; record `pfusdc_egress_verifier.so` SHA-256. A second person rebuilds and compares. |
-| 2. Read the deployed state | none | Program code `0x3b16fc30…`; light `FQe34dCQ…` holds route `84b17839…c767`. |
+| 2. Read the deployed state | none | Program code `0x3b16fc30…`; light `FQe34dCQ…` holds route `84b17839…c767`, height and `paused` as recorded. |
 | 3. Stop the payout worker, disable admission | operator | The disable procedure in Recovery. |
-| 4. `solana program extend 8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF 10240` | upgrade authority `4JJEua…` (with `--payer`) | The loader refuses less than 10,240 bytes; about 0.052 SOL rent. |
+| 4. `solana program extend 8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF 10240` | upgrade authority `4JJEua…` (with `--payer`) | Read back the ProgramData length: 127,213 bytes (45 + 116,928 + 10,240). The loader refuses less than 10,240 bytes; about 0.052 SOL rent. |
 | 5. `solana program write-buffer pfusdc_egress_verifier.so --buffer-authority <upgrade authority>` | payer, upgrade authority | `solana program dump <buffer>` equals the build. |
 | 6. `solana program upgrade <buffer> 8Dxp8bfg…` | upgrade authority | The buffer's rent returns to the spill account. |
 | 7. Read back the program | none | The first bytes equal the build and the rest of ProgramData is zero. Note the SHA-256 of the whole ProgramData tail (`data[45:]`); `profile_code` hashes exactly that. On a local Agave 4.4.1 validator the tail was exactly the image. |
-| 8. Send tag 9 (below) | upgrade authority | Only bytes 136–168 of the light differ from step 2. They now hold `02b02d4b…558e` (`tests/route-vector.txt`). |
-| 9. Set `VERIFIER_SHA256` in `exit_setup.py` to the step-7 hash, then install and self-test the service build | operator | The service refuses any other verifier code. |
+| 8. Send tag 9 (below) | upgrade authority | Tag 9 takes exactly three accounts: the upgrade authority (signer), the light `FQe34dCQ…` (writable) and ProgramData `D7YLTGrE…` (read-only). Read back the light: only bytes 136–168 differ from step 2. They now hold `02b02d4b…558e` (`tests/route-vector.txt`); `height` and `paused` are unchanged. |
+| 9. Set `VERIFIER_SHA256` in `exit_setup.py` to the step-7 hash, then install and self-test the service build | operator | Before the restart, the installed service's `VERIFIER_SHA256` equals the SHA-256 of the ProgramData tail read now from the chain. |
 | 10. Start the worker, re-enable admission | operator | Pending revision-8 burns are paid. |
+| 11. Optional, after the step-8 read-back: `solana program set-upgrade-authority 8Dxp8bfg… --new-upgrade-authority <offline key or multisig>` | upgrade authority | Never `--final`. The service pins the authority (`profile_code` in `exit_setup.py` requires `MAINNET_PAYER`), so that pin changes in the same reviewed release; until then payouts stop. |
 
 ```bash
 python3 solana/pfusdc-egress-verifier/bootstrap.py --migrate "$KIT/setup.json" "$KIT/evidence/migrate-args.bin"
@@ -485,7 +490,9 @@ PY
 `$KIT/setup.json` is the configuration of the 23 November initialisation. Its route equals the one built from `ops/sol-live/fixtures/exit-setup.json`. With any other configuration, tag 9 refuses with `Binding`. A second run also refuses with `Binding`, and a signer other than the upgrade authority is refused.
 
 If a step fails:
-- **Steps 4 to 6.** Nothing has changed. These steps are atomic; repeat them.
+- **Step 4.** An extension is permanent. Read the ProgramData length first; repeat only if it is still 116,973 bytes, because a repeat extends and charges again.
+- **Step 5.** A half-written buffer stays funded. Resume it with `solana program write-buffer … --buffer <buffer key>`, or close it with `solana program close <buffer key>` to recover the rent.
+- **Step 6.** The upgrade is atomic: either the new code is in place (step 7 shows it) or nothing changed. Repeat with the same buffer.
 - **Step 8.** The account keeps the old route, and every withdrawal refuses with `Binding`. Fix the arguments and repeat. To go back instead, upgrade to the `main` build (`0x3b16fc30…`), which works on the unmigrated account.
 - **After a successful migration.** The old program refuses every withdrawal with `Binding`, which is safe but stops payouts. To recover, upgrade to the new build again. No instruction restores the old route.
 
