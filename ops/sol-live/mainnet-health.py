@@ -39,8 +39,19 @@ CLOSE_SLOTS = round(12 * 60 / SLOT_SECONDS)
 SCHEDULE = None
 
 
+# A second public provider, asked only when the first fails. One slow reply from one provider
+# closed deposits for a hundred seconds (2026-11-24).
+FALLBACK_URL = os.environ.get("SOL_MAINNET_RPC_FALLBACK", "https://solana-rpc.publicnode.com")
+
+
 def call(method, *params):
-    return requests.post(URL, json=dict(jsonrpc="2.0", id=1, method=method, params=list(params)), timeout=8).json()["result"]
+    body = dict(jsonrpc="2.0", id=1, method=method, params=list(params))
+    for url in (URL, FALLBACK_URL):
+        try:
+            return requests.post(url, json=body, timeout=8).json()["result"]
+        except (requests.RequestException, KeyError, ValueError, TypeError):
+            if url == FALLBACK_URL:
+                raise
 
 
 def epoch_bounds(slot):
