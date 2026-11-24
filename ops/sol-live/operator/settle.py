@@ -12,8 +12,11 @@ PDA, the exact custody debit and recipient credit, and the withdrawal packet on 
 """
 import sys, json, subprocess, base58
 if "--single-owner-fleet" not in sys.argv[3:]:
-    sys.exit("settle.py writes the review file on every host; run it only with --single-owner-fleet "
-             "while one owner runs all six validators, otherwise use exit_review.py on each host.")
+    sys.exit("settle.py writes the review file on every host, so it needs --single-owner-fleet while one "
+             "owner runs all six validators. Run instead:\n  python3 settle.py "
+             + " ".join(sys.argv[1:]) + " --single-owner-fleet\n"
+             "Otherwise each host reviews and signs by itself with exit_review.py "
+             "(RUNBOOK-LIVE.md, \"Independent settlement reviews\"); update settle.py and settler.sh together.")
 from exit_payout import *
 from exit_payout import LIGHT, SYSTEM, VERIFIER, ATA, MINT, PREFIX, TOKEN, marker, pda, signature
 from exit_setup import FEE_PAYER, MAINNET_PAYER, VAULT
