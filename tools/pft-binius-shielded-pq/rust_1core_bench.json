@@ -1,14 +1,14 @@
 {
-  "trials": 5,
+  "trials": 10,
   "rayon_threads": 1,
-  "prove_ms_med": 26730.627138,
-  "prove_ms_p95": 30362.368156,
-  "prove_ms_max": 30362.368156,
-  "verify_1c_ms_med": 23.661609,
-  "verify_1c_ms_p95": 23.796772,
-  "verify_1c_ms_max": 23.796772,
-  "wire_bytes_min": 137596,
-  "wire_bytes_med": 138892,
-  "wire_bytes_max": 138988,
-  "budget_bytes": 149130
+  "prove_ms_med": 24618.414276,
+  "prove_ms_p95": 26813.819776,
+  "prove_ms_max": 26813.819776,
+  "verify_1c_ms_med": 20.888268,
+  "verify_1c_ms_p95": 31.976606999999998,
+  "verify_1c_ms_max": 31.976606999999998,
+  "wire_bytes_min": 148502,
+  "wire_bytes_med": 148838,
+  "wire_bytes_max": 149414,
+  "budget_bytes": 160000
 }

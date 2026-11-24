@@ -19,7 +19,7 @@ use crate::field::{eq_table, eq_table_scaled_limit, KTables, E};
 use crate::shake256::{
     coin_commit, keccak_f1600_trace, merkle_node, nullifier, owner_addr, shake256_pad_1perm,
     trp_input_bits, ADDR_BYTES, BLIND_SECRET_BYTES, COIN_BYTES, KECCAK_RC, MERKLE_DEPTH,
-    NODE_BYTES, OWNER_SECRET_BYTES, SN_BYTES, TAG_ADDR, TAG_COIN, TAG_NODE, TAG_SN,
+    NODE_BYTES, OWNER_SECRET_BYTES, PK_HASH_BYTES, SN_BYTES, TAG_ADDR, TAG_COIN, TAG_NODE, TAG_SN,
 };
 
 pub const NUM_PERMS: usize = 8 + 2 * MERKLE_DEPTH; // 56
@@ -105,6 +105,8 @@ pub struct PaymentStatement {
     pub v_unshield: u64,
     pub fee: u64,
     pub tx_ctx: [u8; 48],
+    pub pk_hash0: [u8; PK_HASH_BYTES],
+    pub pk_hash1: [u8; PK_HASH_BYTES],
 }
 
 impl PaymentStatement {
@@ -170,7 +172,7 @@ pub enum InputBitSrc {
     },
 }
 
-pub fn perm_input_spec(p: usize) -> Vec<InputBitSrc> {
+pub fn perm_input_spec(p: usize, stmt: &PaymentStatement) -> Vec<InputBitSrc> {
     let mut spec = vec![InputBitSrc::Const(0); 1600];
 
     let set_bytes_const = |spec: &mut [InputBitSrc], byte_off: usize, data: &[u8]| {
@@ -204,8 +206,9 @@ pub fn perm_input_spec(p: usize) -> Vec<InputBitSrc> {
     match p {
         0 => {
             set_bytes_const(&mut spec, 0, &[TAG_ADDR]);
-            set_priv(&mut spec, 1, OFF_S_IN0, OWNER_SECRET_BYTES);
-            set_shake_pad(&mut spec, 1 + OWNER_SECRET_BYTES);
+            set_bytes_const(&mut spec, 1, &stmt.pk_hash0);
+            set_priv(&mut spec, 49, OFF_S_IN0, OWNER_SECRET_BYTES);
+            set_shake_pad(&mut spec, 1 + PK_HASH_BYTES + OWNER_SECRET_BYTES);
         }
         1 => {
             set_bytes_const(&mut spec, 0, &[TAG_COIN]);
@@ -222,8 +225,9 @@ pub fn perm_input_spec(p: usize) -> Vec<InputBitSrc> {
         }
         3 => {
             set_bytes_const(&mut spec, 0, &[TAG_ADDR]);
-            set_priv(&mut spec, 1, OFF_S_IN1, OWNER_SECRET_BYTES);
-            set_shake_pad(&mut spec, 1 + OWNER_SECRET_BYTES);
+            set_bytes_const(&mut spec, 1, &stmt.pk_hash1);
+            set_priv(&mut spec, 49, OFF_S_IN1, OWNER_SECRET_BYTES);
+            set_shake_pad(&mut spec, 1 + PK_HASH_BYTES + OWNER_SECRET_BYTES);
         }
         4 => {
             set_bytes_const(&mut spec, 0, &[TAG_COIN]);
@@ -303,8 +307,8 @@ pub fn build_witness_bits(stmt: &PaymentStatement, wit: &PaymentWitness) -> Circ
         vec![0u8; NUM_BITS_PER_POLY],
     ];
 
-    let a0 = owner_addr(&wit.s_in0);
-    let a1 = owner_addr(&wit.s_in1);
+    let a0 = owner_addr(&stmt.pk_hash0, &wit.s_in0);
+    let a1 = owner_addr(&stmt.pk_hash1, &wit.s_in1);
     let coin_in0 = coin_commit(&a0, wit.v_in0, &wit.r_in0);
     let coin_in1 = coin_commit(&a1, wit.v_in1, &wit.r_in1);
     let sn0 = nullifier(&wit.s_in0, &coin_in0);
@@ -332,9 +336,10 @@ pub fn build_witness_bits(stmt: &PaymentStatement, wit: &PaymentWitness) -> Circ
         }
     };
 
-    let mut m0 = [0u8; 49];
+    let mut m0 = [0u8; 97];
     m0[0] = TAG_ADDR;
-    m0[1..].copy_from_slice(&wit.s_in0);
+    m0[1..49].copy_from_slice(&stmt.pk_hash0);
+    m0[49..97].copy_from_slice(&wit.s_in0);
     record_perm(&mut b, 0, &m0);
 
     let mut m1 = [0u8; 135];
@@ -350,9 +355,10 @@ pub fn build_witness_bits(stmt: &PaymentStatement, wit: &PaymentWitness) -> Circ
     m2[49..97].copy_from_slice(&coin_in0);
     record_perm(&mut b, 2, &m2);
 
-    let mut m3 = [0u8; 49];
+    let mut m3 = [0u8; 97];
     m3[0] = TAG_ADDR;
-    m3[1..].copy_from_slice(&wit.s_in1);
+    m3[1..49].copy_from_slice(&stmt.pk_hash1);
+    m3[49..97].copy_from_slice(&wit.s_in1);
     record_perm(&mut b, 3, &m3);
 
     let mut m4 = [0u8; 135];
@@ -781,7 +787,7 @@ pub fn build_prover_weights(
                 wb_x[base_r0 + yz].add_assign(s.mul(un_x[yz], kt));
             }
         }
-        let spec = perm_input_spec(p);
+        let spec = perm_input_spec(p, stmt);
         for (bit_idx, src) in spec.into_iter().enumerate() {
             let lane = bit_idx / 64;
             let ix = lane % 5;
@@ -1048,7 +1054,7 @@ pub fn eval_verifier_weights_at_r1(
         for y in 0..5 {
             sum_r0_y[y].add_assign(s.mul(eq_hi[hi_r0 + y], kt));
         }
-        let spec = perm_input_spec(p);
+        let spec = perm_input_spec(p, stmt);
         let mut const_acc = E::ZERO;
         for (bit_idx, src) in spec.into_iter().enumerate() {
             let lane = bit_idx / 64;
@@ -1362,10 +1368,12 @@ mod tests {
     fn test_circuit_weights_and_zero_sum_real_and_dummy() {
         let kt = k_tables();
         let mut tree = MerkleTree24::new();
+        let pkh0 = [0xA0u8; PK_HASH_BYTES];
+        let pkh1 = [0xB1u8; PK_HASH_BYTES];
         let s0 = [0x11u8; OWNER_SECRET_BYTES];
         let s1 = [0x22u8; OWNER_SECRET_BYTES];
-        let a0 = owner_addr(&s0);
-        let a1 = owner_addr(&s1);
+        let a0 = owner_addr(&pkh0, &s0);
+        let a1 = owner_addr(&pkh1, &s1);
         let r_in0 = [0x33u8; BLIND_SECRET_BYTES];
         let r_in1 = [0x44u8; BLIND_SECRET_BYTES];
         let c0 = coin_commit(&a0, 700, &r_in0);
@@ -1376,8 +1384,8 @@ mod tests {
         let (dirs0, sibs0) = tree.auth_path(idx0);
         let (dirs1, sibs1) = tree.auth_path(idx1);
 
-        let a_out0 = owner_addr(&[0x55u8; OWNER_SECRET_BYTES]);
-        let a_out1 = owner_addr(&[0x66u8; OWNER_SECRET_BYTES]);
+        let a_out0 = owner_addr(&[0xC0u8; PK_HASH_BYTES], &[0x55u8; OWNER_SECRET_BYTES]);
+        let a_out1 = owner_addr(&[0xD1u8; PK_HASH_BYTES], &[0x66u8; OWNER_SECRET_BYTES]);
         let r_out0 = [0x77u8; BLIND_SECRET_BYTES];
         let r_out1 = [0x88u8; BLIND_SECRET_BYTES];
 
@@ -1400,6 +1408,8 @@ mod tests {
                 v_unshield,
                 fee,
                 tx_ctx: [0x99u8; 48],
+                pk_hash0: pkh0,
+                pk_hash1: pkh1,
             };
             let wit = PaymentWitness {
                 is_dummy0,

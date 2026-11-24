@@ -2,10 +2,12 @@
 //! for Peel-Binius-Shielded (2^24 = 16,777,216 coins, 100% 1-permutation Keccak-f[1600]).
 //!
 //! All four domain-separated in-circuit calls fit strictly inside one SHAKE256 rate block (<= 135 B):
-//!   - Address:    A          = SHAKE256(0x00 || S[48])                      [49 B  -> 1 perm, 48 B out]
+//!   - Address:    A          = SHAKE256(0x00 || pk_hash[48] || r_pk[48])    [97 B  -> 1 perm, 48 B out]
 //!   - Coin:       Coin       = SHAKE256(0x01 || A[48] || v[8] || R[78])     [135 B -> 1 perm, 48 B out]
-//!   - Nullifier:  SN         = SHAKE256(0x02 || S[48] || Coin[48])          [97 B  -> 1 perm, 48 B out]
+//!   - Nullifier:  SN         = SHAKE256(0x02 || r_pk[48] || Coin[48])       [97 B  -> 1 perm, 48 B out]
 //!   - MerkleNode: Node       = SHAKE256(0x03 || Left[48] || Right[48])      [97 B  -> 1 perm, 48 B out]
+//! Out-of-circuit ML-DSA-65 spend key digest:
+//!   - PkHash:     pk_hash    = SHAKE256(0x04 || pk_dsa[1952])               [1953 B -> 48 B out]
 
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::Shake256;
@@ -15,7 +17,8 @@ pub const ADDR_BYTES: usize = 48;  // 384-bit owner address A
 pub const COIN_BYTES: usize = 48;  // 384-bit coin commitment
 pub const SN_BYTES: usize = 48;    // 384-bit nullifier SN
 pub const NODE_BYTES: usize = 48;  // 384-bit Merkle tree digest / anchor
-pub const OWNER_SECRET_BYTES: usize = 48; // 384-bit spend secret S
+pub const OWNER_SECRET_BYTES: usize = 48; // 384-bit note nullifier/blinding secret r_pk
+pub const PK_HASH_BYTES: usize = 48; // 384-bit ML-DSA-65 spend public-key hash pk_hash
 pub const BLIND_SECRET_BYTES: usize = 78; // 624-bit coin blinding R (1 + 48 + 8 + 78 = 135 B -> 1 perm!)
 
 pub const MERKLE_DEPTH: usize = 24; // 2^24 = 16,777,216 global shielded coins
@@ -24,6 +27,7 @@ pub const TAG_ADDR: u8 = 0x00;
 pub const TAG_COIN: u8 = 0x01;
 pub const TAG_SN: u8 = 0x02;
 pub const TAG_NODE: u8 = 0x03;
+pub const TAG_PK_HASH: u8 = 0x04;
 
 /// FIPS-202 Keccak-f[1600] round constants RC[0..24].
 pub const KECCAK_RC: [u64; 24] = [
@@ -152,10 +156,41 @@ pub fn shake256_48(msg: &[u8]) -> [u8; 48] {
     out
 }
 
-pub fn owner_addr(s: &[u8; OWNER_SECRET_BYTES]) -> [u8; ADDR_BYTES] {
-    let mut msg = [0u8; 1 + OWNER_SECRET_BYTES];
+/// Domain-separated 384-bit SHAKE256 digest of an ML-DSA-65 spend public key.
+pub fn pk_hash(pk_dsa: &[u8]) -> [u8; PK_HASH_BYTES] {
+    let mut h = Shake256::default();
+    h.update(&[TAG_PK_HASH]);
+    h.update(pk_dsa);
+    let mut out = [0u8; PK_HASH_BYTES];
+    h.finalize_xof().read(&mut out);
+    out
+}
+
+/// Domain-separated 32-byte deterministic ML-DSA-65 keygen seed derived from a 48-byte spend secret.
+pub fn spend_dsa_seed(spend_secret: &[u8; OWNER_SECRET_BYTES]) -> [u8; 32] {
+    let mut h = Shake256::default();
+    h.update(b"PFT-SH-SPEND-DSA-SEED-V3");
+    h.update(spend_secret);
+    let mut out = [0u8; 32];
+    h.finalize_xof().read(&mut out);
+    out
+}
+
+/// Domain-separated 48-byte private note secret r_pk derived from a 48-byte spend secret.
+pub fn spend_r_pk(spend_secret: &[u8; OWNER_SECRET_BYTES]) -> [u8; OWNER_SECRET_BYTES] {
+    let mut h = Shake256::default();
+    h.update(b"PFT-SH-SPEND-RPK-V3");
+    h.update(spend_secret);
+    let mut out = [0u8; OWNER_SECRET_BYTES];
+    h.finalize_xof().read(&mut out);
+    out
+}
+
+pub fn owner_addr(pk_h: &[u8; PK_HASH_BYTES], r_pk: &[u8; OWNER_SECRET_BYTES]) -> [u8; ADDR_BYTES] {
+    let mut msg = [0u8; 1 + PK_HASH_BYTES + OWNER_SECRET_BYTES];
     msg[0] = TAG_ADDR;
-    msg[1..].copy_from_slice(s);
+    msg[1..49].copy_from_slice(pk_h);
+    msg[49..97].copy_from_slice(r_pk);
     shake256_48(&msg)
 }
 
@@ -329,8 +364,9 @@ mod tests {
         }
         let mut tree = MerkleTree24::new();
         for i in 0u64..17 {
+            let pk_h = [i.wrapping_add(1) as u8; PK_HASH_BYTES];
             let s = [i as u8; OWNER_SECRET_BYTES];
-            let a = owner_addr(&s);
+            let a = owner_addr(&pk_h, &s);
             let r = [(i.wrapping_mul(7) as u8); BLIND_SECRET_BYTES];
             let c = coin_commit(&a, 100 + i, &r);
             let idx = tree.append(c);

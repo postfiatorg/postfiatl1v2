@@ -1,11 +1,13 @@
-//! PFSH02 wire reader and public statement shared by the prover and validators.
+//! PFSH03 wire reader and public statement shared by the prover and validators.
+//! Adds per-input external ML-DSA-65 spend authorization (pk_in0, pk_in1, sig_in0, sig_in1)
+//! so spend authorization reduces directly to FIPS-204 EUF-CMA + unmodified-oracle extraction.
 use crate::binius_pcs::BiniusProof;
 use crate::circuit::PaymentStatement;
-use crate::shake256::{BLIND_SECRET_BYTES, COIN_BYTES, MERKLE_DEPTH, NODE_BYTES, SN_BYTES};
+use crate::shake256::{pk_hash, BLIND_SECRET_BYTES, COIN_BYTES, MERKLE_DEPTH, NODE_BYTES, SN_BYTES};
 use sha2::{Digest, Sha384};
 
-const ML_DSA_65_PK_BYTES: usize = 1952;
-const ML_DSA_65_SIG_BYTES: usize = 3309;
+pub const ML_DSA_65_PK_BYTES: usize = 1952;
+pub const ML_DSA_65_SIG_BYTES: usize = 3309;
 
 #[derive(Clone, Debug)]
 pub struct MintAuth {
@@ -13,13 +15,19 @@ pub struct MintAuth {
     pub signature: [u8; ML_DSA_65_SIG_BYTES],
 }
 
-pub const TX_MAGIC: &[u8; 8] = b"PFSH02\0\0";
+#[derive(Clone, Debug)]
+pub struct SpendAuth {
+    pub public_key: [u8; ML_DSA_65_PK_BYTES],
+    pub signature: [u8; ML_DSA_65_SIG_BYTES],
+}
+
+pub const TX_MAGIC: &[u8; 8] = b"PFSH03\0\0";
 pub const KEM_CT_BYTES: usize = 1568; // 1,568 B
 pub const NOTE_PT_BYTES: usize = 8 + BLIND_SECRET_BYTES; // 86 B (v_le64 || R_78B)
 pub const NOTE_CT_BYTES: usize = NOTE_PT_BYTES + 16; // 102 B (AES-256-GCM tag)
 pub const ENV_BYTES: usize = KEM_CT_BYTES + NOTE_CT_BYTES; // 1,670 B
 pub const UNSHIELD_DEST_BYTES: usize = 32;
-pub const HEADER_OVERHEAD_BYTES: usize = 8
+pub const ENVELOPES_END_BYTES: usize = 8
     + NODE_BYTES
     + 8
     + 8
@@ -27,10 +35,11 @@ pub const HEADER_OVERHEAD_BYTES: usize = 8
     + 8
     + 2 * SN_BYTES
     + 2 * COIN_BYTES
-    + 2 * ENV_BYTES
-    + 4; // 3,648 B
+    + 2 * ENV_BYTES; // 3,644 B
+pub const UNSIGNED_HEADER_BYTES: usize = ENVELOPES_END_BYTES + 2 * ML_DSA_65_PK_BYTES; // 7,548 B
+pub const HEADER_OVERHEAD_BYTES: usize = UNSIGNED_HEADER_BYTES + 2 * ML_DSA_65_SIG_BYTES + 4; // 14,170 B
 
-pub const W1_ARCHIVAL_BUDGET_BYTES: usize = 149_130; // 12 GiB/day @ 1 tx/s
+pub const W1_ARCHIVAL_BUDGET_BYTES: usize = 160_000; // ~12.87 GiB/day @ 1 tx/s
 pub const MAX_POOL_COINS: usize = 1usize << MERKLE_DEPTH; // 16,777,216 coins
 
 #[derive(Clone, Debug)]
@@ -46,6 +55,8 @@ pub struct ShieldedTx {
     pub coin_out1: [u8; COIN_BYTES],
     pub env0: [u8; ENV_BYTES],
     pub env1: [u8; ENV_BYTES],
+    pub spend_auth0: Box<SpendAuth>,
+    pub spend_auth1: Box<SpendAuth>,
     pub proof: BiniusProof,
     pub mint_auth: Option<Box<MintAuth>>,
 }
@@ -61,6 +72,14 @@ impl ShieldedTx {
         Ok(())
     }
 
+    pub fn verify_spend_auth(&self, statement_ctx: &[u8; 48]) -> Result<(), String> {
+        if !self.spend_auth0.verify(0, statement_ctx) || !self.spend_auth1.verify(1, statement_ctx) {
+            return Err("R0-SpendAuth: invalid ML-DSA-65 spend authorization".into());
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn compute_tx_ctx(
         anchor: &[u8; NODE_BYTES],
         v_mint: u64,
@@ -73,9 +92,11 @@ impl ShieldedTx {
         coin_out1: &[u8; COIN_BYTES],
         env0: &[u8; ENV_BYTES],
         env1: &[u8; ENV_BYTES],
+        pk_in0: &[u8; ML_DSA_65_PK_BYTES],
+        pk_in1: &[u8; ML_DSA_65_PK_BYTES],
     ) -> [u8; 48] {
         let mut h = Sha384::new();
-        h.update(b"PFT-SH-TXCTX-V2");
+        h.update(b"PFT-SH-TXCTX-V3");
         h.update(TX_MAGIC);
         h.update(anchor);
         h.update(v_mint.to_le_bytes());
@@ -88,6 +109,8 @@ impl ShieldedTx {
         h.update(coin_out1);
         h.update(env0);
         h.update(env1);
+        h.update(pk_in0);
+        h.update(pk_in1);
         let mut out = [0u8; 48];
         out.copy_from_slice(&h.finalize());
         out
@@ -106,6 +129,8 @@ impl ShieldedTx {
             &self.coin_out1,
             &self.env0,
             &self.env1,
+            &self.spend_auth0.public_key,
+            &self.spend_auth1.public_key,
         );
         PaymentStatement {
             anchor: self.anchor,
@@ -117,6 +142,8 @@ impl ShieldedTx {
             v_unshield: self.v_unshield,
             fee: self.fee,
             tx_ctx,
+            pk_hash0: pk_hash(&self.spend_auth0.public_key),
+            pk_hash1: pk_hash(&self.spend_auth1.public_key),
         }
     }
 
@@ -135,6 +162,10 @@ impl ShieldedTx {
         out.extend_from_slice(&self.coin_out1);
         out.extend_from_slice(&self.env0);
         out.extend_from_slice(&self.env1);
+        out.extend_from_slice(&self.spend_auth0.public_key);
+        out.extend_from_slice(&self.spend_auth1.public_key);
+        out.extend_from_slice(&self.spend_auth0.signature);
+        out.extend_from_slice(&self.spend_auth1.signature);
         out.extend_from_slice(&(proof_bytes.len() as u32).to_le_bytes());
         out.extend_from_slice(&proof_bytes);
         if let Some(auth) = &self.mint_auth {
@@ -183,6 +214,14 @@ impl ShieldedTx {
         let coin_out1: [u8; COIN_BYTES] = take(&mut pos, COIN_BYTES)?.try_into().unwrap();
         let env0: [u8; ENV_BYTES] = take(&mut pos, ENV_BYTES)?.try_into().unwrap();
         let env1: [u8; ENV_BYTES] = take(&mut pos, ENV_BYTES)?.try_into().unwrap();
+        let pk_in0: [u8; ML_DSA_65_PK_BYTES] =
+            take(&mut pos, ML_DSA_65_PK_BYTES)?.try_into().unwrap();
+        let pk_in1: [u8; ML_DSA_65_PK_BYTES] =
+            take(&mut pos, ML_DSA_65_PK_BYTES)?.try_into().unwrap();
+        let sig_in0: [u8; ML_DSA_65_SIG_BYTES] =
+            take(&mut pos, ML_DSA_65_SIG_BYTES)?.try_into().unwrap();
+        let sig_in1: [u8; ML_DSA_65_SIG_BYTES] =
+            take(&mut pos, ML_DSA_65_SIG_BYTES)?.try_into().unwrap();
         let proof_len = u32::from_le_bytes(take(&mut pos, 4)?.try_into().unwrap()) as usize;
         let proof_bytes = take(&mut pos, proof_len)?;
         let mint_auth = if standalone && v_mint > 0 {
@@ -209,6 +248,14 @@ impl ShieldedTx {
             coin_out1,
             env0,
             env1,
+            spend_auth0: Box::new(SpendAuth {
+                public_key: pk_in0,
+                signature: sig_in0,
+            }),
+            spend_auth1: Box::new(SpendAuth {
+                public_key: pk_in1,
+                signature: sig_in1,
+            }),
             proof,
             mint_auth,
         })

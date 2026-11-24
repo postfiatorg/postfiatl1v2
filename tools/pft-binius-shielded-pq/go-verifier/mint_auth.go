@@ -13,6 +13,36 @@ type MintAuth struct {
 	Signature [mldsa65.SignatureSize]byte
 }
 
+type SpendAuth struct {
+	PublicKey [mldsa65.PublicKeySize]byte
+	Signature [mldsa65.SignatureSize]byte
+}
+
+func shake256PkHash(pk []byte) [PkHashBytes]byte {
+	h := sha3.NewSHAKE256()
+	h.Write([]byte{TagPkHash})
+	h.Write(pk)
+	var out [PkHashBytes]byte
+	h.Read(out[:])
+	return out
+}
+
+func (a *SpendAuth) pkHash() [PkHashBytes]byte {
+	return shake256PkHash(a.PublicKey[:])
+}
+
+func (a *SpendAuth) verify(slot byte, statementCtx [48]byte) bool {
+	pkH := a.pkHash()
+	h := sha512.New384()
+	h.Write([]byte("PFT-SH-SPEND-AUTH-V3"))
+	h.Write([]byte{slot})
+	h.Write(pkH[:])
+	h.Write(statementCtx[:])
+	var pk mldsa65.PublicKey
+	pk.Unpack(&a.PublicKey)
+	return mldsa65.Verify(&pk, h.Sum(nil), []byte("postfiat-l1-v2/tx/v1"), a.Signature[:])
+}
+
 func (a *MintAuth) source() string {
 	h := sha3.New384()
 	h.Write([]byte("postfiat.address.v1\x00"))

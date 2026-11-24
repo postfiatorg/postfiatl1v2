@@ -297,7 +297,7 @@ fn recover(
         let envelope = output.envelope().unwrap().try_into().unwrap();
         for (w, wallet) in wallets.iter().enumerate() {
             if let Some((value, r_blind)) = wallet.try_scan_output(&coin, &envelope) {
-                let serial = bytes_to_hex(&nullifier(&wallet.spend_secret, &coin));
+                let serial = bytes_to_hex(&nullifier(&wallet.r_pk, &coin));
                 if value > 0 && !pool.indexes.is_spent(&serial) {
                     balance[w] += value;
                     spend = SpendInput::Real {

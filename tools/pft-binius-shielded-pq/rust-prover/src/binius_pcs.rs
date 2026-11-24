@@ -116,7 +116,7 @@ pub fn row_layout() -> RowLayout {
 
 /// Canonical serialization of PaymentStatement for Fiat-Shamir domain binding.
 pub fn encode_statement(stmt: &PaymentStatement) -> Vec<u8> {
-    let mut out = Vec::with_capacity(NODE_BYTES + 2 * SN_BYTES + 2 * COIN_BYTES + 24 + 48);
+    let mut out = Vec::with_capacity(NODE_BYTES + 2 * SN_BYTES + 2 * COIN_BYTES + 24 + 48 + 96);
     out.extend_from_slice(&stmt.anchor);
     out.extend_from_slice(&stmt.sn0);
     out.extend_from_slice(&stmt.sn1);
@@ -126,6 +126,8 @@ pub fn encode_statement(stmt: &PaymentStatement) -> Vec<u8> {
     out.extend_from_slice(&stmt.v_unshield.to_le_bytes());
     out.extend_from_slice(&stmt.fee.to_le_bytes());
     out.extend_from_slice(&stmt.tx_ctx);
+    out.extend_from_slice(&stmt.pk_hash0);
+    out.extend_from_slice(&stmt.pk_hash1);
     out
 }
 
@@ -2039,16 +2041,18 @@ mod tests {
         let tx = crate::wire::ShieldedTx::from_bytes(raw).unwrap();
         let p = &tx.proof;
         let tr = Transcript::new(&encode_statement(&tx.statement()), &p.merkle_root, p.s_g1, p.s_mask2);
-        assert_eq!(hex::encode(tr.state), "3fb3d4b61f98b82590368950ada67e715181164c38fc8333072458ebe2f10662dcdf97de319e809b9ca0928aa06e74f7b5f4d0086f802ceebea242706618c486");
+        assert_eq!(hex::encode(tr.state), "cbade2b5a5c2fe01c372272dbef282113dc065771eeb5734bcb1f9062afab2fb994aca393e2c0cc954925ddf6d73b9eacf8764bb4cc5a1a4c1842c761927f621");
     }
 
     #[test]
     fn test_binius_shielded_prove_verify_roundtrip() {
         let mut tree = MerkleTree24::new();
+        let pkh0 = [0xA0u8; 48];
+        let pkh1 = [0xB1u8; 48];
         let s0 = [0x11u8; OWNER_SECRET_BYTES];
         let s1 = [0x22u8; OWNER_SECRET_BYTES];
-        let a0 = owner_addr(&s0);
-        let a1 = owner_addr(&s1);
+        let a0 = owner_addr(&pkh0, &s0);
+        let a1 = owner_addr(&pkh1, &s1);
         let r_in0 = [0x33u8; BLIND_SECRET_BYTES];
         let r_in1 = [0x44u8; BLIND_SECRET_BYTES];
         let c0 = coin_commit(&a0, 700, &r_in0);
@@ -2059,8 +2063,8 @@ mod tests {
         let (dirs0, sibs0) = tree.auth_path(idx0);
         let (dirs1, sibs1) = tree.auth_path(idx1);
 
-        let a_out0 = owner_addr(&[0x55u8; OWNER_SECRET_BYTES]);
-        let a_out1 = owner_addr(&[0x66u8; OWNER_SECRET_BYTES]);
+        let a_out0 = owner_addr(&[0xC0u8; 48], &[0x55u8; OWNER_SECRET_BYTES]);
+        let a_out1 = owner_addr(&[0xD1u8; 48], &[0x66u8; OWNER_SECRET_BYTES]);
         let r_out0 = [0x77u8; BLIND_SECRET_BYTES];
         let r_out1 = [0x88u8; BLIND_SECRET_BYTES];
 
@@ -2074,6 +2078,8 @@ mod tests {
             v_unshield: 0,
             fee: 10,
             tx_ctx: [0xABu8; 48],
+            pk_hash0: pkh0,
+            pk_hash1: pkh1,
         };
         let wit = PaymentWitness {
             is_dummy0: false,
@@ -2112,7 +2118,7 @@ mod tests {
             prove_ms,
             verify_ms
         );
-        assert!(bytes.len() + 3648 <= 149_130, "exceeded 149,130 B budget!");
+        assert!(bytes.len() + crate::wire::HEADER_OVERHEAD_BYTES <= crate::wire::W1_ARCHIVAL_BUDGET_BYTES, "exceeded PFSH03 archival budget!");
     }
 
     #[test]

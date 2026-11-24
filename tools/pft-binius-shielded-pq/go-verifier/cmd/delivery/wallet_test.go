@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
 )
 
 func TestWalletRecoveryVector(t *testing.T) {
@@ -53,7 +55,14 @@ func TestWalletRecoveryVector(t *testing.T) {
 	if e != nil || len(buf) != 3388 {
 		t.Fatal("invalid vector")
 	}
-	addr := shake48([]byte{0}, spend)
+	dsaSeedFull := shake48([]byte("PFT-SH-SPEND-DSA-SEED-V3"), spend)
+	var dsaSeed [32]byte
+	copy(dsaSeed[:], dsaSeedFull[:32])
+	pkDsa, _ := mldsa65.NewKeyFromSeed(&dsaSeed)
+	pkDsaBytes, _ := pkDsa.MarshalBinary()
+	pkHash := shake48([]byte{0x04}, pkDsaBytes)
+	rPk := shake48([]byte("PFT-SH-SPEND-RPK-V3"), spend)
+	addr := shake48([]byte{0}, pkHash[:], rPk[:])
 	dk, e := mlkem.NewDecapsulationKey1024(kem)
 	if e != nil {
 		t.Fatal(e)

@@ -5,10 +5,12 @@ use postfiat_crypto_provider::{bytes_to_hex, hex_to_bytes, validate_canonical_ad
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha384};
 
-pub const ARCHIVE_LIMIT: usize = 149_130;
+pub const ARCHIVE_LIMIT: usize = 160_000;
 pub const REQUEST_LIMIT: usize = 1_048_576;
-pub const INNER_LIMIT: usize = 140_476;
-pub const INNER_PREFIX: usize = 3_648;
+pub const INNER_LIMIT: usize = 150_998;
+pub const ENVELOPES_END: usize = 3_644;
+pub const UNSIGNED_HEADER_LEN: usize = ENVELOPES_END + 2 * PUBLIC_KEY_BYTES; // 7,548
+pub const INNER_PREFIX: usize = UNSIGNED_HEADER_LEN + 2 * SIGNATURE_BYTES + 4; // 14,170
 pub const ENVELOPE_BYTES: usize = 1_670;
 pub const PUBLIC_KEY_BYTES: usize = 1952;
 pub const SIGNATURE_BYTES: usize = 3309;
@@ -202,7 +204,7 @@ impl PqPayment {
         } else {
             (None, None)
         };
-        if !(INNER_PREFIX..=INNER_LIMIT).contains(&rest.len()) || &rest[..8] != b"PFSH02\0\0" {
+        if !(INNER_PREFIX..=INNER_LIMIT).contains(&rest.len()) || &rest[..8] != b"PFSH03\0\0" {
             return Err("invalid PQ inner frame");
         }
         let mint = u64::from_le_bytes(rest[56..64].try_into().unwrap());

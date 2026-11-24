@@ -875,6 +875,42 @@ Proof:
           i.e., ~2^-223 at Q=2^64 and ~2^-191 at Q=2^80 for 2^32 honest
           transactions with up to 2^33 targets). []
 
+PFSH03 Upgrade — External Per-Note ML-DSA-65 Spend Authorization (Zero Appendix A.4):
+  PFSH03 replaces the single-permutation address hash A = H_A(S) (49 B) with
+  A = SHAKE256(0x00 || pk_hash[48] || r_pk[48]) (97 B, still 1 Keccak-f[1600]
+  permutation, zero extra circuit rows), where pk_hash = SHAKE256(0x04 || pk_dsa[1952])
+  is computed out-of-circuit from an external NIST FIPS-204 ML-DSA-65 spend public
+  key pk_dsa carried on the wire alongside signature sig_dsa on
+  SHA-384("PFT-SH-SPEND-AUTH-V3" || slot || pk_hash || statement_ctx).
+  Dummy inputs sign with fresh throwaway ML-DSA-65 keypairs, preserving wire
+  indistinguishability. Wire overhead is +10,522 B (2 x 5,261 B; archival cap
+  160,000 B).
+
+  Theorem 4-PFSH03 (Spend & Deposit Authorization — ZERO Simulation, ZERO App. A.4):
+    Adv_Auth^{PFSH03}(A) <= eps_Ext(Q_tot, 1)
+                            + Adv_EUF-CMA^{ML-DSA-65}(spend)
+                            + Adv_EUF-CMA^{ML-DSA-65}(mint)
+                            + Adv_CR^{SHA-384}(tx_ctx or mint digest)
+                            + Adv_CR^{H_pk,384} + Adv_CR^{H_A,384}
+                            + Adv_CR^{H_Coin,384} + Adv_CR^{H_SN,384}
+                            + Adv_CR^{H_Node,384} + Adv_ZeroPreimage^{H_Coin,384}
+                            + Adv_2ndPre^{source,160}(unpinned accounts only).
+
+  Proof (Zero Simulation, Zero Appendix A.4, Zero QROM-ZK, Zero JointPRF):
+    The challenger receives challenge key pk_dsa* from the standard NIST FIPS-204
+    ML-DSA-65 EUF-CMA challenger, samples r_pk* itself, and runs the REAL unmodified
+    Binius prover on unmodified oracle H for ALL honest spends (obtaining spend
+    signatures from the standard ML-DSA-65 signing oracle). Apply unmodified-oracle
+    Theorem 2A (L = 1, identical to Theorem 3) to extract witness w* from forged tx*.
+    By `pfsh03_spend_auth_dichotomy` (kernel-verified in `AuthAndPrivacy.lean`),
+    any forged Mode 1 (unspent note theft) or Mode 2 (in-flight tx malleation)
+    either collides in 384-bit SHAKE256 (H_Node / H_Coin / H_SN / H_A / H_pk) or
+    SHA-384 (tx_ctx), OR carries a fresh valid ML-DSA-65 signature under pk_dsa* on
+    statement_ctx* never queried to the signing oracle — breaking FIPS-204 EUF-CMA.
+    Because ML-DSA-65 is many-time EUF-CMA, accidental address reuse never risks
+    fund theft; using a fresh indexed receive address per note gives full sender-
+    and third-party unlinkability (senders observe only A = H_A(pk_hash, r_pk)). []
+
 4.3 Theorem 5 (Global-Pool & ZK-Mint Privacy With Active O_Scan & O_Corrupt)
 --------------------------------------------------------------------------------
 Single-User Standard-Model Primitive Interfaces (Avoiding Corruption Gaps):
@@ -953,6 +989,15 @@ Theorem 5 (Oracle-Complete Corruption-Compatible Reduction — Zero Extraction):
                              + d * Adv_PRG^{SHAKE256}
                              + 2 * Adv_Hide^{SHAKE256}
                              + 2 * (|Coins| + |SpentSN| + 4) / 2^384 ].
+
+Theorem 5-PFSH03 (Multi-Transaction Adaptive Confidentiality — q_c-Transaction Hybrid):
+  With PFSH03 per-note independent receive keys (pk_dsa_i, r_pk_i), each unspent
+  note's r_pk_i is independent (eliminating cross-note JointPRF when fresh indexed
+  addresses are used per receive). By standard telescoping over q_c adaptive
+  challenge transactions (`pfsh03_theorem5_multitx_hybrid` in `AuthAndPrivacy.lean`),
+  Adv_GlobalPriv^{multi}(q_c, A) <= q_c * Adv_GlobalPriv^{single}(A).
+  Public-ledger metadata (asset IDs, fees, epochs, inclusion heights, public
+  deposit/exit amounts, network timing/IPs) remains observable on-chain.
 
 ML-KEM-1024 Anonymity and Envelope Key Derivation:
   * Grubbs-Maram-Paterson (EUROCRYPT 2022) and Maram-Xagawa (PKC 2023, "Post-

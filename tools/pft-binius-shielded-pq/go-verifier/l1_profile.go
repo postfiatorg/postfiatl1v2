@@ -51,7 +51,7 @@ func verifyL1(b []byte, chain l1Chain) error {
 		}
 		inner = b[end+mldsa65.SignatureSize:]
 	}
-	if len(inner) > 140476 {
+	if len(inner) > InnerLimitBytes {
 		return bad
 	}
 	tx, err := parseProfileInner(inner, false)
@@ -76,6 +76,9 @@ func verifyL1(b []byte, chain l1Chain) error {
 	h.Write(b[:end])
 	h.Write(raw[:])
 	h.Sum(stmt.TxCtx[:0])
+	if !tx.SpendAuth0.verify(0, stmt.TxCtx) || !tx.SpendAuth1.verify(1, stmt.TxCtx) {
+		return bad
+	}
 	if needAuth {
 		domain := "PFT-SH-MINT-AUTH-V2"
 		msg := append([]byte(domain), b[72:92]...)

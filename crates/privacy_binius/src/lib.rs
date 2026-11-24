@@ -31,6 +31,8 @@ pub fn verify_payment(
     let statement = match context {
         VerificationContext::StandaloneFixture => tx.statement(),
     };
+    tx.verify_spend_auth(&statement.tx_ctx)
+        .map_err(|_| VerifyError::InvalidProof)?;
     binius_pcs::verify(&statement, &tx.proof).map_err(|_| VerifyError::InvalidProof)?;
     Ok(statement)
 }
@@ -45,7 +47,8 @@ pub fn l1_public_statement(
     Ok(tx.statement())
 }
 
-/// Verify the settled-domain transcript and the single public authorization, if present.
+/// Verify the settled-domain transcript, per-input external ML-DSA-65 spend authorization,
+/// and the public deposit authorization, if present.
 /// Stateful eligibility, sequence and debits are checked at settlement.
 pub fn verify_l1(
     payment: &postfiat_types::pq_payment::PqPayment,
@@ -67,6 +70,8 @@ pub fn verify_l1(
         }
     }
     statement.tx_ctx = terms.statement_context(chain, statement.tx_ctx);
+    tx.verify_spend_auth(&statement.tx_ctx)
+        .map_err(|_| VerifyError::InvalidProof)?;
     binius_pcs::verify(&statement, &tx.proof).map_err(|_| VerifyError::InvalidProof)?;
     Ok(statement)
 }

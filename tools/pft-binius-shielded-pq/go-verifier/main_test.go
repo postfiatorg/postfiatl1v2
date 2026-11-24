@@ -189,7 +189,7 @@ func TestPublishedHopPinsCircuitAndInitialTranscript(t *testing.T) {
 	}
 	p := tx.Proof
 	tr := newTranscript(encodeStatement(tx.statement()), &p.MerkleRoot, p.SG1, p.SMask2)
-	if hex.EncodeToString(tr.state[:]) != "3fb3d4b61f98b82590368950ada67e715181164c38fc8333072458ebe2f10662dcdf97de319e809b9ca0928aa06e74f7b5f4d0086f802ceebea242706618c486" {
-		t.Fatal("PFSH02 initial transcript changed")
+	if hex.EncodeToString(tr.state[:]) != "cbade2b5a5c2fe01c372272dbef282113dc065771eeb5734bcb1f9062afab2fb994aca393e2c0cc954925ddf6d73b9eacf8764bb4cc5a1a4c1842c761927f621" {
+		t.Fatal("PFSH03 initial transcript changed")
 	}
 }

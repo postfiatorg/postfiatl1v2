@@ -17,16 +17,19 @@ import (
 )
 
 const (
-	KemCTBytes        = 1568
-	NoteCTBytes       = 102
-	EnvBytes          = KemCTBytes + NoteCTBytes // 1670
-	UnshieldDestBytes = 32
-	HeaderBytes       = 8 + NodeBytes + 8 + 8 + UnshieldDestBytes + 8 + 2*SNBytes + 2*CoinBytes + 2*EnvBytes + 4 // 3648
-	BudgetBytes       = 149130
-	MaxPoolCoins      = 1 << MerkleDepth // 16,777,216
+	KemCTBytes          = 1568
+	NoteCTBytes         = 102
+	EnvBytes            = KemCTBytes + NoteCTBytes // 1670
+	UnshieldDestBytes   = 32
+	EnvelopesEndBytes   = 8 + NodeBytes + 8 + 8 + UnshieldDestBytes + 8 + 2*SNBytes + 2*CoinBytes + 2*EnvBytes // 3644
+	UnsignedHeaderBytes = EnvelopesEndBytes + 2*mldsa65.PublicKeySize                                            // 7548
+	HeaderBytes         = UnsignedHeaderBytes + 2*mldsa65.SignatureSize + 4                                      // 14170
+	InnerLimitBytes     = 150998
+	BudgetBytes         = 160000
+	MaxPoolCoins        = 1 << MerkleDepth // 16,777,216
 )
 
-var TxMagic = [8]byte{'P', 'F', 'S', 'H', '0', '2', 0, 0}
+var TxMagic = [8]byte{'P', 'F', 'S', 'H', '0', '3', 0, 0}
 
 type ShieldedTx struct {
 	Anchor       [NodeBytes]byte
@@ -40,13 +43,15 @@ type ShieldedTx struct {
 	CoinOut1     [CoinBytes]byte
 	Env0         [EnvBytes]byte
 	Env1         [EnvBytes]byte
+	SpendAuth0   SpendAuth
+	SpendAuth1   SpendAuth
 	MintAuth     *MintAuth
 	Proof        *BiniusProof
 }
 
 func (tx *ShieldedTx) statement() *PaymentStatement {
 	h := sha512.New384()
-	h.Write([]byte("PFT-SH-TXCTX-V2"))
+	h.Write([]byte("PFT-SH-TXCTX-V3"))
 	h.Write(TxMagic[:])
 	h.Write(tx.Anchor[:])
 	var b8 [8]byte
@@ -63,6 +68,8 @@ func (tx *ShieldedTx) statement() *PaymentStatement {
 	h.Write(tx.CoinOut1[:])
 	h.Write(tx.Env0[:])
 	h.Write(tx.Env1[:])
+	h.Write(tx.SpendAuth0.PublicKey[:])
+	h.Write(tx.SpendAuth1.PublicKey[:])
 	var txCtx [48]byte
 	h.Sum(txCtx[:0])
 	return &PaymentStatement{
@@ -75,6 +82,8 @@ func (tx *ShieldedTx) statement() *PaymentStatement {
 		VUnshield: tx.VUnshield,
 		Fee:       tx.Fee,
 		TxCtx:     txCtx,
+		PkHash0:   tx.SpendAuth0.pkHash(),
+		PkHash1:   tx.SpendAuth1.pkHash(),
 	}
 }
 
@@ -130,6 +139,14 @@ func parseProfileInner(data []byte, standalone bool) (*ShieldedTx, error) {
 	copy(tx.Env0[:], b)
 	b, _ = take(EnvBytes)
 	copy(tx.Env1[:], b)
+	b, _ = take(mldsa65.PublicKeySize)
+	copy(tx.SpendAuth0.PublicKey[:], b)
+	b, _ = take(mldsa65.PublicKeySize)
+	copy(tx.SpendAuth1.PublicKey[:], b)
+	b, _ = take(mldsa65.SignatureSize)
+	copy(tx.SpendAuth0.Signature[:], b)
+	b, _ = take(mldsa65.SignatureSize)
+	copy(tx.SpendAuth1.Signature[:], b)
 	plb, _ := take(4)
 	proofLen := int(binary.LittleEndian.Uint32(plb))
 	proofBytes, err := take(proofLen)
@@ -321,6 +338,9 @@ func verifyFullSettlement(ls *LedgerState, tx *ShieldedTx) error {
 	stmt := tx.statement()
 	if (tx.VMint > 0) != (tx.MintAuth != nil) || (tx.MintAuth != nil && !tx.MintAuth.verify(stmt.TxCtx)) {
 		return errors.New("R0-Auth: invalid mint authorization")
+	}
+	if !tx.SpendAuth0.verify(0, stmt.TxCtx) || !tx.SpendAuth1.verify(1, stmt.TxCtx) {
+		return errors.New("R0-SpendAuth: invalid ML-DSA-65 spend authorization")
 	}
 	return verifyBiniusProof(stmt, tx.Proof)
 }

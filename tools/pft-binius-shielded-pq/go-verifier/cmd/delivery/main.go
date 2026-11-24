@@ -15,6 +15,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
 )
 
 type WalletFixture struct {
@@ -100,9 +102,16 @@ func main() {
 
 	spendSec, _ := hex.DecodeString(wf.SpendSecretHex)
 	kemSeed, _ := hex.DecodeString(wf.KemSeedHex)
-	addr := shake48([]byte{0x00}, spendSec)
+	dsaSeedFull := shake48([]byte("PFT-SH-SPEND-DSA-SEED-V3"), spendSec)
+	var dsaSeed [32]byte
+	copy(dsaSeed[:], dsaSeedFull[:32])
+	pkDsa, _ := mldsa65.NewKeyFromSeed(&dsaSeed)
+	pkDsaBytes, _ := pkDsa.MarshalBinary()
+	pkHash := shake48([]byte{0x04}, pkDsaBytes)
+	rPk := shake48([]byte("PFT-SH-SPEND-RPK-V3"), spendSec)
+	addr := shake48([]byte{0x00}, pkHash[:], rPk[:])
 	if hex.EncodeToString(addr[:]) != wf.AddrHex {
-		fmt.Fprintln(os.Stderr, "ERROR: Go SHAKE256 addr mismatch with Rust")
+		fmt.Fprintln(os.Stderr, "ERROR: Go SHAKE256+ML-DSA-65 addr mismatch with Rust")
 		os.Exit(1)
 	}
 

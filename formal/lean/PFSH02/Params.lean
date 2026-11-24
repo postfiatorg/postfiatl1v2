@@ -68,13 +68,30 @@ theorem peel_case1_margin : (2 * D) ^ 2 < 2 * D * n ∧ 48680 ^ 2 ≤ 2 * D * n 
 theorem coeff_3652_upper : ((2 : ℚ) / 3) ^ 2 * 30 < (3652 / 1000 : ℚ) ^ 2 := by
   norm_num
 
-/-- Exact wire-size ceiling margins under the `149,130 B` archival cap. -/
+/-- Exact wire-size ceiling margins under the PFSH02 `149,130 B` archival cap. -/
 theorem wire_margins_exact :
     140476 + 8654 = wireCap ∧
     145737 + 3393 = wireCap ∧
     146546 + 2584 = wireCap ∧
     146580 + 2550 = wireCap := by
   unfold wireCap
+  norm_num
+
+/-- PFSH03 archival cap (`160,000 B`, ~12.87 GiB/day at 1 tx/s) accommodating
+    2 × 5,261 B = 10,522 B external ML-DSA-65 spend authorization per transaction. -/
+def wireCapPFSH03 : ℕ := 160000
+
+/-- Exact PFSH03 wire-size ceiling margins under the `160,000 B` archival cap:
+    - Standalone non-mint worst-case: `140,476 + 10,522 = 150,998 B` (margin `9,002 B`)
+    - Standalone signed deposit worst-case: `150,998 + 5,261 = 156,259 B` (margin `3,741 B`)
+    - L1 archived redb deposit worst-case: `146,546 + 10,522 = 157,068 B` (margin `2,932 B`)
+    - L1 archived JSONL deposit worst-case: `146,580 + 10,522 = 157,102 B` (margin `2,898 B`). -/
+theorem pfsh03_wire_margins_exact :
+    150998 + 9002 = wireCapPFSH03 ∧
+    156259 + 3741 = wireCapPFSH03 ∧
+    157068 + 2932 = wireCapPFSH03 ∧
+    157102 + 2898 = wireCapPFSH03 := by
+  unfold wireCapPFSH03
   norm_num
 
 /-- Exact verification of the 66-bit unsigned conservation ceiling:

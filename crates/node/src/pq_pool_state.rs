@@ -3,7 +3,7 @@
 //! delta before making any of them visible to the next action.
 use super::*;
 use postfiat_types::pq_payment::{
-    Chain, PqOutput, PqPair, PqPayment, PqPool, ENVELOPE_BYTES, INNER_PREFIX,
+    Chain, PqOutput, PqPair, PqPayment, PqPool, ENVELOPES_END, ENVELOPE_BYTES,
 };
 
 pub(super) fn prepare_pair(
@@ -63,7 +63,7 @@ fn record(
     let (terms, _, inner) = payment.parts().map_err(|_| "pq_encoding")?;
     let asset = bytes_to_hex(&terms.asset);
     let writable = pool.head.assets.get(&asset);
-    let envelopes_end = INNER_PREFIX - 4; // The proof length follows the two envelopes.
+    let envelopes_end = ENVELOPES_END; // The two ML-KEM envelopes precede spend_auth0/1 and proof_len.
     let middle = envelopes_end - ENVELOPE_BYTES;
     Ok(PqPair {
         previous: pool.head.last_page.clone(),

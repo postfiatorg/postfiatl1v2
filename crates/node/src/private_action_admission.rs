@@ -263,7 +263,7 @@ fn pq_reservation(
     payment: &postfiat_types::pq_payment::PqPayment,
     domain: &PrivateActionSubmitDomain,
 ) -> io::Result<PqReservation> {
-    use postfiat_types::pq_payment::{Chain, INNER_PREFIX};
+    use postfiat_types::pq_payment::{Chain, UNSIGNED_HEADER_LEN};
     let (terms, _, inner) = payment.parts().map_err(|e| refused("pq_encoding", e))?;
     let genesis = hex_to_bytes(&domain.genesis_hash)
         .ok()
@@ -275,8 +275,8 @@ fn pq_reservation(
         protocol: domain.protocol_version,
     };
     let mut raw = Sha384::new();
-    raw.update(b"PFT-SH-TXCTX-V2");
-    raw.update(&inner[..INNER_PREFIX - 4]);
+    raw.update(b"PFT-SH-TXCTX-V3");
+    raw.update(&inner[..UNSIGNED_HEADER_LEN]);
     let statement = bytes_to_hex(&terms.statement_context(chain, raw.finalize().into()));
     let mut keys = Vec::with_capacity(5);
     for serial in inner[112..208].chunks_exact(48) {

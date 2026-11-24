@@ -72,7 +72,7 @@ func buildRowLayout() RowLayout {
 }
 
 func encodeStatement(stmt *PaymentStatement) []byte {
-	out := make([]byte, 0, NodeBytes+2*SNBytes+2*CoinBytes+24+48)
+	out := make([]byte, 0, NodeBytes+2*SNBytes+2*CoinBytes+24+48+2*PkHashBytes)
 	out = append(out, stmt.Anchor[:]...)
 	out = append(out, stmt.SN0[:]...)
 	out = append(out, stmt.SN1[:]...)
@@ -86,6 +86,8 @@ func encodeStatement(stmt *PaymentStatement) []byte {
 	binary.LittleEndian.PutUint64(b8[:], stmt.Fee)
 	out = append(out, b8[:]...)
 	out = append(out, stmt.TxCtx[:]...)
+	out = append(out, stmt.PkHash0[:]...)
+	out = append(out, stmt.PkHash1[:]...)
 	return out
 }
 

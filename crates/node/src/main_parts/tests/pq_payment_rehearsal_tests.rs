@@ -34,7 +34,7 @@ mod pq_payment_rehearsal_tests {
         let coin = hex_to_bytes(&out.commitment).unwrap().try_into().unwrap();
         let envelope = out.envelope().unwrap().try_into().unwrap();
         assert_eq!(wallet.try_scan_output(&coin, &envelope).unwrap().0, amount);
-        let serial = pft_binius_shielded::shake256::nullifier(&wallet.spend_secret, &coin);
+        let serial = pft_binius_shielded::shake256::nullifier(&wallet.r_pk, &coin);
         assert!(!pool.indexes.is_spent(&bytes_to_hex(&serial)));
     }
 

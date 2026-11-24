@@ -11,13 +11,15 @@ const (
 	SNBytes            = 48
 	NodeBytes          = 48
 	OwnerSecretBytes   = 48
+	PkHashBytes        = 48
 	BlindSecretBytes   = 78
 	ActiveSubrowsPoly  = 28
 
-	TagAddr byte = 0x00
-	TagCoin byte = 0x01
-	TagSN   byte = 0x02
-	TagNode byte = 0x03
+	TagAddr   byte = 0x00
+	TagCoin   byte = 0x01
+	TagSN     byte = 0x02
+	TagNode   byte = 0x03
+	TagPkHash byte = 0x04
 
 	RowMuxBase       = NumPerms * 7680 // 430080
 	MuxRowsPerLevel  = 192
@@ -123,6 +125,8 @@ type PaymentStatement struct {
 	VUnshield uint64
 	Fee       uint64
 	TxCtx     [48]byte
+	PkHash0   [PkHashBytes]byte
+	PkHash1   [PkHashBytes]byte
 }
 
 func (s *PaymentStatement) pubExit() uint64 {
@@ -143,7 +147,7 @@ type InputBitSrc struct {
 	X, Y, Z int
 }
 
-func basePermInputSpec(p int) [1600]InputBitSrc {
+func basePermInputSpec(p int, stmt *PaymentStatement) [1600]InputBitSrc {
 	var spec [1600]InputBitSrc
 	setBytesConst := func(byteOff int, data []byte) {
 		for bi, b := range data {
@@ -172,8 +176,9 @@ func basePermInputSpec(p int) [1600]InputBitSrc {
 	switch p {
 	case 0:
 		setBytesConst(0, []byte{TagAddr})
-		setPriv(1, OffSIn0, OwnerSecretBytes)
-		setShakePad(1 + OwnerSecretBytes)
+		setBytesConst(1, stmt.PkHash0[:])
+		setPriv(49, OffSIn0, OwnerSecretBytes)
+		setShakePad(1 + PkHashBytes + OwnerSecretBytes)
 	case 1:
 		setBytesConst(0, []byte{TagCoin})
 		setPermOut(1, 0, AddrBytes)
@@ -187,8 +192,9 @@ func basePermInputSpec(p int) [1600]InputBitSrc {
 		setShakePad(97)
 	case 3:
 		setBytesConst(0, []byte{TagAddr})
-		setPriv(1, OffSIn1, OwnerSecretBytes)
-		setShakePad(1 + OwnerSecretBytes)
+		setBytesConst(1, stmt.PkHash1[:])
+		setPriv(49, OffSIn1, OwnerSecretBytes)
+		setShakePad(1 + PkHashBytes + OwnerSecretBytes)
 	case 4:
 		setBytesConst(0, []byte{TagCoin})
 		setPermOut(1, 3, AddrBytes)
@@ -536,7 +542,7 @@ func evalVerifierWeightsAtR1(stmt *PaymentStatement, alpha E, r1 *[VSC1]E, t *KT
 		for y := 0; y < 5; y++ {
 			sumR0Y[y].AddAssign(s.Mul(eqHi[hiR0+y], t))
 		}
-		spec := basePermInputSpec(p)
+		spec := basePermInputSpec(p, stmt)
 		var constAcc E
 		var pBLo, pCLo [5][64]E
 		for bitIdx, src := range spec {

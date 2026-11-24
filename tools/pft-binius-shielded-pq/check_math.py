@@ -489,16 +489,16 @@ def main():
     cols_bytes = t * (m_k * 4 + 2 * 48)                     # 38,896 B
     sibs_wc_bytes = wc_hashes * 48                          # 38,016 B
     sibs_exp_bytes = round(exp_hashes * 48)
-    header_bytes = 3648  # PFSH02: +48 B for v_mint[8], v_unshield[8], unshield_dest[32]
+    header_bytes = 14170  # PFSH03: 3,644 B base+envelopes + 2x5,261 B ML-DSA-65 spend auth + 4 B proof_len
     total_wc = header_bytes + fixed_proof_bytes + cols_bytes + sibs_wc_bytes
     total_exp = header_bytes + fixed_proof_bytes + cols_bytes + sibs_exp_bytes
-    budget = 149130
+    budget = 160000
     mint_auth_bytes = 1952 + 3309  # FIPS 204 ML-DSA-65 public key and signature
     assert total_wc + mint_auth_bytes <= budget
     assert total_wc <= budget
 
     out = {
-        "protocol": "Peel-Binius-Shielded-v2",
+        "protocol": "Peel-Binius-Shielded-v3",
         "tower_verified": True,
         "g1_jacobian_rank": f"{g1_rank}/58",
         "sc2_jacobian_rank": f"{sc2_rank}/17",

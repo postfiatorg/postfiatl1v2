@@ -6,13 +6,14 @@
 //!   (magic[8], anchor[48], fee[8], sn0[48], sn1[48], coin0[48], coin1[48], env0[1670], env1[1670], proof)
 //! Positive mints append a fixed ML-DSA-65 public key and signature after the proof.
 
-use crate::mint_auth::MintAuth;
+use crate::mint_auth::{spend_keypair_from_secret, MintAuth, SpendAuth};
 use fips204::ml_dsa_65;
+use fips204::traits::SerDes as DsaSerDes;
 use crate::binius_pcs::{prove, verify};
 use crate::circuit::{build_witness_bits, PaymentStatement, PaymentWitness};
 use crate::shake256::{
     coin_commit, nullifier, owner_addr, MerkleTree24, ADDR_BYTES, BLIND_SECRET_BYTES, COIN_BYTES,
-    MERKLE_DEPTH, NODE_BYTES, OWNER_SECRET_BYTES, SN_BYTES,
+    MERKLE_DEPTH, NODE_BYTES, OWNER_SECRET_BYTES, PK_HASH_BYTES, SN_BYTES,
 };
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -38,6 +39,8 @@ pub struct StealthAddress {
 #[derive(Clone)]
 pub struct ShieldedWallet {
     pub spend_secret: [u8; OWNER_SECRET_BYTES],
+    pub r_pk: [u8; OWNER_SECRET_BYTES],
+    pub pk_hash: [u8; PK_HASH_BYTES],
     pub addr: [u8; ADDR_BYTES],
     pub kem_seed: [u8; 64],
     pub ek_bytes: [u8; KEM_EK_BYTES],
@@ -54,12 +57,15 @@ impl ShieldedWallet {
     }
 
     pub fn from_secrets(spend_secret: [u8; OWNER_SECRET_BYTES], kem_seed: [u8; 64]) -> Self {
-        let addr = owner_addr(&spend_secret);
+        let (_, _, pk_hash, r_pk) = spend_keypair_from_secret(&spend_secret);
+        let addr = owner_addr(&pk_hash, &r_pk);
         let d: [u8; 32] = kem_seed[0..32].try_into().unwrap();
         let z: [u8; 32] = kem_seed[32..64].try_into().unwrap();
         let (ek, dk) = ml_kem_1024::KG::keygen_from_seed(d, z);
         Self {
             spend_secret,
+            r_pk,
+            pk_hash,
             addr,
             kem_seed,
             ek_bytes: ek.into_bytes(),
@@ -274,6 +280,9 @@ pub fn create_profiled_tx(
             bool,
             [u8; MERKLE_DEPTH],
             [[u8; NODE_BYTES]; MERKLE_DEPTH],
+            ml_dsa_65::PrivateKey,
+            [u8; ml_dsa_65::PK_LEN],
+            [u8; PK_HASH_BYTES],
             [u8; OWNER_SECRET_BYTES],
             u64,
             [u8; BLIND_SECRET_BYTES],
@@ -288,27 +297,43 @@ pub fn create_profiled_tx(
                 value,
                 r_blind,
             } => {
-                let coin = coin_commit(&owner_addr(&spend_secret), value, &r_blind);
+                let (pk_dsa, sk_dsa, pk_h, r_pk) = spend_keypair_from_secret(&spend_secret);
+                let coin = coin_commit(&owner_addr(&pk_h, &r_pk), value, &r_blind);
                 let (dirs, sibs) = tree.opening(leaf_index, &coin).ok_or("input opening unavailable")?;
                 if !MerkleTree24::verify_path(&coin, &dirs, &sibs, &anchor) {
                     return Err("input does not open at selected anchor".into());
                 }
-                let sn = nullifier(&spend_secret, &coin);
-                Ok((false, dirs, sibs, spend_secret, value, r_blind, sn))
+                let sn = nullifier(&r_pk, &coin);
+                Ok((
+                    false,
+                    dirs,
+                    sibs,
+                    sk_dsa,
+                    pk_dsa.into_bytes(),
+                    pk_h,
+                    r_pk,
+                    value,
+                    r_blind,
+                    sn,
+                ))
             }
             SpendInput::Dummy => {
                 let mut s_d = [0u8; OWNER_SECRET_BYTES];
                 let mut r_d = [0u8; BLIND_SECRET_BYTES];
                 rng.fill_bytes(&mut s_d);
                 rng.fill_bytes(&mut r_d);
-                let a_d = owner_addr(&s_d);
+                let (pk_dsa, sk_dsa, pk_h, r_pk) = spend_keypair_from_secret(&s_d);
+                let a_d = owner_addr(&pk_h, &r_pk);
                 let c_d = coin_commit(&a_d, 0, &r_d);
-                let sn_d = nullifier(&s_d, &c_d);
+                let sn_d = nullifier(&r_pk, &c_d);
                 Ok((
                     true,
                     [0u8; MERKLE_DEPTH],
                     [[0u8; NODE_BYTES]; MERKLE_DEPTH],
-                    s_d,
+                    sk_dsa,
+                    pk_dsa.into_bytes(),
+                    pk_h,
+                    r_pk,
                     0,
                     r_d,
                     sn_d,
@@ -317,8 +342,10 @@ pub fn create_profiled_tx(
         }
     };
 
-    let (is_dummy0, dirs0, sibs0, s_in0, v_in0, r_in0, sn0) = resolve_input(in0, rng)?;
-    let (is_dummy1, dirs1, sibs1, s_in1, v_in1, r_in1, sn1) = resolve_input(in1, rng)?;
+    let (is_dummy0, dirs0, sibs0, sk_in0, pk_in0, pk_hash0, r_pk0, v_in0, r_in0, sn0) =
+        resolve_input(in0, rng)?;
+    let (is_dummy1, dirs1, sibs1, sk_in1, pk_in1, pk_hash1, r_pk1, v_in1, r_in1, sn1) =
+        resolve_input(in1, rng)?;
 
     if (v_in0 as u128) + (v_in1 as u128) + (v_mint as u128)
         != (out0_val as u128) + (out1_val as u128) + (pub_exit as u128)
@@ -349,8 +376,13 @@ pub fn create_profiled_tx(
         &coin_out1,
         &env0,
         &env1,
+        &pk_in0,
+        &pk_in1,
     );
 
+    let statement_ctx = l1_context.map_or(tx_ctx, |bind| bind(tx_ctx));
+    let spend_auth0 = SpendAuth::sign(0, &sk_in0, &statement_ctx)?;
+    let spend_auth1 = SpendAuth::sign(1, &sk_in1, &statement_ctx)?;
     let mint_auth = depositor.map(|key| MintAuth::sign(key, &tx_ctx)).transpose()?;
     let stmt = PaymentStatement {
         anchor,
@@ -361,7 +393,9 @@ pub fn create_profiled_tx(
         v_mint,
         v_unshield,
         fee,
-        tx_ctx: l1_context.map_or(tx_ctx, |bind| bind(tx_ctx)),
+        tx_ctx: statement_ctx,
+        pk_hash0,
+        pk_hash1,
     };
     let wit = PaymentWitness {
         is_dummy0,
@@ -370,8 +404,8 @@ pub fn create_profiled_tx(
         sibs0,
         dirs1,
         sibs1,
-        s_in0,
-        s_in1,
+        s_in0: r_pk0,
+        s_in1: r_pk1,
         v_in0,
         v_in1,
         r_in0,
@@ -399,6 +433,8 @@ pub fn create_profiled_tx(
         coin_out1,
         env0,
         env1,
+        spend_auth0: Box::new(spend_auth0),
+        spend_auth1: Box::new(spend_auth1),
         proof,
         mint_auth: mint_auth.map(Box::new),
     };
@@ -563,6 +599,7 @@ impl LedgerState {
             (Some(auth), amount) if amount > 0 && auth.verify(&stmt.tx_ctx) => (),
             _ => return Err("R0-Auth: invalid mint authorization".into()),
         }
+        tx.verify_spend_auth(&stmt.tx_ctx)?;
         verify(&stmt, &tx.proof)?;
         Ok(())
     }

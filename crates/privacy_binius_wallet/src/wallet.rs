@@ -361,7 +361,7 @@ impl Wallet {
                         if let Some((value, blind)) = k.try_scan_output(&coin, &envelope) {
                             if value > 0 {
                                 note_changes.insert(
-                                    hex::encode(nullifier(&k.spend_secret, &coin)),
+                                    hex::encode(nullifier(&k.r_pk, &coin)),
                                     Some(Note {
                                         index: (base_count + history.leaves.len()) as u32,
                                         key: *i,
@@ -445,8 +445,8 @@ impl Wallet {
             protocol: net.protocol_version,
         };
         let mut raw = Sha384::new();
-        raw.update(b"PFT-SH-TXCTX-V2");
-        raw.update(&inner[..pq::INNER_PREFIX - 4]);
+        raw.update(b"PFT-SH-TXCTX-V3");
+        raw.update(&inner[..pq::UNSIGNED_HEADER_LEN]);
         let statement_id = hex::encode(public.statement_context(chain, raw.finalize().into()));
         let terms = if let Some(terms) = &p.review_terms {
             terms.clone()
@@ -908,7 +908,7 @@ mod fee_tests {
             tree.append(coin);
             history.leaves.push(hex::encode(coin));
             wallet.notes.insert(
-                hex::encode(nullifier(&key.spend_secret, &coin)),
+                hex::encode(nullifier(&key.r_pk, &coin)),
                 Note {
                     index,
                     value,

@@ -101,11 +101,13 @@ fn cmd_generate(out_dir: &str) -> Result<(), String> {
 
     // Populate initial background Depth-24 pool with 98 coins (simulated prior shielded deposits)
     for i in 0..98usize {
+        let mut pk_bg = [0u8; 48];
         let mut s_bg = [0u8; OWNER_SECRET_BYTES];
         let mut r_bg = [0u8; BLIND_SECRET_BYTES];
+        rng.fill_bytes(&mut pk_bg);
         rng.fill_bytes(&mut s_bg);
         rng.fill_bytes(&mut r_bg);
-        let a_bg = owner_addr(&s_bg);
+        let a_bg = owner_addr(&pk_bg, &s_bg);
         let c_bg = coin_commit(&a_bg, 500 + (i as u64), &r_bg);
         ledger.mint_coin(c_bg)?;
     }
@@ -271,11 +273,13 @@ fn cmd_generate(out_dir: &str) -> Result<(), String> {
 
     // Intervening ledger deposits (25 new background coins in Depth-24 pool)
     for i in 0..25u64 {
+        let mut pk_bg = [0u8; 48];
         let mut s_bg = [0u8; OWNER_SECRET_BYTES];
         let mut r_bg = [0u8; BLIND_SECRET_BYTES];
+        rng.fill_bytes(&mut pk_bg);
         rng.fill_bytes(&mut s_bg);
         rng.fill_bytes(&mut r_bg);
-        let c_bg = coin_commit(&owner_addr(&s_bg), 1000 + i, &r_bg);
+        let c_bg = coin_commit(&owner_addr(&pk_bg, &s_bg), 1000 + i, &r_bg);
         ledger.mint_coin(c_bg)?;
     }
 
@@ -576,18 +580,41 @@ fn cmd_adversarial(tx_path: &str, ledger_path: &str) -> Result<(), String> {
         tx.unshield_dest[0] ^= 0x01;
         check_reject("relayer_malleability_unshield_dest", base_ledger.verify_tx(&tx))?;
     }
+    // 32b-e. PFSH03 External ML-DSA-65 Spend Authorization Attacks
+    {
+        let mut tx = base_tx.clone();
+        tx.spend_auth0.signature[0] ^= 0x01;
+        check_reject("spend_auth0_tampered_sig", base_ledger.verify_tx(&tx))?;
+    }
+    {
+        let mut tx = base_tx.clone();
+        tx.spend_auth1.signature[0] ^= 0x01;
+        check_reject("spend_auth1_tampered_sig", base_ledger.verify_tx(&tx))?;
+    }
+    {
+        let mut tx = base_tx.clone();
+        tx.spend_auth0.public_key[0] ^= 0x01;
+        check_reject("spend_auth0_substituted_pk", base_ledger.verify_tx(&tx))?;
+    }
+    {
+        let mut tx = base_tx.clone();
+        std::mem::swap(&mut tx.spend_auth0, &mut tx.spend_auth1);
+        check_reject("spend_auth_slot_swap", base_ledger.verify_tx(&tx))?;
+    }
     // 33. Soundness attack: malicious prover tries `is_dummy=1` with `v_in = 500` (inflation!) -> ZKP MUST REJECT!
     {
         let mut rng = ChaCha20Rng::from_seed([0xCCu8; 32]);
+        let pkh0 = [0xA0u8; 48];
+        let pkh1 = [0xB1u8; 48];
         let s0 = [0x11u8; OWNER_SECRET_BYTES];
         let s1 = [0x22u8; OWNER_SECRET_BYTES];
-        let a0 = owner_addr(&s0);
-        let a1 = owner_addr(&s1);
+        let a0 = owner_addr(&pkh0, &s0);
+        let a1 = owner_addr(&pkh1, &s1);
         let r0 = [0x33u8; BLIND_SECRET_BYTES];
         let r1 = [0x44u8; BLIND_SECRET_BYTES];
         let c0 = coin_commit(&a0, 500, &r0); // INFLATION: dummy coin with v_in=500!
         let c1 = coin_commit(&a1, 0, &r1);
-        let a_out = owner_addr(&[0x55u8; OWNER_SECRET_BYTES]);
+        let a_out = owner_addr(&[0xC0u8; 48], &[0x55u8; OWNER_SECRET_BYTES]);
         let stmt = pft_binius_shielded::circuit::PaymentStatement {
             anchor: base_ledger.tree.root(),
             sn0: nullifier(&s0, &c0),
@@ -598,6 +625,8 @@ fn cmd_adversarial(tx_path: &str, ledger_path: &str) -> Result<(), String> {
             v_unshield: 0,
             fee: 10,
             tx_ctx: [0x11u8; 48],
+            pk_hash0: pkh0,
+            pk_hash1: pkh1,
         };
         let wit = PaymentWitness {
             is_dummy0: true, // maliciously sets is_dummy=1 with v_in0=500!
@@ -626,15 +655,17 @@ fn cmd_adversarial(tx_path: &str, ledger_path: &str) -> Result<(), String> {
     // 29. Soundness attack: malicious prover tries `is_dummy=0` with forged Merkle path -> ZKP MUST REJECT!
     {
         let mut rng = ChaCha20Rng::from_seed([0xDDu8; 32]);
+        let pkh0 = [0xA2u8; 48];
+        let pkh1 = [0xB3u8; 48];
         let s0 = [0x12u8; OWNER_SECRET_BYTES];
         let s1 = [0x23u8; OWNER_SECRET_BYTES];
-        let a0 = owner_addr(&s0);
-        let a1 = owner_addr(&s1);
+        let a0 = owner_addr(&pkh0, &s0);
+        let a1 = owner_addr(&pkh1, &s1);
         let r0 = [0x34u8; BLIND_SECRET_BYTES];
         let r1 = [0x45u8; BLIND_SECRET_BYTES];
         let c0 = coin_commit(&a0, 500, &r0);
         let c1 = coin_commit(&a1, 0, &r1);
-        let a_out = owner_addr(&[0x56u8; OWNER_SECRET_BYTES]);
+        let a_out = owner_addr(&[0xC2u8; 48], &[0x56u8; OWNER_SECRET_BYTES]);
         let stmt = pft_binius_shielded::circuit::PaymentStatement {
             anchor: base_ledger.tree.root(),
             sn0: nullifier(&s0, &c0),
@@ -645,6 +676,8 @@ fn cmd_adversarial(tx_path: &str, ledger_path: &str) -> Result<(), String> {
             v_unshield: 0,
             fee: 10,
             tx_ctx: [0x22u8; 48],
+            pk_hash0: pkh0,
+            pk_hash1: pkh1,
         };
         let wit = PaymentWitness {
             is_dummy0: false, // claims real coin in global tree, but path is bogus!
