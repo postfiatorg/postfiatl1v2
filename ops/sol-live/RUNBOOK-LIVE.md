@@ -591,11 +591,10 @@ The verifier lets two parties cancel a proven, unpaid burn: its destination owne
 1. On every validator host, the reviewer's timer finds the burn and writes that host's refund verdict. The reviewer reads the marker through that host's own Solana endpoint at finalized and derives its address from the burn ("Independent settlement reviews"). Confirm each verdict in `/var/lib/postfiat-exit-review/`.
 2. The burner must still hold a trust line for the burned series. If they removed it, ask them to re-create it; until then the refund is refused, and it can be repeated afterwards.
 3. On the relay, run the command below. It drafts the decision from the finalized cancelled marker, and each host signs only from its own review; five of six are needed.
-
-    ```bash
-    python3 ops/sol-live/exit_govern.py refund --revision "$REV" --release-height "$H" --burn "$BURN" --output "$KIT/evidence/refund-$BURN.json"
-    ```
-
 4. Read back on five agreeing validators: the redemption's state is `refunded`, and the burner's balance in the series rose by the amount.
+
+```bash
+python3 ops/sol-live/exit_govern.py refund --revision "$REV" --release-height "$H" --burn "$BURN" --output "$KIT/evidence/refund-$BURN.json"
+```
 
 The seven earlier Solana series retain their own liabilities. The exit pays burns from every bucket of this shared custody whose ID derives from its own revision's policy, and the custody must cover all of them; moving liabilities between series requires separate governance and conservation tests for outstanding amounts, queued redemptions, counted reserves and allocations.
