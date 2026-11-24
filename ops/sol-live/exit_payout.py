@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import json
 import logging
 import os
 from pathlib import Path
@@ -35,6 +36,8 @@ from exit_setup import (
     Instruction,
     checkpoint_pda,
     expected_light,
+    profile_code,
+    verifier_pin,
     load,
     pk,
     pda,
@@ -45,6 +48,8 @@ from exit_setup import (
     rw,
     six,
 )
+from live import agreeing, survey
+import exit_rules
 from exit_segments import (
     public_checkpoint,
     select_target,
@@ -57,6 +62,62 @@ from exit_proof import available, prove
 ATA = pk("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
 PREFIX = "solana-spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:"
 FLOOR = 20_000_000
+READ_QUORUM = 5
+# The shared Solana custody (genesis, vault, mint), as in `postfiat_types::solana_exit`.
+SOURCE_DOMAIN = (
+    "spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
+    ":e2a6fbfcf1e65a0f3e08d400c97d913e3e4eca81f84c814efa0bbcada24aac8b"
+    ":c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61"
+)
+ACCOUNT = re.compile(r"pf[0-9a-f]{40}")
+
+
+def rpc_any(method, **params):
+    """Read from validator 0, else the next validator that answers. Any answer is safe:
+    the proof checks committee-signed finality and Solana checks the proof. A second
+    read as a cross-check would double the full-state reads (finding 3) for no safety."""
+    errors = []
+    for i in range(6):
+        try:
+            return rpc(i, method, **params)
+        except Exception as error:
+            errors.append(f"validator-{i}: {error}")
+    raise RuntimeError("no validator answered " + method + "; " + "; ".join(errors))
+
+
+def fetch_any(_i, method, **params):
+    """`rpc`-shaped reader for the checkpoint helpers: falls back like `rpc_any`, so
+    losing validator 0 does not stop the checkpoint advance or the qualification."""
+    return rpc_any(method, **params)
+
+
+def bucket_id(policy_hash, source_domain=SOURCE_DOMAIN):
+    """`vault_bridge_bucket_id` of the exit family: each route revision has its own bucket."""
+    preimage = (
+        f"asset_id={ASSET}\nsource_domain_bytes={len(source_domain)}\n"
+        f"source_domain={source_domain}\npolicy_hash={policy_hash}\n"
+    )
+    return hashlib.sha3_384(
+        b"postfiat.vault_bridge_bucket_id.v1\0" + preimage.encode()
+    ).hexdigest()
+
+
+def covered_buckets(buckets, covered_ids=None):
+    """Buckets of the shared custody that the governed exit descriptor covers, by ID; with
+    `covered_ids`, only those the chain reports (`exit_rules`)."""
+    return {
+        b["bucket_id"]: b
+        for b in buckets
+        if b["source_domain"] == SOURCE_DOMAIN
+        and b["bucket_id"] == bucket_id(b["policy_hash"])
+        and (covered_ids is None or b["bucket_id"] in covered_ids)
+    }
+
+
+def chain_rules():
+    """The exit rules the chain reports (`exit_rules`), read like the redemption itself:
+    the first release's (revision 8 only) when the report states none."""
+    return exit_rules.of_route(rpc_any("vault_bridge_route", asset_id=SERIES))
 CONFIG = Path(__file__).parent / "fixtures/exit-setup.json"
 
 
@@ -64,10 +125,10 @@ def marker(burn):
     return pda(VERIFIER, b"egress-burn", hashlib.sha256(bytes.fromhex(burn)).digest())
 
 
-def validate_burn(row, burn):
+def validate_burn(row, burn, buckets):
     require(
         row["burn_tx_id"] == burn
-        and row["bucket_id"] == BUCKET
+        and row["bucket_id"] in buckets
         and row["amount_atoms"] > 0,
         "Burn is outside the supported Solana series.",
     )
@@ -77,12 +138,49 @@ def validate_burn(row, burn):
     require(
         destination == PREFIX + bytes(key).hex(), "Burn destination is not canonical."
     )
+    require(key.is_on_curve(), "Burn destination owner is not a wallet key.")
     return key
+
+
+NOT_WALLET = "refused: destination not a wallet"
+
+
+class DestinationNotWallet(ValueError):
+    """The destination owner cannot receive a payout; the burn is not retried."""
+
+
+def destination_refusal(c, owner):
+    """Why `owner` cannot receive a payout, or None. Wallets and the payout service
+    run this same check: the chain cannot read Solana accounts."""
+    if not owner.is_on_curve():
+        return NOT_WALLET + " (key is not an Ed25519 wallet key)"
+    account = c.account(owner)
+    if account is not None and (
+        account["owner"] != str(SYSTEM) or account["executable"]
+    ):
+        return NOT_WALLET + " (account belongs to a program)"
+    return None
+
+
+def check_owner(c, owner):
+    """Refuse an existing owner that is not a plain wallet before any proof work."""
+    reason = destination_refusal(c, owner)
+    if reason is not None:
+        raise DestinationNotWallet(reason)
+
+
+def check_verifier(c):
+    require(
+        profile_code(c, VERIFIER) == verifier_pin(),
+        "Deployed Solana verifier differs from the pinned rebuilt verifier.",
+    )
 
 
 def cluster():
     c = ExitCluster(FEE_PAYER)
     check_payout_authorities(c)
+    # Before any proof time or SOL: only the pinned, rebuilt custody-route verifier.
+    check_verifier(c)
     c.unlock(Path(os.getenv("EXIT_FEE_KEY", DIRECTORY / "exit-fee-payer.json")))
     return c
 
@@ -106,6 +204,8 @@ def funded_send(c, label, instructions, *signers, rent=0, before_send=None):
         require(label != "exit.withdrawal", "Withdrawal journal is required.")
     if label in {"exit.buffer", "exit.upload", "exit.checkpoint", "exit.withdrawal"}:
         check_custody(c)
+        # Again just before sending: an upgrade during proving must not be paid into.
+        check_verifier(c)
     tx = Transaction([c.payer, *signers], message, block)
     sig = str(tx.signatures[0])
     if before_send is not None:
@@ -137,7 +237,8 @@ def light(c):
 
 
 def shared_liabilities(buckets, domain):
-    # Count each bucket once. Paid-but-unsettled queues remain reserved until L1 retires them.
+    # Count each bucket once. Queues include paid-but-unsettled burns until L1 retires
+    # them; `check_custody` subtracts those whose finalized marker shows the payout.
     total = 0
     seen = set()
     for bucket in buckets:
@@ -162,7 +263,7 @@ def shared_liabilities(buckets, domain):
 def proof_count(latest, burn_height, finalized):
     count = 1
     while burn_height - latest > 65:
-        target = select_target(latest, rpc, end=min(latest + 65, finalized - 1))
+        target = select_target(latest, fetch_any, end=min(latest + 65, finalized - 1))
         require(
             latest < target["height"] <= latest + 65, "Invalid checkpoint selection."
         )
@@ -224,7 +325,7 @@ class FinalizedPath:
             )
             self.members = witness["committee"]
         with tempfile.TemporaryDirectory() as tmp:
-            path = qualify_path(self.members, self.cursor, head, Path(tmp))
+            path = qualify_path(self.members, self.cursor, head, Path(tmp), fetch=fetch_any)
         self.cursor, self.members = path["cursor"], path["members"]
         return path["qualified_parent"]
 
@@ -238,7 +339,7 @@ def check_light_path(c, height, block, tip):
         "Light checkpoint outside finalized path.",
     )
     count = 1 if height == tip else 2
-    page = rpc(0, "blocks", from_height=height, limit=count)
+    page = rpc_any("blocks", from_height=height, limit=count)
     require(len(page) == count, "Missing light checkpoint header.")
     h = page[0]["header"]
     account = c.account(checkpoint_pda(block))
@@ -260,50 +361,168 @@ def check_light_path(c, height, block, tip):
         )
 
 
-def check_custody(c):
-    s = rpc(0, "vault_bridge_status", asset_id=ASSET)
-    b = next((b for b in s["buckets"] if b["bucket_id"] == BUCKET), None)
+def paid_unsettled(c, redemptions, covered):
+    """Atoms of pending custody burns whose one-use marker is finalized on Solana.
+    That USDC has left the custody; until settlement retires the claim on Post Fiat
+    it must not be counted again, or every later payout waits for settlement."""
+    pending = [
+        r
+        for r in redemptions
+        if r["bucket_id"] in covered and r["state"] == "pending" and r["settled_atoms"] == 0
+    ]
+    paid = 0
+    for start in range(0, len(pending), 100):
+        page = pending[start : start + 100]
+        markers = c.call(
+            "getMultipleAccounts",
+            [str(marker(r["burn_tx_id"])) for r in page],
+            dict(c.level, encoding="base64"),
+        )["value"]
+        paid += sum(
+            r["amount_atoms"]
+            for r, account in zip(page, markers)
+            if account is not None and account["owner"] == str(VERIFIER)
+        )
+    return paid
+
+
+def check_custody(c, covered_ids=None):
+    s = rpc_any("vault_bridge_status", asset_id=ASSET)
+    covered = covered_buckets(s["buckets"], covered_ids)
     require(
-        b is not None
-        and b["policy_hash"] == POLICY
-        and b["source_series_id"] == SERIES
-        and b["status"] == "active"
-        and b["redeemable_at_par"] is True
-        and b["impairment_factor_bps"] == 10000
-        and b["counted_value_atoms"]
-        >= b["outstanding_vault_bridge_atoms"] + b["redemption_queue_atoms"],
+        covered
+        and all(
+            b["status"] == "active"
+            and b["redeemable_at_par"] is True
+            and b["impairment_factor_bps"] == 10000
+            and b["counted_value_atoms"]
+            >= b["outstanding_vault_bridge_atoms"] + b["redemption_queue_atoms"]
+            for b in covered.values()
+            if b["outstanding_vault_bridge_atoms"] + b["redemption_queue_atoms"] > 0
+        ),
         "Solana source bucket is unavailable.",
     )
-    required_atoms = shared_liabilities(s["buckets"], b["source_domain"])
+    required_atoms = shared_liabilities(s["buckets"], SOURCE_DOMAIN) - paid_unsettled(
+        c, s.get("redemptions", []), covered
+    )
     snapshot = inspect_vault(c)
     require(
         snapshot["custody_atoms"] >= required_atoms,
         "Shared custody is insufficient.",
     )
-    return s, b, required_atoms
+    return s, covered, required_atoms
 
 
-def reconcile_supply(routes, outstanding):
-    require(len(routes) == 6, "Missing validator supply report.")
+def governed_minimum(routes):
+    """The governed minimum Solana exit burn, or None under the first release, which has
+    none; every given validator must report the same rules (readiness passes its agreeing
+    group, so a lagging one does not block)."""
+    try:
+        return exit_rules.agreed(routes)["minimum"]
+    except ValueError as error:
+        raise ValueError("Validators do not agree on the Solana minimum withdrawal.") from error
+
+
+def holdings(account, buckets=None, minimum=1):
+    """The Solana-source series an account may offer, each with its redeemable amount.
+    `buckets` is the readiness snapshot (bucket_id, series_asset_id, outstanding_atoms);
+    only without one is the full status read."""
+    require(ACCOUNT.fullmatch(account or "") is not None, "Invalid account.")
+    if buckets is None:
+        buckets = [
+            dict(
+                bucket_id=b["bucket_id"],
+                series_asset_id=b["source_series_id"],
+                outstanding_atoms=str(b["outstanding_vault_bridge_atoms"]),
+            )
+            for b in covered_buckets(
+                rpc_any("vault_bridge_status", asset_id=ASSET)["buckets"]
+            ).values()
+        ]
+    offer = []
+    for b in buckets:
+        lines = rpc_any(
+            "account_assets", account=account, asset_id=b["series_asset_id"], limit=1
+        )["assets"]
+        if not lines or not lines[0]["authorized"] or lines[0]["frozen"]:
+            continue
+        held = int(lines[0]["balance"])
+        redeemable = min(held, int(b["outstanding_atoms"]))
+        # A series below the governed minimum cannot be burned; do not offer it.
+        if held > 0 and redeemable >= minimum:
+            offer.append(
+                dict(
+                    bucket_id=b["bucket_id"],
+                    series_asset_id=b["series_asset_id"],
+                    balance_atoms=str(held),
+                    redeemable_atoms=str(redeemable),
+                )
+            )
+    return offer
+
+
+def reconcile_supply(routes, outstanding, need=6, bucket=None):
+    """Every given route of `bucket`'s series (revision 8 by default) reports its series
+    supply equal to its bucket outstanding and to `outstanding`. Open qualification
+    passes all six (five for a re-open); readiness passes its agreeing group of five.
+    `revision` is the descriptor epoch, 8 for every covered bucket."""
+    bucket = bucket or dict(bucket_id=BUCKET, policy_hash=POLICY)
+    require(len(routes) >= need, "Missing validator supply report.")
+    require(bucket["bucket_id"] == bucket_id(bucket["policy_hash"]),
+            "Bucket is not a covered bucket of the shared custody.")
     for route in routes:
         backing = route.get("source_backing") or {}
         supply = backing.get("series_supply_atoms")
         reported = backing.get("outstanding_vault_bridge_atoms")
         require(
             (backing.get("revision"), backing.get("bucket_id"), backing.get("policy_hash"))
-            == (8, BUCKET, POLICY)
+            == (8, bucket["bucket_id"], bucket["policy_hash"])
             and type(supply) is int and type(reported) is int
             and type(outstanding) is int and 0 <= supply == reported == outstanding,
-            "Revision-8 series supply and bucket outstanding must reconcile on all six validators.",
+            "Series supply and bucket outstanding must reconcile on every reporting validator.",
         )
     return outstanding
 
 
+def series_routes(series, need, height):
+    """Route reports of one series at `height` from at least `need` validators."""
+    rows = survey(lambda i: rpc(i, "vault_bridge_route", asset_id=series), need)
+    return [r for r in rows.values() if r.get("current_height") == height]
+
+
+def reconcile_covered(covered, routes, need, height):
+    """Series supply of every covered bucket, reconciled like revision 8: revision 8 on the
+    given routes, every other bucket on the route reports of its own series."""
+    supplies = {}
+    for key, b in sorted(covered.items()):
+        rows = routes if key == BUCKET else series_routes(b["source_series_id"], need, height)
+        supplies[key] = reconcile_supply(rows, b["outstanding_vault_bridge_atoms"], need, b)
+    return supplies
+
+
 def readiness():
-    message = "Waiting for the governed Solana descriptor on six validators."
+    message = "Waiting for the governed Solana descriptor on five of six validators."
     try:
-        head = fleet()
-        routes = six(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES))
+        head = fleet(READ_QUORUM)
+        # Readiness only feeds the wallet; five agreeing validators suffice, so one
+        # lost validator does not stop withdrawals.
+        rows = survey(lambda i: rpc(i, "vault_bridge_route", asset_id=SERIES), READ_QUORUM)
+        # The largest group of five that agree; a lagging validator is the one left out.
+        routes = [
+            rows[i]
+            for i in agreeing(
+                rows,
+                lambda r: json.dumps(
+                    [r.get(k) for k in ("active", "profile_hash", "current_height",
+                                        "burns_open", "min_withdrawal_atoms", "source_backing",
+                                        "covered_bucket_ids", "decision_signatures")]
+                    + [r.get("profile", {}).get("route_epoch")],
+                    sort_keys=True,
+                ),
+                READ_QUORUM,
+                message,
+            )
+        ]
         require(
             all(
                 r["active"]
@@ -311,8 +530,10 @@ def readiness():
                 and r["profile"]["route_epoch"] == 8
                 for r in routes
             ),
-            "Waiting for the Solana series exit on all six validators.",
+            "Waiting for the Solana series exit on five of six validators.",
         )
+        minimum = governed_minimum(routes)
+        rules = exit_rules.agreed(routes)
         message = "Solana verifier or relayer unavailable."
         c = cluster()
         latest, anchor = light(c)
@@ -327,16 +548,20 @@ def readiness():
         message = "Withdrawal prover unavailable."
         available()
         message = "Vault custody or shared-bucket accounting unavailable."
-        s, b, required_atoms = check_custody(c)
+        s, covered, required_atoms = check_custody(c, rules["covered"])
         message = "Revision-8 supply or bucket outstanding differs at the qualified parent."
-        supply = reconcile_supply(routes, b["outstanding_vault_bridge_atoms"])
+        r8 = covered.get(BUCKET)
+        require(r8 is not None, "Revision-8 bucket missing from the status report.")
+        message = "Series supply or bucket outstanding differs at the qualified parent."
+        supplies = reconcile_covered(covered, routes, READ_QUORUM, tip)
+        supply = supplies[BUCKET]
         burns_open = routes[0].get("burns_open")
         require(type(burns_open) is bool and all(r.get("burns_open") is burns_open for r in routes),
                 "Mixed burn admission status.")
         message = "Waiting for a compatible finalized committee path."
         qualified = FINALIZED_PATH.check(head)
         check_light_path(c, latest, anchor, tip)
-        require(qualified == parent_of(fleet()), "Tip advanced during qualification.")
+        require(qualified == parent_of(fleet(READ_QUORUM)), "Tip advanced during qualification.")
         return dict(
             ok=True,
             ready=burns_open,
@@ -348,13 +573,24 @@ def readiness():
             required_custody_atoms=str(required_atoms),
             payout_budget_lamports=budget,
             asset_id=ASSET,
-            series_asset_id=SERIES,
-            bucket_id=BUCKET,
+            source_domain=SOURCE_DOMAIN,
+            # None under the first release, which has no minimum.
+            min_withdrawal_atoms=None if minimum is None else str(minimum),
+            exit_release=rules["release"],
+            buckets=[
+                dict(
+                    bucket_id=b["bucket_id"],
+                    series_asset_id=b["source_series_id"],
+                    outstanding_atoms=str(b["outstanding_vault_bridge_atoms"]),
+                    series_supply_atoms=str(supplies[b["bucket_id"]]),
+                )
+                for b in covered.values()
+            ],
             issuer=s["issuer"],
             epoch=s["finalized_epoch"],
             reserve_packet_hash=s["finalized_reserve_packet_hash"],
             series_supply_atoms=str(supply),
-            bucket_outstanding_atoms=str(b["outstanding_vault_bridge_atoms"]),
+            bucket_outstanding_atoms=str(r8["outstanding_vault_bridge_atoms"]),
             current_height=routes[0]["current_height"],
             destination_prefix=PREFIX,
             vault_address=str(VAULT),
@@ -729,20 +965,28 @@ def compatible_prior(headers, states):
     raise ValueError("No compatible checkpoint precedes this burn.")
 
 
+def bind_witness(w, red, burn):
+    """The proof witness is this burn's own packet, from its own bucket."""
+    require(
+        w["receipt"]["tx_id"] == burn
+        and w["receipt"]["accepted"]
+        and w["route_profile"]["profile_hash"] == EXIT
+        and w["withdrawal_packet_hash"] == red["withdrawal_packet_hash"]
+        and w["withdrawal_packet"]["burn_tx_id"] == burn
+        and w["withdrawal_packet"]["source_bucket_id"] == red["bucket_id"],
+        "Witness does not match this burn.",
+    )
+
+
 def process(burn, work, update, *, attempt=None, before_send=None):
     update("reading")
     c = cluster()
-    red = next(
-        (
-            r
-            for r in rpc(0, "vault_bridge_status", asset_id=ASSET)["redemptions"]
-            if r["burn_tx_id"] == burn
-        ),
-        None,
-    )
+    status = rpc_any("vault_bridge_status", asset_id=ASSET)
+    red = next((r for r in status["redemptions"] if r["burn_tx_id"] == burn), None)
     if red is None:
         raise UnknownBurn("No finalized redemption for this burn.")
-    owner = validate_burn(red, burn)
+    owner = validate_burn(red, burn, covered_buckets(status["buckets"], chain_rules()["covered"]))
+    check_owner(c, owner)
     h = red["created_at_height"]
     update(
         "reading",
@@ -775,7 +1019,7 @@ def process(burn, work, update, *, attempt=None, before_send=None):
         start = max(1, h - 65)
         headers = []
         for first in range(start, h + 1, 8):
-            page = rpc(0, "blocks", from_height=first, limit=min(8, h - first + 1))
+            page = rpc_any("blocks", from_height=first, limit=min(8, h - first + 1))
             headers.extend(b["header"] for b in page)
         require(
             headers and headers[0]["height"] == start and headers[-1]["height"] == h,
@@ -795,13 +1039,12 @@ def process(burn, work, update, *, attempt=None, before_send=None):
     )
     work.mkdir(parents=True, exist_ok=True)
     if h - latest > 65:
-        block = select_target(latest, rpc)
+        block = select_target(latest, fetch_any)
         cache = work.parent / "committee.json"
         from live import save
 
         try:
-            w = rpc(
-                0,
+            w = rpc_any(
                 "pfusdc_checkpoint_witness",
                 prior_checkpoint=prior,
                 target_block=block["block_hash"],
@@ -818,17 +1061,10 @@ def process(burn, work, update, *, attempt=None, before_send=None):
                     members = anchor["committee"]
             if members is None:
                 members = [
-                    dict(row, active=True) for row in rpc(0, "validators")["validators"]
+                    dict(row, active=True) for row in rpc_any("validators")["validators"]
                 ]
-            w = public_checkpoint(rpc, latest, prior, block, members, read(CONFIG))
+            w = public_checkpoint(fetch_any, latest, prior, block, members, read(CONFIG))
         first = (w.get("finality_ancestry") or [w])[0]
-        save(
-            cache,
-            {
-                committee(first["block"]["header"]): first["committee"],
-                committee(block): w["committee"],
-            },
-        )
         verify_endpoints(c, w, prior, block)
         submit(c, "checkpoint", w, work)
         latest, prior = light(c)
@@ -836,22 +1072,23 @@ def process(burn, work, update, *, attempt=None, before_send=None):
             (latest, prior) == (block["height"], block["block_hash"]),
             "Checkpoint readback differs.",
         )
+        # Only a checkpoint the verifier accepted feeds the committee cache.
+        save(
+            cache,
+            {
+                committee(first["block"]["header"]): first["committee"],
+                committee(block): w["committee"],
+            },
+        )
         prune_work(c, work)
         raise CheckpointAdvanced()
-    w = rpc(
-        0,
+    w = rpc_any(
         "pfusdc_egress_witness",
         withdrawal_id=red["redemption_id"],
         prior_checkpoint=prior,
     )
-    require(
-        w["receipt"]["tx_id"] == burn
-        and w["receipt"]["accepted"]
-        and w["route_profile"]["profile_hash"] == EXIT
-        and w["withdrawal_packet"]["source_bucket_id"] == BUCKET,
-        "Witness does not match this burn.",
-    )
-    target = rpc(0, "blocks", from_height=h, limit=1)[0]["header"]
+    bind_witness(w, red, burn)
+    target = rpc_any("blocks", from_height=h, limit=1)[0]["header"]
     require(target["height"] == h, "Unexpected burn height.")
     verify_endpoints(c, w, prior, target)
     sig = signature(c, burn)

@@ -78,17 +78,51 @@ def six(fn):
         return list(pool.map(fn, range(6)))
 
 
+def survey(fn, need=6, n=6):
+    """Ask every validator; return the answers by index once `need` answered.
+    Below that, raise and name the validators that did not answer."""
+    with concurrent.futures.ThreadPoolExecutor(n) as pool:
+        futures = {i: pool.submit(fn, i) for i in range(n)}
+    rows, lost = {}, []
+    for i, future in futures.items():
+        try:
+            rows[i] = future.result()
+        except Exception:
+            lost.append(f"validator-{i}")
+    if len(rows) < need:
+        raise RuntimeError(
+            f"{len(rows)} of {n} validators answered, {need} required; "
+            f"unreachable: {', '.join(lost) or 'none'}"
+        )
+    return rows
+
+
+def agreeing(rows, key, need, message):
+    """Indices of the largest group of answers with equal `key`, at least `need`."""
+    groups = {}
+    for i, row in rows.items():
+        groups.setdefault(key(row), []).append(i)
+    best = max(groups.values(), key=len)
+    if len(best) < need:
+        raise RuntimeError(message)
+    return best
+
+
 def verify_node_ids(rows):
-    if len(rows) != len(PEERS):
-        raise ValueError("Six validator statuses are required.")
-    for i, status in enumerate(rows):
+    """Each answer must come from the validator its tunnel names. A full list
+    needs all six; a survey's answers by index may omit unreachable ones."""
+    if isinstance(rows, list):
+        if len(rows) != len(PEERS):
+            raise ValueError("Six validator statuses are required.")
+        rows = dict(enumerate(rows))
+    for i, status in rows.items():
         expected = f"validator-{i}"
         if status.get("node_id") != expected:
             raise ValueError(f"Expected {expected} on port {PEERS[i][1]}")
 
 
-def fleet():
-    rows = six(lambda i: rpc(i, "status"))
+def fleet(need=6):
+    rows = survey(lambda i: rpc(i, "status"), need)
     verify_node_ids(rows)
     keys = (
         "chain_id",
@@ -98,14 +132,19 @@ def fleet():
         "block_tip_hash",
         "build_git_revision",
     )
-    if len({tuple(r[k] for k in keys) for r in rows}) != 1:
-        raise RuntimeError("fleet is not at one build, root and tip")
-    if (rows[0]["chain_id"], rows[0]["genesis_hash"]) != (
+    best = agreeing(
+        rows,
+        lambda r: tuple(r[k] for k in keys),
+        need,
+        "fleet is not at one build, root and tip",
+    )
+    head = rows[best[0]]
+    if (head["chain_id"], head["genesis_hash"]) != (
         CHAIN.decode(),
         PFTL_GENESIS.hex(),
     ):
         raise RuntimeError("unexpected fleet identity")
-    return rows[0]
+    return head
 
 
 def sol(url, method, *params):
@@ -116,7 +155,7 @@ def sol(url, method, *params):
     return r.json()["result"]
 
 
-def receipt_at(txid, height, accepted=True):
+def receipt_at(txid, height, accepted=True, need=6):
     def check(i):
         deadline = time.monotonic() + 90
         while True:
@@ -148,7 +187,11 @@ def receipt_at(txid, height, accepted=True):
             raise RuntimeError("transaction height mismatch")
         return {"validator": i, "root": hdr["state_root"], "receipt": row}
 
-    rows = six(check)
-    if len({(r["root"], json.dumps(r["receipt"], sort_keys=True)) for r in rows}) != 1:
-        raise RuntimeError("validators disagree")
-    return rows
+    rows = survey(check, need)
+    best = agreeing(
+        rows,
+        lambda r: (r["root"], json.dumps(r["receipt"], sort_keys=True)),
+        need,
+        "validators disagree",
+    )
+    return [rows[i] for i in best]
