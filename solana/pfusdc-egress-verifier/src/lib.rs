@@ -161,8 +161,13 @@ fn upgrade_authority(id: &Pubkey, programdata: &AccountInfo) -> Result<Pubkey, P
 
 /// Who may cancel a proven, unmarked burn: its destination owner at any time, anyone once
 /// the light stands `CANCEL_AFTER` Post Fiat blocks past the burn's block.
-pub fn cancel_allowed(_light_height: u64, _burn_height: u64, _owner_signed: bool) -> ProgramResult {
-    Err(Error::TooEarly.into())
+pub fn cancel_allowed(light_height: u64, burn_height: u64, owner_signed: bool) -> ProgramResult {
+    let due = burn_height.checked_add(CANCEL_AFTER);
+    if owner_signed || due.is_some_and(|due| light_height >= due) {
+        Ok(())
+    } else {
+        Err(Error::TooEarly.into())
+    }
 }
 
 fn pda(id: &Pubkey, account: &AccountInfo, seeds: &[&[u8]]) -> Result<u8, ProgramError> {
@@ -301,7 +306,13 @@ fn destination_hash(genesis: &[u8; 32], owner: &Pubkey) -> [u8; 48] {
     h.finalize().into()
 }
 
-fn consume(id: &Pubkey, accounts: &[AccountInfo], proof: &[u8], withdraw: bool) -> ProgramResult {
+fn consume(
+    id: &Pubkey,
+    accounts: &[AccountInfo],
+    proof: &[u8],
+    withdraw: bool,
+    cancel: bool,
+) -> ProgramResult {
     let [payer, light_account, prior, result, buffer, sys, rest @ ..] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
@@ -349,10 +360,42 @@ fn consume(id: &Pubkey, accounts: &[AccountInfo], proof: &[u8], withdraw: bool) 
         save(&light, light_account)?;
     }
     match &v.exit {
+        Some(exit) if cancel => cancel_burn(id, payer, sys, rest, &light, exit, v.height),
         Some(exit) => release_burn(id, payer, sys, rest, &light, exit),
         None if rest.is_empty() => Ok(()),
         None => Err(ProgramError::InvalidArgument),
     }
+}
+
+/// Write a proven burn's marker as cancelled. A payout and a cancel create the same
+/// account, so whichever lands first excludes the other.
+fn cancel_burn<'a>(
+    id: &Pubkey,
+    payer: &AccountInfo<'a>,
+    sys: &AccountInfo<'a>,
+    rest: &[AccountInfo<'a>],
+    light: &Light,
+    exit: &values::Exit,
+    burn_height: u64,
+) -> ProgramResult {
+    let [nullifier, owner] = rest else {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    };
+    if exit.route != light.route
+        || light.vault_alias != exit.vault_alias
+        || light.mint_alias != exit.mint_alias
+    {
+        return Err(Error::Binding.into());
+    }
+    let burn = hash(exit.burn);
+    let bump = pda(id, nullifier, &[BURN, burn.as_ref()])?;
+    if nullifier.owner == id {
+        return Err(Error::Replay.into());
+    }
+    let owner_signed = owner.is_signer
+        && destination_hash(&light.solana_genesis, owner.key) == exit.destination_hash;
+    cancel_allowed(light.height, burn_height, owner_signed)?;
+    create(id, payer, nullifier, sys, &[BURN, burn.as_ref(), &[bump]], &[CANCELLED])
 }
 
 fn release_burn<'a>(
@@ -397,7 +440,7 @@ fn release_burn<'a>(
         nullifier,
         sys,
         &[BURN, burn.as_ref(), &[bump]],
-        &[1],
+        &[PAID],
     )?;
     let accounts = vec![
         AccountMeta::new_readonly(*authority.key, true),
@@ -440,7 +483,10 @@ solana_program_entrypoint::entrypoint!(process_instruction);
 pub fn process_instruction(id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     let (&tag, args) = data.split_first().ok_or(Error::Encoding)?;
     match tag {
-        2 | 8 => consume(id, accounts, args, tag == 2),
+        2 | 8 => consume(id, accounts, args, tag == 2, false),
+        // Cancel a proven, unpaid burn: payer, light, prior, result, buffer, system program,
+        // marker, destination owner (a signer only on the owner path).
+        10 => consume(id, accounts, args, true, true),
         3 => initialize(id, accounts, args),
         4 => {
             let [admin, account] = accounts else {
