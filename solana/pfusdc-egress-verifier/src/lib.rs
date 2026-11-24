@@ -24,8 +24,6 @@ const BURN: &[u8] = b"egress-burn";
 /// Marker states of a burn: no account (none), `PAID`, `CANCELLED`. Each is written once.
 pub const PAID: u8 = 1;
 pub const CANCELLED: u8 = 2;
-/// Post Fiat blocks the light must stand past a burn before anyone may cancel it.
-pub const CANCEL_AFTER: u64 = 256;
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
@@ -38,14 +36,9 @@ pub enum Error {
     Replay,
     Paused,
     WrongDestination,
-    TooEarly,
+    CancelNotAllowed,
 }
 
-#[allow(non_upper_case_globals)]
-impl Error {
-    /// The new name of discriminant 9 (stub alias until the rule lands).
-    pub const CancelNotAllowed: Error = Error::TooEarly;
-}
 impl From<Error> for ProgramError {
     fn from(error: Error) -> Self {
         ProgramError::Custom(error as u32)
@@ -70,7 +63,9 @@ impl Bootstrap {
     pub fn vault_route_binding(&self) -> [u8; 32] {
         // The WAN devnet's mainnet Solana ingress profile pins this commitment
         // at vault initialization, before the governance profile hash exists.
-        if self.solana_genesis == hex_literal::hex!("45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0") {
+        if self.solana_genesis
+            == hex_literal::hex!("45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0")
+        {
             return solana_sha256_hasher::hashv(&[
                 b"postfiat.pfusdc.solana.route_binding.v1",
                 b"postfiat-wan-devnet-2",
@@ -165,25 +160,28 @@ fn upgrade_authority(id: &Pubkey, programdata: &AccountInfo) -> Result<Pubkey, P
     }
 }
 
-/// Who may cancel a proven, unmarked burn: its destination owner at any time, anyone once
-/// the light stands `CANCEL_AFTER` Post Fiat blocks past the burn's block.
-pub fn cancel_allowed(light_height: u64, burn_height: u64, owner_signed: bool) -> ProgramResult {
-    let due = burn_height.checked_add(CANCEL_AFTER);
-    if owner_signed || due.is_some_and(|due| light_height >= due) {
+/// Who may cancel a proven, unmarked burn: its destination owner or the verifier's pause
+/// authority, signing, at any time; nobody else. A cancel moves no funds, and the pause
+/// authority can already stop every payout.
+pub fn cancel_allowed(owner_signed: bool, pause_signed: bool) -> ProgramResult {
+    if owner_signed || pause_signed {
         Ok(())
     } else {
-        Err(Error::TooEarly.into())
+        Err(Error::CancelNotAllowed.into())
     }
 }
 
-/// Stub until the owner-or-pause rule lands.
+/// `cancel_allowed` for the instruction's signer account against the proven destination.
 pub fn cancel_signer_allowed(
-    _light: &Light,
-    _destination_hash: &[u8],
-    _signer: &Pubkey,
-    _is_signer: bool,
+    light: &Light,
+    destination_hash_proven: &[u8],
+    signer: &Pubkey,
+    is_signer: bool,
 ) -> ProgramResult {
-    Err(Error::TooEarly.into())
+    let owner_signed =
+        is_signer && destination_hash(&light.solana_genesis, signer) == destination_hash_proven;
+    let pause_signed = is_signer && signer.as_ref() == light.pause_authority;
+    cancel_allowed(owner_signed, pause_signed)
 }
 
 fn pda(id: &Pubkey, account: &AccountInfo, seeds: &[&[u8]]) -> Result<u8, ProgramError> {
@@ -376,7 +374,7 @@ fn consume(
         save(&light, light_account)?;
     }
     match &v.exit {
-        Some(exit) if cancel => cancel_burn(id, payer, sys, rest, &light, exit, v.height),
+        Some(exit) if cancel => cancel_burn(id, payer, sys, rest, &light, exit),
         Some(exit) => release_burn(id, payer, sys, rest, &light, exit),
         None if rest.is_empty() => Ok(()),
         None => Err(ProgramError::InvalidArgument),
@@ -392,9 +390,8 @@ fn cancel_burn<'a>(
     rest: &[AccountInfo<'a>],
     light: &Light,
     exit: &values::Exit,
-    burn_height: u64,
 ) -> ProgramResult {
-    let [nullifier, owner] = rest else {
+    let [nullifier, signer] = rest else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
     if exit.route != light.route
@@ -408,10 +405,15 @@ fn cancel_burn<'a>(
     if nullifier.owner == id {
         return Err(Error::Replay.into());
     }
-    let owner_signed = owner.is_signer
-        && destination_hash(&light.solana_genesis, owner.key) == exit.destination_hash;
-    cancel_allowed(light.height, burn_height, owner_signed)?;
-    create(id, payer, nullifier, sys, &[BURN, burn.as_ref(), &[bump]], &[CANCELLED])
+    cancel_signer_allowed(light, exit.destination_hash, signer.key, signer.is_signer)?;
+    create(
+        id,
+        payer,
+        nullifier,
+        sys,
+        &[BURN, burn.as_ref(), &[bump]],
+        &[CANCELLED],
+    )
 }
 
 fn release_burn<'a>(
@@ -501,7 +503,7 @@ pub fn process_instruction(id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -
     match tag {
         2 | 8 => consume(id, accounts, args, tag == 2, false),
         // Cancel a proven, unpaid burn: payer, light, prior, result, buffer, system program,
-        // marker, destination owner (a signer only on the owner path).
+        // marker, and the signer: the destination owner or the pause authority.
         10 => consume(id, accounts, args, true, true),
         3 => initialize(id, accounts, args),
         4 => {
@@ -598,8 +600,10 @@ mod tests {
     /// The mainnet light (FQe34dCQg9m6yEW6NjbjoR8LfWwKGLX2hBvTdY2Lu6s1) as read at slot
     /// 473290673: bound to the revision-8 bucket, checkpoint at Post Fiat block 1851.
     fn mainnet_light() -> Light {
-        Light::try_from_slice(&hex::decode(include_str!("../tests/mainnet-light.hex").trim()).unwrap())
-            .unwrap()
+        Light::try_from_slice(
+            &hex::decode(include_str!("../tests/mainnet-light.hex").trim()).unwrap(),
+        )
+        .unwrap()
     }
 
     fn mainnet_fields() -> RouteFields {
@@ -628,7 +632,10 @@ mod tests {
         assert_eq!(light.height, 1851);
         let route = migrated_route(&light, &mainnet_fields()).unwrap();
         // The same route a fresh initialisation of this branch writes (tests/route-vector.txt).
-        assert_eq!(hex::encode(route), "02b02d4b458283c0e351a34adf9e25c896cca0cd9f2094d00a50e7f92a4d558e");
+        assert_eq!(
+            hex::encode(route),
+            "02b02d4b458283c0e351a34adf9e25c896cca0cd9f2094d00a50e7f92a4d558e"
+        );
         // Only bytes 136..168 (route) of the 289-byte account change.
         let before = borsh::to_vec(&light).unwrap();
         let mut after = mainnet_light();
@@ -663,10 +670,19 @@ mod tests {
         let owner = Pubkey::new_from_array([7; 32]);
         let stranger = Pubkey::new_from_array([9; 32]);
         let refused = Err(ProgramError::Custom(Error::CancelNotAllowed as u32));
-        assert_eq!(cancel_signer_allowed(&light, &owner_hash(&owner), &stranger, true), refused);
-        assert_eq!(cancel_signer_allowed(&light, &owner_hash(&owner), &owner, false), refused);
+        assert_eq!(
+            cancel_signer_allowed(&light, &owner_hash(&owner), &stranger, true),
+            refused
+        );
+        assert_eq!(
+            cancel_signer_allowed(&light, &owner_hash(&owner), &owner, false),
+            refused
+        );
         let pause = Pubkey::new_from_array(light.pause_authority);
-        assert_eq!(cancel_signer_allowed(&light, &owner_hash(&owner), &pause, false), refused);
+        assert_eq!(
+            cancel_signer_allowed(&light, &owner_hash(&owner), &pause, false),
+            refused
+        );
     }
 
     #[test]
