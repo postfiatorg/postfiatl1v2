@@ -467,7 +467,7 @@ Under the second release, five of six signatures decide paid, close, re-open and
   - for a payout, the mint and the exact custody and recipient amounts.
 - **When it signs:** only from that host's own approval of exactly this decision (its SHA-256), at most 15 minutes old, keyed with a key that never leaves the host.
 
-`ops/sol-live/exit_review.py` is that reviewer. It is check-only: it exits 0 on approval, 2 with a named refusal, and 3 with a named RPC error, and it never writes a placeholder. `exit_review.py sign` is the host's signing step: `govern.py` runs it on each host for paid and refund under the second release. A first-release chain keeps the go-live review files and six signatures. The go-live tools `operator/settle.py` (now only with `--single-owner-fleet`) and `operator/clearance.py` write those files from the relay host, and the reviewer replaces them.
+`ops/sol-live/exit_review.py` is that reviewer. It is check-only: it exits 0 on approval, 2 with a named refusal, and 3 with a named RPC error, and it never writes a placeholder. `exit_review.py sign` is the host's signing step: `govern.py` runs it on each host for paid and refund under the second release. `exit_review.py show-clearance` gives that host's own keyed rotation clearance for an opening or re-opening. A first-release chain keeps the go-live review files and six signatures. The go-live tools `operator/settle.py` (now only with `--single-owner-fleet`) and `operator/clearance.py` write those files from the relay host, and the reviewer replaces them.
 
 **Install, one host at a time, as root on that host:**
 
