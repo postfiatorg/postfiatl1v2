@@ -1,7 +1,7 @@
 # Fast Validator Reads: Measurements And Design Note
 
 **Date:** 2026-11-24
-**Status:** Study and design note. Step one is implemented on this branch; steps two and three are proposals.
+**Status:** Study and design note. Step one is implemented on this branch for `blocks`, `receipts` and `tx`; steps two and three are proposals.
 **Base:** origin/main `f82ed6986`.
 
 Validator reads are slow in production: 7 to 10 seconds per read. They are
@@ -161,7 +161,7 @@ Three steps, each releasable alone.
 
 1. **Read only what is asked (option d), method by method.**
    - Start with `blocks` (implemented in section 5).
-   - Then `receipts`, `tx` and the witness by transaction-id lookups.
+   - Then `receipts` and `tx` by transaction-id lookups (section 6), then the witness.
    - Then drop the duplicate activation-check open and the counter's second encoding.
    - Expected: `blocks` about 0.03 s instead of 2 to 2.6 s (measured); `receipts` and `tx` similar once indexed; the witness down by the history-scan part. Short reads unchanged at about 0.1 s, but they wait less, because long reads no longer hold the lock for seconds.
 2. **A shared, read-only, height-stamped cache in `rpc-serve` (option c)** for the polled reads: route, status of the vault bridge, account lines and assets.
@@ -202,6 +202,59 @@ Differential on the copy:
 - The grid: 48 requests, with `from_height` of none, 0, 1, 2, 500, 925 to 928, 1500, 1846, 1851, 1853, 1854 (the tip), 1855 and 999999, each with limits 1, 8 and 64.
 - The main binary and the step-one binary gave identical replies for all 48 (`cmp`), including the empty replies above the tip.
 - The change is under 100 lines of code, plus its test.
+
+## 6. Step one continued: `receipts` and `tx` read by transaction id
+
+The store already has the index these reads need. `receipts_by_id_v1` holds, under each
+transaction id, every finalized occurrence of its receipt with the block height. There is no
+index by account. No new table or format was added.
+
+Why the keyed read is exact:
+- A normal commit refuses a receipt stored under an id other than its `tx_id`.
+- The legacy migration, the only caller that relaxes that check, pairs each block receipt id
+  with the persisted receipt of that `tx_id`. So every record's key equals its receipts' `tx_id`.
+- Occurrences are kept only for heights inside the retained history, in height order, which is
+  the order of the full scan.
+
+The change:
+- `TransactionalStore::receipts_for_tx_id` and `receipt_occurrences_for_tx_id` read one record.
+  An id that is not a valid identifier matches nothing, as in the scan.
+- `receipts` with a `tx_id` uses it.
+- `tx` reads the occurrences, the blocks at their heights and the tip block. The other
+  receipts of the chosen block, which its account rows need, are read by key too.
+- The full read stays for `receipts` without a `tx_id` (the latest receipts), for
+  `tx` with `audit_block_log` (a full replay is its purpose), and for the legacy file store.
+
+Tests:
+- **Unit:** `receipts_for_tx_id_equal_the_filtered_full_scan` (storage) compares the encoded
+  bytes with the full scan's for known, unknown, empty, control-byte and oversized ids.
+- **Differential on the copy** (tip 1854), the main binary against this branch, `cmp` on the
+  whole reply:
+  - `receipts`: 49 requests, all identical. They cover 16 transaction ids from blocks across
+    the history, among them the three burns of 23 November; 10 unknown or malformed ids (all
+    zeros, empty, upper case, one character short or long, spaces, a path); limits of none, 1,
+    2, 0 and 1001 (the last two refused); and three requests without a `tx_id`.
+  - `tx`: 27 requests, all identical: the same 16 ids, the same 10 unknown or malformed ids,
+    and one request without a `tx_id`.
+  - Neither method takes a height, so "above the tip" does not apply to them.
+
+Measured on a fresh copy at the same tip, 10 runs each, through `rpc-serve`. "Before" is a
+main build of `fec6ff729`, whose crates equal `f82ed6986`. The read is the burn at block 1851.
+
+| Read | Before: cold / warm median | After: cold / warm median (worst) | Peak child memory before / after |
+| --- | --- | --- | --- |
+| `receipts`, one transaction | 2.642 s / 2.031 s | 0.023 s / 0.020 s (0.031 s) | 837 MB / 12 MB |
+| `tx` | 4.348 s / 3.566 s | 0.035 s / 0.030 s (0.048 s) | 842 MB / 21 MB |
+
+Not done in this round:
+- **`pfusdc_egress_witness`** still reads the whole block, receipt and archive history. Every
+  part it needs has a keyed read already: the block by height, the prior checkpoint by
+  `block_height_by_hash_v1`, the ancestry as a window, the block's receipts by id, and the
+  governance payload by batch. It builds a proof input, so it gets its own round with a
+  differential over the three burns of 23 November (blocks 1846, 1848 and 1851).
+- **The duplicate activation-check open and the counter's second encoding.** The keyed paths
+  above no longer run the counter's encoding. Removing the second open touches the storage
+  lease rule (STO-07) and needs its own review.
 
 ## Not measured
 
