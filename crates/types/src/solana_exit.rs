@@ -32,7 +32,7 @@ pub fn release_height(chain: &str, genesis: &str) -> Option<u64> {
 const SECOND_RELEASES: &[(&str, &str, Option<u64>)] = &[(
     "postfiat-wan-devnet-2",
     "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
-    None, // Governance agrees this height once every validator runs the second release.
+    Some(1880), // Agreed WAN height of the second release.
 )];
 
 #[cfg(any(test, feature = "test-second-release"))]
