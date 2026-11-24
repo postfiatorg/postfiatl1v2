@@ -403,5 +403,231 @@ class AccountTests(unittest.TestCase):
             self.assertLess(stopped, body.index(later), later)
 
 
+
+# The whole script, run as root in a user namespace (bwrap) with a temporary directory bound over
+# each system path it writes. The fakes model systemd for these two units: a link to /dev/null in
+# /run/systemd/system.control masks a unit, and while it exists `is-enabled` and
+# `list-unit-files` say `masked-runtime` and `start` is refused. FAIL_<COMMAND> names a pattern of
+# arguments that fails once, FAIL_RELOAD_AT the daemon-reload that fails.
+E2E_FAKES = {
+    "systemctl": r"""
+set -u
+mask=/run/systemd/system.control; units=/etc/systemd/system; state=$SYSD
+unit_state() { if [[ $(readlink "$mask/$1" 2>/dev/null) == /dev/null ]]; then echo masked-runtime;
+  elif [[ -e $state/enabled-$1 ]]; then echo enabled; elif [[ -e $units/$1 ]]; then echo disabled; else echo not-found; fi; }
+echo "systemctl $*" >> "$state/log"
+case $1 in
+  daemon-reload) n=$(( $(cat "$state/reloads" 2>/dev/null || echo 0) + 1 )); echo $n > "$state/reloads"
+    [[ $n != "${FAIL_RELOAD_AT:-}" ]] ;;
+  is-enabled) s=$(unit_state "$2"); echo "$s"; [[ $s == enabled ]] ;;
+  is-active) echo inactive; exit 3 ;;
+  list-unit-files) for u in pft-sol-mainnet-withdraw.service pft-sol-exit-self-test.service; do
+      s=$(unit_state "$u"); [[ $s == not-found ]] || echo "$u $s"; done ;;
+  show) echo inactive ;;
+  start) if [[ $(unit_state "$2") == masked-runtime ]]; then echo "Failed to start $2: Unit $2 is masked." >&2; exit 1; fi ;;
+  *) ;;
+esac
+""",
+    "getent": r"""
+a=$SYSD/account; read -r uid gid 2>/dev/null < "$a" || true
+case "$1:$2" in
+  passwd:postfiat) echo "postfiat:x:1000:1000::$OPERATOR_HOME:/bin/bash" ;;
+  passwd:pf-sol-exit|passwd:${uid:-none}) [[ -n ${uid:-} ]] && echo "pf-sol-exit:x:$uid:$gid::/var/lib/pf-sol-exit:/usr/sbin/nologin" || exit 2 ;;
+  group:pf-sol-exit|group:${gid:-none}) [[ -n ${gid:-} ]] && echo "pf-sol-exit:x:$gid:" || exit 2 ;;
+  *) exit 2 ;;
+esac
+""",
+    "id": r"""
+a=$SYSD/account; read -r uid gid 2>/dev/null < "$a" || true
+case "$*" in
+  "-u postfiat") echo 1000 ;;
+  pf-sol-exit) [[ -n ${uid:-} ]] ;;
+  "-u pf-sol-exit") [[ -n ${uid:-} ]] && echo "$uid" ;;
+  "-Gn pf-sol-exit") echo pf-sol-exit ;;
+  *) exec /usr/bin/id "$@" ;;
+esac
+""",
+    "groupadd": r'printf "0 %s\n" "${@: -2:1}" > "$SYSD/account"',
+    "useradd": r'read -r _ gid < "$SYSD/account"; for ((i=1;i<=$#;i++)); do [[ ${!i} == --uid ]] && { j=$((i+1)); uid=${!j}; }; done; echo "$uid $gid" > "$SYSD/account"',
+    "groupmod": r'read -r uid _ < "$SYSD/account"; echo "$uid $2" > "$SYSD/account"',
+    "usermod": r'read -r _ gid < "$SYSD/account"; echo "$2 $gid" > "$SYSD/account"',
+    "chown": "exit 0", "chgrp": "exit 0", "runuser": "exit 0", "visudo": "exit 0", "ss": "exit 0",
+    "install": r"""args=(); skip=0; for a; do if ((skip)); then skip=0; continue; fi
+  case $a in -o|-g) skip=1 ;; *) args+=("$a") ;; esac; done; exec /usr/bin/install "${args[@]}" """,
+    "stat": r"""case "$*" in *fee-payer.json*) f=${@: -1}; echo "59900:$(/usr/bin/stat -c %a:%h "$f")" ;; *) exec /usr/bin/stat "$@" ;; esac""",
+    "python3": r"""if [[ "$1 $2 $3" == "-I -m venv" ]]; then mkdir -p "$4/bin"; printf '#!/bin/bash\nexit 0\n' > "$4/bin/python"; chmod 755 "$4/bin/python"; exit 0; fi
+if [[ $2 == *exit_install_credential.py ]]; then exec /bin/cp "$3" "$4"; fi
+exec /usr/bin/python3 "$@" """,
+}
+for _name in ("cp", "ln", "mv", "chmod", "rm"):
+    E2E_FAKES[_name] = (f'v=FAIL_{_name.upper()}; if [[ -n ${{!v:-}} && "$*" == ${{!v}} && ! -e $SYSD/failed-{_name} ]]; '
+                        f'then touch "$SYSD/failed-{_name}"; exit 1; fi; exec /bin/{_name} "$@"')
+UNITS = ("pft-sol-mainnet-withdraw.service", "pft-sol-exit-self-test.service")
+
+
+class EndToEnd:
+    """A temporary root that keeps its state between runs of the whole installer."""
+
+    def __init__(self, root):
+        self.root = Path(root)
+        self.bin = self.root / "bin"
+        self.sysd = self.root / "sysd"
+        for d in ("bin", "sysd", "opt", "varlib", "varlog", "run", "units", "sudoers", "home/.config/postfiat/sol-bridge"):
+            (self.root / d).mkdir(parents=True, exist_ok=True)
+            (self.root / d).chmod(0o755)
+        for name, body in E2E_FAKES.items():
+            (self.bin / name).write_text("#!/bin/bash\n" + body + "\n")
+            (self.bin / name).chmod(0o755)
+        secrets = self.root / "home/.config/postfiat/sol-bridge"
+        (secrets / "exit-prover-ssh").write_text("prover key\n")
+        (secrets / "exit-fee-payer.json").write_text("[1]\n")
+
+    def bundle(self, rev):
+        """A bundle for `rev` at /var/lib/pf-sol-install.<rev>, mode 700, with the real installer."""
+        b = self.root / "varlib" / f"pf-sol-install.{rev[:8]}"
+        ops = b / "runtime/ops/sol-live"
+        ops.mkdir(parents=True, exist_ok=True)
+        b.chmod(0o700)
+        (b / "revision").write_text(rev + "\n")
+        (b / "known_hosts").write_text("hosts\n")
+        (b / "wheels").mkdir(exist_ok=True)
+        (b / "exit_install_credential.py").write_text("")
+        (b / "install-exit-system.sh").write_text(SCRIPT.read_text())
+        for name in ("check-prover-host.sh", "check-prover-identity.sh"):
+            (ops / name).write_text("exit 0\n")
+        (ops / "exit-prover.fingerprint").write_text("SHA256:x\n")
+        (ops / "exit-requirements.lock").write_text("")
+        for unit in UNITS:
+            (ops / unit).write_text(f"# {unit} of {rev}\n")
+        return f"/var/lib/{b.name}"
+
+    def run(self, rev, *args, **env):
+        bundle = self.bundle(rev)
+        for f in self.sysd.glob("failed-*"):
+            f.unlink()
+        (self.sysd / "reloads").write_text("0")
+        command = ["bwrap", "--unshare-user", "--uid", "0", "--gid", "0", "--dev-bind", "/", "/",
+                   "--tmpfs", "/opt", "--bind", str(self.root / "opt"), "/opt/postfiat",
+                   "--bind", str(self.root / "varlib"), "/var/lib",
+                   "--bind", str(self.root / "varlog"), "/var/log",
+                   "--bind", str(self.root / "run"), "/run",
+                   "--bind", str(self.root / "units"), "/etc/systemd/system",
+                   "--bind", str(self.root / "sudoers"), "/etc/sudoers.d",
+                   "/bin/bash", f"{bundle}/install-exit-system.sh", *args]
+        environment = dict(os.environ, PATH=f"{self.bin}:/usr/sbin:/usr/bin:/sbin:/bin", SYSD=str(self.sysd),
+                           OPERATOR_HOME=str(self.root / "home"), **env)
+        return subprocess.run(command, capture_output=True, text=True, env=environment, timeout=120)
+
+    def live(self):
+        return (self.root / "opt/sol-exit/revision").read_text().strip()
+
+    def unit_text(self, unit=UNITS[0]):
+        return (self.root / "units" / unit).read_text()
+
+    def masks(self):
+        control = self.root / "run/systemd/system.control"
+        return sorted(p.name for p in control.iterdir() if p.is_symlink()) if control.exists() else []
+
+    def enabled(self, unit=UNITS[0]):
+        r = subprocess.run([str(self.bin / "systemctl"), "is-enabled", unit], capture_output=True, text=True,
+                           env=dict(os.environ, SYSD=str(self.sysd)), cwd=self.root)
+        return r.stdout.strip()
+
+
+@unittest.skipUnless(subprocess.run(["bwrap", "--unshare-user", "--uid", "0", "--dev-bind", "/", "/", "true"],
+                                    capture_output=True).returncode == 0, "needs bwrap with user namespaces")
+class EndToEndTests(unittest.TestCase):
+    SUCCESS = "Installed disabled worker at "
+
+    def assert_installed(self, result, root, rev):
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(self.SUCCESS + rev, result.stdout)
+        self.assertEqual(root.live(), rev)
+        self.assertIn(f"of {rev}", root.unit_text())
+        self.assertEqual(root.masks(), [])
+
+    def test_first_install_upgrade_and_rollback_end_with_success_and_unmasked_units(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = EndToEnd(d)
+            self.assert_installed(root.run(REV_A), root, REV_A)
+            self.assertEqual(root.enabled(), "disabled")
+            self.assert_installed(root.run(REV_B), root, REV_B)
+            result = root.run(REV_B, "--rollback")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(f"Rolled back to {REV_A}", result.stdout)
+            self.assertEqual((root.live(), root.masks(), root.enabled()), (REV_A, [], "disabled"))
+            self.assertIn(f"of {REV_A}", root.unit_text())
+
+    def test_an_upgrade_from_todays_plain_directory_ends_with_success(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = EndToEnd(d)
+            plain = Path(d, "opt/sol-exit/ops/sol-live")
+            plain.mkdir(parents=True)
+            Path(d, "opt/sol-exit/revision").write_text(REV_A + "\n")
+            for unit in UNITS:
+                (plain / unit).write_text(f"# {unit} of {REV_A}\n")
+                Path(d, "units", unit).write_text(f"# {unit} of {REV_A}\n")
+            svc = Path(d, "varlib/pf-sol-exit")
+            svc.mkdir(mode=0o755)
+            svc.chmod(0o755)
+            (svc / "fee-payer.json").write_text("[1]\n")
+            (svc / "fee-payer.json").chmod(0o600)
+            Path(d, "sysd/account").write_text("999 999\n")
+            self.assert_installed(root.run(REV_B), root, REV_B)
+            self.assertEqual(Path(d, "sysd/account").read_text().split(), ["59900", "59900"])
+            self.assertTrue(Path(d, "opt/sol-exit.previous").is_symlink())
+
+    def test_a_mask_left_by_a_killed_run_is_removed_and_a_foreign_mask_is_left(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = EndToEnd(d)
+            self.assert_installed(root.run(REV_A), root, REV_A)
+            control = Path(d, "run/systemd/system.control")
+            control.mkdir(parents=True, exist_ok=True)
+            for unit in UNITS:
+                (control / unit).symlink_to("/dev/null")
+            (control / ".pf-sol-exit-install.mask").write_text("pid 1 of an earlier run\n")
+            result = root.run(REV_B)
+            self.assert_installed(result, root, REV_B)
+            self.assertIn("left by an earlier run of this installer", result.stdout + result.stderr)
+            for unit in UNITS:
+                (control / unit).symlink_to("/dev/null")
+            result = root.run(REV_C)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("masked by something other than this installer", result.stderr)
+            self.assertEqual(root.masks(), sorted(UNITS))
+            self.assertEqual(root.live(), REV_B)
+
+    def test_a_failure_after_the_new_units_load_puts_back_the_live_trees_units(self):
+        failures = {
+            "the second unit copy": {"FAIL_CP": "*pft-sol-exit-self-test.service.next"},
+            "the gate": {"FAIL_CHMOD": "*self-test-gate.conf*"},
+            "the daemon-reload": {"FAIL_RELOAD_AT": "2"},
+            "the new link": {"FAIL_LN": "*/opt/postfiat/sol-exit.next"},
+            "the link rename": {"FAIL_MV": "*/opt/postfiat/sol-exit.next /opt/postfiat/sol-exit"},
+            "the previous link": {"FAIL_LN": "*/opt/postfiat/sol-exit.previous.next"},
+            "the revision record": {"FAIL_MV": "*revision.next*"},
+        }
+        for step, env in failures.items():
+            with self.subTest(step), tempfile.TemporaryDirectory() as d:
+                root = EndToEnd(d)
+                self.assert_installed(root.run(REV_A), root, REV_A)
+                Path(d, "varlib/pf-sol-exit-install").mkdir(exist_ok=True)
+                result = root.run(REV_B, **env)
+                self.assertNotEqual(result.returncode, 0, step)
+                self.assertIn("putting back", result.stderr, step)
+                self.assertEqual(root.live(), REV_A, step)
+                for unit in UNITS:
+                    self.assertIn(f"of {REV_A}", root.unit_text(unit), step)
+                self.assertFalse(Path(d, "opt/sol-exit.previous").exists(), step)
+                self.assertEqual(root.masks(), [], step)
+
+    def test_a_failed_removal_of_the_private_staging_folder_is_reported(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = EndToEnd(d)
+            result = root.run(REV_A, FAIL_RM="-rf -- /var/lib/pf-sol-exit/.install.*")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("could not be removed", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
