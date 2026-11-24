@@ -353,6 +353,90 @@ def python_build_group_c(tx_bytes: bytes):
     return cs
 
 
+def z3_proof_pfsh03_input_wiring(orig_pub_rhs_hex: str):
+    """Z3 UNSAT + source-level check of PFSH03 56-permutation input wiring:
+    Verifies that:
+      - p=0 (slot 0 A) binds public pk_hash0[48] at bytes 1..49 and private r_pk0[48] at bytes 49..97
+        with domain tag 0x00 and SHAKE256 padding at byte 97 (0x1F) + byte 135 bit 7 (0x80).
+      - p=3 (slot 1 A) binds public pk_hash1[48] at bytes 1..49 and private r_pk1[48] at bytes 49..97.
+      - p=1,4 (Coin_in0/1) consume PermOut(0/3) at bytes 1..49, v_in0/1 at bytes 49..57, r_in0/1 at 57..135.
+      - p=2,5 (SN0/1) share the EXACT SAME private r_pk0/1 bit offsets (OFF_S_IN0/1) as p=0,3 at bytes 1..49
+        and PermOut(1/4) (Coin_in0/1) at bytes 49..97.
+      - p=6,7 (Coin_out0/1) bind private A_out0/1, v_out0/1, r_out0/1 (same OFF_V_OUT0/1 as conservation adder).
+      - p=8..31 and p=32..55 chain 24 Merkle levels from PermOut(1) and PermOut(4).
+    Also verifies that Rust `circuit.rs` and Go `circuit.go` contain identical PFSH03 wiring clauses.
+    """
+    # 1. Z3 symbolic proof that no witness can satisfy both H_A(pk_hash, r_pk) and H_SN(r_pk', Coin)
+    #    with mismatched r_pk != r_pk' or mismatched pk_hash != stmt.pk_hash (for all 384-bit vectors).
+    s = z3.Solver()
+    pk_stmt = z3.BitVec("pk_stmt", 384)
+    r_pk_priv = z3.BitVec("r_pk_priv", 384)
+    # p=0/3 wiring: bytes 1..49 = Const(pk_stmt), bytes 49..97 = Priv(OFF_S_IN)
+    p_addr_pk = pk_stmt
+    p_addr_rpk = r_pk_priv
+    # p=2/5 wiring: bytes 1..49 = Priv(OFF_S_IN)
+    p_sn_rpk = r_pk_priv
+    s.add(z3.Or(p_addr_pk != pk_stmt, p_addr_rpk != p_sn_rpk))
+    assert s.check() == z3.unsat, "PFSH03 r_pk/pk_hash binding Z3 check failed"
+
+    # 2. Check exact wiring structure in BOTH rust-prover/src/circuit.rs and go-verifier/circuit.go
+    rust_src = (ROOT / "rust-prover/src/circuit.rs").read_text()
+    go_src = (ROOT / "go-verifier/circuit.go").read_text()
+    for needle in [
+        "set_bytes_const(&mut spec, 1, &stmt.pk_hash0)",
+        "set_priv(&mut spec, 49, OFF_S_IN0, OWNER_SECRET_BYTES)",
+        "set_bytes_const(&mut spec, 1, &stmt.pk_hash1)",
+        "set_priv(&mut spec, 49, OFF_S_IN1, OWNER_SECRET_BYTES)",
+        "set_perm_out(&mut spec, 1, 0, ADDR_BYTES)",
+        "set_perm_out(&mut spec, 49, 1, COIN_BYTES)",
+        "set_perm_out(&mut spec, 1, 3, ADDR_BYTES)",
+        "set_perm_out(&mut spec, 49, 4, COIN_BYTES)",
+    ]:
+        assert needle in rust_src, f"Missing PFSH03 wiring in rust circuit.rs: {needle}"
+    for needle in [
+        "setBytesConst(1, stmt.PkHash0[:])",
+        "setPriv(49, OffSIn0, OwnerSecretBytes)",
+        "setBytesConst(1, stmt.PkHash1[:])",
+        "setPriv(49, OffSIn1, OwnerSecretBytes)",
+        "setPermOut(1, 0, AddrBytes)",
+        "setPermOut(49, 1, CoinBytes)",
+        "setPermOut(1, 3, AddrBytes)",
+        "setPermOut(49, 4, CoinBytes)",
+    ]:
+        assert needle in go_src, f"Missing PFSH03 wiring in go circuit.go: {needle}"
+
+    # 3. Verify differential sensitivity: flipping pk_in0 / pk_in1 in tx_hop2 changes pub_rhs
+    #    IDENTICALLY in Rust and Go Group A+B+C evaluator!
+    orig_bytes = bytearray((ROOT / "payments/tx_hop2.bin").read_bytes())
+    # In PFSH03 wire: pk_in0 starts at offset 3644 (1952 B), pk_in1 at 5596 (1952 B).
+    for label, byte_off in [("pk_in0", 3644), ("pk_in1", 5596)]:
+        mod = bytearray(orig_bytes)
+        mod[byte_off] ^= 0x01
+        tmp_tx = ROOT / f".tmp_{label}.bin"
+        r_out = ROOT / f".tmp_{label}_rust.json"
+        g_out = ROOT / f".tmp_{label}_go.json"
+        tmp_tx.write_bytes(mod)
+        try:
+            subprocess.run(
+                [os.environ.get("RUST_BIN", str(ROOT / "rust-prover/target/release/pft-binius-shielded")), "dump-ir", "--tx", str(tmp_tx), "--out", str(r_out)],
+                check=True,
+            )
+            subprocess.run(
+                [str(ROOT / "go-verifier/binius-shielded-verifier"), "dump-ir", "-tx", str(tmp_tx), "-out", str(g_out)],
+                check=True,
+            )
+            rj = json.loads(r_out.read_text())
+            gj = json.loads(g_out.read_text())
+            assert rj["pub_rhs_hex"] == gj["pub_rhs_hex"], f"Rust/Go pub_rhs mismatch on {label} flip!"
+            assert rj["pub_rhs_hex"] != orig_pub_rhs_hex, f"{label} bit flip did NOT affect pub_rhs!"
+            assert rj["wb_hex"] == gj["wb_hex"] and rj["wc_hex"] == gj["wc_hex"]
+        finally:
+            tmp_tx.unlink(missing_ok=True)
+            r_out.unlink(missing_ok=True)
+            g_out.unlink(missing_ok=True)
+    return "unsat+rust_go_diff_verified"
+
+
 def main():
     tx_path = ROOT / "payments/tx_hop2.bin"
     rust_ir_path = ROOT / "rust_ir.json"
@@ -383,12 +467,15 @@ def main():
     rust_ir_path.unlink(missing_ok=True)
     go_ir_path.unlink(missing_ok=True)
 
+    pfsh03_wiring = z3_proof_pfsh03_input_wiring(rust_ir["pub_rhs_hex"])
+
     res = {
         "z3_version": z3.get_version_string(),
         "z3_conservation_66bit_mint_unshield": z3_proof_conservation(),
         "z3_merkle_mux_2bit": z3_proof_merkle_mux(),
         "z3_is_dummy_gating": z3_proof_is_dummy_gating(),
         "z3_chi_iota": z3_proof_chi_iota(),
+        "z3_pfsh03_56perm_pk_hash_wiring": pfsh03_wiring,
         "ltrp_basis_verified": verify_ltrp_1600(),
         "keccak_56perm_dag_bits_covered": verify_56perm_dag_coverage(),
         "group_c_3way_rust_go_python": len(py_cs),

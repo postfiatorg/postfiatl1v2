@@ -2429,6 +2429,22 @@ pub fn prepare_pq_account_debit(
     Ok(account)
 }
 
+/// Strict deposit-debit guard requiring the depositor's full 1,952-byte ML-DSA-65
+/// public key to already be pinned on-chain (`account.public_key_hex.is_some()`),
+/// eliminating the 160-bit unpinned address preimage window on brand-new accounts.
+pub fn prepare_pq_account_debit_pinned(
+    ledger: &LedgerState,
+    authorization: &postfiat_types::pq_payment::Account,
+    debit: u64,
+) -> Result<postfiat_types::Account, &'static str> {
+    let address = address_from_public_key(authorization.public_key.as_ref());
+    let account = ledger.account(&address).ok_or("pq_unfunded_source")?;
+    if account.public_key_hex.is_none() {
+        return Err("pq_unpinned_source_account");
+    }
+    prepare_pq_account_debit(ledger, authorization, debit)
+}
+
 pub fn check_pq_recipient(
     ledger: &LedgerState,
     address: &str,

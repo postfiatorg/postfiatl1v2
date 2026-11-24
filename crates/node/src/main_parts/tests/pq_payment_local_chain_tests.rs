@@ -75,8 +75,12 @@ mod pq_payment_local_chain_tests {
         ))
         .unwrap()
         .proposal;
+        // Under the two-tier exit-safe pause, Mode::Internal (`pft-pay`) is
+        // rejected with `pq_settlement_inactive` both before first activation
+        // and during a standard pause, whereas Mode::Exit remains open until an
+        // explicit auto-expiring emergency exit-freeze is enacted.
         let actions = vec![
-            l1_action("pfusdc-exit"),
+            l1_action("pft-pay"),
             ShieldedAction::ShieldedSwapV1(postfiat_types::ShieldedSwapActionPayload {
                 swap_json: "{}".into(),
             }),

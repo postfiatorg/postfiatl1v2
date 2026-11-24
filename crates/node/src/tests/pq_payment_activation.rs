@@ -658,3 +658,131 @@ fn pq_base_history_non_atomic_issued_shield() {
     assert_eq!(shielded, disk.read_shielded().unwrap());
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn two_tier_pq_pause_keeps_exits_open_and_emergency_freeze_auto_expires() {
+    let dir = unique_test_dir("pq-two-tier-pause");
+    let genesis = rehearsal_genesis(&dir);
+    let store = NodeStore::new(&dir);
+    let registry = read_validator_registry_file(&dir.join(VALIDATOR_REGISTRY_FILE)).unwrap();
+    let validators = active_validator_ids(&store.read_governance().unwrap()).unwrap();
+    let keys = read_validator_key_file(&dir.join(VALIDATOR_KEYS_FILE)).unwrap();
+    let split = super::consensus_history::write_split_validator_key_files(&dir, &keys);
+
+    let pay = build_atomic_shielded_action_batch(
+        &genesis,
+        vec![ShieldedAction::PqPaymentV1(payment("pft-pay"))],
+    )
+    .unwrap();
+    let exit_pft = build_atomic_shielded_action_batch(
+        &genesis,
+        vec![ShieldedAction::PqPaymentV1(payment("pft-exit"))],
+    )
+    .unwrap();
+
+    let mut g = GovernanceState::new(6);
+    let mut fee_sched = amendment(&genesis, 2);
+    fee_sched.kind = "pq_payment_rehearsal_v1:fee:3".into();
+    g.apply(fee_sched);
+
+    // 1. Active at height 5: pay and exit allowed, issued fee active for both modes.
+    consensus_artifacts::check_pq_block(&genesis, &g, 5, [&pay]).unwrap();
+    consensus_artifacts::check_pq_block(&genesis, &g, 5, [&exit_pft]).unwrap();
+    assert_eq!(
+        g.pq_issued_fee_for_mode(postfiat_types::PQ_REHEARSAL_ISSUE, 5, Mode::Internal),
+        Some(3)
+    );
+    assert_eq!(
+        g.pq_issued_fee_for_mode(postfiat_types::PQ_REHEARSAL_ISSUE, 5, Mode::Exit),
+        Some(3)
+    );
+
+    // 2. Standard pause (`PQ_REHEARSAL_V1` value=0): halts Shield/Internal, keeps Exits OPEN!
+    g.apply(amendment(&genesis, 0));
+    assert_eq!(
+        consensus_artifacts::check_pq_block(&genesis, &g, 6, [&pay])
+            .unwrap_err()
+            .to_string(),
+        "pq_settlement_inactive"
+    );
+    consensus_artifacts::check_pq_block(&genesis, &g, 6, [&exit_pft])
+        .expect("standard pause must keep native PFT exits open");
+    assert_eq!(
+        g.pq_issued_fee_for_mode(postfiat_types::PQ_REHEARSAL_ISSUE, 6, Mode::Internal),
+        None
+    );
+    assert_eq!(
+        g.pq_issued_fee_for_mode(postfiat_types::PQ_REHEARSAL_ISSUE, 6, Mode::Exit),
+        Some(3),
+        "standard pause must keep issued pfUSDC exit fee readable so users can exit"
+    );
+
+    // 3. Emergency exit-freeze requires elevated quorum (6/6 on 6 validators) and <= MAX cap.
+    assert_eq!(postfiat_types::pq_exit_freeze_quorum(6), 6);
+    let make_signed_freeze = |quorum: usize, value: u32, slot: u64| {
+        let mut config = EssentialSubsetConfig::all_of(validators.clone());
+        config.quorum = quorum;
+        let support = validators[..quorum].to_vec();
+        let mut a = ratify_governance_amendment_with_lifecycle(
+            &cobalt_domain(&genesis),
+            &config,
+            postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1,
+            value,
+            support.clone(),
+            GovernanceAmendmentLifecycle {
+                activation_height: slot,
+                veto_until_height: 0,
+                paused: false,
+            },
+        )
+        .unwrap();
+        let file = dir.join(format!("freeze-{quorum}-{value}.json"));
+        write_amendment_file(&file, &a).unwrap();
+        for v in &support {
+            let auth = sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                data_dir: dir.clone(),
+                amendment_file: file.clone(),
+                validator: v.clone(),
+                validator_key_file: split.iter().find(|(id, _)| id == v).unwrap().1.clone(),
+                proposal_slot: slot,
+                expires_at_height: slot + 20,
+                authorization_file: dir.join(format!("auth-{v}-{quorum}-{value}.json")),
+            })
+            .unwrap();
+            a.signed_authorizations.push(auth);
+        }
+        a
+    };
+
+    // 5/6 BFT quorum is NOT enough to freeze exits (must be 6/6 on 6 validators).
+    let low_quorum = GovernanceActionBatch::new("low-q", vec![make_signed_freeze(5, 10, 1)]);
+    let err = verify_live_signed_governance_batch(&genesis, &g, &registry, &low_quorum, 1)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("pq_exit_freeze_threshold"), "{err}");
+
+    // Indefinite / oversized freeze (> MAX_PQ_EXIT_FREEZE_BLOCKS past slot) is rejected.
+    let over_cap_val = (1 + postfiat_types::MAX_PQ_EXIT_FREEZE_BLOCKS + 1) as u32;
+    let over_cap = GovernanceActionBatch::new("over-cap", vec![make_signed_freeze(6, over_cap_val, 1)]);
+    let err = verify_live_signed_governance_batch(&genesis, &g, &registry, &over_cap, 1)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("pq_exit_freeze_exceeds_cap"), "{err}");
+
+    // Valid 6/6 bounded freeze through height 10 passes admission, freezes exits at 6..=10,
+    // and AUTO-EXPIRES at height 11 without any governance vote!
+    let valid_freeze = make_signed_freeze(6, 10, 1);
+    let valid_batch = GovernanceActionBatch::new("valid-freeze", vec![valid_freeze.clone()]);
+    verify_live_signed_governance_batch(&genesis, &g, &registry, &valid_batch, 1).unwrap();
+    g.apply(valid_freeze);
+    assert_eq!(
+        consensus_artifacts::check_pq_block(&genesis, &g, 10, [&exit_pft])
+            .unwrap_err()
+            .to_string(),
+        "pq_exit_frozen"
+    );
+    consensus_artifacts::check_pq_block(&genesis, &g, 11, [&exit_pft])
+        .expect("emergency exit freeze must auto-expire at freeze_until + 1");
+
+    fs::remove_dir_all(dir).unwrap();
+}

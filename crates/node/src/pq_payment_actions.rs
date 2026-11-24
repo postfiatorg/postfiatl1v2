@@ -50,6 +50,14 @@ pub(super) fn verify_statement(
     payment: &PqPayment,
     chain: Chain,
 ) -> Result<postfiat_privacy_binius::PaymentStatement, postfiat_privacy_binius::VerifyError> {
+    verify_statement_abortable(payment, chain, None)
+}
+
+pub(super) fn verify_statement_abortable(
+    payment: &PqPayment,
+    chain: Chain,
+    abort: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<postfiat_privacy_binius::PaymentStatement, postfiat_privacy_binius::VerifyError> {
     let digest = payment.digest();
     {
         let entries = verified_cache().lock().unwrap_or_else(|e| e.into_inner());
@@ -62,7 +70,7 @@ pub(super) fn verify_statement(
     let _slot = VerificationSlot::acquire();
     #[cfg(test)]
     PROOF_VERIFICATIONS.with(|n| n.set(n.get() + 1));
-    let statement = postfiat_privacy_binius::verify_l1(payment, chain)?;
+    let statement = postfiat_privacy_binius::verify_l1_abortable(payment, chain, abort)?;
     {
         let mut entries = verified_cache().lock().unwrap_or_else(|e| e.into_inner());
         if !entries.iter().any(|e| {
@@ -198,7 +206,9 @@ pub(super) fn fee_terms(
         }
         return Ok((terms.public_fee, pft_minimum));
     }
-    let required = governance.pq_issued_fee(&id, height).ok_or("pq_fee_unconfigured")?;
+    let required = governance
+        .pq_issued_fee_for_mode(&id, height, terms.mode)
+        .ok_or("pq_fee_unconfigured")?;
     if inner_fee != required {
         return Err("pq_fee_mismatch");
     }
@@ -273,17 +283,17 @@ pub(super) fn apply(
     governance: &GovernanceState,
     policies: &AssetOrchardEgressPolicyRegistry,
 ) -> Result<Receipt, &'static str> {
-    if !postfiat_types::pq_rehearsal_domain(&genesis.chain_id, genesis_digest)
-        || !governance.pq_rehearsal_active(
-            &genesis.chain_id,
-            genesis_digest,
-            genesis.protocol_version,
-            height,
-        )
-    {
+    let (terms, _, inner) = payment.parts().map_err(|_| "pq_encoding")?;
+    if !postfiat_types::pq_rehearsal_domain(&genesis.chain_id, genesis_digest) {
         return Err("pq_settlement_inactive");
     }
-    let (terms, _, inner) = payment.parts().map_err(|_| "pq_encoding")?;
+    governance.pq_rehearsal_mode_allowed(
+        &genesis.chain_id,
+        genesis_digest,
+        genesis.protocol_version,
+        height,
+        terms.mode,
+    )?;
     let chain = Chain {
         id: &genesis.chain_id,
         genesis: hex_to_bytes(genesis_digest)

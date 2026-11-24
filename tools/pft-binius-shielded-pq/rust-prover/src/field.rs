@@ -208,13 +208,19 @@ impl KTables {
         (lo as u32) | ((hi as u32) << 16)
     }
 
-    /// Branchless constant-time K_32 multiply via PCLMULQDQ when available on x86_64.
+    /// Branchless constant-time K_32 multiply via PCLMULQDQ (x86_64) or PMULL (aarch64).
     #[inline(always)]
     pub fn kmul(&self, a: u32, b: u32) -> u32 {
         #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq") {
                 return unsafe { kmul32_pclmul(a, b) };
+            }
+        }
+        #[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+        {
+            if std::arch::is_aarch64_feature_detected!("pmull") {
+                return unsafe { kmul32_pmull(a, b) };
             }
         }
         self.kmul_portable(a, b)
@@ -600,6 +606,12 @@ impl E {
                 return unsafe { self.scale_k_pclmul(k) };
             }
         }
+        #[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+        {
+            if std::arch::is_aarch64_feature_detected!("pmull") {
+                return unsafe { self.scale_k_pmull(k) };
+            }
+        }
         let b0 = (k & 0xFFFF) as u16;
         let b1 = (k >> 16) as u16;
         let b01 = b0 ^ b1;
@@ -679,6 +691,12 @@ impl E {
                 && std::arch::is_x86_feature_detected!("sse4.1")
             {
                 return unsafe { self.mul_pclmul(rhs) };
+            }
+        }
+        #[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+        {
+            if std::arch::is_aarch64_feature_detected!("pmull") {
+                return unsafe { self.mul_pmull(rhs) };
             }
         }
         // Sparse basis elements remain cheaper with the reference loop.
@@ -840,12 +858,177 @@ fn reduce_poly16_31(mut w: u64) -> u16 {
     ((w & 0xFFFF) ^ h3 ^ (h3 << 1) ^ (h3 << 3) ^ (h3 << 5)) as u16
 }
 
-#[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
+#[cfg(all(any(target_arch = "x86_64", target_arch = "aarch64"), not(feature = "portable")))]
 #[inline(always)]
 fn reduce_poly16_42(mut w: u64) -> u16 {
     let h1 = w >> 32;
     w = (w & 0xFFFF_FFFF) ^ h1 ^ (h1 << 2) ^ (h1 << 6) ^ (h1 << 10);
     reduce_poly16_31(w)
+}
+
+/// ARMv8 PMULL (vmull_p64) branchless binary-field kernels for Apple Silicon and ARM64 servers/mobile.
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+#[inline(always)]
+#[target_feature(enable = "pmull")]
+unsafe fn pmull64(a: u64, b: u64) -> u128 {
+    core::arch::aarch64::vmull_p64(a, b)
+}
+
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+#[inline]
+#[target_feature(enable = "pmull")]
+unsafe fn kmul32_pmull(a: u32, b: u32) -> u32 {
+    let a_u64 = ((a & 0xFFFF) as u64) | (((a >> 16) as u64) << 32);
+    let b_u64 = ((b & 0xFFFF) as u64) | (((b >> 16) as u64) << 32);
+    let p = pmull64(a_u64, b_u64);
+    let lo64 = p as u64;
+    let hi64 = (p >> 64) as u64;
+    let r0 = reduce_poly16_42((lo64 & 0x7FFF_FFFF) ^ (hi64 << 11));
+    let r1 = reduce_poly16_31((lo64 >> 32) ^ hi64);
+    (r0 as u32) | ((r1 as u32) << 16)
+}
+
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+#[inline]
+#[target_feature(enable = "pmull")]
+unsafe fn karatsuba3_pmull(
+    a0: u64, a1: u64, a2: u64,
+    b0: u64, b1: u64, b2: u64,
+    out: &mut [u128; 5],
+) {
+    let p0 = pmull64(a0, b0);
+    let p1 = pmull64(a1, b1);
+    let p2 = pmull64(a2, b2);
+    let q01 = pmull64(a0 ^ a1, b0 ^ b1);
+    let q02 = pmull64(a0 ^ a2, b0 ^ b2);
+    let q12 = pmull64(a1 ^ a2, b1 ^ b2);
+    out[0] = p0;
+    out[1] = q01 ^ p0 ^ p1;
+    out[2] = q02 ^ p0 ^ p1 ^ p2;
+    out[3] = q12 ^ p1 ^ p2;
+    out[4] = p2;
+}
+
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+#[inline]
+#[target_feature(enable = "pmull")]
+unsafe fn karatsuba6_pmull(a: &[u64; 6], b: &[u64; 6], out: &mut [u128; 11]) {
+    let mut z0 = [0u128; 5];
+    let mut z1 = [0u128; 5];
+    let mut z2 = [0u128; 5];
+    karatsuba3_pmull(a[0], a[1], a[2], b[0], b[1], b[2], &mut z0);
+    karatsuba3_pmull(a[3], a[4], a[5], b[3], b[4], b[5], &mut z2);
+    karatsuba3_pmull(
+        a[0] ^ a[3], a[1] ^ a[4], a[2] ^ a[5],
+        b[0] ^ b[3], b[1] ^ b[4], b[2] ^ b[5],
+        &mut z1,
+    );
+    out[0] = z0[0];
+    out[1] = z0[1];
+    out[2] = z0[2];
+    out[3] = z0[3] ^ z1[0] ^ z0[0] ^ z2[0];
+    out[4] = z0[4] ^ z1[1] ^ z0[1] ^ z2[1];
+    out[5] = z1[2] ^ z0[2] ^ z2[2];
+    out[6] = z2[0] ^ z1[3] ^ z0[3] ^ z2[3];
+    out[7] = z2[1] ^ z1[4] ^ z0[4] ^ z2[4];
+    out[8] = z2[2];
+    out[9] = z2[3];
+    out[10] = z2[4];
+}
+
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+#[inline]
+#[target_feature(enable = "pmull")]
+unsafe fn karatsuba12_pmull(a: &[u64; 12], b: &[u64; 12], out: &mut [u128; 23]) {
+    let mut a_lo = [0u64; 6];
+    let mut a_hi = [0u64; 6];
+    let mut a_sum = [0u64; 6];
+    let mut b_lo = [0u64; 6];
+    let mut b_hi = [0u64; 6];
+    let mut b_sum = [0u64; 6];
+    for i in 0..6 {
+        a_lo[i] = a[i];
+        a_hi[i] = a[i + 6];
+        a_sum[i] = a[i] ^ a[i + 6];
+        b_lo[i] = b[i];
+        b_hi[i] = b[i + 6];
+        b_sum[i] = b[i] ^ b[i + 6];
+    }
+    let mut z0 = [0u128; 11];
+    let mut z1 = [0u128; 11];
+    let mut z2 = [0u128; 11];
+    karatsuba6_pmull(&a_lo, &b_lo, &mut z0);
+    karatsuba6_pmull(&a_hi, &b_hi, &mut z2);
+    karatsuba6_pmull(&a_sum, &b_sum, &mut z1);
+    for i in 0..6 {
+        out[i] = z0[i];
+    }
+    for i in 0..5 {
+        out[6 + i] = z0[6 + i] ^ z1[i] ^ z0[i] ^ z2[i];
+    }
+    out[11] = z1[5] ^ z0[5] ^ z2[5];
+    for i in 0..5 {
+        out[12 + i] = z2[i] ^ z1[6 + i] ^ z0[6 + i] ^ z2[6 + i];
+    }
+    for i in 0..6 {
+        out[17 + i] = z2[5 + i];
+    }
+}
+
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+impl E {
+    #[target_feature(enable = "pmull")]
+    unsafe fn scale_k_pmull(self, k: u32) -> E {
+        let k_u64 = ((k & 0xFFFF) as u64) | (((k >> 16) as u64) << 32);
+        let mut out = [0u32; 12];
+        for i in 0..12 {
+            let a = self.c[i];
+            let a_u64 = ((a & 0xFFFF) as u64) | (((a >> 16) as u64) << 32);
+            let p = pmull64(k_u64, a_u64);
+            let lo64 = p as u64;
+            let hi64 = (p >> 64) as u64;
+            let r0 = reduce_poly16_42((lo64 & 0x7FFF_FFFF) ^ (hi64 << 11));
+            let r1 = reduce_poly16_31((lo64 >> 32) ^ hi64);
+            out[i] = (r0 as u32) | ((r1 as u32) << 16);
+        }
+        E { c: out }
+    }
+
+    #[inline]
+    #[target_feature(enable = "pmull")]
+    pub unsafe fn mul_pmull(self, rhs: E) -> E {
+        let mut pa = [0u64; 12];
+        let mut pb = [0u64; 12];
+        for i in 0..12 {
+            let a = self.c[i];
+            let b = rhs.c[i];
+            pa[i] = ((a & 0xFFFF) as u64) | (((a >> 16) as u64) << 32);
+            pb[i] = ((b & 0xFFFF) as u64) | (((b >> 16) as u64) << 32);
+        }
+        let mut p = [0u128; 23];
+        karatsuba12_pmull(&pa, &pb, &mut p);
+        let mut prod = [0u32; 23];
+        for i in (12..23).rev() {
+            let v = p[i];
+            p[i - 12 + 3] ^= v;
+            p[i - 12 + 1] ^= v;
+            let lo64 = v as u64;
+            let hi64 = (v >> 64) as u64;
+            let r0 = reduce_poly16_42((lo64 & 0x7FFF_FFFF) ^ (hi64 << 11));
+            let r1 = reduce_poly16_31((lo64 >> 32) ^ hi64);
+            prod[i - 12] ^= kmul_alpha_branchless((r0 as u32) | ((r1 as u32) << 16));
+        }
+        let mut out = [0u32; 12];
+        for i in 0..12 {
+            let v = p[i];
+            let lo64 = v as u64;
+            let hi64 = (v >> 64) as u64;
+            let r0 = reduce_poly16_42((lo64 & 0x7FFF_FFFF) ^ (hi64 << 11));
+            let r1 = reduce_poly16_31((lo64 >> 32) ^ hi64);
+            out[i] = prod[i] ^ ((r0 as u32) | ((r1 as u32) << 16));
+        }
+        E { c: out }
+    }
 }
 
 #[inline(always)]

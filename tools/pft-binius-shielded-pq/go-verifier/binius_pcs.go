@@ -856,6 +856,7 @@ func verifyBiniusProof(stmt *PaymentStatement, proof *BiniusProof) error {
 	rl := buildRowLayout()
 	stmtBytes := encodeStatement(stmt)
 
+	// 1. Cheap full Fiat-Shamir transcript replay before heavy algebra or Merkle hashing.
 	tr := newTranscript(stmtBytes, &proof.MerkleRoot, proof.SG1, proof.SMask2)
 	alpha := tr.squeezeE("C02")
 
@@ -871,30 +872,10 @@ func verifyBiniusProof(stmt *PaymentStatement, proof *BiniusProof) error {
 		r1[d] = rCh
 	}
 
-	wbR1, wcR1, pubRHS := evalVerifierWeightsAtR1(stmt, alpha, &r1, t)
-	claim1 := pubRHS.Add(proof.SG1)
-	for d := 0; d < VSC1; d++ {
-		c0, c2, c3 := proof.SC1Rounds[d][0], proof.SC1Rounds[d][1], proof.SC1Rounds[d][2]
-		c1 := claim1.Add(c2).Add(c3)
-		rd := r1[d]
-		claim1 = c0.Add(rd.Mul(c1.Add(rd.Mul(c2.Add(rd.Mul(c3, t)), t)), t))
-	}
-
 	tr.absorbE("DEG2C", []E{proof.EvalC1, proof.EvalC2})
 	tau := tr.squeezeE("C22")
 	if tau.IsZero() {
 		return errors.New("zero tau challenge")
-	}
-	lhsDeg2 := claim1.Add(tau.Mul(proof.EvalC1, t)).Add(tau.Sq(t).Mul(proof.EvalC2, t))
-	rhsDeg2 := proof.EvalZG
-	for x := 0; x < 5; x++ {
-		xp1 := (x + 1) % 5
-		xp2 := (x + 2) % 5
-		rhsDeg2.AddAssign(wbR1[x].Mul(proof.EvalZ[x], t))
-		rhsDeg2.AddAssign(wcR1[x].Mul(EOne.Add(proof.EvalZ[xp1]).Mul(proof.EvalZ[xp2], t), t))
-	}
-	if lhsDeg2 != rhsDeg2 {
-		return errors.New("Degree-2 evaluation hiding check failed")
 	}
 
 	tr.absorbE("DEG2Z", []E{
@@ -902,37 +883,16 @@ func verifyBiniusProof(stmt *PaymentStatement, proof *BiniusProof) error {
 	})
 
 	gamma := tr.squeezeE("C23")
-	gammas := expandGammas(gamma, t)
-	eqBit := eqTable(r1[14:19], t)
-	var rsLhs E
-	for b := 0; b < 32; b++ {
-		rsLhs.AddAssign(eqBit[b].Mul(proof.RSSPrime[b], t))
-	}
-	rsRhs := proof.EvalZ[0]
-	for x := 1; x < 5; x++ {
-		rsRhs.AddAssign(gammas[x].Mul(proof.EvalZ[x], t))
-	}
-	if rsLhs != rsRhs {
-		return errors.New("Ring-Switching sum check failed")
-	}
-
 	tr.absorbE("RSSP", proof.RSSPrime[:])
 	rhoRS := tr.squeezeE("C24")
 	if rhoRS.IsZero() {
 		return errors.New("zero rho_rs challenge")
 	}
-	wRS, eta1, eta2, eta3 := expandRhoRS(rhoRS, t)
 
-	rsTarget := ringSwitchTarget(&proof.RSSPrime, wRS, t)
-	claim2 := rsTarget.Add(eta1.Mul(proof.EvalZG, t)).Add(eta2.Mul(proof.SG1, t)).Add(eta3.Mul(proof.SMask2, t))
 	var rRowP [VSC2]E
 	for d := 0; d < VSC2; d++ {
-		c0, c2 := proof.SC2Rounds[d][0], proof.SC2Rounds[d][1]
-		c1 := claim2.Add(c2)
 		tr.absorbE(fmt.Sprintf("S2%02d", d), proof.SC2Rounds[d][:])
-		rCh := tr.squeezeE(fmt.Sprintf("C%02d", d+25))
-		rRowP[d] = rCh
-		claim2 = c0.Add(rCh.Mul(c1.Add(rCh.Mul(c2, t)), t))
+		rRowP[d] = tr.squeezeE(fmt.Sprintf("C%02d", d+25))
 	}
 
 	tr.absorbE("BEVAL", []E{proof.BEval})
@@ -942,15 +902,7 @@ func verifyBiniusProof(stmt *PaymentStatement, proof *BiniusProof) error {
 	tr.absorbE("VOPEN", proof.VOpenCoeffs)
 	trFinal := tr.state
 
-	vOpenH := make([]E, KCols)
-	copy(vOpenH, proof.VOpenCoeffs[:KCols])
-	t.anttForwardHE(vOpenH)
-	ipLhs := evalVerifierIPLhs(&rl, &r1, tau, &gammas, wRS, eta1, eta2, eta3, &rRowP, vOpenH, t)
-	ipRhs := proof.BEval.Add(lambdaO.Mul(claim2, t))
-	if ipLhs != ipRhs {
-		return errors.New("PCS H-domain inner-product check failed")
-	}
-
+	// 2. Fail-fast Round-34 20-bit PoW & opened-column count check.
 	powOK, qIndices := evalHC4(&trFinal, &proof.PowNonce)
 	if !powOK {
 		return errors.New("PoW verification failed")
@@ -970,7 +922,63 @@ func verifyBiniusProof(stmt *PaymentStatement, proof *BiniusProof) error {
 		return errors.New("opened column count mismatch")
 	}
 
-	// Pruned SHA-384 Merkle verification
+	// 3. Cheap Ring-Switching sum check.
+	gammas := expandGammas(gamma, t)
+	eqBit := eqTable(r1[14:19], t)
+	var rsLhs E
+	for b := 0; b < 32; b++ {
+		rsLhs.AddAssign(eqBit[b].Mul(proof.RSSPrime[b], t))
+	}
+	rsRhs := proof.EvalZ[0]
+	for x := 1; x < 5; x++ {
+		rsRhs.AddAssign(gammas[x].Mul(proof.EvalZ[x], t))
+	}
+	if rsLhs != rsRhs {
+		return errors.New("Ring-Switching sum check failed")
+	}
+
+	// 4. Circuit MLE & Sumcheck 1 + Degree-2 Evaluation Hiding check.
+	wbR1, wcR1, pubRHS := evalVerifierWeightsAtR1(stmt, alpha, &r1, t)
+	claim1 := pubRHS.Add(proof.SG1)
+	for d := 0; d < VSC1; d++ {
+		c0, c2, c3 := proof.SC1Rounds[d][0], proof.SC1Rounds[d][1], proof.SC1Rounds[d][2]
+		c1 := claim1.Add(c2).Add(c3)
+		rd := r1[d]
+		claim1 = c0.Add(rd.Mul(c1.Add(rd.Mul(c2.Add(rd.Mul(c3, t)), t)), t))
+	}
+	lhsDeg2 := claim1.Add(tau.Mul(proof.EvalC1, t)).Add(tau.Sq(t).Mul(proof.EvalC2, t))
+	rhsDeg2 := proof.EvalZG
+	for x := 0; x < 5; x++ {
+		xp1 := (x + 1) % 5
+		xp2 := (x + 2) % 5
+		rhsDeg2.AddAssign(wbR1[x].Mul(proof.EvalZ[x], t))
+		rhsDeg2.AddAssign(wcR1[x].Mul(EOne.Add(proof.EvalZ[xp1]).Mul(proof.EvalZ[xp2], t), t))
+	}
+	if lhsDeg2 != rhsDeg2 {
+		return errors.New("Degree-2 evaluation hiding check failed")
+	}
+
+	// 5. Sumcheck 2 & H-domain Ring-Switch inner-product check.
+	wRS, eta1, eta2, eta3 := expandRhoRS(rhoRS, t)
+	rsTarget := ringSwitchTarget(&proof.RSSPrime, wRS, t)
+	claim2 := rsTarget.Add(eta1.Mul(proof.EvalZG, t)).Add(eta2.Mul(proof.SG1, t)).Add(eta3.Mul(proof.SMask2, t))
+	for d := 0; d < VSC2; d++ {
+		c0, c2 := proof.SC2Rounds[d][0], proof.SC2Rounds[d][1]
+		c1 := claim2.Add(c2)
+		rCh := rRowP[d]
+		claim2 = c0.Add(rCh.Mul(c1.Add(rCh.Mul(c2, t)), t))
+	}
+
+	vOpenH := make([]E, KCols)
+	copy(vOpenH, proof.VOpenCoeffs[:KCols])
+	t.anttForwardHE(vOpenH)
+	ipLhs := evalVerifierIPLhs(&rl, &r1, tau, &gammas, wRS, eta1, eta2, eta3, &rRowP, vOpenH, t)
+	ipRhs := proof.BEval.Add(lambdaO.Mul(claim2, t))
+	if ipLhs != ipRhs {
+		return errors.New("PCS H-domain inner-product check failed")
+	}
+
+	// 6. Pruned 384-bit Merkle verification (prefix of 3×SHA-512)
 	levelMap := make(map[int][HashBytes]byte, len(uniq))
 	for i, idx := range uniq {
 		col := &proof.OpenedCols[i]

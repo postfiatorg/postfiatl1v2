@@ -54,6 +54,20 @@ pub fn verify_l1(
     payment: &postfiat_types::pq_payment::PqPayment,
     chain: postfiat_types::pq_payment::Chain,
 ) -> Result<PaymentStatement, VerifyError> {
+    verify_l1_abortable(payment, chain, None)
+}
+
+/// Fail-fast L1 verifier with optional cooperative cancellation (`abort`) for
+/// parallel multi-proof block validation.
+pub fn verify_l1_abortable(
+    payment: &postfiat_types::pq_payment::PqPayment,
+    chain: postfiat_types::pq_payment::Chain,
+    abort: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<PaymentStatement, VerifyError> {
+    use std::sync::atomic::Ordering;
+    if abort.is_some_and(|f| f.load(Ordering::Relaxed)) {
+        return Err(VerifyError::InvalidProof);
+    }
     let (terms, signature, inner) = payment.parts().map_err(|_| VerifyError::Encoding)?;
     let tx = ShieldedTx::from_l1_inner(inner).map_err(|_| VerifyError::Encoding)?;
     let mut statement = tx.statement();
@@ -72,7 +86,8 @@ pub fn verify_l1(
     statement.tx_ctx = terms.statement_context(chain, statement.tx_ctx);
     tx.verify_spend_auth(&statement.tx_ctx)
         .map_err(|_| VerifyError::InvalidProof)?;
-    binius_pcs::verify(&statement, &tx.proof).map_err(|_| VerifyError::InvalidProof)?;
+    binius_pcs::verify_abortable(&statement, &tx.proof, abort)
+        .map_err(|_| VerifyError::InvalidProof)?;
     Ok(statement)
 }
 
@@ -108,6 +123,60 @@ mod tests {
             verify_payment(&bytes, VerificationContext::StandaloneFixture).unwrap_err(),
             VerifyError::InvalidPublicFlow
         );
+    }
+
+    #[test]
+    fn fail_fast_dos_rejects_bad_sig_bad_pow_and_aborts_siblings() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::Instant;
+        initialize();
+
+        let valid = include_bytes!("../../../tools/pft-binius-shielded-pq/payments/tx_hop1.bin");
+        // 1. Bad ML-DSA-65 spend signature (offset 7548 = first byte of sig_in0)
+        let mut bad_sig = valid.to_vec();
+        bad_sig[7548] ^= 0x01;
+        // 2. Valid ML-DSA-65 spend signatures + corrupted Binius proof byte (breaks PoW / transcript)
+        let mut bad_pow = valid.to_vec();
+        let proof_start = 14_170;
+        bad_pow[proof_start + 59_860] ^= 0x01; // flips pow_nonce inside fixed proof header
+        // 3. Valid ML-DSA-65 sigs + valid PoW + corrupted final Merkle sibling (worst-case DoS)
+        let mut bad_merkle = valid.to_vec();
+        let last = bad_merkle.len() - 1;
+        bad_merkle[last] ^= 0x01;
+
+        let measure = |buf: &[u8]| -> f64 {
+            let mut times = Vec::with_capacity(20);
+            for _ in 0..20 {
+                let t0 = Instant::now();
+                assert_eq!(
+                    verify_payment(buf, VerificationContext::StandaloneFixture).unwrap_err(),
+                    VerifyError::InvalidProof
+                );
+                times.push(t0.elapsed().as_secs_f64() * 1e3);
+            }
+            times.sort_by(f64::total_cmp);
+            times[10]
+        };
+
+        let ms_bad_sig = measure(&bad_sig);
+        let ms_bad_pow = measure(&bad_pow);
+        let ms_bad_merkle = measure(&bad_merkle);
+        println!(
+            "DOS_FAIL_FAST med_ms: bad_sig={ms_bad_sig:.3} bad_pow={ms_bad_pow:.3} bad_last_merkle={ms_bad_merkle:.3}"
+        );
+        assert!(ms_bad_sig < 5.0, "bad_sig took {ms_bad_sig:.3} ms");
+        assert!(ms_bad_pow < 5.0, "bad_pow took {ms_bad_pow:.3} ms");
+
+        // 4. Cooperative early-abort stops immediately when sibling sets abort=true
+        let flag = AtomicBool::new(true);
+        let tx = ShieldedTx::from_bytes(valid).unwrap();
+        let stmt = tx.statement();
+        let t0 = Instant::now();
+        assert!(binius_pcs::verify_abortable(&stmt, &tx.proof, Some(&flag)).is_err());
+        let ms_abort = t0.elapsed().as_secs_f64() * 1e3;
+        println!("DOS_COOP_ABORT ms={ms_abort:.4}");
+        assert!(ms_abort < 1.0);
+        assert!(flag.load(Ordering::Relaxed));
     }
 }
 

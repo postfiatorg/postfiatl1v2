@@ -1,6 +1,6 @@
 //! Zero-Knowledge Binius-Packed Binary-RS Polynomial Commitment & Sumcheck Proof System
 //! ("Peel-Binius-Shielded") over GF(2) ⊂ K_16 = GF(2^16) ⊂ K = GF(2^32) ⊂ E = GF(2^384)
-//! with ONE SINGLE FIXED-RANGE NIST FIPS 180-4 SHA-384 COMPILER ORACLE H: {0,1}^* -> {0,1}^{1152}
+//! with ONE SINGLE FIXED-RANGE NIST FIPS 180-4 3×SHA-512 COMPILER ORACLE H: {0,1}^* -> {0,1}^{1536}
 //! (ZERO Lemma A.1 multi-range lift, ZERO shared Keccak permutation with in-circuit SHAKE256!).
 //!
 //! Parameters (Peel-Binius-Shielded):
@@ -8,8 +8,8 @@
 //!   - Interpolation domain H = V_9             (k = 512, H ∩ L = ∅)
 //!   - Queries t = 52, PoW w_pow = 20, M_pow = 2^27, Degree bound D = k + t + 1 = 565
 //!   - Witness + ZK mask matrix: m_k = 163 K-rows (140 wit + 5 rs_mask + 2 G_1 + 16 sc2_mask)
-//!     + 2 E-rows (B_pcs, B_prox) in ONE SHA-384 Merkle tree MT_1
-//!   - Streaming 1,024-column L1-cache-resident ANTT prover (peak RSS ~300 MiB, branchless PCLMULQDQ)
+//!     + 2 E-rows (B_pcs, B_prox) in ONE 384-bit-digest Merkle tree MT_1 (prefix of 3×SHA-512)
+//!   - Streaming 1,024-column L1-cache-resident ANTT prover with subtree-root MT_1 (192 KiB tree RAM)
 
 use crate::circuit::{
     eval_verifier_weights_at_r1, CircuitChallenge,
@@ -25,8 +25,55 @@ use crate::shake256::{COIN_BYTES, NODE_BYTES, SN_BYTES};
 use rand::{RngCore, SeedableRng};
 #[cfg(feature = "prover")]
 use rand_chacha::ChaCha20Rng;
-#[cfg(feature = "prover")]
+#[cfg(all(feature = "prover", not(target_arch = "wasm32")))]
 use rayon::prelude::*;
+
+/// Single-threaded drop-in iterator shim on `wasm32` where `std::thread::spawn`
+/// is unavailable (avoids Rayon global threadpool init panic in WASM runtimes).
+#[cfg(all(feature = "prover", target_arch = "wasm32"))]
+mod wasm_seq_par {
+    pub struct SeqIter<I>(pub I);
+    pub trait IntoParIter {
+        type Item;
+        type Iter: Iterator<Item = Self::Item>;
+        fn into_par_iter(self) -> SeqIter<Self::Iter>;
+    }
+    impl<T: IntoIterator> IntoParIter for T {
+        type Item = T::Item;
+        type Iter = T::IntoIter;
+        fn into_par_iter(self) -> SeqIter<Self::Iter> {
+            SeqIter(self.into_iter())
+        }
+    }
+    impl<I: Iterator> SeqIter<I> {
+        pub fn map<B, F: FnMut(I::Item) -> B>(self, f: F) -> SeqIter<std::iter::Map<I, F>> {
+            SeqIter(self.0.map(f))
+        }
+        pub fn collect<B: FromIterator<I::Item>>(self) -> B {
+            self.0.collect()
+        }
+        pub fn fold<T, ID: Fn() -> T, F: Fn(T, I::Item) -> T>(
+            self,
+            id: ID,
+            f: F,
+        ) -> SeqIter<std::iter::Once<T>> {
+            let acc = self.0.fold(id(), f);
+            SeqIter(std::iter::once(acc))
+        }
+        pub fn reduce<ID: Fn() -> I::Item, F: Fn(I::Item, I::Item) -> I::Item>(
+            self,
+            id: ID,
+            f: F,
+        ) -> I::Item {
+            self.0.fold(id(), f)
+        }
+        pub fn find_map_first<B, F: FnMut(I::Item) -> Option<B>>(mut self, f: F) -> Option<B> {
+            self.0.find_map(f)
+        }
+    }
+}
+#[cfg(all(feature = "prover", target_arch = "wasm32"))]
+use wasm_seq_par::IntoParIter;
 use sha2::{Digest, Sha512};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1194,43 +1241,69 @@ pub fn prove(
     let mut b_pcs_h = b_pcs_coeffs[..K_COLS].to_vec();
     kt.antt_forward_h_e(&mut b_pcs_h);
 
-    // 3. Streaming L1-cache-resident MT_1 leaf generation across 2,048 coset blocks of 1,024 cols!
-    let mut leaves = vec![[0u8; HASH_BYTES]; N_CODE];
-    leaves
-        .par_chunks_mut(1024)
-        .enumerate()
-        .for_each(|(blk, leaf_chunk)| {
-            // Per-thread working set: heap-allocated so rayon work-stealing stacks stay tiny!
-            let mut u_blk = vec![[0u32; 1024]; M_K_ROWS];
+    // 3. Streaming L1-cache-resident MT_1 generation across 2,048 coset blocks of 1,024 cols.
+    //    Retain ONLY the 2,048 subtree roots (level 10, 96 KiB -> 192 KiB total upper tree)
+    //    instead of holding 201 MiB of leaves/lower levels across Sumcheck 1!
+    //    At Round 34 we recompute ONLY the <= 52 touched 1,024-leaf subtrees (~2.5% work),
+    //    producing bit-identical merkle_root and merkle_siblings while cutting peak RSS ~200 MiB.
+    const SUBTREE_LOG: usize = 10; // 1,024 leaves per coset block
+    const NUM_BLOCKS: usize = N_CODE >> SUBTREE_LOG; // 2,048
+    let build_block_subtree = |blk: usize| -> Vec<Vec<[u8; HASH_BYTES]>> {
+        let mut u_blk = vec![[0u32; 1024]; M_K_ROWS];
+        for aidx in 0..M_K_ROWS {
+            kt.antt_forward_block1024_k(&k_coeffs[aidx], blk, &mut u_blk[aidx]);
+        }
+        let mut b_pcs_blk = Box::new([E::ZERO; 1024]);
+        let mut b_prox_blk = Box::new([E::ZERO; 1024]);
+        kt.antt_forward_block1024_e(&b_pcs_coeffs, blk, &mut b_pcs_blk);
+        kt.antt_forward_block1024_e(&b_prox_coeffs, blk, &mut b_prox_blk);
+
+        let base_col = blk << SUBTREE_LOG;
+        let mut k_col = [0u32; M_K_ROWS];
+        let mut sub_levels: Vec<Vec<[u8; HASH_BYTES]>> = Vec::with_capacity(SUBTREE_LOG + 1);
+        let mut lvl0 = vec![[0u8; HASH_BYTES]; 1 << SUBTREE_LOG];
+        for sub in 0..(1 << SUBTREE_LOG) {
             for aidx in 0..M_K_ROWS {
-                kt.antt_forward_block1024_k(&k_coeffs[aidx], blk, &mut u_blk[aidx]);
+                k_col[aidx] = u_blk[aidx][sub];
             }
-            let mut b_pcs_blk = Box::new([E::ZERO; 1024]);
-            let mut b_prox_blk = Box::new([E::ZERO; 1024]);
-            kt.antt_forward_block1024_e(&b_pcs_coeffs, blk, &mut b_pcs_blk);
-            kt.antt_forward_block1024_e(&b_prox_coeffs, blk, &mut b_prox_blk);
-
-            let base_col = blk * 1024;
-            let mut k_col = [0u32; M_K_ROWS];
-            for sub in 0..1024 {
-                for aidx in 0..M_K_ROWS {
-                    k_col[aidx] = u_blk[aidx][sub];
-                }
-                leaf_chunk[sub] = oracle_leaf(base_col + sub, &k_col, b_pcs_blk[sub], b_prox_blk[sub]);
+            lvl0[sub] = oracle_leaf(base_col + sub, &k_col, b_pcs_blk[sub], b_prox_blk[sub]);
+        }
+        sub_levels.push(lvl0);
+        for lvl in 0..SUBTREE_LOG {
+            let prev = &sub_levels[lvl];
+            let base_pos = blk << (SUBTREE_LOG - 1 - lvl);
+            let mut next = Vec::with_capacity(prev.len() / 2);
+            for local in 0..(prev.len() / 2) {
+                next.push(oracle_node(
+                    lvl as u8,
+                    base_pos + local,
+                    &prev[2 * local],
+                    &prev[2 * local + 1],
+                ));
             }
-        });
+            sub_levels.push(next);
+        }
+        sub_levels
+    };
 
-    let mut tree_levels: Vec<Vec<[u8; HASH_BYTES]>> = Vec::with_capacity(MERKLE_HEIGHT + 1);
-    tree_levels.push(leaves);
-    for lvl in 0..MERKLE_HEIGHT {
-        let prev = &tree_levels[lvl];
+    let subtree_roots: Vec<[u8; HASH_BYTES]> = (0..NUM_BLOCKS)
+        .into_par_iter()
+        .map(|blk| build_block_subtree(blk)[SUBTREE_LOG][0])
+        .collect();
+
+    // Upper Merkle levels: upper_levels[0] = level 10 (2,048 nodes) .. upper_levels[11] = level 21 (root)
+    let mut upper_levels: Vec<Vec<[u8; HASH_BYTES]>> = Vec::with_capacity(MERKLE_HEIGHT - SUBTREE_LOG + 1);
+    upper_levels.push(subtree_roots);
+    for u_lvl in 0..(MERKLE_HEIGHT - SUBTREE_LOG) {
+        let lvl = SUBTREE_LOG + u_lvl;
+        let prev = &upper_levels[u_lvl];
         let next: Vec<[u8; HASH_BYTES]> = (0..(prev.len() / 2))
             .into_par_iter()
             .map(|pos| oracle_node(lvl as u8, pos, &prev[2 * pos], &prev[2 * pos + 1]))
             .collect();
-        tree_levels.push(next);
+        upper_levels.push(next);
     }
-    let merkle_root = tree_levels[MERKLE_HEIGHT][0];
+    let merkle_root = upper_levels[MERKLE_HEIGHT - SUBTREE_LOG][0];
 
     // 4. Transcript init & single-element Round-2 CircuitChallenge
     let mut tr = Transcript::new(&stmt_bytes, &merkle_root, s_g1, s_mask2);
@@ -1743,7 +1816,17 @@ pub fn prove(
         });
     }
 
-    // 12. Pruned Merkle authentication path for unique_cols
+    // 12. Pruned Merkle authentication path for unique_cols:
+    //     Recompute ONLY the <= 52 touched 1,024-leaf subtrees in parallel for levels 0..10,
+    //     then read levels 10..21 directly from the 192 KiB `upper_levels`.
+    let mut touched_blks: Vec<usize> = unique_cols.iter().map(|&c| c >> SUBTREE_LOG).collect();
+    touched_blks.sort_unstable();
+    touched_blks.dedup();
+    let lower_subtrees: BTreeMap<usize, Vec<Vec<[u8; HASH_BYTES]>>> = touched_blks
+        .into_par_iter()
+        .map(|blk| (blk, build_block_subtree(blk)))
+        .collect();
+
     let mut cur_set: BTreeSet<usize> = unique_cols.into_iter().collect();
     let mut merkle_siblings = Vec::new();
     for lvl in 0..MERKLE_HEIGHT {
@@ -1751,7 +1834,15 @@ pub fn prove(
         for &pos in &cur_set {
             let sib = pos ^ 1;
             if !cur_set.contains(&sib) {
-                merkle_siblings.push(tree_levels[lvl][sib]);
+                let h = if lvl < SUBTREE_LOG {
+                    let shift = SUBTREE_LOG - lvl;
+                    let blk = sib >> shift;
+                    let local = sib & ((1 << shift) - 1);
+                    lower_subtrees[&blk][lvl][local]
+                } else {
+                    upper_levels[lvl - SUBTREE_LOG][sib]
+                };
+                merkle_siblings.push(h);
             }
             next_set.insert(pos >> 1);
         }
@@ -1786,22 +1877,38 @@ pub fn verifier_row_layout() -> &'static RowLayout {
 
 /// Complete, self-contained single-core verifier for Peel-Binius-Shielded proofs.
 pub fn verify(stmt: &PaymentStatement, proof: &BiniusProof) -> Result<(), String> {
+    verify_abortable(stmt, proof, None)
+}
+
+/// Fail-fast verifier with optional cooperative cancellation (`abort`) for parallel
+/// block validation. Runs cheap transcript replay, non-zero challenge checks, Round-34
+/// 20-bit PoW (`H_C4`), opened-column count, and Ring-Switching sum check (~0.15 ms)
+/// BEFORE expensive circuit MLE evaluation, 3D-Karatsuba ring-switch, and Merkle paths.
+pub fn verify_abortable(
+    stmt: &PaymentStatement,
+    proof: &BiniusProof,
+    abort: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    let aborted = || abort.is_some_and(|flag| flag.load(Ordering::Relaxed));
+
     if proof.v_prox_coeffs.len() != DEG_BOUND || proof.v_open_coeffs.len() != DEG_BOUND {
         return Err("invalid v_prox/v_open degree bound".into());
+    }
+    if aborted() {
+        return Err("verification aborted by sibling failure".into());
     }
     let kt = k_tables();
     let layout = verifier_row_layout();
     let stmt_bytes = encode_statement(stmt);
 
-    // 1. Transcript init & Round-2 single-element alpha
+    // 1. Cheap full Fiat-Shamir transcript replay (~0.15 ms): zero heavy algebra before PoW!
     let mut tr = Transcript::new(&stmt_bytes, &proof.merkle_root, proof.s_g1, proof.s_mask2);
     let ch = CircuitChallenge {
         alpha: tr.squeeze_e(b"C02"),
     };
 
-    // 2. Sumcheck 1 replay (19 rounds)
     let mut r1 = [E::ZERO; V_SC1];
-    let mut sc1_claims = [E::ZERO; V_SC1 + 1];
     for d in 0..V_SC1 {
         let [c0, c2, c3] = proof.sc1_rounds[d];
         let sc_tag = [b'S', b'1', b'0' + ((d / 10) as u8), b'0' + ((d % 10) as u8)];
@@ -1814,7 +1921,81 @@ pub fn verify(stmt: &PaymentStatement, proof: &BiniusProof) -> Result<(), String
         r1[d] = r_ch;
     }
 
+    tr.absorb_e(b"DEG2C", &[proof.eval_c1, proof.eval_c2]);
+    let tau = tr.squeeze_e(b"C22");
+    if tau.is_zero() {
+        return Err("zero tau challenge".into());
+    }
+
+    tr.absorb_e(
+        b"DEG2Z",
+        &[
+            proof.eval_z[0],
+            proof.eval_z[1],
+            proof.eval_z[2],
+            proof.eval_z[3],
+            proof.eval_z[4],
+            proof.eval_zg,
+        ],
+    );
+
+    let gamma = tr.squeeze_e(b"C23");
+    tr.absorb_e(b"RSSP", &proof.rs_s_prime);
+    let rho_rs = tr.squeeze_e(b"C24");
+    if rho_rs.is_zero() {
+        return Err("zero rho_rs challenge".into());
+    }
+
+    let mut r_row_p = [E::ZERO; V_SC2];
+    for d in 0..V_SC2 {
+        let [c0, c2] = proof.sc2_rounds[d];
+        let sc2_tag = [b'S', b'2', b'0', b'0' + (d as u8)];
+        let ch_tag = [b'C', b'0' + (((d + 25) / 10) as u8), b'0' + (((d + 25) % 10) as u8)];
+        tr.absorb_e(&sc2_tag, &[c0, c2]);
+        r_row_p[d] = tr.squeeze_e(&ch_tag);
+    }
+
+    tr.absorb_e(b"BEVAL", &[proof.b_eval]);
+    let lambda_p = tr.squeeze_e(b"C33P");
+    tr.absorb_e(b"VPROX", &proof.v_prox_coeffs);
+    let lambda_o = tr.squeeze_e(b"C33O");
+    tr.absorb_e(b"VOPEN", &proof.v_open_coeffs);
+    let tr_final = tr.state;
+
+    // 2. Fail-fast Round-34 PoW & opened-column count check (< 0.01 ms!)
+    let (pow_ok, q_indices) = eval_h_c4(&tr_final, &proof.pow_nonce);
+    if !pow_ok {
+        return Err("PoW verification failed".into());
+    }
+    let mut unique_cols: Vec<usize> = q_indices.to_vec();
+    unique_cols.sort_unstable();
+    unique_cols.dedup();
+    if proof.opened_cols.len() != unique_cols.len() {
+        return Err("opened column count mismatch".into());
+    }
+
+    // 3. Cheap Ring-Switching sum check (< 0.02 ms)
+    let gammas = expand_gammas(gamma, kt);
+    let eq_bit = eq_table(&r1[14..19], kt);
+    let mut rs_lhs = E::ZERO;
+    for b in 0..32 {
+        rs_lhs.add_assign(eq_bit[b].mul(proof.rs_s_prime[b], kt));
+    }
+    let mut rs_rhs = proof.eval_z[0];
+    for x in 1..5 {
+        rs_rhs.add_assign(gammas[x].mul(proof.eval_z[x], kt));
+    }
+    if rs_lhs != rs_rhs {
+        return Err("Ring-Switching sum check failed".into());
+    }
+
+    if aborted() {
+        return Err("verification aborted by sibling failure".into());
+    }
+
+    // 4. Circuit MLE & Sumcheck 1 + Degree-2 Evaluation Hiding check
     let (wb_r1, wc_r1, pub_rhs) = eval_verifier_weights_at_r1(stmt, &ch, &r1, kt);
+    let mut sc1_claims = [E::ZERO; V_SC1 + 1];
     sc1_claims[0] = pub_rhs.add(proof.s_g1);
     for d in 0..V_SC1 {
         let [c0, c2, c3] = proof.sc1_rounds[d];
@@ -1823,13 +2004,6 @@ pub fn verify(stmt: &PaymentStatement, proof: &BiniusProof) -> Result<(), String
         sc1_claims[d + 1] = c0.add(rd.mul(c1.add(rd.mul(c2.add(rd.mul(c3, kt)), kt)), kt));
     }
     let sc1_final = sc1_claims[V_SC1];
-
-    // 3. Degree-2 Evaluation Hiding check
-    tr.absorb_e(b"DEG2C", &[proof.eval_c1, proof.eval_c2]);
-    let tau = tr.squeeze_e(b"C22");
-    if tau.is_zero() {
-        return Err("zero tau challenge".into());
-    }
     let lhs_deg2 = sc1_final
         .add(tau.mul(proof.eval_c1, kt))
         .add(tau.sq(kt).mul(proof.eval_c2, kt));
@@ -1845,66 +2019,23 @@ pub fn verify(stmt: &PaymentStatement, proof: &BiniusProof) -> Result<(), String
         return Err("Degree-2 evaluation hiding check failed".into());
     }
 
-    tr.absorb_e(
-        b"DEG2Z",
-        &[
-            proof.eval_z[0],
-            proof.eval_z[1],
-            proof.eval_z[2],
-            proof.eval_z[3],
-            proof.eval_z[4],
-            proof.eval_zg,
-        ],
-    );
-
-    // 4. Ring-Switching consistency check
-    let gamma = tr.squeeze_e(b"C23");
-    let gammas = expand_gammas(gamma, kt);
-    let eq_bit = eq_table(&r1[14..19], kt);
-    let mut rs_lhs = E::ZERO;
-    for b in 0..32 {
-        rs_lhs.add_assign(eq_bit[b].mul(proof.rs_s_prime[b], kt));
-    }
-    let mut rs_rhs = proof.eval_z[0];
-    for x in 1..5 {
-        rs_rhs.add_assign(gammas[x].mul(proof.eval_z[x], kt));
-    }
-    if rs_lhs != rs_rhs {
-        return Err("Ring-Switching sum check failed".into());
+    if aborted() {
+        return Err("verification aborted by sibling failure".into());
     }
 
-    tr.absorb_e(b"RSSP", &proof.rs_s_prime);
-    let rho_rs = tr.squeeze_e(b"C24");
-    if rho_rs.is_zero() {
-        return Err("zero rho_rs challenge".into());
-    }
+    // 5. Sumcheck 2 & H-domain Ring-Switch inner-product check
     let (w_rs, eta1, eta2, eta3) = expand_rho_rs(rho_rs, kt);
-
-    // 5. Sumcheck 2 replay (8 rounds)
     let rs_target = ring_switch_target(&proof.rs_s_prime, &w_rs, kt);
     let mut claim2 = rs_target
         .add(eta1.mul(proof.eval_zg, kt))
         .add(eta2.mul(proof.s_g1, kt))
         .add(eta3.mul(proof.s_mask2, kt));
-    let mut r_row_p = [E::ZERO; V_SC2];
     for d in 0..V_SC2 {
         let [c0, c2] = proof.sc2_rounds[d];
         let c1 = claim2.add(c2);
-        let sc2_tag = [b'S', b'2', b'0', b'0' + (d as u8)];
-        let ch_tag = [b'C', b'0' + (((d + 25) / 10) as u8), b'0' + (((d + 25) % 10) as u8)];
-        tr.absorb_e(&sc2_tag, &[c0, c2]);
-        let r_ch = tr.squeeze_e(&ch_tag);
-        r_row_p[d] = r_ch;
+        let r_ch = r_row_p[d];
         claim2 = c0.add(r_ch.mul(c1.add(r_ch.mul(c2, kt)), kt));
     }
-
-    // 6. Split PCS challenges (Round 33a: lambda_p; Round 33b: lambda_o) & H-domain inner-product check
-    tr.absorb_e(b"BEVAL", &[proof.b_eval]);
-    let lambda_p = tr.squeeze_e(b"C33P");
-    tr.absorb_e(b"VPROX", &proof.v_prox_coeffs);
-    let lambda_o = tr.squeeze_e(b"C33O");
-    tr.absorb_e(b"VOPEN", &proof.v_open_coeffs);
-    let tr_final = tr.state;
 
     let mut v_open_h = proof.v_open_coeffs[..K_COLS].to_vec();
     kt.antt_forward_h_e(&mut v_open_h);
@@ -1916,19 +2047,11 @@ pub fn verify(stmt: &PaymentStatement, proof: &BiniusProof) -> Result<(), String
         return Err("PCS H-domain inner-product check failed".into());
     }
 
-    // 7. Atomic H_C4 PoW & 52 query indices
-    let (pow_ok, q_indices) = eval_h_c4(&tr_final, &proof.pow_nonce);
-    if !pow_ok {
-        return Err("PoW verification failed".into());
-    }
-    let mut unique_cols: Vec<usize> = q_indices.to_vec();
-    unique_cols.sort_unstable();
-    unique_cols.dedup();
-    if proof.opened_cols.len() != unique_cols.len() {
-        return Err("opened column count mismatch".into());
+    if aborted() {
+        return Err("verification aborted by sibling failure".into());
     }
 
-    // 8. Pruned SHA-384 Merkle path verification
+    // 6. Pruned 384-bit Merkle path verification (prefix of 3×SHA-512)
     let mut level_map: BTreeMap<usize, [u8; HASH_BYTES]> = BTreeMap::new();
     for (&idx, col) in unique_cols.iter().zip(proof.opened_cols.iter()) {
         level_map.insert(idx, oracle_leaf(idx, &col.k_vals, col.b_pcs, col.b_prox));

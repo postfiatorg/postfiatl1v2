@@ -1750,19 +1750,24 @@ pub(super) fn check_pq_block<'a>(
             let ShieldedAction::PqPaymentV1(payment) = action else {
                 continue;
             };
+            let (terms, _, inner) = payment
+                .parts()
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             let digest = hash.get_or_init(|| genesis_hash(genesis));
-            if digest != pq_payment_fixture::GENESIS_HASH
-                || !governance.pq_rehearsal_active(
-                    &genesis.chain_id,
-                    digest,
-                    genesis.protocol_version,
-                    height,
-                )
-            {
+            if digest != pq_payment_fixture::GENESIS_HASH {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "pq_settlement_inactive",
                 ));
+            }
+            if let Err(code) = governance.pq_rehearsal_mode_allowed(
+                &genesis.chain_id,
+                digest,
+                genesis.protocol_version,
+                height,
+                terms.mode,
+            ) {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, code));
             }
             if !batch.atomic && governance.pq_fee_schedule_in_force(height) {
                 return Err(io::Error::new(
@@ -1797,9 +1802,6 @@ pub(super) fn check_pq_block<'a>(
                     "pq_block_byte_limit",
                 ));
             }
-            let (terms, _, inner) = payment
-                .parts()
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             let inner_fee = u64::from_le_bytes(inner[104..112].try_into().unwrap());
             let (fee, minimum) = pq_payment_actions::fee_terms(governance, &terms, inner_fee, height)
                 .map_err(|code| io::Error::new(io::ErrorKind::InvalidData, code))?;
@@ -1870,11 +1872,26 @@ pub(super) fn verify_development_pq_payments(
         })?;
         return Ok(());
     }
-    // Verify up to PQ_REHEARSAL_PROOFS (4) proofs in parallel across scoped OS threads.
+    // Verify up to PQ_REHEARSAL_PROOFS (4) proofs in parallel across scoped OS threads
+    // with cooperative early-abort: if any proof fails, siblings abort before heavy work.
+    let abort = std::sync::atomic::AtomicBool::new(false);
     let results: Vec<Result<_, _>> = std::thread::scope(|scope| {
+        let abort_ref = &abort;
         let handles: Vec<_> = payments
             .iter()
-            .map(|payment| scope.spawn(move || pq_payment_actions::verify_statement(payment, chain)))
+            .map(|payment| {
+                scope.spawn(move || {
+                    let res = pq_payment_actions::verify_statement_abortable(
+                        payment,
+                        chain,
+                        Some(abort_ref),
+                    );
+                    if res.is_err() {
+                        abort_ref.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    res
+                })
+            })
             .collect();
         handles
             .into_iter()
@@ -3345,6 +3362,28 @@ pub(super) fn verify_signed_governance_batch(
         }
         if requires_pq_registry(amendment, governance, proposal_slot) {
             validate_governance_genesis_quorum(amendment.quorum, validators.len())?;
+        }
+        if amendment.kind == postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1 {
+            let required = postfiat_types::pq_exit_freeze_quorum(validators.len());
+            if usize::try_from(amendment.quorum).unwrap_or(0) < required {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!(
+                        "pq_exit_freeze_threshold: requires elevated quorum {required}/{} (got {})",
+                        validators.len(),
+                        amendment.quorum
+                    ),
+                ));
+            }
+            if amendment.value != 0
+                && u64::from(amendment.value)
+                    > proposal_slot.saturating_add(postfiat_types::MAX_PQ_EXIT_FREEZE_BLOCKS)
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "pq_exit_freeze_exceeds_cap",
+                ));
+            }
         }
         verify_external_lane_amendment_admission(
             genesis,

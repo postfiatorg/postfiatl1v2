@@ -1947,3 +1947,85 @@ The Dockerfile packages the same entry point:
   docker build -t pft-binius-shielded-pq .
   docker run --rm pft-binius-shielded-pq
 ================================================================================
+
+================================================================================
+APPENDIX D. PFSH03 AUDIT HARDENING, BIT-SECURITY STATEMENT & TRACEABILITY MATRIX
+================================================================================
+
+D.1 Explicit Concrete Post-Quantum Bit-Security Statement
+--------------------------------------------------------------------------------
+Conditional on unmodified-oracle Theorem 2A (App. A.1-A.3), FIPS-204 ML-DSA-65
+(NIST Level 3), and 384-bit SHAKE256/SHA-384 collision resistance, PFSH03 targets
+~126-bit QROM soundness (trivial-break query budget Q_break = 2^{126.75}, governed
+by 384-bit proof-tree collisions, with error < 2^{-137.55} at Q = 2^80 and
+< 2^{-92.25} at Q = 2^96). The sole sub-126-bit exception is an unpinned brand-new
+L1 deposit account (~80-bit quantum address preimage until its first key-pinning
+transaction; strict key-pinning guard available via `prepare_pq_account_debit_pinned`).
+
+D.2 3-Block Counter-Mode SHA-512 -> Atomic 1,536-Bit QRO Reduction
+--------------------------------------------------------------------------------
+The compiler oracle H(x) = SHA-512(0x00||x) || SHA-512(0x01||x) || SHA-512(0x02||x)
+uses distinct leading counter bytes (0x00, 0x01, 0x02) and fixed-length inputs per
+8-byte ASCII domain tag (`PFS-LEAF` 761 B, `PFS-NODE` 110 B, `PFS-STMT` 561 B
+with constant 408 B `encode_statement`, `PFS-ABS ` fixed per sub-tag, `PFS-CH  `
+fixed per sub-tag, `PFS-C4  ` 121 B). Because inputs are prefix-free across tags
+and messages (ruling out Merkle-Damgard length extension), any Q-query adversary A^h
+with direct independent quantum access to the 512-bit slice oracle h(b || x) is
+simulated with AT MOST Q queries (zero query blowup) against the atomic 1,536-bit
+tuple oracle H(x) by projecting slice b in {0, 1, 2} (`three_block_sha512_qro_reduction`
+in `formal/lean/PFSH02/CompressedOracle.lean`, axioms: `[propext]`).
+
+D.3 Two-Tier Exit-Safe Governance Circuit Breaker & Pruned Storage
+--------------------------------------------------------------------------------
+- Standard Pause (`pq_payment_rehearsal_v1`, value = 0): Halts `Mode::Shield` and
+  `Mode::Internal` while leaving `Mode::Exit` OPEN (and keeping the last active
+  issued-asset fee readable via `pq_issued_fee_for_mode`) so users can always exit.
+- Emergency Exit-Freeze (`pq_exit_freeze_until_v1`, value = freeze_until): Halts
+  `Mode::Exit` ONLY through `freeze_until`, hard-capped at `MAX_PQ_EXIT_FREEZE_BLOCKS`
+  = 604,800 blocks (~7 days at 1 s blocks) past inclusion height (no indefinite
+  freeze), auto-expiring at `freeze_until + 1`, and requiring elevated quorum
+  `pq_exit_freeze_quorum(n) = min(n, floor(5n/6) + 1)` (6/6 unanimous on 6 validators).
+- Pruned-Node Storage (`NodeStore::prune_pq_bodies` in `crates/storage/src/pq_archive.rs`):
+  Deletes verified `pq_bodies_v1` proof blobs outside a kept checkpoint set,
+  reclaiming ~95% of PQ disk footprint (~150 KB -> ~4 KB/tx) while keeping `pq_pool`
+  output pages, commitments, envelopes, and global nullifiers intact for wallet scanning.
+
+D.4 Fail-Fast DoS Hardening & Adversarial Invalid-Proof Audit Scope
+--------------------------------------------------------------------------------
+Both Rust (`binius_pcs::verify_abortable`) and Go (`verifyBiniusProof`) execute
+cheap transcript replay, non-zero challenge guards, Round-34 20-bit PoW (`eval_h_c4`),
+opened-column count check, and Ring-Switching sum check (~0.5 ms) BEFORE circuit
+MLE evaluation, 3D-Karatsuba ring-switch, or Merkle hashing; external ML-DSA-65
+spend-auth checks run first (~0.22 ms reject). Parallel 4-proof block verification
+in `crates/node/src/consensus_artifacts.rs` shares an `AtomicBool` early-abort flag
+(`~0.2 us` sibling cancellation). Adversarial invalid-proof flooding and mempool
+admission backpressure are explicitly included in the Gate 1 external audit scope.
+
+D.5 Spec-to-Code & Lean 4 Traceability Matrix
+--------------------------------------------------------------------------------
+- Field tower & ANTT / PCLMULQDQ + ARM64 PMULL:
+    `tools/pft-binius-shielded-pq/rust-prover/src/field.rs`
+    `tools/pft-binius-shielded-pq/go-verifier/field.go`
+- PFSH03 56-perm circuit (`pk_hash0/1`, `r_pk0/1`, 66-bit adder, Merkle mux):
+    `tools/pft-binius-shielded-pq/rust-prover/src/circuit.rs` (`perm_input_spec`, L175-305)
+    `tools/pft-binius-shielded-pq/go-verifier/circuit.go` (`permInputSpec`, L150-270)
+    Z3 + 3-way IR + differential `pk_in0/1` audit: `verify_circuit_equivalence.py`
+- 3xSHA-512 compiler oracle, subtree-root streaming prover & fail-fast verifier:
+    `tools/pft-binius-shielded-pq/rust-prover/src/binius_pcs.rs` (`prove`, `verify_abortable`)
+    `tools/pft-binius-shielded-pq/go-verifier/binius_pcs.go` (`verifyBiniusProof`)
+    Lean 4: `Params.lean`, `Peel.lean`, `DualBinding.lean`, `Rank3Op.lean`,
+            `CompressedOracle.lean` (incl. `three_block_sha512_qro_reduction`),
+            `ZeroKnowledge.lean`
+- External per-note ML-DSA-65 spend auth & L1 profile verification:
+    `tools/pft-binius-shielded-pq/rust-prover/src/mint_auth.rs` & `wire.rs`
+    `tools/pft-binius-shielded-pq/go-verifier/mint_auth.go` & `l1_profile.go`
+    `crates/privacy_binius/src/lib.rs` (`verify_l1_abortable`)
+    Lean 4: `ValueConservation.lean`, `AuthAndPrivacy.lean`
+            (`pfsh03_spend_auth_dichotomy`, `pfsh03_theorem4_zero_appA4`,
+             `pfsh03_theorem5_multitx_hybrid`)
+- L1 settlement, two-tier exit-safe pause, key-pinning & pruned storage:
+    `crates/types/src/shielded_bridge_governance.rs` (`pq_rehearsal_mode_allowed`, `PQ_EXIT_FREEZE_UNTIL_V1`)
+    `crates/execution/src/entrypoints.rs` (`prepare_pq_account_debit`, `prepare_pq_account_debit_pinned`)
+    `crates/node/src/consensus_artifacts.rs`, `crates/node/src/pq_payment_actions.rs`
+    `crates/storage/src/pq_archive.rs` (`prune_pq_bodies`)
+================================================================================

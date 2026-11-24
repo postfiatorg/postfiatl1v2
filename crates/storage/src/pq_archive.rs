@@ -64,6 +64,46 @@ impl NodeStore {
             .expand_pq(|id| read_body(&self.data_dir, id).map_err(|e| e.to_string()))
             .map_err(invalid)
     }
+
+    /// Pruned-node storage helper: deletes verified `pq_bodies_v1` proof blobs outside
+    /// `keep_ids` after finality checkpointing, reclaiming ~95% of PQ disk footprint
+    /// (~150 KB -> ~4 KB/tx) while leaving `pq_pool` output pages, commitments,
+    /// envelopes, and global nullifier sets untouched for wallet scanning and settlement.
+    pub fn prune_pq_bodies(&self, keep_ids: &BTreeSet<String>) -> io::Result<PqBodyPruneReport> {
+        self.ensure_writable()?;
+        let dir = self.data_dir.join("pq_bodies_v1");
+        if !dir.exists() {
+            return Ok(PqBodyPruneReport::default());
+        }
+        let mut report = PqBodyPruneReport::default();
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let Some(id) = name.to_str() else {
+                continue;
+            };
+            if keep_ids.contains(id) {
+                report.kept_count += 1;
+                continue;
+            }
+            let meta = entry.metadata()?;
+            if meta.is_file() {
+                let len = meta.len();
+                fs::remove_file(entry.path())?;
+                report.pruned_count += 1;
+                report.bytes_reclaimed += len;
+            }
+        }
+        sync_parent_dir(&dir)?;
+        Ok(report)
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct PqBodyPruneReport {
+    pub pruned_count: usize,
+    pub kept_count: usize,
+    pub bytes_reclaimed: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -115,5 +155,46 @@ impl SnapshotBatchArchive {
         Ok(BatchArchive {
             batches: self.batches,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prune_pq_bodies_reclaims_verified_proof_blobs_and_preserves_kept_ids() {
+        let dir = std::env::temp_dir().join(format!(
+            "pq-prune-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let store = NodeStore::new(&dir);
+        let p1 = PqPayment::from_bytes(
+            include_bytes!("../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-pay.bin").to_vec(),
+        )
+        .unwrap();
+        let p2 = PqPayment::from_bytes(
+            include_bytes!("../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-exit.bin").to_vec(),
+        )
+        .unwrap();
+        let id1 = p1.digest();
+        let id2 = p2.digest();
+        persist_body(&dir, &id1, &p1).unwrap();
+        persist_body(&dir, &id2, &p2).unwrap();
+
+        let mut keep = BTreeSet::new();
+        keep.insert(id2.clone());
+        let report = store.prune_pq_bodies(&keep).unwrap();
+        assert_eq!(report.pruned_count, 1);
+        assert_eq!(report.kept_count, 1);
+        assert_eq!(report.bytes_reclaimed as usize, p1.bytes().len());
+        assert!(read_body(&dir, &id1).is_err());
+        assert_eq!(read_body(&dir, &id2).unwrap(), p2);
+        fs::remove_dir_all(&dir).unwrap();
     }
 }
