@@ -64,6 +64,9 @@ const RPC_HOST = process.env.RPC_HOST || '127.0.0.1';
 const RPC_PORT = parseBoundedIntegerEnv('RPC_PORT', 27650, 1, 65_535);
 const LISTEN_PORT = parseBoundedIntegerEnv('LISTEN_PORT', 8080, 0, 65_535);
 const LISTEN_HOST = parseListenHost(process.env.LISTEN_HOST);
+// Client ids are bounded below rpc-serve's 256-byte id limit, so ids the proxy
+// derives from them (timeout votes append `-timeout-v<view>-<validator>`) still fit.
+const PROXY_MAX_CLIENT_ID_BYTES = 192;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS
     ?? 'http://127.0.0.1:5173,http://localhost:5173')
     .split(',')
@@ -1461,6 +1464,23 @@ wss.on('connection', (ws, req) => {
                 ok: false,
                 result: null,
                 error: { code: 'proxy_invalid_json', message: 'message is not valid JSON' },
+                events: []
+            }));
+            return;
+        }
+
+        // S3.2b: the proxy derives ids from a client's id (timeout votes add about
+        // 30 bytes), and rpc-serve refuses ids over 256 bytes: bound them here.
+        if (typeof parsed.id === 'string' && Buffer.byteLength(parsed.id, 'utf8') > PROXY_MAX_CLIENT_ID_BYTES) {
+            ws.send(JSON.stringify({
+                version: 'postfiat-local-rpc-v1',
+                id: 'proxy-error',
+                ok: false,
+                result: null,
+                error: {
+                    code: 'proxy_request_id_too_long',
+                    message: `request id is ${Buffer.byteLength(parsed.id, 'utf8')} bytes; the limit is ${PROXY_MAX_CLIENT_ID_BYTES}`
+                },
                 events: []
             }));
             return;
