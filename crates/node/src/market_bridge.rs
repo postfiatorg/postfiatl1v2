@@ -1361,14 +1361,13 @@ pub(super) fn vault_bridge_route_at_height(
     };
     let (nav, trust_class) = if is_solana {
         let bucket = bucket.ok_or_else(|| deny("Solana source bucket is missing".into()))?;
-        let accounting =
-            postfiat_execution::SolanaExitAccounting::read(
-                &genesis.chain_id,
-                ledger,
-                orchard_balances,
-                second,
-            )
-            .map_err(|(_, message)| io::Error::new(io::ErrorKind::InvalidData, message))?;
+        let accounting = postfiat_execution::SolanaExitAccounting::read(
+            &genesis.chain_id,
+            ledger,
+            orchard_balances,
+            second,
+        )
+        .map_err(|(_, message)| io::Error::new(io::ErrorKind::InvalidData, message))?;
         // The reported bucket's own series, for any covered bucket of the custody.
         let claims = accounting
             .bucket(&bucket.bucket_id)

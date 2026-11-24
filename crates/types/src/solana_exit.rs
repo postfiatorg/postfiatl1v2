@@ -54,7 +54,9 @@ pub fn second_release_scheduled() -> bool {
     if SECOND_RELEASE_FOR_TESTS.with(|h| h.get()).is_some() {
         return true;
     }
-    SECOND_RELEASES.iter().any(|(_, _, height)| height.is_some())
+    SECOND_RELEASES
+        .iter()
+        .any(|(_, _, height)| height.is_some())
 }
 
 pub fn second_release_height(chain: &str, genesis: &str) -> Option<u64> {

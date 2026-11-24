@@ -221,7 +221,7 @@ pub(super) fn require_reconciled_bucket(
         second,
     )
     .and_then(|claims| claims.require_reconciled())
-        .map_err(|(_, message)| message)
+    .map_err(|(_, message)| message)
 }
 
 pub(super) fn apply_decision(
@@ -240,12 +240,16 @@ pub(super) fn apply_decision(
     }
     if amendment.kind == solana_exit::RETIRE {
         let ledger = ledger.ok_or("Solana exit retirement requires canonical ledger")?;
-        if let Some(reason) = redemption_obligation(ledger, height, second_release(genesis, height))? {
+        if let Some(reason) =
+            redemption_obligation(ledger, height, second_release(genesis, height))?
+        {
             return Err(reason.into());
         }
         return Ok(());
     }
-    if amendment.kind == solana_exit::CLOSE || amendment.kind.starts_with(solana_exit::MIN_WITHDRAWAL) {
+    if amendment.kind == solana_exit::CLOSE
+        || amendment.kind.starts_with(solana_exit::MIN_WITHDRAWAL)
+    {
         return Ok(());
     }
     if amendment.kind.starts_with(solana_exit::REFUND) {
@@ -566,9 +570,8 @@ fn require_change_allowed<L: Borrow<LedgerState>>(
             "Solana burns are open or opening; close burns first (the normal quorum suffices)"
         } else if solana_exit::open_height(governance).is_some() || opening {
             "Solana burns are open or opening; close burns in a separate unanimous block"
-        } else if let Some(reason) =
-            redemption_obligation(read_ledger()?.borrow(), height, second)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+        } else if let Some(reason) = redemption_obligation(read_ledger()?.borrow(), height, second)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
         {
             reason
         } else if !governance.amendment_activation_records.iter().any(|r| {
