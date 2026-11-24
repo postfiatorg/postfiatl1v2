@@ -189,7 +189,7 @@ jq -e '.guest.forward and .guest.start==.config.initial_committee and .simulatio
 
 Setup re-verifies the archived certificate and compares the authenticated committee, accepted ingress record and bucket across six validators. It checks finalized Solana vault config, custody, and USDC mint at one slot, deployed programs and loader authorities, executes the frozen checkpoint guest on every selected segment through the six-way finalized tip, and checks both simulated PDA bodies. At a stationary 1753 tip the guest can prove ancestry ending there. Wait for a later finalized block before signing.
 
-The tag-3 instruction is 317 bytes. Its SHA-256 is `bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4`. The dedicated pause authority is `ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx`. Its signing file stays offline from the payout service. Review the instruction, ordered accounts and simulated bindings in `unsigned.json`.
+The tag-3 instruction is 317 bytes. Its SHA-256 is `7d02bbfe0bc6b43a52746ed5d13cd506ea0b7d4b1628d00c279fc9ed38cf19b6`. Its route binds the shared custody, so the verifier must first be upgraded to the reviewed custody-route build. The dedicated pause authority is `ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx`. Its signing file stays offline from the payout service. Review the instruction, ordered accounts and simulated bindings in `unsigned.json`.
 
 ### Install the reviewed Task Node gateway and relay before tag 3
 
@@ -349,7 +349,7 @@ timeout 610s python3 ops/sol-live/exit_cutover.py wait-closed --api "$API" --sec
 python3 ops/sol-live/exit_canary.py preflight --output "$KIT/canary"
 ```
 
-### Must be true before the real 0.02 pfUSDC test
+### Must be true before the real minimum-amount canary
 
 Repeat the disabled relay checks from step 4 against the same deployed gateway and relay. Freeze both deployments through settlement.
 
@@ -371,14 +371,14 @@ Review the saved evidence for each completed step. Evaluate the final two checks
 
 ```bash
 grep -Fxq 'service-proof verified' "$KIT/evidence/service-proof.log"
-PYTHONPATH="$PWD/ops/sol-live" python3 -c 'import json; from exit_qualification_socket import qualify; print(json.dumps(qualify()))' | jq -e '.payout_ready and (.burns_open==false) and (.qualified_parent != null) and (.series_supply_atoms | type == "string") and (.series_supply_atoms == .bucket_outstanding_atoms) and (.relayer_lamports >= .relayer_floor_lamports + .payout_budget_lamports)'
+PYTHONPATH="$PWD/ops/sol-live" python3 -c 'import json; from exit_qualification_socket import qualify; print(json.dumps(qualify()))' | jq -e '.payout_ready and (.burns_open==false) and (.qualified_parent != null) and (.series_supply_atoms | type == "string") and (.series_supply_atoms == .bucket_outstanding_atoms) and all(.buckets[]; .series_supply_atoms == .outstanding_atoms) and (.relayer_lamports >= .relayer_floor_lamports + .payout_budget_lamports)'
 ```
 
 ### Staff and rehearse settlement before the first open
 
 Name a settlement on-call, backup and independently reachable operator for each of the six resident signers. Record coverage, escalation contacts, expected payout volume and available custody margin in the cutover evidence. Each operator must complete a restore rehearsal on isolated state with test credentials. Exercise loss of that signer, fence the old instance, restore the authorized identity and its latest safety journals without duplicate signing, verify its committee identity and finalized parent, then complete a six-signature close and paid settlement. Record all six outcomes and who can perform each restore on call. Defer the first open if any signer, recovery path or settlement shift is unavailable.
 
-## 8. Open burns in a separate unanimous decision
+## 8. Open burns in a separate decision (the first open is unanimous)
 
 The frozen checker requires old-quorum V2 `signed_authorizations` in a supported single-update governance payload. Historical block 924 contains five Cobalt authorizations and zero V2 authorizations. That block predates the trusted anchor. A future Cobalt-only rotation after 1753 blocks payment across it. Readiness executes the frozen guest from the trusted committee, checks every segment endpoint and binds the resulting block hash, height and state root to six agreeing validators. It reuses previously verified finalized segments. An update at the tip requires a verified successor. Require the separately reviewed chain interlock in the exact scheduled build before opening. Drain pending burns before an incompatible change. A rotation format the frozen guest cannot verify requires a reviewed verifier repair. An HTTP flag cannot stop direct L1 burns after opening.
 
@@ -389,9 +389,11 @@ jq -e '.height==(.qualified_parent.block_height+1) and (.validators|length)==6 a
 curl -fsS "$API/readiness/qualify" | tee "$KIT/evidence/open-readiness.json" | jq -e '.ready and .burns_open'
 ```
 
-Qualification brackets the accounting reads with the same six-way height, hash and root. All six revision-8 route reports must show the full series supply equal to their bucket outstanding and the independently read source bucket. The separate custody test covers liabilities across all shared buckets, including queued redemptions. Missing full-supply reports keep opening closed. The wrapper checks the closed descriptor on six validators and requests fresh qualification on /run/pf-sol-exit/qualify.sock. Systemd gives pf-sol-exit ownership of the directory. Open verifies the connected peer UID against the installed pf-sol-exit account before requesting a response. The loopback HTTP listener remains available to the relay. It restarts qualification when the agreed parent changes before submission. After an ambiguous submission inspect the six receipts before another round. It invokes `ratify-solana-exit-open` on the resident node for the next proposal height. It obtains all six authorizations and submits a separate ordinary governance batch. Check six accepted receipts and open flags. At this point a direct L1 client can burn. Keep the public relay disabled.
+Qualification brackets the accounting reads with the same height, hash and root on six validators (five agreeing ones for a re-open). For every covered bucket of the shared custody, the route reports of its own series must show the full series supply equal to its bucket outstanding and the independently read source bucket. The separate custody test covers liabilities across all shared buckets, including queued redemptions. Missing full-supply reports keep opening closed. The wrapper checks the closed descriptor on six validators (on five agreeing ones for a re-open, when the route report shows `closed_since_registration`) and requests fresh qualification on /run/pf-sol-exit/qualify.sock. Systemd gives pf-sol-exit ownership of the directory. Open verifies the connected peer UID against the installed pf-sol-exit account before requesting a response. The loopback HTTP listener remains available to the relay. It restarts qualification when the agreed parent changes before submission. After an ambiguous submission inspect the receipts before another round. It invokes `ratify-solana-exit-open` on the resident node for the next proposal height. The first open obtains all six authorizations; a re-open after a close needs five, like the close. It submits a separate ordinary governance batch. Check the accepted receipts and open flags. At this point a direct L1 client can burn. Keep the public relay disabled.
 
-## 9. Pay and settle one 0.02 pfUSDC canary
+## 9. Pay and settle one canary at the governed minimum
+
+The canary burns exactly the governed minimum withdrawal that readiness reports (0.30 USDC by default), from the covered series with the most redeemable pfUSDC. Fund the test account with at least that much Solana-backed pfUSDC in one series first. Do not lower the minimum for the canary.
 
 The source is StakeHub's encrypted b23-bob wallet under `~/.pft/wallets/4eca662d469907e4/` with passphrase at `~/.pft/b23-bob.passphrase`. The destination is `Ce5Yv528pKVrVq4JbQchZ8zasCAzxT3f9uCfatTZcfo8`. Preserve the same canary directory across retries.
 
@@ -400,7 +402,7 @@ python3 ops/sol-live/exit_canary.py prepare --output "$KIT/canary"
 jq '{before,fields}' "$KIT/canary/plan.json"
 python3 ops/sol-live/exit_canary.py burn --output "$KIT/canary"
 python3 ops/sol-live/exit_canary.py check --output "$KIT/canary"
-jq -e '.token_deltas=={"custody":-20000,"recipient":20000} and .withdrawal_packet_hash and .solana_tx' "$KIT/canary/paid.json"
+jq -e '.amount_atoms as $a | $a > 0 and .token_deltas=={"custody":-$a,"recipient":$a} and .withdrawal_packet_hash and .solana_tx' "$KIT/canary/paid.json"
 ```
 
 The checker compares the signed envelope including fee and sequence, the six finalized burn confirmations, the permanent Solana marker, the transaction-local custody debit and ATA credit, and the 20,000-atom debit recorded by that accepted L1 burn. Later wallet credits do not affect this check. If a finalized burn already exists, rerun `check` in its original directory. After a signing or submission interruption run `python3 ops/sol-live/exit_canary.py recover --output "$KIT/canary"`, then `check`. Recovery verifies the saved ML-DSA envelope offline and looks up its exact ID on all six. If absent everywhere it submits those same bytes against a fresh, matching quote. Preserve the directory if the signed file is missing or incomplete. A paid marker with unavailable history proves payment; obtain the finalized transaction from an archival RPC before attesting settlement.
@@ -419,12 +421,12 @@ python3 ops/sol-live/exit_govern.py paid --revision "$REV" --release-height "$H"
 PAID_ID=$(jq -er .tx_id "$KIT/canary/paid-round.json")
 PAID_HEIGHT=$(jq -er .height "$KIT/canary/paid-round.json")
 python3 ops/sol-live/exit_canary.py settlement-check --output "$KIT/canary" --amendment "$PAID_ID" --height "$PAID_HEIGHT"
-jq -e '(.validators|length)==6 and .state.settled==20000 and .reference.ordinal==0' "$KIT/canary/settled.json"
+jq -e '(.validators|length)==6 and .state.settled==.state.amount and .reference.ordinal==0' "$KIT/canary/settled.json"
 ```
 
-The paid command discovers the running validator binary, validates its data directory and uses `ratify-solana-exit-paid` to draft from paid.json. It checks the exact packet, finalized slot, raw 64-byte signature and ordinal in the draft before any signing. Each resident signer requires its independent approval for that parent and payout. On an ambiguous submission, locate the accepted amendment and height on all six by the saved draft ID before retrying. Recover paid-round.json from the verified receipt rather than issuing a second attestation.
+The paid command discovers the running validator binary, validates its data directory and uses `ratify-solana-exit-paid` to draft from paid.json. It checks the exact packet, finalized slot, raw 64-byte signature and ordinal in the draft before any signing. Each resident signer requires its independent approval for that parent and payout. The wrapper takes each decision's signature count from the route report (`decision_signatures`, see `exit_rules.py`); a chain on the first release reports none, and then every decision needs all six. From the second release, paid and close need the chain's normal quorum (5 of 6): the wrapper continues when one validator is unavailable or has not approved, names the signers in its output and saved evidence, and stops if fewer than five sign or the height's proposer is unavailable. For close and paid, every read (fleet tip, Ethereum route, closed descriptor, payout reference and the receipt survey) also needs only five validators that agree, and names the unreachable ones. `accepted.json` is written before the receipt survey, so a validator lost after submission does not lose the evidence of a committed action. The first open stays unanimous; a re-open after a close needs the same five of six as the close, so one lost validator can neither block nor lock holders' exit. On an ambiguous submission, locate the accepted amendment and height on all six by the saved draft ID before retrying. Recover paid-round.json from the verified receipt rather than issuing a second attestation.
 
-Require six accepted settlement receipts. On each validator verify that the original redemption is settled for 20,000 atoms with `settlement_receipt_hash` equal to the accepted amendment ID. Reconcile the revision-8 queue, counted reserves and supply allocations against the saved baseline. The check accounts for intervening burns, other settled packets, newly counted receipts and newly issued supply allocations from the same bucket. Keep the original baseline across retries. An outstanding signature or accounting discrepancy keeps the public relay disabled.
+Require six accepted settlement receipts. On each validator verify that the original redemption is settled for its full amount (the governed minimum) with `settlement_receipt_hash` equal to the accepted amendment ID. Reconcile its bucket's queue, counted reserves and supply allocations against the saved baseline. The check accounts for intervening burns, other settled packets, newly counted receipts and newly issued supply allocations from the same bucket. Keep the original baseline across retries. An outstanding signature or accounting discrepancy keeps the public relay disabled.
 
 ## 10. Enable the public relay
 
@@ -436,9 +438,20 @@ After the finalized payout and its verified L1 settlement, enable admission usin
 "$HOME/.local/lib/pf-sol-exit-relay/exit_relay.py" enable "$KIT/canary/paid.json" | tee "$KIT/evidence/public-paid-job.log"
 ```
 
+## Before the second release height is set
+
+H (`SECOND_RELEASES` in `crates/types/src/solana_exit.rs`) is a source constant today, not a governed value. Every validator must run a build with the same H before H, or it diverges at the first block that uses the second release's rules.
+
+- [ ] Every validator's status read reports the second-release build (`build_git_revision`).
+- [ ] The Solana verifier is upgraded and its hash is pinned (`VERIFIER_SHA256` in `exit_setup.py`).
+- [ ] The tools report the second release's rules from the chain's route report.
+- [ ] A replay of the live chain with the build passes and matches the live state root.
+
+A governed or interlocked activation would need validators to ratify H only from the second-release build, the code to read the stored activation instead of the constant, and ratification to be refused while any active validator reports another build.
+
 ## Recovery
 
-On signer loss or a settlement backlog, disable public admission immediately by running `"$HOME/.local/bin/disable-sol-exit"` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Five validators can finalize direct burns. Direct burns remain possible until a unanimous close commits. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. With all six available, close direct L1 admission with a separate unanimous decision, pay and settle all pending claims using their original packets, and reconcile custody before considering a separate reopen. Preserve evidence and wait for six accepted receipts and six closed descriptors.
+On signer loss or a settlement backlog, disable public admission immediately by running `"$HOME/.local/bin/disable-sol-exit"` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Direct burns remain possible until a close is committed, because five validators can finalize them. Five can also close direct L1 admission with a separate decision, and the same five can re-open it after that close, so a lost sixth signer neither blocks nor locks holders' exit. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. Pay and settle all pending claims using their original packets, and reconcile custody before re-opening. Preserve evidence and wait for accepted receipts and closed descriptors on at least five agreeing validators; the wrapper names any validator that did not answer.
 
 ```bash
 source "$HOME/.config/postfiat/sol-exit-oncall.env"
@@ -475,4 +488,4 @@ assert c.account(LIGHT)["data"][-1]==flag
 PY
 ```
 
-The seven earlier Solana series retain their own liabilities. Migration requires separate governance and conservation tests for outstanding amounts, queued redemptions, counted reserves and allocations. This release binds only revision 8.
+The seven earlier Solana series retain their own liabilities. The exit pays burns from every bucket of this shared custody whose ID derives from its own revision's policy, and the custody must cover all of them; moving liabilities between series requires separate governance and conservation tests for outstanding amounts, queued redemptions, counted reserves and allocations.
