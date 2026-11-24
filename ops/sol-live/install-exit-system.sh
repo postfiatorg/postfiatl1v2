@@ -459,8 +459,15 @@ check_port() {
 # unmasks both units, on success and on any failure.
 cleanup() {
     local status=$?
-    if [[ -n ${tmp:-} ]]; then rm -rf -- "$tmp"; fi
-    if [[ -n ${sudoers:-} ]]; then rm -f -- "$sudoers"; fi
+    # The staging folder can hold a copy of a key file: a failed removal is reported, not ignored.
+    if [[ -n ${tmp:-} ]] && ! rm -rf -- "$tmp"; then
+        echo "$tmp could not be removed and may hold a key file; remove it by hand." >&2
+        status=1
+    fi
+    if [[ -n ${sudoers:-} ]] && ! rm -f -- "$sudoers"; then
+        echo "$sudoers could not be removed; remove it by hand." >&2
+        status=1
+    fi
     if (( masked )) && ! unmask_units; then
         echo "Unmask by hand: rm $mask_dir/$unit $mask_dir/$test_unit; systemctl daemon-reload" >&2
         status=1
