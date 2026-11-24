@@ -9,7 +9,13 @@ device=
 # On the four-GPU machine shared with the deposit prover it names the device, the staged tree
 # and its SP1 home (RUNBOOK-LIVE.md, "One proving machine").
 conf=/etc/pf-sol-exit-prove.conf
+conf_owner=0
 if [[ -e $conf ]]; then
+    # The file chooses the device, the tree and the SP1 home that run: root's alone.
+    if [[ $(stat -c %u "$conf") != "$conf_owner" || -n $(find "$conf" -maxdepth 0 -perm /022) ]]; then
+        echo "pf-sol-exit-prove: $conf must be owned by root and writable by no one else" >&2
+        exit 78
+    fi
     # A last line without a newline is read too.
     while IFS='=' read -r key value || [[ -n $key ]]; do
         case "$key=$value" in
