@@ -187,7 +187,41 @@ def verifier_instructions(tx, tag):
             if keys[ix["programIdIndex"]] == str(VERIFIER) and base58.b58decode(ix["data"])[:1] == bytes([tag])]
 
 
-def creating_transaction(sol, key, tag):
+def creates(tx, key, tag):
+    """The top-level verifier instructions of this tag in `tx` that name the marker `key` as its seventh account."""
+    keys = account_keys(tx)
+    return [ix for ix in verifier_instructions(tx, tag) if len(ix["accounts"]) >= 7 and keys[ix["accounts"][6]] == str(key)]
+
+
+def remembered(sol, key, tag, memory):
+    """The marker's writer found by an earlier review on this host, checked again like any other."""
+    try:
+        sig = (Path(memory) / f"{key}.sig").read_text().strip()
+    except (OSError, TypeError):
+        return None
+    tx = sol("getTransaction", [sig, dict(commitment="finalized", encoding="json", maxSupportedTransactionVersion=0)])
+    if tx is None or tx["meta"]["err"] is not None or not creates(tx, key, tag):
+        return None
+    return sig, tx
+
+
+def remember(memory, key, sig):
+    if memory is not None:
+        Path(memory).mkdir(mode=0o750, parents=True, exist_ok=True)
+        tmp = Path(memory) / f"{key}.tmp"
+        tmp.write_text(sig + "\n")
+        os.replace(tmp, Path(memory) / f"{key}.sig")
+
+
+def creating_transaction(sol, key, tag, memory=None):
+    """The creating transaction, from this host's memory of an earlier review when it has one: the
+    program creates a marker once, so a later flood of transactions naming the address cannot hide
+    a writer this reviewer has already found."""
+    found = remembered(sol, key, tag, memory)
+    return found or paged_creating_transaction(sol, key, tag)
+
+
+def paged_creating_transaction(sol, key, tag):
     """The successful transaction whose verifier instruction created the marker `key`.
 
     The verifier creates a marker once (`create` in its lib.rs transfers only the missing rent,
@@ -198,9 +232,7 @@ def creating_transaction(sol, key, tag):
     failed = False
     for row in signatures(sol, str(key)):
         tx = transaction(sol, row["signature"])
-        keys = account_keys(tx)
-        creating = [ix for ix in verifier_instructions(tx, tag)
-                    if len(ix["accounts"]) >= 7 and keys[ix["accounts"][6]] == str(key)]
+        creating = creates(tx, key, tag)
         if creating and (row["err"] is not None or tx["meta"]["err"] is not None):
             failed = True
             continue
@@ -249,7 +281,7 @@ def uploaded_values(sol, buffer, payout):
     return bytes(out)
 
 
-def review_burn(action, burn, node, sol):
+def review_burn(action, burn, node, sol, memory=None):
     """Every check behind a paid or refund signature; returns the verdict body."""
     want_marker, want_tag = ACTIONS[action]
     rows = [r for r in node("vault_bridge_status", asset_id=ASSET)["redemptions"] if r["burn_tx_id"] == burn]
@@ -265,7 +297,7 @@ def review_burn(action, burn, node, sol):
             and base64.b64decode(account["data"][0]) == want_marker,
             f"marker: {key} does not read {want_marker[0]} at finalized")
     finalized = sol("getSlot", [dict(commitment="finalized")])
-    sig, tx = creating_transaction(sol, key, want_tag)
+    sig, tx = creating_transaction(sol, key, want_tag, memory)
     require(0 < tx["slot"] <= finalized, "finalized: the transaction is not below the finalized slot")
     keys = account_keys(tx)
     tagged = [ix for ix in verifier_instructions(tx, want_tag)
@@ -312,6 +344,7 @@ def review_burn(action, burn, node, sol):
     packet = red["withdrawal_packet_hash"]
     decision = (f"solana_exit_r8_paid:{packet}:{tx['slot']}:0:{raw.hex()}" if action == "paid"
                 else f"solana_exit_refund:{packet}:{tx['slot']}:{raw.hex()}")
+    remember(memory, key, sig)  # only an approved writer is remembered
     return dict(action=action, burn=burn, decision=decision, finalized_slot=finalized, transaction_slot=tx["slot"])
 
 
@@ -400,7 +433,7 @@ def run_review(cfg, action, burn):
         if action == "clearance":
             body = review_clearance(cfg)
         else:
-            body = review_burn(action, burn, cfg.node, cfg.solana)
+            body = review_burn(action, burn, cfg.node, cfg.solana, cfg.review_dir / "writers")
     except AccessError as error:
         print(f"access error: {error}", file=sys.stderr)
         return EXIT_ACCESS

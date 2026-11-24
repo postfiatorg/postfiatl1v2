@@ -461,6 +461,7 @@ Under the second release, five of six signatures decide paid, close, re-open and
 - **Which transaction it checks:** the one that created the marker by the verifier's own rule.
   - That is the successful transaction whose verifier instruction names the marker; the program creates a marker once.
   - The reviewer pages the marker's whole history to find it, up to 20,000 transactions.
+  - Once a review approves, the reviewer remembers that transaction's signature (`/var/lib/postfiat-exit-review/writers/`) and later reviews check it again directly, so transactions that name the marker afterwards cannot push it out of reach.
   - Lamport transfers to the address and transactions that only name it are ignored, as the program ignores a prefund.
 - **What it checks:**
   - the redemption is pending, unsettled and in a covered bucket;
