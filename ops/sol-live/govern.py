@@ -161,18 +161,22 @@ def collect(kind, step, n=6, need=None):
     return done
 
 
+# Solana exit decisions bound to a qualified Solana parent and drafted by `ratify-solana-<kind>`.
+EXIT_DECISIONS = ("exit-open", "exit-close", "exit-paid", "exit-refund")
+
+
 def read_quorum(kind, n=6, *, rules=None):
     """Validators whose agreeing reads suffice: the signatures the chain requires."""
     return required_signatures(kind, n, rules=rules)
 
 
 def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout=None,
-           rules=None):
+           rules=None, refund=None):
     need = read_quorum(kind, rules=rules)
     head = fleet(need)
     if head["build_git_revision"] != (compatible or R6):
         raise RuntimeError("waiting for compatible six-validator release")
-    if kind in ("exit-open", "exit-close", "exit-paid"):
+    if kind in EXIT_DECISIONS:
         from exit_precheck import parent_of
 
         if parent_of(head) != qualified_parent:
@@ -248,7 +252,7 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
             "--batch-file",
             work[lead] + "/draft",
         )
-    elif kind in ("exit-open", "exit-close", "exit-paid"):
+    elif kind in EXIT_DECISIONS:
         extra = []
         if kind == "exit-paid":
             extra = [
@@ -260,6 +264,15 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
                 payout["ordinal"],
                 "--signature-hex",
                 payout["signature_hex"],
+            ]
+        if kind == "exit-refund":
+            extra = [
+                "--packet-hash",
+                refund["packet"],
+                "--solana-slot",
+                refund["slot"],
+                "--signature-hex",
+                refund["signature_hex"],
             ]
         tool(
             lead,
@@ -294,9 +307,11 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         from exit_canary import match_reference
 
         match_reference(amend, payout)
-    if kind in ("exit-open", "exit-close", "exit-paid") and (
+    if kind == "exit-refund" and amend["kind"] != refund["kind"]:
+        raise ValueError("Refund draft differs from the cancelled marker's reference.")
+    if kind in EXIT_DECISIONS and (
         (
-            kind != "exit-paid"
+            kind not in ("exit-paid", "exit-refund")
             and amend["kind"] != "solana_exit_r8_" + kind.split("-")[1]
         )
         or amend["activation_height"] != h
@@ -309,12 +324,15 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
     save(local / "amendment.json", amend)
 
     reviewed = set(runtime)
-    if kind == "exit-paid":
+    if kind in ("exit-paid", "exit-refund"):
+        # Each signer's operator has checked the payout, or the finalized cancelled marker.
         def verify_review(i):
             if i not in runtime:
                 _unavailable(i)
             try:
-                approval = read_operator_review(i, "/etc/postfiat/sol-exit-paid-review.json")
+                approval = read_operator_review(
+                    i, f"/etc/postfiat/sol-{kind}-review.json"
+                )
             except subprocess.CalledProcessError as error:
                 # An unsafe or oversized review file stops the round; an unreachable
                 # host or a missing review only keeps that validator from signing.
@@ -323,7 +341,7 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
                 raise
             if approval != dict(kind=amend["kind"], parent=qualified_parent):
                 return ValueError(
-                    f"Validator-{i} has not verified this payout and proposal parent."
+                    f"Validator-{i} has not verified this {kind.split('-')[1]} and proposal parent."
                 )
             return None
 
@@ -358,7 +376,7 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         )
         return get(i, "auth")
 
-    if kind in ("exit-open", "exit-close", "exit-paid") and parent_of(fleet(need)) != qualified_parent:
+    if kind in EXIT_DECISIONS and parent_of(fleet(need)) != qualified_parent:
         raise ParentChanged("Parent changed before signing.")
     need = amend["quorum"] if kind.startswith("exit-") else required_signatures(kind)
     auth = collect(

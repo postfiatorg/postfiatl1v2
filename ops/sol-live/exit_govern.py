@@ -21,7 +21,7 @@ from exit_setup import (
 )
 from govern import govern, ParentChanged, read_operator_review
 from exit_precheck import parent_of
-from exit_payout import SOURCE_DOMAIN
+from exit_payout import SOURCE_DOMAIN, cluster, refund_kind
 from exit_qualification_socket import qualify
 import exit_rules
 
@@ -228,11 +228,13 @@ def main():
     p.add_argument("--binary", required=True, type=Path)
     p.add_argument("--copied-store", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
-    for name in ("submit", "open", "close", "paid"):
+    for name in ("submit", "open", "close", "paid", "refund"):
         p = subs.add_parser(name)
         if name == "paid":
             p.add_argument("--paid", required=True, type=Path)
-        if name in ("close", "paid"):
+        if name == "refund":
+            p.add_argument("--burn", required=True)
+        if name in ("close", "paid", "refund"):
             p.add_argument("--output", required=True, type=Path)
         if name == "open":
             p.add_argument("--output", type=Path)
@@ -269,7 +271,7 @@ def main():
     rules = chain_rules()
     need = (
         exit_rules.signatures(rules, "exit-" + args.action)
-        if args.action in ("open", "close", "paid")
+        if args.action in ("open", "close", "paid", "refund")
         else 6
     )
     head = fleet(need)
@@ -341,6 +343,21 @@ def main():
         ref = review_paid(read(args.paid), need=need)
         result = govern("exit-paid", compatible=args.revision,
                         qualified_parent=parent_of(head), payout=ref, rules=rules)
+        save(args.output, result)
+    elif args.action == "refund":
+        # Only a pending, unsettled burn whose Solana marker reads cancelled at a finalized slot.
+        statuses = survey(lambda i: rpc(i, "vault_bridge_status", asset_id=ASSET), need)
+        burn_row = lambda s: json.dumps(  # noqa: E731
+            next((r for r in s["redemptions"] if r["burn_tx_id"] == args.burn), None), sort_keys=True)
+        status = agreed(statuses, burn_row, need, "Validators disagree on the burn.")
+        red = json.loads(burn_row(status[0]))
+        require(red is not None and red["state"] == "pending" and red["settled_atoms"] == 0,
+                "Only a pending, unsettled burn can be refunded.")
+        kind = refund_kind(cluster(), red)
+        _, packet, slot, signature = kind.split(":")
+        ref = dict(kind=kind, packet=packet, slot=slot, signature_hex=signature)
+        result = govern("exit-refund", compatible=args.revision,
+                        qualified_parent=parent_of(head), refund=ref, rules=rules)
         save(args.output, result)
     elif args.action == "close":
         result = govern("exit-close", compatible=args.revision, qualified_parent=parent_of(head),
