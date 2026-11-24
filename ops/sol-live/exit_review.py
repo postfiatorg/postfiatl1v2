@@ -377,6 +377,9 @@ def run_review(cfg, action, burn):
     except Refused as error:
         print(f"refused: {error}", file=sys.stderr)
         return EXIT_REFUSED
+    except Exception as error:  # a reply of an unexpected shape: named, never a traceback
+        print(f"rpc error: unexpected {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_RPC
     print(write_verdict(cfg, body))
     return 0
 
@@ -504,22 +507,52 @@ def load_config(path=CONFIG, key=KEY, public=PUBLIC, reviewer=True):
                   public=Pubkey.from_string(Path(public).read_text().strip()))
 
 
-def pending_burns(cfg):
-    """Pending covered burns whose marker reads paid or cancelled: what the timer reviews."""
+def pending_burns(cfg, errors):
+    """Pending covered burns whose marker reads paid or cancelled: what the timer reviews. A burn
+    whose marker cannot be read is named in `errors` and does not stop the others."""
     status = cfg.node("vault_bridge_status", asset_id=ASSET)
     for red in status["redemptions"]:
-        if red["state"] != "pending" or red["settled_atoms"] != 0:
+        if red.get("state") != "pending" or red.get("settled_atoms") != 0:
             continue
-        account = cfg.solana("getAccountInfo", [str(marker(red["burn_tx_id"])),
-                                                dict(commitment="finalized", encoding="base64")])["value"]
-        if account and account["owner"] == str(VERIFIER):
-            byte = base64.b64decode(account["data"][0])
-            for action, (want, _) in ACTIONS.items():
-                if byte == want:
-                    yield action, red["burn_tx_id"]
+        try:
+            account = cfg.solana("getAccountInfo", [str(marker(red["burn_tx_id"])),
+                                                    dict(commitment="finalized", encoding="base64")])["value"]
+            byte = base64.b64decode(account["data"][0]) if account and account["owner"] == str(VERIFIER) else None
+        except Exception as error:
+            errors.append(f"{red.get('burn_tx_id')}: {type(error).__name__}: {error}")
+            continue
+        for action, (want, _) in ACTIONS.items():
+            if byte == want:
+                yield action, red["burn_tx_id"]
+
+
+def scan(cfg):
+    """The timer's job: review every pending burn whose marker is written, then the clearance.
+    One failing burn or read stops nothing else."""
+    codes, errors, work = [0], [], []
+    try:
+        work = list(pending_burns(cfg, errors))
+    except Exception as error:
+        errors.append(f"pending burns: {type(error).__name__}: {error}")
+    for error in errors:
+        print(f"rpc error: {error}", file=sys.stderr)
+        codes.append(EXIT_RPC)
+    codes += [run_review(cfg, action, burn) for action, burn in work]
+    codes.append(run_review(cfg, "clearance", None))
+    return max(codes)
 
 
 def main(argv=None):
+    try:
+        return command(argv)
+    except SystemExit:
+        raise
+    except Exception as error:  # a broken config or key: named, never a traceback
+        print(f"rpc error: unexpected {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_RPC
+
+
+def command(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("paid", "refund"):
@@ -559,12 +592,7 @@ def main(argv=None):
             return EXIT_REFUSED
         return 0
     if args.command == "scan":
-        try:
-            work = list(pending_burns(cfg))
-        except RpcError as error:
-            print(f"rpc error: {error}", file=sys.stderr)
-            return EXIT_RPC
-        return max([run_review(cfg, action, burn) for action, burn in work] + [run_review(cfg, "clearance", None)])
+        return scan(cfg)
     return run_review(cfg, args.command, getattr(args, "burn", None))
 
 
