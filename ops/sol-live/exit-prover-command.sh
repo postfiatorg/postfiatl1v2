@@ -10,7 +10,8 @@ device=
 # and its SP1 home (RUNBOOK-LIVE.md, "One proving machine").
 conf=/etc/pf-sol-exit-prove.conf
 if [[ -e $conf ]]; then
-    while IFS='=' read -r key value; do
+    # A last line without a newline is read too.
+    while IFS='=' read -r key value || [[ -n $key ]]; do
         case "$key=$value" in
             =|'#'*) ;;
             EXIT_CUDA_DEVICE=[0-9]|EXIT_CUDA_DEVICE=[0-9][0-9]) device=$value;;
