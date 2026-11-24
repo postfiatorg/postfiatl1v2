@@ -42,11 +42,14 @@ export SP1_GROTH16_CIRCUIT_PATH="$PWD/circuit-install"
 # Clear what a dead prover leaves behind, but only while no running prover holds prover.lock:
 # its socket, which serve.py refuses to start over, and its proving processes, which outlive
 # serve.py and keep the GPU memory, so the next prover runs out of memory on its first proof.
-# Only GPU servers on this prover's own devices are stopped, never the withdrawal prover's.
+# GPU servers on this prover's own devices are stopped, and on any other device only a server
+# whose parent is gone (adopted by init), such as one left on device 3 when the count went from
+# four to three. A server with a live parent elsewhere, the withdrawal prover's, is never touched.
 flock -n prover.lock bash -c 'pkill -9 -f "^$PWD/host-live serve "
     for pid in $(pgrep -x sp1-gpu-server); do
         dev=$(tr "\0" "\n" < "/proc/$pid/environ" | sed -n "s/^CUDA_VISIBLE_DEVICES=//p")
-        if [[ $dev =~ ^[0-9]+$ ]] && (( dev < $1 )); then kill -9 "$pid"; fi
+        parent=$(awk "{print \$4}" "/proc/$pid/stat" 2>/dev/null)
+        if [[ $dev =~ ^[0-9]+$ ]] && { (( dev < $1 )) || [[ $parent == 1 ]]; }; then kill -9 "$pid"; fi
     done
     rm -f prover.sock' _ "$gpus" || true
 exec python3 serve.py --lock prover.lock --prime prime.bin ./host-live elf "$PWD/prover.sock" "$gpus"
