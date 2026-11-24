@@ -85,6 +85,18 @@ class InstallTest(unittest.TestCase):
             self.assertIn("systemctl enable --now pft-sol-exit-review.timer", log)
             self.assertEqual((host.root / "var/lib/postfiat-exit-review").stat().st_mode & 0o777, 0o750)
 
+    def test_a_rerun_keeps_the_key_and_restores_a_missing_public_key(self):
+        with tempfile.TemporaryDirectory() as d:
+            host = Host(d)
+            self.assertEqual(host.run().returncode, 0)
+            etc = host.root / "etc/postfiat"
+            key, public = (etc / "sol-exit-review.key").read_bytes(), (etc / "sol-exit-review.pub").read_text()
+            (etc / "sol-exit-review.pub").unlink()
+            result = host.run()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(((etc / "sol-exit-review.key").read_bytes(), (etc / "sol-exit-review.pub").read_text()),
+                             (key, public))
+
     def test_every_failed_step_stops_the_install_with_its_reason(self):
         cases = {
             "CHOWN_FAILS": "cannot give the reviewer key",

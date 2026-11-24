@@ -55,6 +55,12 @@ open(sys.argv[1], "xb").write(bytes(key))
 open(sys.argv[2], "w").write(str(key.pubkey()) + "\n")' "$etc/sol-exit-review.key" "$etc/sol-exit-review.pub" \
         || fail "cannot create the reviewer key"
 fi
+if [[ ! -f $etc/sol-exit-review.pub ]]; then
+    "$app/venv/bin/python" -I -c 'import sys
+from solders.keypair import Keypair
+open(sys.argv[2], "w").write(str(Keypair.from_bytes(open(sys.argv[1], "rb").read()).pubkey()) + "\n")' \
+        "$etc/sol-exit-review.key" "$etc/sol-exit-review.pub" || fail "cannot derive the reviewer's public key"
+fi
 chown "$user:$user" "$etc/sol-exit-review.key" || fail "cannot give the reviewer key to $user"
 chmod 0600 "$etc/sol-exit-review.key" || fail "cannot make the reviewer key private"
 chmod 0644 "$etc/sol-exit-review.pub" || fail "cannot publish the reviewer's public key"
