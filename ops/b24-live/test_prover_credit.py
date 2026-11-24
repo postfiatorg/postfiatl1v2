@@ -167,4 +167,14 @@ class FixRoundTests(unittest.TestCase):
         runbook=(Path(__file__).parents[2]/'docs/runbooks/prover-credit-alert.md').read_text()
         self.assertIn('loginctl enable-linger',runbook)
 
+    def test_the_failure_unit_reports_a_crash_but_not_a_failure_the_run_reported(self):
+        with patch.dict('os.environ',INVOCATION_ID='run-1'):self.run_check(failing)
+        with patch.dict('os.environ',MONITOR_INVOCATION_ID='run-1'),patch('sys.stdout'),patch('sys.stderr'):
+            self.assertTrue(prover_credit.service_failed('prover-credit-alert.service',self.state,self.send))
+        self.assertEqual(len(self.sent),1)
+        with patch.dict('os.environ',MONITOR_INVOCATION_ID='run-2',MONITOR_SERVICE_RESULT='timeout'),patch('sys.stdout'),patch('sys.stderr'):
+            self.assertTrue(prover_credit.service_failed('prover-credit-alert.service',self.state,self.send))
+        self.assertEqual(len(self.sent),2)
+        self.assertIn('prover-credit-alert.service failed',self.sent[1]);self.assertIn('timeout',self.sent[1])
+
 if __name__=='__main__':unittest.main()
