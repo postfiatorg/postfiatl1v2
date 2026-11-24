@@ -2689,9 +2689,9 @@ mod transport_batch_payload_tests {
         std::fs::remove_dir_all(&data_dir).expect("cleanup");
     }
 
-    /// Holds the late validator's prepare replies until the test opens it, or
-    /// for at most a given time, and counts the prepare requests received and
-    /// the replies passed on.
+    /// Holds a late validator's vote replies until the test opens it, or for
+    /// at most a given time, and counts the requests received and the replies
+    /// passed on.
     #[derive(Default)]
     struct LateReplyGate {
         open: Mutex<bool>,
@@ -2838,6 +2838,9 @@ mod transport_batch_payload_tests {
     enum ProxyVote {
         /// Forward to the real validator and hold its reply this long.
         Forward(Duration),
+        /// Forward to the real validator, hold its reply this long and then
+        /// until the gate opens, or at most the second time longer.
+        ForwardPastGate(Duration, &'static LateReplyGate, Duration),
         /// Forward a tampered request so the real validator sends an explicit
         /// rejection, then close like the validator does.
         Refuse,
@@ -2923,6 +2926,7 @@ mod transport_batch_payload_tests {
                         };
                         let delay = match action {
                             ProxyVote::Forward(delay) => delay,
+                            ProxyVote::ForwardPastGate(delay, _, _) => delay,
                             ProxyVote::OmitV2Vote => Duration::ZERO,
                             ProxyVote::CorruptV2Signature(delay) => delay,
                             ProxyVote::Silent => {
@@ -2988,6 +2992,9 @@ mod transport_batch_payload_tests {
                             response = format!("{reply}\n");
                         }
                         std::thread::sleep(delay);
+                        if let ProxyVote::ForwardPastGate(_, gate, limit) = action {
+                            gate.hold(limit);
+                        }
                         if client_writer.write_all(response.as_bytes()).is_err() {
                             return;
                         }
@@ -5127,25 +5134,52 @@ mod transport_batch_payload_tests {
     fn round_time_with_one_vote_late(tag: &str, late_phase: Option<usize>) -> Duration {
         let delay = |phase| Duration::from_secs(if late_phase == Some(phase) { 8 } else { 0 });
         let (prepare, precommit) = (ProxyVote::Forward(delay(0)), ProxyVote::Forward(delay(1)));
-        let fixture = vote_phase_round_fixture(tag, &[(1, prepare, precommit)]);
-        let (result, elapsed, lock_free) = run_vote_phase_round(
-            &fixture,
+        early_quorum_round_with_one_proxied_validator(
+            tag,
+            prepare,
+            precommit,
             UNIT_TIMEOUT_MS,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            Duration::from_secs(40),
+        )
+        .0
+    }
+
+    /// Early-quorum round with the validator after the proposer answering as
+    /// given and the others at once, under the given transport timeout and
+    /// vote phase deadline. Returns the round time and that validator's vote
+    /// requests ([prepare, precommit]) when the round returned.
+    fn early_quorum_round_with_one_proxied_validator(
+        tag: &str,
+        prepare: ProxyVote,
+        precommit: ProxyVote,
+        timeout_ms: u64,
+        vote_phase_deadline_ms: u64,
+        bound: Duration,
+    ) -> (Duration, [usize; 2]) {
+        let fixture = vote_phase_round_fixture(tag, &[(1, prepare, precommit)]);
+        let (result, elapsed, lock_free) = run_vote_phase_round_with_sends(
+            &fixture,
+            timeout_ms,
             UNIT_SEND_RETRIES,
             UNIT_RETRY_BACKOFF_MS,
             true,
-            Duration::from_secs(40),
+            false,
+            vote_phase_deadline_ms,
+            bound,
         );
+        let proxied = (fixture.proposer_index + 1) % fixture.data_dirs.len();
+        let requests = [fixture.requests(proxied, 0), fixture.requests(proxied, 1)];
         let report = result
             .expect("round still running")
             .expect("round certifies");
         eprintln!(
-            "{tag}: round_time={elapsed:?} lock_free={lock_free} timings={}",
+            "{tag}: round_time={elapsed:?} lock_free={lock_free} vote_requests={requests:?} timings={}",
             serde_json::to_string(&report.timings).expect("round timings json")
         );
         assert!(report.round_ok, "{:?}", report.send_failures);
         clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
-        elapsed
+        (elapsed, requests)
     }
 
     /// One signed transfer through rpc-serve's finality path with the live
@@ -5273,22 +5307,66 @@ mod transport_batch_payload_tests {
         clear_transport_vote_stream_pool_for_test(&fixture.topology_file).expect("close persistent streams");
     }
 
+    /// With every vote on time, an early-quorum round certifies and asks the
+    /// proxied validator once for each vote; its logged time is the reference
+    /// for the late-vote tests.
     #[test]
     fn an_early_quorum_round_with_every_vote_on_time_sets_the_baseline() {
         let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let elapsed = round_time_with_one_vote_late("on-time-votes", None);
-        assert!(elapsed < Duration::from_secs(8), "round took {elapsed:?}");
+        let on_time = ProxyVote::Forward(Duration::ZERO);
+        let (elapsed, requests) = early_quorum_round_with_one_proxied_validator(
+            "on-time-votes",
+            on_time,
+            on_time,
+            UNIT_TIMEOUT_MS,
+            PEER_VOTE_PHASE_DEADLINE_MS,
+            // Only a stalled round reaches this: 25 times the round here.
+            Duration::from_secs(120),
+        );
+        // Nothing was refused or retried: each vote was asked for once before
+        // the round returned. The round time depends on the machine, so it is
+        // logged, not bounded.
+        assert_eq!(requests, [1, 1], "round took {elapsed:?}");
     }
 
+    /// Once an early quorum exists the round returns without waiting for a
+    /// precommit that answers 8 s late.
     #[test]
     fn a_precommit_answered_8s_late_does_not_delay_an_early_quorum_round() {
         let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let elapsed = round_time_with_one_vote_late("late-precommit-8s", Some(1));
-        assert!(elapsed < Duration::from_secs(8), "round took {elapsed:?}");
+        // The late precommit reply is held 8 s and then until the round has
+        // returned, or at most 120 s more: a round that waits for it returns
+        // only after it was passed on, on a runner of any speed. 120 s is 25
+        // times the round here and 11 times the slowest seen (10.8 s, hosted).
+        let late_hold = Duration::from_secs(120);
+        let late_gate: &'static LateReplyGate = Box::leak(Box::default());
+        // No timeout or phase deadline ends the wait before the held reply is
+        // passed on: only the quorum may end it.
+        let wait_limit_ms = (late_hold * 2).as_millis() as u64;
+        let (elapsed, requests) = early_quorum_round_with_one_proxied_validator(
+            "late-precommit-8s",
+            ProxyVote::Forward(Duration::ZERO),
+            ProxyVote::ForwardPastGate(Duration::from_secs(8), late_gate, late_hold),
+            wait_limit_ms,
+            wait_limit_ms,
+            late_hold * 3,
+        );
+        let late_replies_before_return = late_gate.passed_on();
+        late_gate.open();
+        // The late validator was asked for its precommit and its reply was
+        // still held when the round returned, so the round did not wait for it.
+        assert_eq!(
+            requests[1], 1,
+            "the late validator was not asked for its precommit before the round returned"
+        );
+        assert_eq!(
+            late_replies_before_return, 0,
+            "round took {elapsed:?}: it waited for the late precommit instead of certifying at the early quorum"
+        );
     }
 
     #[test]
