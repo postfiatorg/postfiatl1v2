@@ -18,6 +18,14 @@ FAKES = {
     "usermod": 'echo "usermod $*" >> "$LOG"',
     "chgrp": 'echo "chgrp $*" >> "$LOG"',
     "chown": 'echo "chown $*" >> "$LOG"',
+    # The commands inside the real build_tree and self_test_tree: a copy, a venv with pip, and the
+    # worker's checks run through runuser. Each one fails when its variable is set.
+    "cp": '[[ -z ${CP_FAILS:-} ]] || exit 1; exec /bin/cp "$@"',
+    "python3": 'if [[ "$1 $2 $3" == "-I -m venv" ]]; then mkdir -p "$4/bin"; '
+               'printf "#!/bin/bash\\n[[ -z \\${PIP_FAILS:-} ]]\\n" > "$4/bin/python"; chmod 755 "$4/bin/python"; exit 0; fi; '
+               'exec /usr/bin/python3 "$@"',
+    "runuser": 'case "$*" in *verify_local_host*) [[ -z ${HOST_CHECK_FAILS:-} ]] || exit 1;; '
+               '*FEE_PAYER*) [[ -z ${PAYER_CHECK_FAILS:-} ]] || exit 1;; esac; exit 0',
 }
 
 
@@ -37,7 +45,8 @@ class Installer:
         prelude = (f'source {SCRIPT}\n'
                    f'base={self.root}/opt; app=$base/sol-exit; trees=$base/sol-exit.d; '
                    f'previous=$base/sol-exit.previous; history=$base/sol-exit.history; '
-                   f'passed={self.root}/passed; svc={self.root}/svc\n'
+                   f'passed={self.root}/passed; svc={self.root}/svc; unit_dir={self.root}/units; '
+                   f'mask_dir={self.root}/run-control; mountinfo={self.root}/mountinfo\n'
                    # install -d: create the named directories; owners and modes are not tested here.
                    'install() { local skip=0 a; for a; do if ((skip)); then skip=0; continue; fi; '
                    'case $a in -o|-g|-m) skip=1;; -*) ;; *) mkdir -p -- "$a";; esac; done; }\n')
@@ -114,6 +123,46 @@ class TreeTests(unittest.TestCase):
             self.assertEqual(result.stdout.strip().splitlines()[-1], REV_B)
             self.assertFalse(Path(d, "passed").exists(), "a switch clears the self-test pass")
             self.assertEqual(Path(d, "opt/sol-exit.history").read_text().split(), [REV_A, REV_B])
+
+
+def bundle(root):
+    """A bundle whose runtime holds the two unit files and nothing else."""
+    path = Path(root, "bundle")
+    (path / "runtime/ops/sol-live").mkdir(parents=True)
+    (path / "wheels").mkdir()
+    for name in ("pft-sol-mainnet-withdraw.service", "pft-sol-exit-self-test.service"):
+        (path / "runtime/ops/sol-live" / name).write_text(f"[Service]\n# {name} from the bundle\n")
+    return path
+
+
+class RealBuildAndCheckTests(unittest.TestCase):
+    """The real build_tree and self_test_tree; only the system commands they call are fakes."""
+
+    def install(self, d, **env):
+        installer = Installer(d)
+        installer.tree(REV_A)
+        Path(d, "svc").mkdir(exist_ok=True)
+        Path(d, "svc/fee-payer.json").write_text("{}")
+        app = Path(d, "opt/sol-exit")
+        before = os.readlink(app)
+        result = installer.run(f'install_tree {bundle(d)} {REV_B}', **env)
+        return result, app, before
+
+    def test_every_failed_step_of_the_build_and_the_check_refuses_the_switch(self):
+        for failing in ("CP_FAILS", "PIP_FAILS", "HOST_CHECK_FAILS", "PAYER_CHECK_FAILS"):
+            with self.subTest(failing=failing), tempfile.TemporaryDirectory() as d:
+                result, app, before = self.install(d, **{failing: "1"})
+                self.assertNotEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(os.readlink(app), before)
+                self.assertEqual((app / "revision").read_text(), REV_A + "\n")
+                self.assertIn("the installed tree is unchanged", result.stderr)
+
+    def test_the_same_fakes_let_a_good_tree_through(self):
+        with tempfile.TemporaryDirectory() as d:
+            result, app, before = self.install(d)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotEqual(os.readlink(app), before)
+            self.assertEqual((app / "revision").read_text(), REV_B + "\n")
 
 
 class DowngradeTests(unittest.TestCase):
