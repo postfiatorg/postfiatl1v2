@@ -36,6 +36,11 @@ fn u32be(b: &mut &[u8]) -> Result<usize, ProgramError> {
     Ok(u32::from_be_bytes(take(b, 4)?.try_into().unwrap()) as usize)
 }
 
+/// The exit route over fields 6, 7, 23 and 32 to 36: descriptor, family and custody.
+pub fn custody_route(fields: [&[u8]; 8]) -> [u8; 32] {
+    hashv(&fields).to_bytes()
+}
+
 pub fn decode(mut b: &[u8], withdrawal: bool) -> Result<Values<'_>, ProgramError> {
     let schema = if withdrawal { EGRESS } else { CHECKPOINT };
     if take(&mut b, MAGIC.len())? != MAGIC
@@ -93,7 +98,7 @@ pub fn decode(mut b: &[u8], withdrawal: bool) -> Result<Values<'_>, ProgramError
             // The route binds the exit descriptor, family and custody (chain tag, vault and
             // mint aliases and code hashes). Field 26, the burn's source bucket, stays proven in
             // the exit leaf; Post Fiat enforces each bucket's own limits before it is burned.
-            route: hashv(&[f[6], f[7], f[23], f[32], f[33], f[34], f[35], f[36]]).to_bytes(),
+            route: custody_route([f[6], f[7], f[23], f[32], f[33], f[34], f[35], f[36]]),
             vault_alias: f[33],
             mint_alias: f[35],
             burn: f[24],

@@ -105,9 +105,52 @@ pub struct RouteFields {
     pub token_code: [u8; 32],
 }
 
-/// The custody route that replaces a light's one-bucket route.
-pub fn migrated_route(_light: &Light, _fields: &RouteFields) -> Result<[u8; 32], ProgramError> {
-    Err(Error::Binding.into())
+/// The custody route that replaces a light's one-bucket route. The fields must reproduce
+/// the stored route with field 26 in place, so the new route is fully determined by the
+/// account, and a light that already holds the custody route is refused.
+pub fn migrated_route(light: &Light, f: &RouteFields) -> Result<[u8; 32], ProgramError> {
+    let old = solana_sha256_hasher::hashv(&[
+        &f.exit_profile,
+        &f.exit_epoch,
+        &f.family,
+        &f.bucket,
+        &f.chain_tag,
+        &light.vault_alias,
+        &f.vault_code,
+        &light.mint_alias,
+        &f.token_code,
+    ])
+    .to_bytes();
+    if old != light.route || &f.chain_tag != b"SOLANA01" {
+        return Err(Error::Binding.into());
+    }
+    Ok(values::custody_route([
+        &f.exit_profile,
+        &f.exit_epoch,
+        &f.family,
+        &f.chain_tag,
+        &light.vault_alias,
+        &f.vault_code,
+        &light.mint_alias,
+        &f.token_code,
+    ]))
+}
+
+/// The program's upgrade authority, read from its ProgramData account.
+fn upgrade_authority(id: &Pubkey, programdata: &AccountInfo) -> Result<Pubkey, ProgramError> {
+    let loader = solana_sdk_ids::bpf_loader_upgradeable::ID;
+    let (key, _) = Pubkey::find_program_address(&[id.as_ref()], &loader);
+    if programdata.key != &key || programdata.owner != &loader {
+        return Err(ProgramError::InvalidSeeds);
+    }
+    // UpgradeableLoaderState::ProgramData: u32 tag 3, u64 slot, Option<Pubkey>.
+    let data = programdata.try_borrow_data()?;
+    match (data.get(..4), data.get(12), data.get(13..45)) {
+        (Some(tag), Some(1), Some(authority)) if tag == 3u32.to_le_bytes() => {
+            Ok(Pubkey::new_from_array(authority.try_into().unwrap()))
+        }
+        _ => Err(ProgramError::MissingRequiredSignature),
+    }
 }
 
 fn pda(id: &Pubkey, account: &AccountInfo, seeds: &[&[u8]]) -> Result<u8, ProgramError> {
@@ -451,6 +494,21 @@ pub fn process_instruction(id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -
             }
             groth16::verify(&buffer.try_borrow_data()?, args)
         }
+        // One-time route migration of a light initialised by the first release, signed by
+        // the upgrade authority right after the upgrade. Checkpoint, markers and the pause
+        // state stay as they are; only `route` changes.
+        9 => {
+            let [authority, account, programdata] = accounts else {
+                return Err(ProgramError::NotEnoughAccountKeys);
+            };
+            if !authority.is_signer || upgrade_authority(id, programdata)? != *authority.key {
+                return Err(ProgramError::MissingRequiredSignature);
+            }
+            let fields = RouteFields::try_from_slice(args).map_err(|_| Error::Encoding)?;
+            let mut light = read_light(id, account)?;
+            light.route = migrated_route(&light, &fields)?;
+            save(&light, account)
+        }
         _ => Err(Error::Encoding.into()),
     }
 }
@@ -497,6 +555,14 @@ mod tests {
         let route = migrated_route(&light, &mainnet_fields()).unwrap();
         // The same route a fresh initialisation of this branch writes (tests/route-vector.txt).
         assert_eq!(hex::encode(route), "02b02d4b458283c0e351a34adf9e25c896cca0cd9f2094d00a50e7f92a4d558e");
+        // Only bytes 136..168 (route) of the 289-byte account change.
+        let before = borsh::to_vec(&light).unwrap();
+        let mut after = mainnet_light();
+        after.route = route;
+        let after = borsh::to_vec(&after).unwrap();
+        assert_eq!(before.len(), 289);
+        let changed: Vec<usize> = (0..289).filter(|&i| before[i] != after[i]).collect();
+        assert!(changed.iter().all(|i| (136..168).contains(i)) && !changed.is_empty());
     }
 
     #[test]
