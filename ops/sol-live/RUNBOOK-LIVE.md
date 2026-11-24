@@ -453,30 +453,65 @@ A governed or interlocked activation would need validators to ratify H only from
 ### Independent settlement reviews
 
 Under the second release, five of six signatures decide paid, close, re-open and refund. A signature is only as good as the review behind it. On each validator host, a review is independent when all of the following hold:
-- **Where it runs:** on that host.
+- **Where it runs:** on that host, as its own user `pf-sol-exit-review`.
 - **What it reads:**
   - the burn and its redemption from that host's own node;
-  - Solana through an endpoint configured on that host, named in every verdict.
-- **Where it writes:** each address (marker, light, associated token account) is derived on that host, and the verdict goes into that host's own review directory. No other host writes there.
+  - Solana through an endpoint configured on that host. Every verdict names that endpoint's host, never the full URL.
+- **What it derives itself:** each address (marker, light, associated token account).
+- **Which transaction it checks:** the one that created the marker by the verifier's own rule.
+  - That is the successful transaction whose verifier instruction names the marker; the program creates a marker once.
+  - The reviewer pages the marker's whole history to find it, up to 20,000 transactions.
+  - Lamport transfers to the address and transactions that only name it are ignored, as the program ignores a prefund.
 - **What it checks:**
   - the redemption is pending, unsettled and in a covered bucket;
   - the destination is canonical;
-  - the marker's address and byte are as expected (1 paid, 2 cancelled) at finalized;
-  - exactly one payout or cancel instruction, of the verifier program, in a successful transaction at or below the finalized slot;
-  - the proof's public values match the burn (burn, amount, destination, bucket, family, chain tag);
+  - the marker's byte (1 paid, 2 cancelled) at finalized;
+  - exactly one payout or cancel instruction of the verifier in that transaction;
+  - the proof's public values, rebuilt from the buffer's own uploads before the payout, match the burn (burn, amount, destination, bucket, family, chain tag);
   - for a payout, the mint and the exact custody and recipient amounts.
-- **When it signs:** only from that host's own approval of exactly this decision (its SHA-256), at most 15 minutes old, keyed with a key that never leaves the host.
+- **How its verdict is kept:**
+  - The verdict names the decision's SHA-256 and is sealed with the reviewer's Ed25519 key.
+  - The keypair is readable only by `pf-sol-exit-review`.
+  - The signing step reads only the public key, so it can check a verdict but not make one.
+- **How it signs:** `exit_review.py sign --amendment-file F --proposal-slot H --expires-at-height E --authorization-file A` signs only a decision approved by a verdict at most 15 minutes old.
+  - It builds the node's signing command itself: the resident binary, this host's data directory, validator name and key file.
+  - It takes no command from its caller, and refuses any other argument.
+  - It checks the amendment file's hash before and after the signing command, and removes the authorization if the file changed.
+- **Exit codes:** 0 approved; 2 refused with a named reason; 3 an RPC error or a reply of an unexpected shape, named in one line; 4 a local file it cannot read. In `scan`, one failing burn stops neither the other burns' reviews nor the clearance. Verdicts older than a day are removed.
 
-`ops/sol-live/exit_review.py` is that reviewer. It is check-only: it exits 0 on approval, 2 with a named refusal, and 3 with a named RPC error, and it never writes a placeholder. `exit_review.py sign` is the host's signing step: `govern.py` runs it on each host for paid and refund under the second release. `exit_review.py show-clearance` gives that host's own keyed rotation clearance for an opening or re-opening. A first-release chain keeps the go-live review files and six signatures. The go-live tools `operator/settle.py` (now only with `--single-owner-fleet`) and `operator/clearance.py` write those files from the relay host, and the reviewer replaces them.
+`govern.py` runs `exit_review.py sign` on each host for paid and refund under the second release. A host whose reviewer refused is printed with its reason as "refused by its own reviewer", apart from unreachable hosts, even when the other five reach the quorum.
 
-**Install, one host at a time, as root on that host:**
+`exit_review.py show-clearance` gives that host's own sealed rotation clearance for an opening or re-opening. A first-release chain keeps the go-live review files and six signatures. The go-live tools `operator/settle.py` (now only with `--single-owner-fleet`) and `operator/clearance.py` write those files from the relay host, and the reviewer replaces them. Update `settle.py` and `settler.sh` together: without the flag `settle.py` exits and prints the command to run, and `settler.sh` prints an `ALERT` line for any failed settle.
+
+**Install, one host at a time.** Copy the archive and the script to the host, then run the script there as root:
 
 ```bash
-git archive <reviewed commit> ops/sol-live | ssh root@<host> \
-  'bash -s validator-<i> <node RPC port> <this host'"'"'s Solana RPC URL>' < ops/sol-live/install-exit-review.sh
+git archive -o exit-review.tar <reviewed commit> ops/sol-live
+scp exit-review.tar ops/sol-live/install-exit-review.sh root@<host>:/root/
+ssh root@<host> bash /root/install-exit-review.sh validator-<i> <node RPC port> <this host's Solana RPC URL> /root/exit-review.tar
 ```
 
-The script installs the reviewer and its venv (hash-pinned `exit-requirements.lock`), a per-host review key, `/etc/postfiat/sol-exit-review.json` and the timer `pft-sol-exit-review.timer` (every minute).
+The script needs Python 3.10 or newer and `setfacl` (the `acl` package). Any failed step stops it with its reason. It installs:
+- the reviewer and its venv, from the hash-pinned `exit-requirements.lock` with `--require-hashes`;
+- the user `pf-sol-exit-review`, which alone owns the key (mode 0600), with `postfiat` in its group so the node user can read the verdicts and the config (mode 0640);
+- the public key, readable by all;
+- read access for the reviewer to the names in the node's `consensus-v2-safety` directory and nothing else of the node;
+- the timer `pft-sol-exit-review.timer`, every minute.
+
+The script runs the first review and stops if it ends in an RPC or access error.
+
+**Check the six providers.** Use at least three different Solana providers across the six hosts. This prints each host's provider (host name only) and warns when fewer than three differ:
+
+```bash
+for h in <six hosts>; do ssh root@$h cat /etc/postfiat/sol-exit-review.json; echo; done | python3 ops/sol-live/exit_review.py endpoints
+```
+
+**What stays open.**
+- **Root ssh from the relay.** The relay host still reaches every validator host as root over ssh (`govern.py`, `remote`). Root can run the node's signing command with the validator key directly, or replace the reviewer, so a compromised relay host can still sign on all six. Only the operators can close this:
+  - give the relay a non-root key whose forced command allows only `exit_review.py sign` with its four arguments;
+  - keep each validator key readable only by the node user;
+  - remove root ssh for settlement.
+- **Shared providers.** Independence also needs each host's Solana endpoint to be a different provider; the check above only warns.
 
 **Order, so that no payout waits unsettled** (each payout blocks the next until it is settled):
 1. While the chain runs the first release, install the reviewer on all six hosts, one at a time. The relay's settler keeps running with `--single-owner-fleet`; the reviewers only write verdicts.
