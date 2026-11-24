@@ -40,6 +40,12 @@ pub enum Error {
     WrongDestination,
     TooEarly,
 }
+
+#[allow(non_upper_case_globals)]
+impl Error {
+    /// The new name of discriminant 9 (stub alias until the rule lands).
+    pub const CancelNotAllowed: Error = Error::TooEarly;
+}
 impl From<Error> for ProgramError {
     fn from(error: Error) -> Self {
         ProgramError::Custom(error as u32)
@@ -168,6 +174,16 @@ pub fn cancel_allowed(light_height: u64, burn_height: u64, owner_signed: bool) -
     } else {
         Err(Error::TooEarly.into())
     }
+}
+
+/// Stub until the owner-or-pause rule lands.
+pub fn cancel_signer_allowed(
+    _light: &Light,
+    _destination_hash: &[u8],
+    _signer: &Pubkey,
+    _is_signer: bool,
+) -> ProgramResult {
+    Err(Error::TooEarly.into())
 }
 
 fn pda(id: &Pubkey, account: &AccountInfo, seeds: &[&[u8]]) -> Result<u8, ProgramError> {
@@ -623,41 +639,40 @@ mod tests {
         assert!(changed.iter().all(|i| (136..168).contains(i)) && !changed.is_empty());
     }
 
+    fn owner_hash(owner: &Pubkey) -> [u8; 48] {
+        destination_hash(&mainnet_light().solana_genesis, owner)
+    }
+
     #[test]
     fn the_destination_owner_may_cancel_at_any_time() {
-        assert!(cancel_allowed(1851, 1851, true).is_ok());
-        assert!(cancel_allowed(1851, 1848, true).is_ok());
+        let owner = Pubkey::new_from_array([7; 32]);
+        assert!(cancel_signer_allowed(&mainnet_light(), &owner_hash(&owner), &owner, true).is_ok());
     }
 
     #[test]
-    fn anyone_may_cancel_only_after_the_time_limit_seen_by_the_light() {
-        let too_early = Err(ProgramError::Custom(Error::TooEarly as u32));
-        assert_eq!(cancel_allowed(1851, 1851, false), too_early);
-        assert_eq!(cancel_allowed(1848 + CANCEL_AFTER - 1, 1848, false), too_early);
-        assert!(cancel_allowed(1848 + CANCEL_AFTER, 1848, false).is_ok());
-        // A light behind the burn, or a burn height near u64::MAX, never opens the anyone path.
-        assert_eq!(cancel_allowed(10, 1848, false), too_early);
-        assert_eq!(cancel_allowed(u64::MAX, u64::MAX - 1, false), too_early);
+    fn the_pause_authority_may_cancel_at_any_time() {
+        let light = mainnet_light();
+        let pause = Pubkey::new_from_array(light.pause_authority);
+        let owner = Pubkey::new_from_array([7; 32]);
+        assert!(cancel_signer_allowed(&light, &owner_hash(&owner), &pause, true).is_ok());
     }
 
     #[test]
-    fn the_time_limit_moves_only_with_the_light() {
-        // The anyone path reads nothing but the light's height and the burn's own block:
-        // Post Fiat blocks count once a proof has moved the light past them.
-        for burn in [1, 1848, 1_000_000] {
-            for light in [burn, burn + CANCEL_AFTER - 1] {
-                assert!(cancel_allowed(light, burn, false).is_err());
-            }
-            for light in [burn + CANCEL_AFTER, burn + 10 * CANCEL_AFTER] {
-                assert!(cancel_allowed(light, burn, false).is_ok());
-            }
-        }
+    fn a_stranger_or_an_unsigned_owner_may_not_cancel() {
+        let light = mainnet_light();
+        let owner = Pubkey::new_from_array([7; 32]);
+        let stranger = Pubkey::new_from_array([9; 32]);
+        let refused = Err(ProgramError::Custom(Error::CancelNotAllowed as u32));
+        assert_eq!(cancel_signer_allowed(&light, &owner_hash(&owner), &stranger, true), refused);
+        assert_eq!(cancel_signer_allowed(&light, &owner_hash(&owner), &owner, false), refused);
+        let pause = Pubkey::new_from_array(light.pause_authority);
+        assert_eq!(cancel_signer_allowed(&light, &owner_hash(&owner), &pause, false), refused);
     }
 
     #[test]
     fn marker_states_are_distinct_one_byte_values() {
         assert_eq!((PAID, CANCELLED), (1, 2));
-        assert_eq!(Error::TooEarly as u32, 9);
+        assert_eq!(Error::CancelNotAllowed as u32, 9);
     }
 
     #[test]
