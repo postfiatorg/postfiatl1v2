@@ -11,15 +11,31 @@ pub fn account(options: NodeOptions, address: &str) -> io::Result<Account> {
 
 pub fn receipts(options: ReceiptQueryOptions) -> io::Result<Vec<Receipt>> {
     let store = NodeStore::new(options.data_dir);
-    let mut receipts = store.read_receipts()?;
-    if let Some(tx_id) = options.tx_id {
-        receipts.retain(|receipt| receipt.tx_id == tx_id);
-    }
+    let mut receipts = match keyed_receipts(&store, options.tx_id.as_deref())? {
+        Some(receipts) => receipts,
+        None => {
+            let mut receipts = store.read_receipts()?;
+            if let Some(tx_id) = options.tx_id {
+                receipts.retain(|receipt| receipt.tx_id == tx_id);
+            }
+            receipts
+        }
+    };
     let limit = bounded_read_query_limit(options.limit, "receipts")?;
     if receipts.len() > limit {
         receipts = receipts[receipts.len() - limit..].to_vec();
     }
     Ok(receipts)
+}
+
+/// The receipts of one transaction by the store's receipt-id key, or `None`
+/// when only the full scan answers: no transaction asked for, or the legacy
+/// log.
+fn keyed_receipts(store: &NodeStore, tx_id: Option<&str>) -> io::Result<Option<Vec<Receipt>>> {
+    match tx_id {
+        Some(tx_id) => store.read_receipts_for_tx_id(tx_id),
+        None => Ok(None),
+    }
 }
 
 pub fn verify_state(options: NodeOptions) -> io::Result<StateVerificationReport> {
