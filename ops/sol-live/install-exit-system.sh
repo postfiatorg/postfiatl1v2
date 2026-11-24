@@ -514,6 +514,12 @@ install_tree "$bundle" "$rev" "$payer"
 if [[ -f "$tmp/fee-payer.json" ]]; then
     mv -T "$tmp/fee-payer.json" "$svc/fee-payer.json"
 fi
+# The install is complete: unmask both units, then check the worker's real state, which a mask
+# would hide (`masked-runtime`). The exit trap still unmasks on every other way out.
+unmask_units
 enabled=$(systemctl is-enabled "$unit" || true)
-[[ $enabled == disabled ]]
+if [[ $enabled != disabled ]]; then
+    echo "The worker unit is $enabled after the install, not disabled; check it before starting anything." >&2
+    exit 1
+fi
 echo "Installed disabled worker at $rev. Run the archive self-test; the worker starts only after it passed on $rev."
