@@ -12,7 +12,7 @@ and again every 6 hours while it stays unreadable. The Vast CLI reads its own ke
 reads that file only to strip the key from anything it prints or sends.
 Standard library only, so it runs with `python3 -I` like the failure hook.
 """
-import argparse,importlib.util,json,math,os,re,subprocess,sys
+import argparse,importlib.util,json,math,os,re,subprocess,sys,time
 from pathlib import Path
 # Loaded by path: this directory also holds operator.py, which must not shadow the standard library.
 spec=importlib.util.spec_from_file_location('reading_alert',Path(__file__).resolve().with_name('reading_alert.py'))
@@ -23,6 +23,7 @@ VASTAI=Path.home()/'.local/bin/vastai'
 STATE=Path.home()/'.local/state/prover-credit-alert/state.json'
 LEVELS=('ok','warn','urgent')
 RUNNING={'running'}
+REPEAT_SECONDS=6*3600  # an unreadable credit is reported again after this long
 
 def key_files():
     config=Path(os.environ.get('XDG_CONFIG_HOME') or Path.home()/'.config')
@@ -88,7 +89,9 @@ def message(kind,credit=0,spend=0,count=0,hours=0,warn=24,urgent=6,error='',stor
 def load(path):
     try:state=json.loads(path.read_text())
     except (OSError,ValueError):state={}
-    return dict(level=state.get('level','ok') if state.get('level') in LEVELS else 'ok',unreadable=bool(state.get('unreadable')))
+    kept=dict(level=state.get('level','ok') if state.get('level') in LEVELS else 'ok',unreadable=bool(state.get('unreadable')))
+    if number(state.get('reported_at')):kept['reported_at']=float(state['reported_at'])
+    return kept
 
 def delivered(result):
     """True only when the hook took the report. An unset address sends nothing, so it is a failure too."""
@@ -102,12 +105,13 @@ def check(warn=24.0,urgent=6.0,state_path=STATE,run=vastai,send=notify):
     try:credit,spend,count,stored=read_credit(run)
     except Exception as error:
         line=message('unreadable',error=redact(str(error))[:300])
-        if not state['unreadable']:
-            result=send(line);state['unreadable']=delivered(result)
+        if not state['unreadable'] or time.time()-state.get('reported_at',0)>REPEAT_SECONDS:
+            result=send(line)
+            if delivered(result):state.update(unreadable=True,reported_at=time.time())
             print(line+f'; notification {result}',file=sys.stderr)
         else:print(line+'; already reported',file=sys.stderr)
         write(state_path,state);return dict(state,ok=False)
-    state['unreadable']=False
+    state['unreadable']=False;state.pop('reported_at',None)
     hours=0.0 if credit<=0 else float('inf') if spend<=0 else credit/spend
     now=level(hours,warn,urgent);summary=f'credit {credit:.2f} USD, spend {spend:.2f} USD/h, {count} running, {stored} stopped billed for storage, {hours:.1f} h left, level {now}'
     ok=True

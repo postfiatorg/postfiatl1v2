@@ -8,10 +8,11 @@ Every 15 minutes it reads the account credit (`vastai show user --raw`) and the 
 instances (`vastai show instances --raw`: `dph_total` of each running instance, which includes its
 storage, plus `storage_total_cost` of each stopped one), and divides one by the other.
 It reports once when the hours left fall under 24, and once more, marked URGENT, under 6. A top-up
-above 24 hours re-arms both. If the credit cannot be read, it reports that once and exits with
-status 1 until a read succeeds. A reply of an unexpected shape counts the same: no `credit` field
-(`balance` is not taken in its place), a running instance without a positive `dph_total`, or an
-instance list that is not a list. A report whose hook fails is retried on the next run.
+above 24 hours re-arms both. If the credit cannot be read, it reports that, again every 6 hours
+while it stays unreadable, and exits with status 1 until a read succeeds. A reply of an
+unexpected shape counts the same: no `credit` field (`balance` is not taken in its place), a
+running instance without a positive `dph_total`, or an instance list that is not a list. A report
+whose hook fails is retried on the next run.
 
 ## Install
 
