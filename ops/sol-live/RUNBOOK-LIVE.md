@@ -476,3 +476,28 @@ PY
 ```
 
 The seven earlier Solana series retain their own liabilities. Migration requires separate governance and conservation tests for outstanding amounts, queued redemptions, counted reserves and allocations. This release binds only revision 8.
+
+## One proving machine
+
+The withdrawal prover can share the four-GPU deposit machine instead of renting its own. None of this has been run on a GPU yet; check it on the machine before moving payouts.
+
+- **Why it collided.** SP1 picks the device, not our code: without a device id, sp1-sdk 6.3.1 connects to device 0 and sp1-cuda 6.3.1 starts `~/.sp1/bin/sp1-gpu-server` with `CUDA_VISIBLE_DEVICES=<id>` behind `/tmp/sp1-cuda-<id>.sock`. The deposit prover takes devices 0 to 3, one server and socket each.
+- **Split.** Deposit: devices 0, 1, 2 (`SOL_DEPOSIT_GPUS=3`). Withdrawal: device 3. Each prover keeps its own lock, work tree and SP1 home; no port is involved.
+- **Memory.** One RTX 5090 (32 GB) has proven both programs; neither peak is measured. A whole GPU each, so they never share GPU memory. Host memory and CPU (32 + 4 threads) are shared and not measured. Three-GPU deposit proofs are slower; not measured.
+- **Proof host.** Build `ops/withdraw/proof_host.rs` with this change; `--cuda-device N` or `PROOF_HOST_CUDA_DEVICE=N` picks the device, default 0. It refuses a device whose socket answers.
+
+On the four-GPU machine, as root, with the staged tree from `copy-exit-prover.sh`:
+
+```bash
+SOL_DEPOSIT_GPUS=3 bash ops/sol-live/prover-start.sh
+mkdir -p /workspace/b23-gpu
+printf '%s\n' EXIT_CUDA_DEVICE=3 EXIT_WORK_DIR=/workspace/exit/b23-withdraw-20261116 \
+    EXIT_SP1_HOME=/workspace/exit/home > /etc/pf-sol-exit-prove.conf
+install -m755 exit-prover-command.sh /usr/local/bin/pf-sol-exit-prove
+```
+
+The payout worker starts the withdrawal prover itself through `pf-sol-exit-prove`; by hand: `cd /workspace/exit/b23-withdraw-20261116 && HOME=/workspace/exit/home SP1_PROVER=cuda RAYON_NUM_THREADS=4 ./proof-host --cuda-device 3 withdrawal egress.elf exit-witness.json /tmp/w prove`.
+
+Check: `ls -l /tmp/sp1-cuda-*.sock; ss -xlp | grep sp1-cuda; for p in $(pgrep -x sp1-gpu-server); do echo "$p $(tr '\0' '\n' </proc/$p/environ | grep CUDA_VISIBLE)"; done; nvidia-smi --query-compute-apps=pid,gpu_bus_id,used_memory --format=csv; nvidia-smi --query-gpu=index,pci.bus_id --format=csv`. Sockets 0 to 2 belong to the deposit servers, socket 3 only exists during a withdrawal proof.
+
+Moving to one machine also changes the payout worker's SSH target (`HOST`, `PORT` in `exit_proof.py`, `authorize-exit-prover.sh`, `exit-prover.fingerprint`) and, if the bundle ships the rebuilt binary, the pinned proof-host hash (`install-exit-user.sh`, `build-exit-bundle.py`). To go back: restore the SSH target, delete `/etc/pf-sol-exit-prove.conf`, restart the deposit prover without `SOL_DEPOSIT_GPUS`.
