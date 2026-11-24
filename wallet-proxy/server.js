@@ -1479,7 +1479,9 @@ wss.on('connection', (ws, req) => {
                 result: null,
                 error: {
                     code: 'proxy_request_id_too_long',
-                    message: `request id is ${Buffer.byteLength(parsed.id, 'utf8')} bytes; the limit is ${PROXY_MAX_CLIENT_ID_BYTES}`
+                    // The id itself is too long to echo; name the refused request instead.
+                    message: `${typeof parsed.method === 'string' ? parsed.method.slice(0, 64) : 'request'} refused: `
+                        + `its id is ${Buffer.byteLength(parsed.id, 'utf8')} bytes; the limit is ${PROXY_MAX_CLIENT_ID_BYTES}`
                 },
                 events: []
             }));
