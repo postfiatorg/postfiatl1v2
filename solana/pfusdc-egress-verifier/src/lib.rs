@@ -21,6 +21,11 @@ pub const MAX_VALUES: usize = 2048;
 const LIGHT: &[u8] = b"egress-light";
 const CHECK: &[u8] = b"egress-checkpoint";
 const BURN: &[u8] = b"egress-burn";
+/// Marker states of a burn: no account (none), `PAID`, `CANCELLED`. Each is written once.
+pub const PAID: u8 = 1;
+pub const CANCELLED: u8 = 2;
+/// Post Fiat blocks the light must stand past a burn before anyone may cancel it.
+pub const CANCEL_AFTER: u64 = 256;
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
@@ -33,6 +38,7 @@ pub enum Error {
     Replay,
     Paused,
     WrongDestination,
+    TooEarly,
 }
 impl From<Error> for ProgramError {
     fn from(error: Error) -> Self {
@@ -151,6 +157,12 @@ fn upgrade_authority(id: &Pubkey, programdata: &AccountInfo) -> Result<Pubkey, P
         }
         _ => Err(ProgramError::MissingRequiredSignature),
     }
+}
+
+/// Who may cancel a proven, unmarked burn: its destination owner at any time, anyone once
+/// the light stands `CANCEL_AFTER` Post Fiat blocks past the burn's block.
+pub fn cancel_allowed(_light_height: u64, _burn_height: u64, _owner_signed: bool) -> ProgramResult {
+    Err(Error::TooEarly.into())
 }
 
 fn pda(id: &Pubkey, account: &AccountInfo, seeds: &[&[u8]]) -> Result<u8, ProgramError> {
@@ -563,6 +575,29 @@ mod tests {
         assert_eq!(before.len(), 289);
         let changed: Vec<usize> = (0..289).filter(|&i| before[i] != after[i]).collect();
         assert!(changed.iter().all(|i| (136..168).contains(i)) && !changed.is_empty());
+    }
+
+    #[test]
+    fn the_destination_owner_may_cancel_at_any_time() {
+        assert!(cancel_allowed(1851, 1851, true).is_ok());
+        assert!(cancel_allowed(1851, 1848, true).is_ok());
+    }
+
+    #[test]
+    fn anyone_may_cancel_only_after_the_time_limit_seen_by_the_light() {
+        let too_early = Err(ProgramError::Custom(Error::TooEarly as u32));
+        assert_eq!(cancel_allowed(1851, 1851, false), too_early);
+        assert_eq!(cancel_allowed(1848 + CANCEL_AFTER - 1, 1848, false), too_early);
+        assert!(cancel_allowed(1848 + CANCEL_AFTER, 1848, false).is_ok());
+        // A light behind the burn, or a burn height near u64::MAX, never opens the anyone path.
+        assert_eq!(cancel_allowed(10, 1848, false), too_early);
+        assert_eq!(cancel_allowed(u64::MAX, u64::MAX - 1, false), too_early);
+    }
+
+    #[test]
+    fn marker_states_are_distinct_one_byte_values() {
+        assert_eq!((PAID, CANCELLED), (1, 2));
+        assert_eq!(Error::TooEarly as u32, 9);
     }
 
     #[test]
