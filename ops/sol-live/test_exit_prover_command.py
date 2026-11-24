@@ -170,6 +170,7 @@ class ProverStartTest(unittest.TestCase):
         conf = root / "pf-sol-exit-prove.conf"
         if conf_text is not None:
             conf.write_text(conf_text)
+            conf.chmod(0o644)
         runner = root / "start"
         runner.write_text(START.read_text().replace("/workspace/sol-ingress/speed-i2", str(tree))
                           .replace("/etc/pf-sol-exit-prove.conf", str(conf))
