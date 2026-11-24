@@ -37,7 +37,10 @@ def secrets():
     return found
 
 def redact(text,values=None):
-    for value in (secrets() if values is None else values):text=text.replace(value,'[redacted]')
+    """Remove each key, then any start or end of it of 8 or more characters, longest first:
+    a text cut elsewhere may hold only part of a key."""
+    for value in (secrets() if values is None else values):
+        for size in range(len(value),min(8,len(value))-1,-1):text=text.replace(value[:size],'[redacted]').replace(value[-size:],'[redacted]')
     text=re.sub(r'(api_key=)[^&\s"\']+',r'\1[redacted]',text)
     return re.sub(r'(Bearer\s+)\S+',r'\1[redacted]',text)
 
@@ -45,7 +48,7 @@ def vastai(*args):
     """Run one read-only CLI call; the error never carries the key or raw output."""
     try:result=subprocess.run([str(VASTAI),*args,'--raw'],stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=120)
     except Exception as error:raise RuntimeError(f'vastai {args[-1]}: {type(error).__name__}') from None
-    if result.returncode:raise RuntimeError(redact(f'vastai {args[-1]} exited {result.returncode}: '+' '.join(result.stderr.split())[-200:]))
+    if result.returncode:raise RuntimeError(f'vastai {args[-1]} exited {result.returncode}: '+redact(' '.join(result.stderr.split()))[-200:])
     try:return json.loads(result.stdout)
     except ValueError:raise RuntimeError(f'vastai {args[-1]}: output is not JSON') from None
 
