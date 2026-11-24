@@ -1096,13 +1096,17 @@ mod transport_batch_payload_tests {
 
     #[test]
     fn activated_consensus_v2_transport_survives_failed_view_zero_proposer_n4() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         run_activated_consensus_v2_transport_failed_proposer(4);
     }
 
     #[test]
     fn activated_consensus_v2_transport_survives_failed_view_zero_proposer_n6() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         run_activated_consensus_v2_transport_failed_proposer(6);
     }
 
@@ -1198,7 +1202,9 @@ mod transport_batch_payload_tests {
     /// between rounds.
     #[test]
     fn transactional_six_validator_round_opens_each_database_a_bounded_number_of_times() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("transactional open-count test").expect("prewarm");
         let fleet = consensus_v2_transport_fleet("transactional-open-count", 6, Some(2));
         let _ = transactional_six_validator_round(&fleet, 1, 1);
@@ -1313,7 +1319,9 @@ mod transport_batch_payload_tests {
     /// is stored once, and the next proposal is not refused.
     #[test]
     fn certified_send_redelivery_after_a_lost_ack_completes_as_already_applied() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("duplicate certified send test").expect("prewarm");
         let fleet = consensus_v2_transport_fleet("duplicate-certified-send", 4, Some(2));
         let _ = transactional_six_validator_round(&fleet, 1, 1);
@@ -1542,7 +1550,9 @@ mod transport_batch_payload_tests {
     /// matches: the job stays pending with `certified_send_duplicate_conflict`.
     #[test]
     fn certified_send_redelivery_with_a_different_consensus_v2_commit_stays_pending() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("duplicate v2 commit test").expect("prewarm");
         let fleet = consensus_v2_transport_fleet("duplicate-v2-commit", 4, Some(2));
         let _ = transactional_six_validator_round(&fleet, 1, 1);
@@ -1610,7 +1620,9 @@ mod transport_batch_payload_tests {
 
     #[test]
     fn peer_round_routes_to_remote_proposer_with_host_local_keys() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("remote proposer transport test")
             .expect("prewarm verifier");
         let validator_count = 4usize;
@@ -1850,7 +1862,9 @@ mod transport_batch_payload_tests {
     /// must apply the block through the store it holds and send only to peers.
     #[test]
     fn default_peer_round_applies_locally_without_sending_to_its_own_validator() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("no self-delivery test").expect("prewarm");
         let fleet = consensus_v2_transport_fleet("certified-round-no-self-send", 4, None);
         let proposer =
@@ -2098,7 +2112,9 @@ mod transport_batch_payload_tests {
     /// vote that arrives after the quorum.
     #[test]
     fn peer_round_keeps_a_vote_outcome_record_for_every_requested_validator() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("vote record test").expect("prewarm");
         // Ten validators: a quorum of seven still forms with one refusing,
         // one silent and one late validator.
@@ -2326,7 +2342,9 @@ mod transport_batch_payload_tests {
     /// round's certified send to its timeout).
     #[test]
     fn peer_round_records_a_vote_after_the_quorum_when_the_writer_runs_at_the_deadline() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("vote record deadline test").expect("prewarm");
         // Seven validators: a quorum of five forms from the proposer and four
         // prompt validators, before the late one and without the hanging one.
@@ -2671,13 +2689,62 @@ mod transport_batch_payload_tests {
         std::fs::remove_dir_all(&data_dir).expect("cleanup");
     }
 
+    /// Holds the late validator's prepare replies until the test opens it, or
+    /// for at most a given time, and counts the prepare requests received and
+    /// the replies passed on.
+    #[derive(Default)]
+    struct LateReplyGate {
+        open: Mutex<bool>,
+        opened: std::sync::Condvar,
+        asked: std::sync::atomic::AtomicUsize,
+        passed_on: std::sync::atomic::AtomicUsize,
+    }
+
+    impl LateReplyGate {
+        fn ask(&self) {
+            self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+
+        fn asked(&self) -> usize {
+            self.asked.load(std::sync::atomic::Ordering::SeqCst)
+        }
+
+        fn open(&self) {
+            *self
+                .open
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
+            self.opened.notify_all();
+        }
+
+        fn hold(&self, limit: Duration) {
+            let open = self
+                .open
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            drop(
+                self.opened
+                    .wait_timeout_while(open, limit, |open| !*open)
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
+            // Counted before the reply is written, so a round that saw the
+            // reply always finds it counted.
+            self.passed_on.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+
+        fn passed_on(&self) -> usize {
+            self.passed_on.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
     /// Line proxy in front of one validator, modelling validator-2 at height
     /// 1453: its prepare vote reaches the proposer late, and every precommit
     /// request is held and then refused.
     fn spawn_late_refusing_validator_proxy(
         listener: TcpListener,
         upstream: std::net::SocketAddr,
-        prepare_delay: Duration,
+        prepare_gate: std::sync::Arc<LateReplyGate>,
+        prepare_hold: Duration,
         precommit_hold: Duration,
         precommit_requests: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     ) {
@@ -2685,6 +2752,7 @@ mod transport_batch_payload_tests {
             for client in listener.incoming() {
                 let Ok(client) = client else { return };
                 let precommit_requests = std::sync::Arc::clone(&precommit_requests);
+                let prepare_gate = std::sync::Arc::clone(&prepare_gate);
                 std::thread::spawn(move || {
                     let mut client_writer = client.try_clone().expect("clone proxy client");
                     let mut client_reader = BufReader::new(client);
@@ -2709,6 +2777,9 @@ mod transport_batch_payload_tests {
                             let _ = client_writer.write_all(format!("{refusal}\n").as_bytes());
                             return;
                         }
+                        if phase == Some("prepare") {
+                            prepare_gate.ask();
+                        }
                         if upstream_stream.is_none() {
                             let stream = TcpStream::connect(upstream).expect("proxy upstream");
                             let reader =
@@ -2724,7 +2795,7 @@ mod transport_batch_payload_tests {
                             return;
                         }
                         if phase == Some("prepare") {
-                            std::thread::sleep(prepare_delay);
+                            prepare_gate.hold(prepare_hold);
                         }
                         if client_writer.write_all(response.as_bytes()).is_err() {
                             return;
@@ -5280,16 +5351,21 @@ mod transport_batch_payload_tests {
     /// mempool mutation lock for the whole wait.
     #[test]
     fn height_1453_round_certifies_at_precommit_quorum_without_late_refusing_peer() {
-        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         prewarm_shielded_verifier_cache("height 1453 stall test").expect("prewarm verifier");
         let validator_count = 6usize;
         // The incident's transport timeout was 900 s; 60 s keeps the failing
-        // run short while staying far above the asserted round bound.
+        // run short while staying far above the late validator's hold.
         let transport_timeout_ms = 60_000u64;
-        let round_bound = Duration::from_secs(12);
         let precommit_hold = Duration::from_secs(20);
-        // The late prepare vote lands after the round's precommit quorum.
-        let prepare_delay = round_bound / 2;
+        // The late prepare vote is held until the round has returned, or for
+        // at most this long: a round that waits for it returns only after it
+        // was passed on, on a runner of any speed. The bound is 5 times the
+        // slowest round seen (6 s on a hosted runner).
+        let late_prepare_hold = Duration::from_secs(30);
+        let late_prepare_gate = std::sync::Arc::new(LateReplyGate::default());
         let root = std::env::temp_dir().join(format!(
             "postfiat-height-1453-stall-{}-{}",
             std::process::id(),
@@ -5386,7 +5462,8 @@ mod transport_batch_payload_tests {
         spawn_late_refusing_validator_proxy(
             late_topology_listener,
             late_upstream_addr,
-            prepare_delay,
+            std::sync::Arc::clone(&late_prepare_gate),
+            late_prepare_hold,
             precommit_hold,
             std::sync::Arc::clone(&precommit_requests),
         );
@@ -5472,7 +5549,9 @@ mod transport_batch_payload_tests {
                 timeout_ms: transport_timeout_ms,
                 send_retries: 1,
                 retry_backoff_ms: 50,
-                vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
+                // As at height 1453, no phase deadline ends the wait before
+                // the late validator answers: only the quorum may end it.
+                vote_phase_deadline_ms: transport_timeout_ms,
                 local_apply_before_certified_send: true,
                 defer_certified_sends: false,
                 commit_processed_dir: None,
@@ -5484,7 +5563,7 @@ mod transport_batch_payload_tests {
             })
         };
         let mut busy_until_round_end = false;
-        while !round.is_finished() && round_start.elapsed() < round_bound * 2 {
+        while !round.is_finished() && round_start.elapsed() < late_prepare_hold * 4 {
             busy_until_round_end |= matches!(
                 mempool_mutation_lock.try_lock(),
                 Err(std::sync::TryLockError::WouldBlock)
@@ -5498,18 +5577,46 @@ mod transport_batch_payload_tests {
             .expect("round thread")
             .expect("height 1453 round must certify at quorum");
         let round_elapsed = round_start.elapsed();
+        let late_prepare_requests_before_return = late_prepare_gate.asked();
+        let late_prepare_replies_before_return = late_prepare_gate.passed_on();
+        let precommit_requests_before_return =
+            precommit_requests.load(std::sync::atomic::Ordering::SeqCst);
+        late_prepare_gate.open();
+        // Once the gate opens, the held reply is passed on.
+        let opened_at = Instant::now();
+        while late_prepare_gate.passed_on() == 0 && opened_at.elapsed() < late_prepare_hold {
+            std::thread::sleep(Duration::from_millis(20));
+        }
         eprintln!(
             "height-1453 repro: round_elapsed={round_elapsed:?} mempool_lock_free_after={mempool_lock_free_after:?} \
-             precommit_requests_to_late_peer={} busy_seen={busy_until_round_end}",
-            precommit_requests.load(std::sync::atomic::Ordering::SeqCst)
+             late_prepare_requests_before_return={late_prepare_requests_before_return} \
+             late_prepare_replies_before_return={late_prepare_replies_before_return} \
+             precommit_requests_to_late_peer={precommit_requests_before_return} busy_seen={busy_until_round_end} \
+             certified_and_applied_ms={:.0}",
+            report.timings.client_visible_finality_ms
+        );
+        // The late validator was asked for its prepare vote and its reply
+        // was still held when the round returned, so the round did not wait
+        // for it; nor did it ask the late validator for a precommit, which
+        // needs that prepare vote. The held reply is passed on exactly once
+        // after the gate opens.
+        assert_eq!(
+            late_prepare_requests_before_return, 1,
+            "the late validator was not asked for its prepare vote before the round returned"
+        );
+        assert_eq!(
+            late_prepare_replies_before_return, 0,
+            "round took {round_elapsed:?}: it waited on the late peer instead of certifying at precommit quorum"
+        );
+        assert_eq!(precommit_requests_before_return, 0);
+        assert_eq!(
+            (late_prepare_gate.asked(), late_prepare_gate.passed_on()),
+            (1, 1),
+            "the late validator's held prepare reply was not passed on exactly once after the gate opened"
         );
         assert!(
             mempool_lock_free,
             "mempool mutation lock still held {mempool_lock_free_after:?} into the round"
-        );
-        assert!(
-            round_elapsed < round_bound,
-            "round took {round_elapsed:?}: it waited on the late peer instead of certifying at precommit quorum"
         );
         assert!(
             report.round_ok,
@@ -5526,10 +5633,6 @@ mod transport_batch_payload_tests {
             !precommit_voters.contains(&late_validator),
             "late validator was counted in the precommit QC: {precommit_voters:?}"
         );
-        // The late validator is asked for its precommit only once its prepare
-        // vote has arrived; here the round certified before that, so never.
-        assert!(round_elapsed < prepare_delay, "{round_elapsed:?}");
-        assert_eq!(precommit_requests.load(std::sync::atomic::Ordering::SeqCst), 0);
 
         // The late validator still receives the certified block through the
         // existing certified delivery path.

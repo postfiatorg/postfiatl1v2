@@ -13,15 +13,24 @@ pub(super) fn apply_proof(
     compatibility: AssetExecutionCompatibility,
     orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Result<(), Rejection> {
-    let secondary = ledger.additional_solana_routes.contains_key(&operation.profile_hash);
-    let route = ledger.additional_solana_routes.get(&operation.profile_hash)
-        .or(ledger.solana_route.as_ref()).cloned().ok_or((
-        "solana_bridge_disabled",
-        "Solana route has no activation".into(),
-    ))?;
+    let secondary = ledger
+        .additional_solana_routes
+        .contains_key(&operation.profile_hash);
+    let route = ledger
+        .additional_solana_routes
+        .get(&operation.profile_hash)
+        .or(ledger.solana_route.as_ref())
+        .cloned()
+        .ok_or((
+            "solana_bridge_disabled",
+            "Solana route has no activation".into(),
+        ))?;
     let profile = &route.profile;
     if ledger.solana_route_superseded(profile) {
-        return Err(("solana_route_superseded", "Solana route revision has been retired".into()));
+        return Err((
+            "solana_route_superseded",
+            "Solana route revision has been retired".into(),
+        ));
     }
     if !(profile.activation_height..profile.expires_at_height).contains(&height) {
         return Err((
@@ -70,11 +79,15 @@ pub(super) fn apply_proof(
     .map_err(|error| (error.code(), error.message()))?;
     if operation.proof_kind == postfiat_types::SOLANA_HANDOFF_PROOF {
         let client = if secondary {
-            ledger.additional_solana_routes.get_mut(&operation.profile_hash)
+            ledger
+                .additional_solana_routes
+                .get_mut(&operation.profile_hash)
         } else {
             ledger.solana_route.as_mut()
         };
-        client.expect("route loaded above").apply_verified_handoff(&operation.public_values)
+        client
+            .expect("route loaded above")
+            .apply_verified_handoff(&operation.public_values)
             .map_err(|e| ("invalid_solana_handoff", e))?;
         return Ok(());
     }
@@ -110,10 +123,14 @@ fn credit_verified(
         .ok_or(("invalid_solana_route", "missing Solana pins".into()))?;
     let values = SolanaDepositPublicValues::decode(public_values)
         .map_err(|e| ("invalid_solana_deposit_values", e))?;
-    let certificate_epoch = pins.slot_epoch(values.certificate_slot)
-        .ok_or(("solana_source_mismatch", "invalid Solana certificate epoch".into()))?;
-    let signing_client = route.client_at(certificate_epoch)
-        .ok_or(("solana_source_mismatch", "certificate epoch has no authenticated client".into()))?;
+    let certificate_epoch = pins.slot_epoch(values.certificate_slot).ok_or((
+        "solana_source_mismatch",
+        "invalid Solana certificate epoch".into(),
+    ))?;
+    let signing_client = route.client_at(certificate_epoch).ok_or((
+        "solana_source_mismatch",
+        "certificate epoch has no authenticated client".into(),
+    ))?;
     if values.validator_set_hash != signing_client.validator_set_hash
         || values.total_stake.to_string() != signing_client.total_stake
     {
@@ -143,7 +160,9 @@ fn credit_verified(
     for evidence in &values.receipts {
         if evidence.program_id != profile.vault_address
             || evidence.slot < pins.anchor_slot
-            || pins.slot_epoch(evidence.slot).is_none_or(|e| e < certificate_epoch.saturating_sub(1))
+            || pins
+                .slot_epoch(evidence.slot)
+                .is_none_or(|e| e < certificate_epoch.saturating_sub(1))
         {
             return Err((
                 "solana_source_mismatch",
@@ -174,7 +193,8 @@ fn credit_verified(
         .ok_or(("missing_asset", "Solana asset family missing".into()))?;
     let bucket = vault_bridge_bucket_id(&family.asset_id, &profile.source_domain(), hash)
         .map_err(|e| ("invalid_solana_route", e))?;
-    let series_id = postfiat_types::solana_source_series_id(&genesis.chain_id, &family.asset_id, &bucket);
+    let series_id =
+        postfiat_types::solana_source_series_id(&genesis.chain_id, &family.asset_id, &bucket);
     for evidence in values.receipts {
         let amount = evidence.amount_atoms;
         let recipient = evidence.recipient.clone();
@@ -335,7 +355,11 @@ mod tests {
         values.extend(5_000_000u64.to_le_bytes());
         values.extend([12; 32]);
         values.extend([13; 32]);
-        let route = SolanaRouteState { profile, client, epoch_history: Default::default() };
+        let route = SolanaRouteState {
+            profile,
+            client,
+            epoch_history: Default::default(),
+        };
         let mut ledger = LedgerState::new(vec![Account::new(
             format!("pf{}", "0b".repeat(20)),
             1000,
@@ -488,18 +512,31 @@ mod tests {
         // B=1011 in epoch 10. D=1101 in epoch 11. The authenticated set follows D.
         values[..8].copy_from_slice(b"PFSOLDP2");
         values.extend(1101u64.to_le_bytes());
-        assert_eq!(credit(&genesis, &mut ledger, &route, &values).unwrap_err().0, "solana_source_mismatch");
+        assert_eq!(
+            credit(&genesis, &mut ledger, &route, &values)
+                .unwrap_err()
+                .0,
+            "solana_source_mismatch"
+        );
         route.client.epoch = 11;
         ledger.solana_route = Some(route.clone());
         credit(&genesis, &mut ledger, &route, &values).unwrap();
-        let receipt = ledger.vault_bridge_receipts[0].solana_deposit_evidence.as_ref().unwrap();
+        let receipt = ledger.vault_bridge_receipts[0]
+            .solana_deposit_evidence
+            .as_ref()
+            .unwrap();
         assert_eq!(receipt.slot, 1011);
         let end = values.len();
-        values[end-8..].copy_from_slice(&1011u64.to_le_bytes());
+        values[end - 8..].copy_from_slice(&1011u64.to_le_bytes());
         assert!(SolanaDepositPublicValues::decode(&values).is_err());
-        values[end-8..].copy_from_slice(&1201u64.to_le_bytes());
+        values[end - 8..].copy_from_slice(&1201u64.to_le_bytes());
         route.client.epoch = 12;
-        assert_eq!(credit(&genesis, &mut ledger, &route, &values).unwrap_err().0, "solana_source_mismatch");
+        assert_eq!(
+            credit(&genesis, &mut ledger, &route, &values)
+                .unwrap_err()
+                .0,
+            "solana_source_mismatch"
+        );
     }
 
     #[test]
@@ -623,22 +660,39 @@ mod tests {
         let anchor = rotated.profile.solana.as_ref().unwrap().anchor.clone();
         rotated.epoch_history.insert(anchor.epoch, anchor);
         let backfill = SolanaProofOperation {
-            submitter: format!("pf{}", "0b".repeat(20)), profile_hash: hash,
+            submitter: format!("pf{}", "0b".repeat(20)),
+            profile_hash: hash,
             proof_kind: postfiat_types::SOLANA_HANDOFF_PROOF.into(),
             proof: std::fs::read(directory.join("epoch-6.groth16")).unwrap(),
             public_values: std::fs::read(directory.join("epoch-6.values")).unwrap(),
         };
-        apply_proof(&genesis, &mut ledger, &backfill, 10,
-            AssetExecutionCompatibility::strict(), &[]).unwrap();
+        apply_proof(
+            &genesis,
+            &mut ledger,
+            &backfill,
+            10,
+            AssetExecutionCompatibility::strict(),
+            &[],
+        )
+        .unwrap();
         let rotated = ledger.solana_route.as_ref().unwrap();
         assert_eq!(rotated.client, live);
         let six = rotated.client_at(6).unwrap();
-        assert_eq!(six.validator_set_hash, live.handoff.as_ref().unwrap().predecessor_set_hash);
+        assert_eq!(
+            six.validator_set_hash,
+            live.handoff.as_ref().unwrap().predecessor_set_hash
+        );
         let before = ledger.clone();
-        assert!(apply_proof(&genesis, &mut ledger, &backfill, 10,
-            AssetExecutionCompatibility::strict(), &[]).is_err());
+        assert!(apply_proof(
+            &genesis,
+            &mut ledger,
+            &backfill,
+            10,
+            AssetExecutionCompatibility::strict(),
+            &[]
+        )
+        .is_err());
         assert_eq!(ledger, before);
-
     }
 
     #[test]
