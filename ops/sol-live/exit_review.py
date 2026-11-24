@@ -295,8 +295,9 @@ def review_clearance(cfg, data_dir=None):
         match = re.fullmatch(r"height-([0-9]+)\.json", name) or re.fullmatch(
             r"epoch-[0-9]+-[a-f0-9]{96}-height-([0-9]+)(?:-view-[0-9]+\.timeout-vote)?\.json", name)
         require(match and int(match[1]) <= head["block_height"], f"clearance: unknown or uncommitted round {name}")
-    parent = f"{head['block_height']}:{head['block_tip_hash']}"
-    decision = f"solana_exit_rotation_clearance:{cfg.validator}:{parent}:{head['build_git_revision']}"
+    parent = {k: head[k] for k in ("block_height", "block_tip_hash", "state_root")}
+    text = f"{parent['block_height']}:{parent['block_tip_hash']}:{parent['state_root']}"
+    decision = f"solana_exit_rotation_clearance:{cfg.validator}:{text}:{head['build_git_revision']}"
     return dict(action="clearance", decision=decision, parent=parent, revision=head["build_git_revision"],
                 outstanding_signed_rotation_rounds=[], finalized_slot=0)
 
@@ -362,6 +363,7 @@ def main(argv=None):
         p = sub.add_parser(name)
         p.add_argument("--burn", required=True)
     sub.add_parser("clearance")
+    sub.add_parser("show-clearance", help="print this host's own fresh clearance for its node's current tip")
     sub.add_parser("scan", help="review every pending burn whose marker is written (the timer's job)")
     s = sub.add_parser("sign", help="run the node's signing command only for a reviewed decision")
     s.add_argument("--amendment-file", required=True, type=Path)
@@ -376,6 +378,16 @@ def main(argv=None):
             return EXIT_REFUSED
         command = [a for a in args.command_line if a != "--"]
         os.execv(command[0], command)
+    if args.command == "show-clearance":
+        try:
+            print(json.dumps(load_review(cfg, review_clearance(cfg)["decision"])))
+        except RpcError as error:
+            print(f"rpc error: {error}", file=sys.stderr)
+            return EXIT_RPC
+        except Refused as error:
+            print(f"refused: {error}", file=sys.stderr)
+            return EXIT_REFUSED
+        return 0
     if args.command == "scan":
         try:
             work = list(pending_burns(cfg))

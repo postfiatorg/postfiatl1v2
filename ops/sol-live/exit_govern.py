@@ -131,10 +131,13 @@ def reconcile_service_buckets(state, height, need=6):
         reconcile_supply(rows, int(outstanding), need, dict(bucket_id=b["bucket_id"], policy_hash=policy))
 
 
-def rotation_clearance(head, need=6):
+def rotation_clearance(head, need=6, rules=None):
     """Read the independent inventories over the authenticated host connections: all six
-    for setup and a first opening, the five answering ones for a re-opening."""
-    from govern import remote
+    for setup and a first opening, the five answering ones for a re-opening. Under the second
+    release each host's own reviewer states its clearance (`exit_review.py show-clearance`)."""
+    from govern import REVIEWER, REVIEWER_PYTHON, remote
+
+    own = rules is not None and rules.get("release") == 2
 
     require_closed(routes(SERIES, need), need)
 
@@ -156,8 +159,12 @@ def rotation_clearance(head, need=6):
             ],
         ).splitlines()
         try:
+            if own:
+                return files, json.loads(remote(i, [REVIEWER_PYTHON, "-I", REVIEWER, "show-clearance"]))
             return files, read_operator_review(i, "/etc/postfiat/sol-exit-rotation-clearance.json")
         except subprocess.CalledProcessError as error:
+            if own:
+                return files, ValueError(f"No fresh own rotation clearance on validator-{i}: {error.stderr}")
             # An unsafe clearance file fails the check; only an unreachable host is skipped.
             if "operator review file" in (error.stderr or ""):
                 return files, error
@@ -182,6 +189,15 @@ def rotation_clearance(head, need=6):
     # validators beyond `need` may be unreachable.
     rows = {i: inspect(i, *answer) for i, answer in survey(fetch, need).items()}
     for i, row in sorted(rows.items()):
+        if own:
+            require(
+                row["validator"] == f"validator-{i}"
+                and row["parent"] == parent_of(head)
+                and row["revision"] == head["build_git_revision"]
+                and row["outstanding_signed_rotation_rounds"] == [],
+                f"Missing, stale or outstanding rotation clearance on validator-{i}.",
+            )
+            continue
         require(
             row["validator"] == f"validator-{i}"
             and row["parent"] == parent_of(head)
@@ -308,7 +324,7 @@ def main():
             try:
                 if state["qualified_parent"] != start or start != parent_of(fleet(need)):
                     continue
-                rotation_clearance(candidate, need)
+                rotation_clearance(candidate, need, rules=rules)
                 accepted = govern(
                     "exit-open",
                     compatible=args.revision,

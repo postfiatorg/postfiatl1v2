@@ -283,7 +283,7 @@ class QualificationTest(unittest.TestCase):
             patch.object(g, "govern", return_value={"tx_id": "id"}) as submit,
         ):
             g.main()
-            clearance.assert_called_once_with(new, 6)
+            clearance.assert_called_once_with(new, 6, rules=__import__("unittest.mock").mock.ANY)
             submit.assert_called_once_with(
                 "exit-open", compatible="rev", qualified_parent=pre.parent_of(new),
                 rules=__import__("exit_rules").first_release(),

@@ -215,7 +215,8 @@ class ConstantsAndClearanceTest(unittest.TestCase):
     def test_clearance_reads_this_hosts_own_signing_history(self):
         class Head(Node):
             def __call__(self, method, **params):
-                return dict(block_height=1900, block_tip_hash="ab" * 48, build_git_revision="rev")
+                return dict(block_height=1900, block_tip_hash="ab" * 48, state_root="cd" * 48,
+                            build_git_revision="rev")
 
         with tempfile.TemporaryDirectory() as d:
             safety = Path(d) / "consensus-v2-safety"

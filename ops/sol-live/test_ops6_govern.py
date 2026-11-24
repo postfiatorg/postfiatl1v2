@@ -44,7 +44,7 @@ class GovernanceTest(unittest.TestCase):
         clearance = self.mock(g, "rotation_clearance", side_effect=ValueError("stale clearance"))
         with self.assertRaisesRegex(ValueError, "stale clearance"):
             self.command("open")
-        clearance.assert_called_once_with(self.head, 6)
+        clearance.assert_called_once_with(self.head, 6, rules=__import__("unittest.mock").mock.ANY)
         self.sign.assert_not_called()
 
     def test_close_and_paid_use_solana_parent_after_ethereum_changes(self):

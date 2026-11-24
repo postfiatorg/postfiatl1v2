@@ -91,6 +91,10 @@ class Fleet:
             return json.dumps(dict(kind=self.kind, parent=parent_of(self.head)))
         if args[0] == "find":
             return f"height-{HEIGHT}.json\n"
+        if args == [govern.REVIEWER_PYTHON, "-I", govern.REVIEWER, "show-clearance"]:
+            # The host's own reviewer states its clearance for the current tip.
+            return json.dumps(dict(validator=f"validator-{i}", parent=parent_of(self.head), revision=REV,
+                                   outstanding_signed_rotation_rounds=[]))
         if args[-1] == "/etc/postfiat/sol-exit-rotation-clearance.json":
             return json.dumps(dict(
                 validator=f"validator-{i}", parent=parent_of(self.head), revision=REV,
