@@ -33,6 +33,18 @@ class CancelledBurnTest(unittest.TestCase):
                 payout.process(BURN, Path("/nonexistent"), lambda *a, **k: None)
             cluster.return_value.account.assert_not_called()
 
+    def test_a_burn_cancelled_before_the_second_release_says_when_its_refund_comes(self):
+        early = payout.BurnCancelled(early=True)
+        self.assertTrue(str(early).startswith(payout.CANCELLED))
+        self.assertIn("second release", str(early))
+        self.assertEqual(str(payout.BurnCancelled()), payout.CANCELLED)
+        with tempfile.TemporaryDirectory() as d:
+            journal = svc.Journal(Path(d) / "jobs.sqlite")
+            journal.enqueue(BURN)
+            with patch.object(svc, "process", side_effect=early):
+                svc.process_next(journal, Path(d))
+            self.assertIn("second release", svc.public_row(journal.get(BURN))["error"])
+
     def test_a_cancelled_marker_is_not_counted_as_paid_custody(self):
         reds = [dict(burn_tx_id=b * 48, bucket_id=payout.BUCKET, amount_atoms=a, state="pending",
                      settled_atoms=0) for b, a in (("a1", 300000), ("b2", 400000))]
