@@ -5,6 +5,7 @@ umask 077
 work=/workspace/b23-withdraw-20261116
 lock=/workspace/b23-gpu/prover.lock
 device=
+deposit=
 # Without this file the prover is the single-GPU host as before: device 0 and the paths above.
 # On the four-GPU machine shared with the deposit prover it names the device, the staged tree
 # and its SP1 home (RUNBOOK-LIVE.md, "One proving machine").
@@ -21,12 +22,20 @@ if [[ -e $conf ]]; then
         case "$key=$value" in
             =|'#'*) ;;
             EXIT_CUDA_DEVICE=[0-9]|EXIT_CUDA_DEVICE=[0-9][0-9]) device=$value;;
+            DEPOSIT_CUDA_DEVICES=*) [[ $value =~ ^[0-9]{1,2}(,[0-9]{1,2})*$ ]] ||
+                { echo "pf-sol-exit-prove: bad line in $conf: $key" >&2; exit 78; }
+                deposit=$value;;
             EXIT_WORK_DIR=/*) work=$value;;
             EXIT_LOCK=/*) lock=$value;;
             EXIT_SP1_HOME=/*) export HOME=$value;;
             *) echo "pf-sol-exit-prove: bad line in $conf: $key" >&2; exit 78;;
         esac
     done < "$conf"
+    # The deposit prover reads its devices from the same file; they must leave this one alone.
+    if [[ ,$deposit, == *,${device:-0},* ]]; then
+        echo "pf-sol-exit-prove: device ${device:-0} is also in DEPOSIT_CUDA_DEVICES=$deposit in $conf" >&2
+        exit 78
+    fi
 fi
 case "${SSH_ORIGINAL_COMMAND:-}" in
     pf-sol-exit-check) cd "$work"; test -x proof-host && test -s egress.elf; exit;;
