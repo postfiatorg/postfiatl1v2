@@ -21,14 +21,22 @@ live checkout of `main`:
 
 ```bash
 cd ~/repos/postfiatl1v2-live
-install -m 0644 ops/b24-live/prover-credit-alert.service ops/b24-live/prover-credit-alert.timer ~/.config/systemd/user/
+install -m 0644 ops/b24-live/prover-credit-alert.service ops/b24-live/prover-credit-alert-failed.service \
+  ops/b24-live/prover-credit-alert.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user start prover-credit-alert.service   # one check now
 journalctl --user -u prover-credit-alert.service -n 5
 systemctl --user enable --now prover-credit-alert.timer
 ```
 
-Nothing runs until the timer is installed. The unit needs:
+Nothing runs until the timer is installed. A user timer runs only while the user has a session,
+unless lingering is on; check once with `loginctl show-user postfiat -p Linger` and, if it says
+`no`, ask root for `sudo loginctl enable-linger postfiat`.
+
+A failed run shows in `systemctl --user --failed`. `prover-credit-alert-failed.service` (started by
+`OnFailure=`) also reports a run that ended without its own report, such as a crash or a timeout.
+
+The unit needs:
 
 - the Vast CLI at `~/.local/bin/vastai`, the one `ops/sol-live/prover-tunnel.py` uses. The CLI reads
   its own key file (`~/.config/vastai/vast_api_key`). The key is never passed as an argument. The

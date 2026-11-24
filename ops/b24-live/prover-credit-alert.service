@@ -2,6 +2,9 @@
 Description=Report before the Vast proving hosts run out of credit
 After=network-online.target
 Wants=network-online.target
+# A failed run (a crash, a timeout, a report not delivered) shows in `systemctl --user --failed`;
+# this unit also reports a run that ended without its own report.
+OnFailure=prover-credit-alert-failed.service
 
 [Service]
 Type=oneshot
