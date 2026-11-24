@@ -584,7 +584,17 @@ The verifier lets two parties cancel a proven, unpaid burn: its destination owne
 2. The burn is not in flight: its job is not `paying`, the journal holds no unexpired attempt signature, and the marker account does not exist at finalized.
 3. The worker is stopped for this burn until the cancel is final.
 
-**Then:** sign tag 10 on the pause host with the pause signer. Use the burn's own values and proof from the worker's work directory. The accounts are: payer, light, prior checkpoint, result checkpoint, values buffer, system program, the burn's marker, and the pause signer. Read back the marker: byte 2 at finalized. Record the signature, then follow "Refund a cancelled burn" below. No tool builds this transaction yet; it uses the worker's own proof artifacts.
+**Then,** with `ops/sol-live/exit_cancel.py`, which never holds or reads the pause key:
+1. **Prepare.** On the relay, stop the worker for this burn, then run `prepare`. It refuses unless the redemption is pending and unsettled, the marker does not exist at finalized, and no payout is in flight: neither the job paying, nor a recorded attempt whose block height has not passed. It checks that the worker's proof files are for this burn. It writes `unsigned.hex`, plus `summary.txt` and `summary.json`: the burn, amount, destination owner, marker address, program, the signer that must sign (the pause authority), the values buffer, the message hash and the last valid block height.
+2. **Sign.** On the offline pause host, the holder signs `unsigned.hex` with the pause key, before the last valid block height in the summary. Past that height, prepare again.
+3. **Verify.** On the relay, `verify` checks that the signed transaction is the prepared message, signed by the pause authority alone.
+4. **Send.** `send` refuses unless five agreeing validators report the second release. It re-checks the burn and the marker, uploads the burn's public values, and sends the transaction. Read back the marker: byte 2 at finalized. Record the signature, then follow "Refund a cancelled burn" below.
+
+```bash
+python3 ops/sol-live/exit_cancel.py prepare --burn "$BURN" --proof-dir "$EXIT_WORK/jobs/$BURN/<witness hash>" --journal "$EXIT_WORK/jobs.sqlite" --out "$KIT/cancel-$BURN"
+python3 ops/sol-live/exit_cancel.py verify --out "$KIT/cancel-$BURN" --signed "$KIT/cancel-$BURN/signed.hex"
+python3 ops/sol-live/exit_cancel.py send --out "$KIT/cancel-$BURN" --signed "$KIT/cancel-$BURN/signed.hex"
+```
 
 ### Refund a cancelled burn
 
