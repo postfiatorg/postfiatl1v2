@@ -446,8 +446,43 @@ H (`SECOND_RELEASES` in `crates/types/src/solana_exit.rs`) is a source constant 
 - [ ] The Solana verifier is upgraded and its hash is pinned (`VERIFIER_SHA256` in `exit_setup.py`).
 - [ ] The tools report the second release's rules from the chain's route report.
 - [ ] A replay of the live chain with the build passes and matches the live state root.
+- [ ] The per-host settlement reviewer runs on all six hosts and approved the latest payout on each (see "Independent settlement reviews").
 
 A governed or interlocked activation would need validators to ratify H only from the second-release build, the code to read the stored activation instead of the constant, and ratification to be refused while any active validator reports another build.
+
+### Independent settlement reviews
+
+Under the second release, five of six signatures decide paid, close, re-open and refund. A signature is only as good as the review behind it. On each validator host, a review is independent when all of the following hold:
+- **Where it runs:** on that host.
+- **What it reads:**
+  - the burn and its redemption from that host's own node;
+  - Solana through an endpoint configured on that host, named in every verdict.
+- **Where it writes:** each address (marker, light, associated token account) is derived on that host, and the verdict goes into that host's own review directory. No other host writes there.
+- **What it checks:**
+  - the redemption is pending, unsettled and in a covered bucket;
+  - the destination is canonical;
+  - the marker's address and byte are as expected (1 paid, 2 cancelled) at finalized;
+  - exactly one payout or cancel instruction, of the verifier program, in a successful transaction at or below the finalized slot;
+  - the proof's public values match the burn (burn, amount, destination, bucket, family, chain tag);
+  - for a payout, the mint and the exact custody and recipient amounts.
+- **When it signs:** only from that host's own approval of exactly this decision (its SHA-256), at most 15 minutes old, keyed with a key that never leaves the host.
+
+`ops/sol-live/exit_review.py` is that reviewer. It is check-only: it exits 0 on approval, 2 with a named refusal, and 3 with a named RPC error, and it never writes a placeholder. `exit_review.py sign` is the host's signing step: `govern.py` runs it on each host for paid and refund under the second release. A first-release chain keeps the go-live review files and six signatures. The go-live tools `operator/settle.py` (now only with `--single-owner-fleet`) and `operator/clearance.py` write those files from the relay host, and the reviewer replaces them.
+
+**Install, one host at a time, as root on that host:**
+
+```bash
+git archive <reviewed commit> ops/sol-live | ssh root@<host> \
+  'bash -s validator-<i> <node RPC port> <this host'"'"'s Solana RPC URL>' < ops/sol-live/install-exit-review.sh
+```
+
+The script installs the reviewer and its venv (hash-pinned `exit-requirements.lock`), a per-host review key, `/etc/postfiat/sol-exit-review.json` and the timer `pft-sol-exit-review.timer` (every minute).
+
+**Order, so that no payout waits unsettled** (each payout blocks the next until it is settled):
+1. While the chain runs the first release, install the reviewer on all six hosts, one at a time. The relay's settler keeps running with `--single-owner-fleet`; the reviewers only write verdicts.
+2. For the next payout, confirm on each host that `/var/lib/postfiat-exit-review/<sha256 of the paid decision>.json` approves the same decision the settler signed.
+3. Just before the second release height, let the settler settle every paid burn, then stop it.
+4. From the height, the relay runs `exit_govern.py paid` (and `refund`). It only drafts and collects signatures; each host signs from its own review.
 
 ### Upgrade the initialised Solana verifier
 
