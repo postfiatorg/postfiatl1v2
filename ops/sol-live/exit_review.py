@@ -7,7 +7,8 @@ writes its verdict into a local review directory. The signing step on the same h
 that decision. One review covers a paid decision (marker byte 1, one payout instruction),
 a refund (marker byte 2, one cancel instruction) or this host's rotation clearance.
 
-Exit codes: 0 approved, 2 refused with a named reason, 3 RPC error with a named reason.
+Exit codes: 0 approved, 2 refused with a named reason, 3 RPC error with a named reason,
+4 a local file this reviewer must read is not readable (a failure of the install, not a verdict).
 """
 
 import argparse
@@ -52,7 +53,7 @@ REVIEW_MAX_AGE = 900
 # by name beyond that; the timer reviews a marker within a minute of its creation.
 PAGE = 1000
 MAX_PAGES = 20
-EXIT_REFUSED, EXIT_RPC = 2, 3
+EXIT_REFUSED, EXIT_RPC, EXIT_ACCESS = 2, 3, 4
 CONFIG = Path("/etc/postfiat/sol-exit-review.json")
 KEY = Path("/etc/postfiat/sol-exit-review.key")
 ACTIONS = {"paid": (b"\x01", 2), "refund": (b"\x02", 10)}
@@ -64,6 +65,10 @@ class Refused(ValueError):
 
 class RpcError(RuntimeError):
     """A node or Solana read failed; nothing is written."""
+
+
+class AccessError(RuntimeError):
+    """A local file the reviewer must read is not readable by it; nothing is written."""
 
 
 def require(ok, reason):
@@ -341,6 +346,9 @@ def run_review(cfg, action, burn):
             body = review_clearance(cfg)
         else:
             body = review_burn(action, burn, cfg.node, cfg.solana)
+    except AccessError as error:
+        print(f"access error: {error}", file=sys.stderr)
+        return EXIT_ACCESS
     except RpcError as error:
         print(f"rpc error: {error}", file=sys.stderr)
         return EXIT_RPC
@@ -354,8 +362,14 @@ def run_review(cfg, action, burn):
 def review_clearance(cfg, data_dir=None):
     """This host's rotation clearance: its own signing history ends at or below its node's tip."""
     head = cfg.node("status")
-    directory = Path(data_dir or f"/var/lib/postfiat/{cfg.validator}") / "consensus-v2-safety"
-    names = sorted(p.name for p in directory.glob("*.json"))
+    directory = Path(data_dir or cfg.data_dir or f"/var/lib/postfiat/{cfg.validator}") / "consensus-v2-safety"
+    try:
+        names = sorted(name for name in os.listdir(directory) if name.endswith(".json"))
+    except FileNotFoundError:
+        names = []
+    except PermissionError as error:
+        raise AccessError(f"clearance: cannot read {directory}: {error.strerror}; "
+                          "the installer grants the reviewer read access to it") from None
     require(names, "clearance: no resident signing history")
     for name in names:
         match = re.fullmatch(r"height-([0-9]+)\.json", name) or re.fullmatch(
@@ -511,6 +525,9 @@ def main(argv=None):
     if args.command == "show-clearance":
         try:
             print(json.dumps(load_review(cfg, review_clearance(cfg)["decision"])))
+        except AccessError as error:
+            print(f"access error: {error}", file=sys.stderr)
+            return EXIT_ACCESS
         except RpcError as error:
             print(f"rpc error: {error}", file=sys.stderr)
             return EXIT_RPC
