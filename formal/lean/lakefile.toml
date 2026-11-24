@@ -1,0 +1,11 @@
+name = "pfsh02"
+version = "0.1.0"
+defaultTargets = ["PFSH02"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.20.0"
+
+[[lean_lib]]
+name = "PFSH02"
