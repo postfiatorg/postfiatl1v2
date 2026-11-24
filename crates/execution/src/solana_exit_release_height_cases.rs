@@ -1,5 +1,6 @@
 // Release-gated cases on the WAN genesis (`RELEASES` height 1841), shared with origin/main
 // a720cc80f: the same file is compiled into both trees, and main's outputs are pinned.
+#[cfg(test)]
 mod release_height_cases {
     use super::*;
 
