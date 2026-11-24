@@ -584,8 +584,22 @@ def sign(cfg, amendment_file, proposal_slot, expires_at_height, output, run=subp
     return output
 
 
-def load_config(path=CONFIG, key=KEY, public=PUBLIC, reviewer=True):
-    """The reviewer loads its keypair; the signing step (`reviewer=False`) only the public key."""
+def root_only(path, owner=0):
+    """`path` and its directory are owned by root and writable by no one else, so the signing
+    user (the node user) cannot replace the public key or point the config elsewhere."""
+    for item in (Path(path), Path(path).parent):
+        info = os.lstat(item)
+        require(not stat.S_ISLNK(info.st_mode), f"{item} is a symlink")
+        require(info.st_uid == owner, f"{item} is not owned by root")
+        require(not info.st_mode & 0o022, f"{item} is writable by its group or others")
+
+
+def load_config(path=CONFIG, key=KEY, public=PUBLIC, reviewer=True, owner=0):
+    """The reviewer loads its keypair; the signing step (`reviewer=False`) only the public key,
+    and only from root-owned files the signing user cannot replace."""
+    if not reviewer:
+        root_only(path, owner)
+        root_only(public, owner)
     raw = json.loads(Path(path).read_text())
     keypair = Keypair.from_bytes(Path(key).read_bytes()) if reviewer else None
     return Config(validator=raw["validator"], node=node_rpc(raw["node"]), solana=solana_rpc(raw["solana_rpc"]),

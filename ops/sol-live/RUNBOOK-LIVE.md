@@ -474,6 +474,7 @@ Under the second release, five of six signatures decide paid, close, re-open and
   - The verdict names the decision's SHA-256 and is sealed with the reviewer's Ed25519 key.
   - The keypair is readable only by `pf-sol-exit-review`.
   - The signing step reads only the public key, so it can check a verdict but not make one.
+  - The signing step trusts the public key and the config only when they and `/etc/postfiat` are owned by root and writable by no one else; otherwise it refuses by name, because the node user could then replace the key or point the config at its own verdicts.
 - **How it signs:** `exit_review.py sign --amendment-file F --proposal-slot H --expires-at-height E --authorization-file A` signs only a decision approved by a verdict at most 15 minutes old.
   - It builds the node's signing command itself: the resident binary, this host's data directory, validator name and key file.
   - The resident binary is the executable the kernel runs for the node user's `transport-validator-serve` process of this data directory (`/proc/PID/exe`), never a name taken from a command line. It must lie in `/opt/postfiat/releases/<release>/postfiat-node`, and the binary, its release directory and `/opt/postfiat/releases` must be owned by root and writable by no one else; otherwise, or when there is not exactly one such process, the step refuses. Check this on each host before the height: `stat -c '%U %a %n' /opt/postfiat/releases /opt/postfiat/releases/*/ /opt/postfiat/releases/*/postfiat-node` prints `root` and no group or other write bit.
