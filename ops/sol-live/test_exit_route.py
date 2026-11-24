@@ -8,7 +8,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "solana/pfusdc-egress-verifier"))
-from bootstrap import encode, packet_alias  # noqa: E402
+from bootstrap import encode, migrate, packet_alias  # noqa: E402
 
 CONFIG = json.loads((HERE / "fixtures/exit-setup.json").read_text())
 MINT = bytes.fromhex("c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61")
@@ -63,6 +63,18 @@ class ExitRouteTest(unittest.TestCase):
             ],
         )
         self.assertEqual(route(CONFIG).hex(), vector["route"])
+
+    def test_migration_fields_rebuild_the_mainnet_light_route(self):
+        # Route stored in the mainnet light at slot 473290673, written by the first release.
+        live = "84b17839b48727d7b8bb427f301e838b4c51504dd64e3e1a7263a72fc737c767"
+        f = migrate(CONFIG)
+        self.assertEqual(len(f), 224)
+        vault = packet_alias(bytes.fromhex(CONFIG["vault_program"]))
+        mint = packet_alias(MINT)
+        old = f[:152] + f[152:160] + vault + f[160:192] + mint + f[192:]
+        self.assertEqual(hashlib.sha256(old).hexdigest(), live)
+        new = f[:104] + f[152:160] + vault + f[160:192] + mint + f[192:]
+        self.assertEqual(hashlib.sha256(new).digest(), route(CONFIG))
 
 
 if __name__ == "__main__":
