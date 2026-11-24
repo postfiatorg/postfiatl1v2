@@ -197,8 +197,9 @@ class Journal:
             db.execute("DELETE FROM status_fault")
             db.execute("INSERT INTO status_fault(tries, since, until, alerted) VALUES(:tries, :since, :until, :alerted)",
                        self.status_fault)
-            db.execute("UPDATE jobs SET detail=? WHERE burn_tx_id=? AND stage!='paid'",
-                       (STATUS_TOO_LARGE_DETAIL, burn))
+            # The burn's next try is the end of the pause, which its row then shows.
+            db.execute("UPDATE jobs SET detail=?, due=? WHERE burn_tx_id=? AND stage!='paid'",
+                       (STATUS_TOO_LARGE_DETAIL, self.status_fault["until"], burn))
         return alert
 
     def clear_status_fault(self):
