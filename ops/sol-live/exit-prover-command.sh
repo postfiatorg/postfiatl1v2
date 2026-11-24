@@ -2,22 +2,41 @@
 # Forced command for the dedicated credential on the prover.
 set -euo pipefail
 umask 077
+work=/workspace/b23-withdraw-20261116
+lock=/workspace/b23-gpu/prover.lock
+device=
+# Without this file the prover is the single-GPU host as before: device 0 and the paths above.
+# On the four-GPU machine shared with the deposit prover it names the device, the staged tree
+# and its SP1 home (RUNBOOK-LIVE.md, "One proving machine").
+conf=/etc/pf-sol-exit-prove.conf
+if [[ -e $conf ]]; then
+    while IFS='=' read -r key value; do
+        case "$key=$value" in
+            =|'#'*) ;;
+            EXIT_CUDA_DEVICE=[0-9]|EXIT_CUDA_DEVICE=[0-9][0-9]) device=$value;;
+            EXIT_WORK_DIR=/*) work=$value;;
+            EXIT_LOCK=/*) lock=$value;;
+            EXIT_SP1_HOME=/*) export HOME=$value;;
+            *) echo "pf-sol-exit-prove: bad line in $conf: $key" >&2; exit 78;;
+        esac
+    done < "$conf"
+fi
 case "${SSH_ORIGINAL_COMMAND:-}" in
-    pf-sol-exit-check) cd /workspace/b23-withdraw-20261116; test -x proof-host && test -s egress.elf; exit;;
+    pf-sol-exit-check) cd "$work"; test -x proof-host && test -s egress.elf; exit;;
     pf-sol-exit-checkpoint) kind=checkpoint;;
     pf-sol-exit-withdrawal) kind=withdrawal;;
     *) exit 64;;
 esac
-cd /workspace/b23-withdraw-20261116
+cd "$work"
 mkdir -p jobs
 job=$(mktemp -d jobs/sol-exit-worker.XXXXXXXX)
 trap 'rm -rf -- "$job"' EXIT
 # Receive at most 24 MiB before reserving the shared device.
 timeout 30 head -c 25165825 > "$job/witness.json"
 test "$(wc -c < "$job/witness.json")" -le 25165824
-exec 9>/workspace/b23-gpu/prover.lock
+exec 9>"$lock"
 flock -E 75 -n 9
-SP1_PROVER=cuda RAYON_NUM_THREADS=4 timeout 1500 ./proof-host "$kind" egress.elf "$job/witness.json" "$job/proof" prove > "$job/prove.log" 2>&1
+SP1_PROVER=cuda RAYON_NUM_THREADS=4 timeout 1500 ./proof-host ${device:+--cuda-device "$device"} "$kind" egress.elf "$job/witness.json" "$job/proof" prove > "$job/prove.log" 2>&1
 for file in public-values.bin proof-report.json proof-calldata.bin; do
     test "$(wc -c < "$job/proof/$file")" -le 8192
     base64 -w0 "$job/proof/$file"
