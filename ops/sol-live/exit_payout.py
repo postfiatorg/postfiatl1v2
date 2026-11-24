@@ -683,6 +683,10 @@ def refund_kind(c, red, *, history_limit=100):
     (finalized) commitment, bound to the cancel transaction. Anything else is refused."""
     import base58
 
+    require(
+        c.level.get("commitment") == "finalized",
+        "Refund reads need a cluster set to finalized; refund refused.",
+    )
     key = marker(red["burn_tx_id"])
     account = c.account(key)
     require(

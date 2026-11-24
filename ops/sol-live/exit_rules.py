@@ -11,6 +11,8 @@ import re
 
 BUCKET = "4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc"
 ACTIONS = ("open", "close", "paid", "min_withdrawal", "retire")
+# Reported from the build that carries the refund decision; older second-release builds omit it.
+OPTIONAL_ACTIONS = ("refund",)
 # The first release's canary amount, 0.02 USDC; it has no governed minimum.
 FIRST_RELEASE_CANARY_ATOMS = 20_000
 
@@ -21,6 +23,7 @@ def require(ok, message):
 
 
 def first_release(n=6):
+    # The first release has no refund decision.
     return dict(release=1, covered=(BUCKET,), signatures={a: n for a in ACTIONS}, minimum=None)
 
 
@@ -42,7 +45,7 @@ def of_route(route, n=6):
     )
     require(
         isinstance(signatures, dict)
-        and set(signatures) == set(ACTIONS)
+        and set(ACTIONS) <= set(signatures) <= set(ACTIONS + OPTIONAL_ACTIONS)
         and all(type(v) is int and 0 < v <= n for v in signatures.values()),
         "Route report has invalid decision signatures.",
     )
@@ -62,6 +65,7 @@ def agreed(routes, n=6):
 def signatures(rules, kind):
     """Signatures a wrapper kind (`exit-open`, `exit-close`, `exit-paid`, ...) needs now."""
     action = kind.removeprefix("exit-").replace("-", "_")
+    require(action in rules["signatures"], f"The chain reports no {action} decision.")
     return rules["signatures"][action]
 
 
