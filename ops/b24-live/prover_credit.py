@@ -11,7 +11,7 @@ until it can be read again. The Vast CLI reads its own key file; this script
 reads that file only to strip the key from anything it prints or sends.
 Standard library only, so it runs with `python3 -I` like the failure hook.
 """
-import argparse,importlib.util,json,os,re,subprocess,sys
+import argparse,importlib.util,json,math,os,re,subprocess,sys
 from pathlib import Path
 # Loaded by path: this directory also holds operator.py, which must not shadow the standard library.
 spec=importlib.util.spec_from_file_location('reading_alert',Path(__file__).resolve().with_name('reading_alert.py'))
@@ -52,21 +52,27 @@ def vastai(*args):
     try:return json.loads(result.stdout)
     except ValueError:raise RuntimeError(f'vastai {args[-1]}: output is not JSON') from None
 
+def number(value):return isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value)
+
 def read_credit(run=vastai):
-    """Return (credit in USD, spend in USD per hour, running instance count)."""
+    """Return (credit in USD, spend in USD per hour, running instance count).
+    A reply of any other shape raises, so it is reported as not usable, never as endless hours."""
     user=run('show','user')
-    credit=user.get('credit',user.get('balance')) if isinstance(user,dict) else None
-    if isinstance(credit,bool) or not isinstance(credit,(int,float)):raise RuntimeError('vastai show user: no credit field')
+    # `credit` only: nothing in the Vast CLI's documentation says `balance` means the same.
+    credit=user.get('credit') if isinstance(user,dict) else None
+    if not number(credit):raise RuntimeError('vastai show user: no credit field')
     instances=run('show','instances')
-    if not isinstance(instances,list):raise RuntimeError('vastai show instances: not a list')
-    live=[i for i in instances if isinstance(i,dict) and RUNNING&{i.get('actual_status'),i.get('intended_status'),i.get('cur_state')}]
-    return float(credit),sum(float(i.get('dph_total') or 0) for i in live),len(live)
+    if not isinstance(instances,list) or not all(isinstance(i,dict) for i in instances):raise RuntimeError('vastai show instances: not a list of instances')
+    live=[i for i in instances if RUNNING&{i.get('actual_status'),i.get('intended_status'),i.get('cur_state')}]
+    for i in live:
+        if not number(i.get('dph_total')) or i['dph_total']<=0:raise RuntimeError(f"vastai show instances: running instance {i.get('id','?')} has no positive dph_total")
+    return float(credit),sum(float(i['dph_total']) for i in live),len(live)
 
 def level(hours,warn,urgent):
     return 'urgent' if hours<urgent else 'warn' if hours<warn else 'ok'
 
 def message(kind,credit=0,spend=0,count=0,hours=0,warn=24,urgent=6,error=''):
-    if kind=='unreadable':return f'Proving hosts: Vast credit could not be read ({error}); the low-credit alert is blind until it can ({utc_now()})'
+    if kind=='unreadable':return f'Proving hosts: Vast credit could not be read ({error}); the reading is not usable and the low-credit alert is blind until it can ({utc_now()})'
     head='URGENT: proving hosts stop' if kind=='urgent' else 'Proving hosts stop'
     limit=urgent if kind=='urgent' else warn
     return f'{head} in about {hours:.1f} h: Vast credit {credit:.2f} USD at {spend:.2f} USD/h for {count} running instance(s), under the {limit:g} h limit. Top up the Vast account ({utc_now()})'

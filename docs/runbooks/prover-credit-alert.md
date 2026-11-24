@@ -8,7 +8,9 @@ Every 15 minutes it reads the account credit (`vastai show user --raw`) and the 
 running instances (`vastai show instances --raw`, sum of `dph_total`), and divides one by the other.
 It reports once when the hours left fall under 24, and once more, marked URGENT, under 6. A top-up
 above 24 hours re-arms both. If the credit cannot be read, it reports that once and exits with
-status 1 until a read succeeds. A report whose hook fails is retried on the next run.
+status 1 until a read succeeds. A reply of an unexpected shape counts the same: no `credit` field
+(`balance` is not taken in its place), a running instance without a positive `dph_total`, or an
+instance list that is not a list. A report whose hook fails is retried on the next run.
 
 ## Install
 
@@ -50,7 +52,7 @@ The urgent value must be below the warning value. The last reported level is kep
 ```text
 Proving hosts stop in about 11.6 h: Vast credit 40.50 USD at 3.50 USD/h for 2 running instance(s), under the 24 h limit. Top up the Vast account (2026-11-23T07:47:50Z)
 URGENT: proving hosts stop in about 5.0 h: Vast credit 30.00 USD at 6.00 USD/h for 3 running instance(s), under the 6 h limit. Top up the Vast account (…)
-Proving hosts: Vast credit could not be read (vastai user exited 1: …); the low-credit alert is blind until it can (…)
+Proving hosts: Vast credit could not be read (vastai user exited 1: …); the reading is not usable and the low-credit alert is blind until it can (…)
 ```
 
 The hourly cost counts running instances only. Storage on stopped instances is not counted.
