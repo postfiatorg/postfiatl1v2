@@ -190,6 +190,21 @@ class ReviewTest(unittest.TestCase):
             with self.assertRaisesRegex(rv.Refused, "more than 30 transactions"):
                 self.review(sol=Solana(crowd=150))
 
+    def test_a_marker_crowded_after_its_first_review_is_still_reviewed_from_its_remembered_writer(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d, patch.object(rv, "PAGE", 10), patch.object(rv, "MAX_PAGES", 3):
+            memory = Path(d)
+            self.assertEqual(rv.review_burn("paid", BURN, Node(), Solana(crowd=5), memory)["decision"], PAID_KIND)
+            crowded = Solana(crowd=150)
+            self.assertEqual(rv.review_burn("paid", BURN, Node(), crowded, memory)["decision"], PAID_KIND)
+            self.assertEqual(crowded.pages, 1)  # only the buffer's uploads before the payout are paged
+            # A remembered signature is checked like any other: one that did not create the marker is not used.
+            (memory / f"{rv.marker(BURN)}.sig").write_text("later3\n")
+            self.assertEqual(rv.review_burn("paid", BURN, Node(), Solana(crowd=5), memory)["decision"], PAID_KIND)
+            with self.assertRaisesRegex(rv.Refused, "more than 30 transactions"):
+                (memory / f"{rv.marker(BURN)}.sig").write_text("later3\n")
+                rv.review_burn("paid", BURN, Node(), Solana(crowd=150), memory)
+
     def test_a_strangers_upload_naming_the_buffer_is_ignored(self):
         self.assertEqual(self.review(sol=Solana(stranger_upload=True, crowd=20))["decision"], PAID_KIND)
 
@@ -302,9 +317,11 @@ class SignCommandTest(unittest.TestCase):
         proc.mkdir(parents=True)
         (proc / "cmdline").write_bytes("\0".join([str(self.binary), "transport-validator-serve", "--data-dir",
                                                     str(self.data), "--topology", "t"]).encode() + b"\0")
+        (proc / "exe").symlink_to(self.binary)
         self.cfg = rv.Config(validator="validator-3", node=Node(), solana=Solana(), review_dir=root / "review",
                              key=HOST_KEY, data_dir=self.data, proc=root / "proc",
                              releases=root / "opt/postfiat/releases")
+        self.cfg.release_owner = os.getuid()  # root on a host
         self.assertEqual(rv.run_review(self.cfg, "paid", BURN), 0)
         self.amend = self.data / "sol-live/round/amend"
         self.amend.write_text(json.dumps(dict(kind=PAID_KIND, value=1, paused=False, activation_height=1901)))
@@ -322,6 +339,49 @@ class SignCommandTest(unittest.TestCase):
                                 "--proposal-slot", "1901", "--expires-at-height", "1931",
                                 "--authorization-file", str(self.auth)])
         self.assertEqual(self.auth.read_text(), "auth")
+
+    def add_process(self, pid, argv, exe):
+        proc = Path(self.tmp.name) / "proc" / str(pid)
+        proc.mkdir(parents=True)
+        (proc / "cmdline").write_bytes("\0".join(argv).encode() + b"\0")
+        (proc / "exe").symlink_to(exe)
+
+    def fake_node(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(FAKE_NODE)
+        path.chmod(0o755)
+        return path
+
+    def test_the_binary_is_the_processs_own_executable_not_the_name_in_its_command_line(self):
+        # Any local process may name a release binary in its command line; only /proc/PID/exe counts.
+        other = self.fake_node(self.binary.parent.parent / "r0/postfiat-node")
+        self.add_process(4243, [str(other), "transport-validator-serve", "--data-dir", str(self.data)], "/bin/sleep")
+        self.add_process(4244, [str(self.binary), "transport-validator-serve", "--data-dir"], "/bin/sleep")
+        rv.sign(self.cfg, self.amend, 1901, 1931, self.auth)
+        self.assertEqual(json.loads(self.binary.with_name("argv.json").read_text())[0], str(self.binary))
+        self.assertFalse(other.with_name("argv.json").exists())
+
+    def test_a_binary_outside_the_releases_or_writable_by_others_or_of_another_user_is_refused(self):
+        import shutil
+        from unittest.mock import patch
+        outside = self.fake_node(Path(self.tmp.name) / "opt/postfiat/postfiat-node")
+        shutil.rmtree(Path(self.tmp.name) / "proc/4242")
+        self.add_process(4245, [str(self.cfg.releases / ".." / "postfiat-node"), "transport-validator-serve",
+                                "--data-dir", str(self.data)], outside)
+        with self.assertRaisesRegex(rv.Refused, "resident validator"):
+            rv.sign(self.cfg, self.amend, 1901, 1931, self.auth)
+        self.assertFalse(outside.with_name("argv.json").exists())
+        shutil.rmtree(Path(self.tmp.name) / "proc/4245")
+        self.add_process(4242, [str(self.binary), "transport-validator-serve", "--data-dir", str(self.data)],
+                         self.binary)
+        self.binary.chmod(0o777)
+        with self.assertRaisesRegex(rv.Refused, "resident validator"):
+            rv.sign(self.cfg, self.amend, 1901, 1931, self.auth)
+        self.binary.chmod(0o755)
+        with patch.object(rv, "uid_of", lambda path: 4321 if "proc" in str(path) else os.getuid()):
+            with self.assertRaisesRegex(rv.Refused, "resident validator"):
+                rv.sign(self.cfg, self.amend, 1901, 1931, self.auth)
+        self.assertFalse(self.binary.with_name("argv.json").exists())
 
     def test_a_caller_supplied_command_or_any_other_argument_is_refused(self):
         for extra in (["--", "/bin/echo", "signed"], ["--validator-key-file", "/tmp/k"], ["extra"]):
