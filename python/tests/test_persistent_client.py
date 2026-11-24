@@ -265,6 +265,13 @@ class PersistentClientResponseBindingTests(unittest.TestCase):
             client.call_response("server_info", request_id="1")
         self.assert_closed_then_reconnects(client, [first, second], request_id="1")
 
+    def test_a_node_error_under_its_placeholder_id_is_reported_as_the_node_error(self) -> None:
+        refusal = {"code": "rpc_request_id_too_long", "message": "rpc request id of 300 bytes exceeds the 256-byte limit"}
+        first = ScriptedStream([lambda request: envelope(request, id="remote-1", ok=False, result=None, error=refusal)])
+        client = self.scripted_client(first)
+        with self.assertRaisesRegex(RpcError, "rpc_request_id_too_long"):
+            client.call_response("server_info", request_id="x" * 300)
+
     def test_bytes_beyond_one_response_close_session(self) -> None:
         first = ScriptedStream([lambda request: envelope(request) + b'{"stray"'])
         second = ScriptedStream([envelope])

@@ -87,6 +87,22 @@ async function main() {
         await assert.rejects(oneShot, (error) => error.transportClass === 'rpc_response_id_mismatch');
     });
 
+    // The node answers a request it cannot parse under its own placeholder id
+    // (remote-N); that is the node's error for this request, not a stream fault.
+    await check('a node error under its placeholder id is surfaced, not called a mismatch', async () => {
+        const { sockets, routing, connection: c } = fixture();
+        const refusal = { code: 'rpc_request_id_too_long', message: 'rpc request id of 300 bytes exceeds the 256-byte limit' };
+        const oneShot = routing.rpcTcpRequestOneShotLine('fixture', 1, { id: 'mine', method: 'status' }, 1000);
+        sockets[0].connect(); sockets[0].reply({ id: 'remote-1', ok: false, result: null, error: refusal });
+        const line = JSON.parse(await oneShot);
+        assert.deepStrictEqual([line.id, line.error.code], ['mine', 'rpc_request_id_too_long']);
+        const pooled = c.requestLine({ id: 'pooled', method: 'status' });
+        sockets[1].connect(); sockets[1].reply({ id: 'remote-2', ok: false, result: null, error: refusal });
+        assert.strictEqual(JSON.parse(await pooled).error.code, 'rpc_request_id_too_long');
+        assert.ok(!sockets[1].destroyed, 'the connection still pairs requests with replies');
+        c.close();
+    });
+
     // A connect that never completes is bounded by the request timeout.
     await check('a hung connect fails within the request timeout', async () => {
         const { sockets, connection: hung } = fixture();
