@@ -53,7 +53,11 @@ def save(p, data):
 
 
 class ReplyTooLarge(RuntimeError):
-    """The node's reply to this read exceeds its frame limit; asking again cannot help."""
+    """The node's reply to this read exceeds its frame limit; `method` names the read."""
+
+    def __init__(self, message, method=""):
+        super().__init__(message)
+        self.method = method
 
 
 def rpc(i, method, **params):
@@ -74,7 +78,7 @@ def rpc(i, method, **params):
         r = json.loads(s.makefile("rb").readline(64 << 20))
     error = r.get("error")
     if r.get("id") == rid and isinstance(error, dict) and error.get("code") == "rpc_response_too_large":
-        raise ReplyTooLarge(f"{i} {method}: {error.get('message')}")
+        raise ReplyTooLarge(f"{i} {method}: {error.get('message')}", method)
     if r.get("id") != rid or r.get("ok") is not True:
         raise RuntimeError(f"{i} {method}: {r.get('error')}")
     return r["result"]

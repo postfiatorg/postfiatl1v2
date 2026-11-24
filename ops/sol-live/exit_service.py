@@ -32,6 +32,13 @@ from live import ReplyTooLarge
 BASE = "/solana/withdrawals"
 BURN = re.compile("[0-9a-f]{96}")
 COLUMNS = {"amount_atoms", "recipient", "burn_height", "solana_tx", "error", "detail"}
+# A node reply over its frame limit can fit later (a newer checkpoint shortens a witness), so
+# the burn waits 5 minutes, doubling up to 6 hours, and is filed as failed only after
+# TOO_LARGE_TRIES such replies. A read about the whole bridge is the read's fault, not the burn's.
+TOO_LARGE_FIRST, TOO_LARGE_CAP, TOO_LARGE_TRIES = 300, 6 * 3600, 12
+TOO_LARGE_DETAIL = "Node reply too large; retry scheduled."
+STATUS_TOO_LARGE_DETAIL = "Status read too large; retry scheduled."
+SHARED_READS = {"vault_bridge_status"}
 
 
 def parse_request(data):
@@ -64,13 +71,14 @@ class Journal:
         self.marker_lock = threading.Lock()
         self.refresh_slot = threading.BoundedSemaphore(1)
         self.refresh_rate = Admissions()
+        self.status_fault = None
         with closing(self.connect()) as db:
             db.execute("""CREATE TABLE IF NOT EXISTS jobs (
                 burn_tx_id TEXT PRIMARY KEY, stage TEXT NOT NULL, detail TEXT, error TEXT,
                 amount_atoms TEXT, recipient TEXT, burn_height INTEGER, solana_tx TEXT)""")
 
             columns = {r[1] for r in db.execute("PRAGMA table_info(jobs)")}
-            for name in ("due", "retries"):
+            for name in ("due", "retries", "too_large"):
                 if name not in columns:
                     db.execute(
                         f"ALTER TABLE jobs ADD COLUMN {name} INTEGER NOT NULL DEFAULT 0"
@@ -142,6 +150,38 @@ class Journal:
                 ),
             )
 
+    def defer_too_large(self, burn):
+        """Wait longer after each too-large reply; at the bound, file the burn as failed.
+        Returns the count so far, or None when the burn was filed."""
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            tries = db.execute("SELECT too_large FROM jobs WHERE burn_tx_id=?", (burn,)).fetchone()[0]
+            if tries >= TOO_LARGE_TRIES:
+                db.execute(
+                    "UPDATE jobs SET stage='failed', error=?, detail=NULL WHERE burn_tx_id=? AND stage!='paid'",
+                    (f"Node reply too large {tries} times.", burn),
+                )
+                return None
+            db.execute(
+                """UPDATE jobs SET stage='queued', too_large=?, due=?, error=NULL, detail=?
+                WHERE burn_tx_id=? AND stage!='paid'""",
+                (tries + 1, int(time.time()) + min(TOO_LARGE_CAP, TOO_LARGE_FIRST * 2**tries),
+                 TOO_LARGE_DETAIL, burn),
+            )
+            return tries + 1
+
+    def status_too_large(self, burn):
+        """The shared status read is too large: no burn is tried until its wait ends, and the
+        waiting burn is neither counted nor filed. Returns True the first time."""
+        first = self.status_fault is None
+        tries = 0 if first else self.status_fault["tries"]
+        self.status_fault = {"tries": tries + 1,
+                             "until": time.time() + min(TOO_LARGE_CAP, TOO_LARGE_FIRST * 2**tries)}
+        with closing(self.connect()) as db, db:
+            db.execute("UPDATE jobs SET detail=? WHERE burn_tx_id=? AND stage!='paid'",
+                       (STATUS_TOO_LARGE_DETAIL, burn))
+        return first
+
     def connect(self):
         db = sqlite3.connect(self.path, timeout=10)
         db.row_factory = sqlite3.Row
@@ -171,7 +211,8 @@ class Journal:
                     raise OverflowError("withdrawal queue is full")
                 db.execute(
                     """INSERT INTO jobs(burn_tx_id,stage,due) VALUES(?,'queued',?)
-                    ON CONFLICT(burn_tx_id) DO UPDATE SET stage='queued', error=NULL, detail=NULL, due=excluded.due""",
+                    ON CONFLICT(burn_tx_id) DO UPDATE SET stage='queued', error=NULL, detail=NULL, due=excluded.due,
+                    too_large=0""",
                     (burn, int(time.time())),
                 )
             return public_row(
@@ -219,6 +260,8 @@ def public_row(row):
         "Retry scheduled.",
         "Checkpoint advanced.",
         "Finalized marker. Signature unavailable.",
+        TOO_LARGE_DETAIL,
+        STATUS_TOO_LARGE_DETAIL,
     ):
         value["detail"] = None
     return value
@@ -341,6 +384,8 @@ def process_next(journal, directory):
         raise ValueError("Invalid journal entry. Rebuild required.")
     if burn is None or journal.waiting_for_expiry():
         return False
+    if journal.status_fault and time.time() < journal.status_fault["until"]:
+        return False
     try:
         process(
             burn,
@@ -354,12 +399,24 @@ def process_next(journal, directory):
     except CheckpointAdvanced:
         journal.defer(burn, progress=True)
     except ReplyTooLarge as error:
-        # The same read would be as large next time: file it with the reason, which a
-        # later submission of the burn clears.
-        journal.update(burn, "failed", error=f"Node reply too large: {error}")
-        print(f"ALERT withdrawal {burn} filed as failed: node reply too large: {error}", flush=True)
+        if error.method in SHARED_READS:
+            if journal.status_too_large(burn):
+                print(f"ALERT status read too large, withdrawals wait: {error}", flush=True)
+            return True
+        tries = journal.defer_too_large(burn)
+        if tries is None:
+            print(f"ALERT withdrawal {burn} filed as failed: node reply too large: {error}", flush=True)
+        elif tries == 1:
+            print(f"ALERT withdrawal {burn} waits, retrying with a growing wait: node reply too large: {error}", flush=True)
+        return True
     except Exception:
         journal.defer(burn)
+        return True
+    if journal.status_fault is not None:
+        journal.status_fault = None
+        print("Status read fits again; withdrawals continue.", flush=True)
+    with closing(journal.connect()) as db, db:
+        db.execute("UPDATE jobs SET too_large=0 WHERE burn_tx_id=?", (burn,))
     return True
 
 
