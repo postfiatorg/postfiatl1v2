@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock, patch
 from solders.hash import Hash
@@ -99,6 +100,24 @@ class RecoveryTest(unittest.TestCase):
                 svc.process_next(j, Path(d))
             self.assertEqual(j.pending(), second)
             self.assertEqual(j.get(BURN)["stage"], "queued")
+
+    def test_a_reply_too_large_is_filed_with_its_reason_not_retried(self):
+        with tempfile.TemporaryDirectory() as d:
+            j = svc.Journal(Path(d) / "db")
+            j.enqueue(BURN)
+            too_large = svc.ReplyTooLarge(
+                "0 pfusdc_egress_witness: rpc response of 5000000 bytes exceeds the 4194304-byte frame limit"
+            )
+            with patch.object(svc, "process", side_effect=too_large):
+                svc.process_next(j, Path(d))
+            with closing(j.connect()) as db:
+                stage, error = db.execute("SELECT stage, error FROM jobs WHERE burn_tx_id=?", (BURN,)).fetchone()
+            self.assertEqual(stage, "failed")
+            self.assertIn("Node reply too large", error)
+            self.assertIn("4194304-byte frame limit", error)
+            self.assertIsNone(j.pending())
+            # A later submission of the burn queues it again.
+            self.assertEqual(j.enqueue(BURN)["stage"], "queued")
 
     def test_public_paid_status_is_reconciled_and_can_be_rebuilt(self):
         with tempfile.TemporaryDirectory() as d:

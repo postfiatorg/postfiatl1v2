@@ -27,6 +27,7 @@ from exit_payout import (
     signature,
     validate_burn,
 )
+from live import ReplyTooLarge
 
 BASE = "/solana/withdrawals"
 BURN = re.compile("[0-9a-f]{96}")
@@ -352,6 +353,11 @@ def process_next(journal, directory):
         journal.update(burn, "failed", error="Unknown finalized burn.")
     except CheckpointAdvanced:
         journal.defer(burn, progress=True)
+    except ReplyTooLarge as error:
+        # The same read would be as large next time: file it with the reason, which a
+        # later submission of the burn clears.
+        journal.update(burn, "failed", error=f"Node reply too large: {error}")
+        print(f"ALERT withdrawal {burn} filed as failed: node reply too large: {error}", flush=True)
     except Exception:
         journal.defer(burn)
     return True

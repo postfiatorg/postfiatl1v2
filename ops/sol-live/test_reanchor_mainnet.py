@@ -501,6 +501,30 @@ class FakeCluster:
         raise AssertionError(method)
 
 
+class ReplyTooLargeTest(unittest.TestCase):
+    """live.rpc names a reply over the node's frame limit instead of a generic failure."""
+
+    def test_a_reply_over_the_frame_limit_raises_reply_too_large(self):
+        import socket
+
+        server = socket.create_server(("127.0.0.1", 0))
+        message = "rpc response of 5000000 bytes exceeds the 4194304-byte frame limit; request less data"
+
+        def answer():
+            conn, _ = server.accept()
+            with conn:
+                request = json.loads(conn.makefile("rb").readline())
+                reply = {"version": "postfiat-local-rpc-v1", "id": request["id"], "ok": False,
+                         "error": {"code": "rpc_response_too_large", "message": message}, "events": []}
+                conn.sendall(json.dumps(reply).encode() + b"\n")
+
+        threading.Thread(target=answer, daemon=True).start()
+        with server, mock.patch.object(live, "PEERS", [("127.0.0.1", server.getsockname()[1])]):
+            with self.assertRaises(live.ReplyTooLarge) as error:
+                live.rpc(0, "vault_bridge_status", asset_id="a")
+        self.assertEqual(str(error.exception), f"0 vault_bridge_status: {message}")
+
+
 class ReanchorTest(unittest.TestCase):
     """reanchor-mainnet.py main() against a fake cluster, fake chain and fake systemd."""
 
