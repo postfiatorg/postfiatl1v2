@@ -51,7 +51,7 @@ from exit_setup import (
     rw,
     six,
 )
-from live import ReplyTooLarge, agreeing, survey
+from live import EmptyReply, ReplyTooLarge, agreeing, survey
 import exit_rules
 from exit_segments import (
     public_checkpoint,
@@ -125,7 +125,7 @@ def rpc_any(method, **params):
         order = [i for i in order if _skip.get(i, 0) <= now] + [
             i for i in order if _skip.get(i, 0) > now
         ]
-    errors = []
+    errors, empty, unreachable = [], 0, 0
     for i in order:
         timeout = limit
         if deadline is not None:
@@ -135,9 +135,17 @@ def rpc_any(method, **params):
             timeout = min(timeout, left)
         try:
             result = rpc(i, method, timeout=timeout, **params)
+        except EmptyReply as error:
+            # A restarting validator also sends an empty line: try the next one.
+            empty += 1
+            with _reads:
+                _skip[i] = time.monotonic() + SKIP_SECONDS
+            errors.append(f"validator-{i}: {error}")
+            continue
         except ReplyTooLarge:
             raise
         except Exception as error:
+            unreachable += isinstance(error, OSError)
             with _reads:
                 _skip[i] = time.monotonic() + SKIP_SECONDS
             errors.append(f"validator-{i}: {error}")
@@ -145,7 +153,28 @@ def rpc_any(method, **params):
         with _reads:
             _preferred[0] = i
         return result
+    # Every validator that could be reached sent an empty line: the reply does not fit.
+    if empty and empty == len(order) - unreachable:
+        raise ReplyTooLarge(f"empty reply from every reachable validator for {method}")
     raise RuntimeError("no validator answered " + method + "; " + "; ".join(errors))
+
+
+def find_redemption(burn):
+    """The burn's redemption and the status it came from. A validator a block behind has not
+    seen it yet, so the others are asked before the burn counts as unknown (then retried)."""
+    status = rpc_any("vault_bridge_status", asset_id=ASSET)
+    red = next((r for r in status["redemptions"] if r["burn_tx_id"] == burn), None)
+    for i in range(6) if red is None else ():
+        try:
+            other = rpc(i, "vault_bridge_status", timeout=READ_SECONDS["vault_bridge_status"], asset_id=ASSET)
+        except Exception:
+            continue
+        red = next((r for r in other["redemptions"] if r["burn_tx_id"] == burn), None)
+        if red is not None:
+            return red, other
+    if red is None:
+        raise UnknownBurn("No finalized redemption for this burn on any validator yet.")
+    return red, status
 
 
 BLOCK_TOO_LARGE = "refused: one block's reply exceeds the node's frame limit"
@@ -1213,10 +1242,7 @@ def egress_witness(c, red, prior, h, work):
 def process(burn, work, update, *, attempt=None, before_send=None):
     update("reading")
     c = cluster()
-    status = rpc_any("vault_bridge_status", asset_id=ASSET)
-    red = next((r for r in status["redemptions"] if r["burn_tx_id"] == burn), None)
-    if red is None:
-        raise UnknownBurn("No finalized redemption for this burn.")
+    red, status = find_redemption(burn)
     if red.get("state") == "refunded":
         # Refunded on Post Fiat after a cancel on Solana: nothing left to pay.
         raise BurnCancelled()

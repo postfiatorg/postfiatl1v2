@@ -45,6 +45,8 @@ from exit_payout import (
 )
 
 BASE = "/solana/withdrawals"
+WAITING_BURN = "Waiting for the burn to reach every validator."
+WAITING_ROTATION = "Waiting for a checkpoint across a validator-set change."
 BURN = re.compile("[0-9a-f]{96}")
 COLUMNS = {"amount_atoms", "recipient", "burn_height", "solana_tx", "error", "detail"}
 
@@ -139,7 +141,7 @@ class Journal:
                 "SELECT due FROM jobs WHERE burn_tx_id=?", (burn,)
             ).fetchone()[0]
 
-    def defer(self, burn, progress=False):
+    def defer(self, burn, progress=False, detail=None):
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             retries = db.execute(
@@ -152,7 +154,7 @@ class Journal:
                 (
                     0 if progress else retries + 1,
                     int(time.time()) + delay,
-                    "Checkpoint advanced." if progress else "Retry scheduled.",
+                    detail or ("Checkpoint advanced." if progress else "Retry scheduled."),
                     burn,
                 ),
             )
@@ -237,6 +239,8 @@ def public_row(row):
         "Retry scheduled.",
         "Checkpoint advanced.",
         "Finalized marker. Signature unavailable.",
+        WAITING_ROTATION,
+        WAITING_BURN,
     ):
         value["detail"] = None
     return value
@@ -372,8 +376,12 @@ def process_next(journal, directory):
                 before_send=lambda sig, h: journal.record_attempt(burn, sig, h),
             )
     except UnknownBurn:
-        journal.update(burn, "failed", error="Unknown finalized burn.")
-    except (BlockTooLarge, CommitteeRotated) as named:
+        # A validator a block behind has not seen the burn yet: retried, never filed as failed.
+        journal.defer(burn, detail=WAITING_BURN)
+    except CommitteeRotated:
+        # Payable once a later checkpoint crosses the rotation: waiting, retried.
+        journal.defer(burn, detail=WAITING_ROTATION)
+    except BlockTooLarge as named:
         # Asking again cannot help: filed with its reason; a later submission retries it.
         journal.update(burn, "failed", error=str(named))
         print(f"ALERT withdrawal {burn} filed as failed: {named}", flush=True)
