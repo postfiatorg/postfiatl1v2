@@ -739,12 +739,66 @@ pub struct ChainTipState {
     pub history_base_height: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BatchArchiveEntry {
     pub batch_kind: String,
     pub batch_id: String,
     pub payload_hash: String,
     pub payload_json: String,
+}
+
+// Historical clients receive the same logical batch as before, with its
+// compact reference for PQ bodies. Stored detached entries have no inline body.
+impl Serialize for BatchArchiveEntry {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::{Error, SerializeStruct};
+        let reference = if !self.has_binary_references()
+            && Self::may_contain_pq(&self.batch_kind, &self.payload_json)
+        {
+            let (compact, bodies) = self.compact_pq().map_err(S::Error::custom)?;
+            (!bodies.is_empty()).then_some(compact.payload_json)
+        } else {
+            None
+        };
+        let mut fields =
+            s.serialize_struct("BatchArchiveEntry", 4 + usize::from(reference.is_some()))?;
+        fields.serialize_field("batch_kind", &self.batch_kind)?;
+        fields.serialize_field("batch_id", &self.batch_id)?;
+        fields.serialize_field("payload_hash", &self.payload_hash)?;
+        fields.serialize_field("payload_json", &self.payload_json)?;
+        if let Some(reference) = reference {
+            fields.serialize_field("pq_reference_v1", &reference)?;
+        }
+        fields.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for BatchArchiveEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        #[derive(Deserialize)]
+        struct Entry {
+            batch_kind: String,
+            batch_id: String,
+            payload_hash: String,
+            payload_json: String,
+            pq_reference_v1: Option<String>,
+        }
+        let decoded = Entry::deserialize(d)?;
+        let entry = Self {
+            batch_kind: decoded.batch_kind,
+            batch_id: decoded.batch_id,
+            payload_hash: decoded.payload_hash,
+            payload_json: decoded.payload_json,
+        };
+        if let Some(reference) = decoded.pq_reference_v1 {
+            let (compact, bodies) = entry.compact_pq().map_err(D::Error::custom)?;
+            if bodies.is_empty() || compact.payload_json != reference {
+                return Err(D::Error::custom("PQ historical reference mismatch"));
+            }
+        }
+        Ok(entry)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -777,4 +831,148 @@ impl BatchArchive {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
     message: String,
+}
+
+/// The logical entry expands to the canonical API batch for existing callers.
+/// On disk each PQ action is addressed by its versioned, domain-separated body digest.
+impl BatchArchiveEntry {
+    const PQ_REFERENCE_PREFIX: &'static str = "pf-pq-refs-v1\n";
+
+    /// Legacy batches can skip a second parse. Escaped JSON field names or
+    /// variant tags must still reach the typed parser and canonical-byte check.
+    pub fn may_contain_pq(kind: &str, json: &str) -> bool {
+        kind == "shielded" && (json.contains("pq_payment_v1") || json.contains(r"\u"))
+    }
+
+    pub fn has_binary_references(&self) -> bool {
+        self.payload_json.starts_with(Self::PQ_REFERENCE_PREFIX)
+    }
+
+    pub fn compact_pq(&self) -> Result<(Self, Vec<(String, pq_payment::PqPayment)>), String> {
+        self.compact_pq_with_framing(0)
+    }
+
+    /// Charge the serialized detached reference, including the full batch
+    /// metadata and its action separator, identically in storage and consensus.
+    pub fn pq_archived_payment_bytes(
+        batch_id: &str,
+        payload_hash: &str,
+        atomic: bool,
+        multiple: bool,
+        reference: &serde_json::Value,
+        body_bytes: usize,
+    ) -> Result<usize, String> {
+        let one = Self {
+            payload_json: format!(
+                "{}{}",
+                Self::PQ_REFERENCE_PREFIX,
+                serde_json::json!([atomic, [reference]])
+            ),
+            batch_kind: "shielded".into(),
+            batch_id: batch_id.to_owned(),
+            payload_hash: payload_hash.to_owned(),
+        };
+        let framing =
+            serde_json::to_vec(&one).map_err(|e| e.to_string())?.len() + usize::from(multiple);
+        Ok(pq_payment::checked_archive_size(body_bytes, framing)?)
+    }
+
+    pub fn compact_pq_with_framing(
+        &self,
+        storage_framing: usize,
+    ) -> Result<(Self, Vec<(String, pq_payment::PqPayment)>), String> {
+        if self.has_binary_references() {
+            return Err("unresolved PQ archive".into());
+        }
+        if !Self::may_contain_pq(&self.batch_kind, &self.payload_json) {
+            return Ok((self.clone(), vec![]));
+        }
+        let batch: ShieldedActionBatch =
+            serde_json::from_str(&self.payload_json).map_err(|e| e.to_string())?;
+        if !batch
+            .actions
+            .iter()
+            .any(|a| matches!(a, ShieldedAction::PqPaymentV1(_)))
+        {
+            return Ok((self.clone(), vec![]));
+        }
+        if batch.batch_id != self.batch_id
+            || serde_json::to_string(&batch).unwrap() != self.payload_json
+        {
+            return Err("noncanonical PQ archive batch".into());
+        }
+        let mut actions = Vec::new();
+        let mut bodies = Vec::new();
+        let multiple = batch.actions.len() > 1;
+        for action in batch.actions {
+            if let ShieldedAction::PqPaymentV1(p) = action {
+                let digest = p.digest();
+                let reference = serde_json::json!({"pq_body_v1":digest});
+                // Charge the full single-payment reference and batch metadata to each
+                // payment. Mixed batches also allocate one action separator per payment.
+                let framed = Self::pq_archived_payment_bytes(
+                    &self.batch_id,
+                    &self.payload_hash,
+                    batch.atomic,
+                    multiple,
+                    &reference,
+                    p.bytes().len(),
+                )?;
+                pq_payment::checked_archive_size(framed, storage_framing)?;
+                actions.push(reference);
+                bodies.push((digest, p));
+            } else {
+                actions.push(serde_json::to_value(action).map_err(|e| e.to_string())?);
+            }
+        }
+        let mut entry = self.clone();
+        entry.payload_json = format!(
+            "{}{}",
+            Self::PQ_REFERENCE_PREFIX,
+            serde_json::json!([batch.atomic, actions])
+        );
+        Ok((entry, bodies))
+    }
+
+    pub fn expand_pq(
+        &mut self,
+        mut load: impl FnMut(&str) -> Result<pq_payment::PqPayment, String>,
+    ) -> Result<(), String> {
+        let Some(raw) = self.payload_json.strip_prefix(Self::PQ_REFERENCE_PREFIX) else {
+            return Ok(());
+        };
+        if self.batch_kind != "shielded" {
+            return Err("invalid PQ archive kind".into());
+        }
+        let (atomic, refs): (bool, Vec<serde_json::Value>) =
+            serde_json::from_str(raw).map_err(|e| e.to_string())?;
+        let mut actions = Vec::new();
+        for item in refs {
+            if let Some(id) = item.get("pq_body_v1").and_then(|v| v.as_str()) {
+                if item.as_object().unwrap().len() != 1
+                    || validate_lower_hex_len("pq_body_v1", id, 96).is_err()
+                {
+                    return Err("invalid PQ body reference".into());
+                }
+                let body = load(id)?;
+                if body.digest() != id {
+                    return Err("PQ archive digest mismatch".into());
+                }
+                actions.push(ShieldedAction::PqPaymentV1(body));
+            } else {
+                let action = serde_json::from_value(item).map_err(|e| e.to_string())?;
+                if matches!(action, ShieldedAction::PqPaymentV1(_)) {
+                    return Err("inline PQ archive body".into());
+                }
+                actions.push(action);
+            }
+        }
+        self.payload_json = serde_json::to_string(&ShieldedActionBatch {
+            batch_id: self.batch_id.clone(),
+            atomic,
+            actions,
+        })
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }

@@ -1,5 +1,7 @@
 #![allow(clippy::large_enum_variant, clippy::too_many_arguments)]
 
+pub mod pq_address;
+pub mod pq_payment;
 include!("core_chain.rs");
 include!("external_lane_types.rs");
 include!("ledger_assets.rs");

@@ -2595,6 +2595,8 @@ fn max_rpc_param_string_bytes(method: &str, key: &str) -> usize {
         }
     } else if method == "shield_batch_finality" && key == "batch_json" {
         MAX_RPC_SHIELD_BATCH_JSON_BYTES
+    } else if method == "private_action_submit" && key == "action_json" {
+        postfiat_types::pq_payment::REQUEST_LIMIT
     } else if key == "action_json" {
         MAX_RPC_ORCHARD_ACTION_JSON_BYTES
     } else if key == "deposit_json" {
@@ -4911,3 +4913,19 @@ pub fn error_response(
 }
 
 include!("protocol_response_helpers.rs");
+
+/// Resume at a global public pair ordinal from an authenticated wallet checkpoint.
+pub fn pq_pairs_request(id: impl Into<String>, token: &str, offset: u64) -> RpcRequest {
+    let section = "pq_pairs";
+    let digest = postfiat_crypto_provider::hash_hex(
+        "postfiat.private_pool_page.cursor.v1",
+        format!("{token}\n{section}").as_bytes(),
+    );
+    RpcRequest::empty(id, "private_pool_page")
+        .with_param_value("snapshot_token", string_value(token))
+        .with_param_value("section", string_value(section))
+        .with_param_value(
+            "cursor",
+            string_value(format!("ppc1:{section}:{offset}:{}", &digest[..16])),
+        )
+}

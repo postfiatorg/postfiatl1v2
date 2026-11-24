@@ -210,10 +210,12 @@ pub fn create_shielded_swap_action_batch(
 pub fn create_shielded_atomic_batch(
     options: ShieldedAtomicBatchOptions,
 ) -> io::Result<ShieldedActionBatch> {
-    if options.source_batch_files.is_empty() || options.source_batch_files.len() > 3 {
+    if options.source_batch_files.is_empty()
+        || options.source_batch_files.len() > postfiat_types::PQ_REHEARSAL_PROOFS
+    {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "shielded atomic batch requires between one and three source batches",
+            "shielded atomic batch requires one to three ordinary sources or up to four PQ sources",
         ));
     }
     let store = NodeStore::new(&options.data_dir);
@@ -241,9 +243,21 @@ pub fn create_shielded_atomic_batch(
         ));
     }
 
+    let priced = genesis_hash(&genesis) == pq_payment_fixture::GENESIS_HASH
+        && governance.pq_fee_schedule_in_force(execution_height);
     let mut actions = Vec::with_capacity(options.source_batch_files.len());
     for source_path in &options.source_batch_files {
         let source = read_shielded_action_batch_file(source_path)?;
+        // The priced atomic rule applies to the assembled candidate. Before
+        // that era keep the base checks on each unassembled source as well.
+        if !priced {
+            consensus_artifacts::check_pq_block(
+                &genesis,
+                &governance,
+                execution_height,
+                [&source],
+            )?;
+        }
         verify_shielded_action_batch_id(&genesis, &source)?;
         if source.atomic {
             return Err(io::Error::new(
@@ -260,6 +274,7 @@ pub fn create_shielded_atomic_batch(
         actions.push(source.actions[0].clone());
     }
     let batch = build_atomic_shielded_action_batch(&genesis, actions)?;
+    consensus_artifacts::check_pq_block(&genesis, &governance, execution_height, [&batch])?;
     write_shielded_action_batch_file(&options.batch_file, &batch)?;
     Ok(batch)
 }
@@ -296,8 +311,7 @@ pub fn simulate_shielded_batch(
         .checked_add(1)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
     let batch = read_shielded_action_batch_file(&options.batch_file)?;
-    verify_shielded_action_batch_id(&genesis, &batch)?;
-    reject_live_legacy_cleartext_shielded_actions(&batch)?;
+
     if ordered_batches.contains(&batch.batch_id) {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
@@ -327,6 +341,7 @@ fn simulate_shielded_batch_against_state(
     execution_height: u64,
     batch: &ShieldedActionBatch,
 ) -> io::Result<ShieldedBatchSimulationReport> {
+    consensus_artifacts::check_pq_block(genesis, governance, execution_height, [batch])?;
     verify_shielded_action_batch_id(genesis, batch)?;
     reject_live_legacy_cleartext_shielded_actions(batch)?;
     let pre_state_root = replicated_state_root(
@@ -348,7 +363,7 @@ fn simulate_shielded_batch_against_state(
         asset_execution_compatibility_for_genesis_and_governance(genesis, governance),
         governance.orchard_pool_paused,
         governance.shielded_atomic_batch_activation_height(),
-        &governance.asset_orchard_egress_policy_registry(),
+        &governance,
         false,
     );
     let all_accepted = receipts.iter().all(|receipt| receipt.accepted);
@@ -407,6 +422,7 @@ pub fn conformance_shielded_batch(
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
     for prefix_file in &options.prefix_batch_files {
         let prefix = read_shielded_action_batch_file(prefix_file)?;
+        consensus_artifacts::check_pq_block(&genesis, &governance, execution_height, [&prefix])?;
         verify_shielded_action_batch_id(&genesis, &prefix)?;
         reject_live_legacy_cleartext_shielded_actions(&prefix)?;
         if ordered_batches.contains(&prefix.batch_id) {
@@ -427,7 +443,7 @@ pub fn conformance_shielded_batch(
             asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
             governance.orchard_pool_paused,
             governance.shielded_atomic_batch_activation_height(),
-            &governance.asset_orchard_egress_policy_registry(),
+            &governance,
             false,
         );
         if !receipts.iter().all(|receipt| receipt.accepted) {
@@ -445,6 +461,7 @@ pub fn conformance_shielded_batch(
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
     }
     let source = read_shielded_action_batch_file(&options.batch_file)?;
+    consensus_artifacts::check_pq_block(&genesis, &governance, execution_height, [&source])?;
     verify_shielded_action_batch_id(&genesis, &source)?;
     reject_live_legacy_cleartext_shielded_actions(&source)?;
     if !source.atomic {
@@ -619,7 +636,7 @@ pub fn conformance_shielded_batch(
         asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
         governance.orchard_pool_paused,
         governance.shielded_atomic_batch_activation_height(),
-        &governance.asset_orchard_egress_policy_registry(),
+        &governance,
         false,
     );
     if !ingress_receipts.iter().all(|receipt| receipt.accepted) {
@@ -1358,13 +1375,27 @@ pub fn apply_shielded_batch_with_replay(
     replay_block_file: Option<PathBuf>,
 ) -> io::Result<Vec<Receipt>> {
     let store = NodeStore::new(&options.data_dir);
+    let batch = read_shielded_action_batch_file(&options.batch_file)?;
+    let genesis = store.read_genesis()?;
+    // Bound proof work before entering the ledger writer. The locked view
+    // checks the amendment and all state-dependent conditions again.
+    if batch
+        .actions
+        .iter()
+        .any(|a| matches!(a, ShieldedAction::PqPaymentV1(_)))
+    {
+        let tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&store, &genesis)?;
+        let height = tip
+            .height
+            .checked_add(1)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "height overflow"))?;
+        consensus_artifacts::check_pq_block(&genesis, &store.read_governance()?, height, [&batch])?;
+        verify_shielded_action_batch_id(&genesis, &batch)?;
+    }
     let commit_lock = store.lock_ordered_commit()?;
     recover_ordered_commit_journal_locked(&store, &commit_lock)?;
-    let genesis = store.read_genesis()?;
     let mut shielded = store.read_shielded()?;
     let mut governance = store.read_governance()?;
-    let batch = read_shielded_action_batch_file(&options.batch_file)?;
-    verify_shielded_action_batch_id(&genesis, &batch)?;
 
     let mut ledger = read_fastpay_ledger(&store)?;
     let bridge = store.read_bridge()?;
@@ -1373,6 +1404,8 @@ pub fn apply_shielded_batch_with_replay(
         .height
         .checked_add(1)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
+    consensus_artifacts::check_pq_block(&genesis, &governance, block_height, [&batch])?;
+    verify_shielded_action_batch_id(&genesis, &batch)?;
     let parent_hash = chain_tip.block_hash.clone();
     let (proposed_ordered_batches, ordered_history) =
         proposed_ordered_state(&store, &genesis, &batch.batch_id, block_height)?;
@@ -1418,9 +1451,10 @@ pub fn apply_shielded_batch_with_replay(
         asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
         governance.orchard_pool_paused,
         governance.shielded_atomic_batch_activation_height(),
-        &governance.asset_orchard_egress_policy_registry(),
+        &governance,
         historical_replay.is_some(),
     );
+    pq_payment_fixture::ensure_valid(&batch, &receipts)?;
     ensure_atomic_shielded_batch_accepted(&batch, &receipts)?;
     let consensus_proposal = build_block_proposal_from_state(BlockProposalPlan {
         genesis: &genesis,
@@ -1474,6 +1508,8 @@ pub fn apply_shielded_batch_with_replay(
     let live_registry_update =
         live_validator_registry_after_due_updates(&store, &genesis, &governance, commit.height)?;
 
+    #[cfg(test)]
+    let persistence_start = std::time::Instant::now();
     write_ordered_commit_with_journal_locked(
         &store,
         &commit_lock,
@@ -1486,6 +1522,13 @@ pub fn apply_shielded_batch_with_replay(
             validator_registry: live_registry_update.or(due_activations.registry),
         },
     )?;
+    #[cfg(test)]
+    if std::env::var_os("PQ_VALIDATOR_BENCH").is_some() {
+        println!(
+            "PQ persistence height={block_height} ms={:.2}",
+            persistence_start.elapsed().as_secs_f64() * 1000.0
+        );
+    }
     Ok(receipts)
 }
 

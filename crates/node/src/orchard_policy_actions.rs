@@ -2931,6 +2931,7 @@ fn shielded_archive_payload_orchard_commitment_action_indexes(
                 }
                 None
             }
+            ShieldedAction::PqPaymentV1(_) | ShieldedAction::PqFixtureHop { .. } => None,
             ShieldedAction::AssetOrchardEgressV1(_) => None,
             ShieldedAction::AssetOrchardPrivateEgressV1(_) => None,
             ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(payload) => {
@@ -3000,6 +3001,9 @@ fn orchard_authorizing_domain(
     genesis: &Genesis,
     pool_id: &str,
 ) -> io::Result<OrchardAuthorizingDomain> {
+    if pool_id == postfiat_types::pq_payment::POOL_ID {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "pq_pool_owner"));
+    }
     OrchardAuthorizingDomain::new(
         genesis.chain_id.clone(),
         genesis_hash(genesis),

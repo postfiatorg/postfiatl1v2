@@ -3792,6 +3792,9 @@ pub struct LedgerState {
     pub pftl_uniswap_routes: Vec<PftlUniswapConsensusRouteState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pftl_uniswap_source_custody: Vec<PftlUniswapSourceCustody>,
+    /// Public protocol custody in exact source-series atoms. Absent when empty.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub collected_private_fees: std::collections::BTreeMap<String, u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pftl_uniswap_receipts: Vec<PftlUniswapConsensusReceipt>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -3991,6 +3994,7 @@ impl LedgerState {
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
             pftl_uniswap_source_custody: Vec::new(),
+            collected_private_fees: Default::default(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -4047,6 +4051,7 @@ impl LedgerState {
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
             pftl_uniswap_source_custody: Vec::new(),
+            collected_private_fees: Default::default(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -4104,6 +4109,7 @@ impl LedgerState {
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
             pftl_uniswap_source_custody: Vec::new(),
+            collected_private_fees: Default::default(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -4156,6 +4162,7 @@ impl LedgerState {
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
             pftl_uniswap_source_custody: Vec::new(),
+            collected_private_fees: Default::default(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -4213,6 +4220,7 @@ impl LedgerState {
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
             pftl_uniswap_source_custody: Vec::new(),
+            collected_private_fees: Default::default(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -4265,6 +4273,7 @@ impl LedgerState {
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
             pftl_uniswap_source_custody: Vec::new(),
+            collected_private_fees: Default::default(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,

@@ -846,7 +846,8 @@ fn issued_asset_supply_with_non_nav_spread(
                 .ok_or_else(|| ("issued_supply_overflow", "source custody overflow".to_string()))
         })?;
     trustline_supply
-        .checked_add(source_custody)
+        .checked_add(ledger.collected_private_fees.get(asset_id).copied().unwrap_or(0))
+        .and_then(|supply| supply.checked_add(source_custody))
         .and_then(|supply| supply.checked_add(open_escrow_supply))
         .and_then(|supply| supply.checked_add(open_offer_supply))
         .and_then(|supply| supply.checked_add(fast_lane_reserve_supply))
@@ -940,6 +941,7 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits: _,
+        collected_private_fees: _,
         pftl_uniswap_source_custody: _, // counted by the source-specific custody sum
         pftl_uniswap_routes: _,
         pftl_uniswap_receipts: _,
@@ -1098,4 +1100,42 @@ fn account_reserve_violation(address: &str, balance: u64) -> Option<String> {
     } else {
         None
     }
+}
+
+/// Calculate the replacement balance of an existing holder line. Keep the
+/// issuer, line limit, reservations and authorization untouched on either edge.
+pub fn prepare_pq_line_balance(
+    ledger: &LedgerState,
+    asset: &AssetDefinition,
+    holder: &str,
+    amount: u64,
+    credit: bool,
+) -> Result<(usize, u64), &'static str> {
+    if holder == asset.issuer
+        || ledger
+            .account(holder)
+            .is_none_or(|account| account.balance < required_account_reserve(holder))
+    {
+        return Err("pq_ineligible_holder");
+    }
+    let index = trustline_index(ledger, holder, &asset.asset_id).ok_or("pq_missing_trustline")?;
+    let line = &ledger.trustlines[index];
+    if line.issuer != asset.issuer {
+        return Err("pq_line_issuer");
+    }
+    ensure_line_can_move(asset, line).map_err(|(code, _)| code)?;
+    let balance = if credit {
+        let (balance, required) =
+            prepare_issued_asset_credit(ledger, asset, holder, index, amount, "PQ exit")
+                .map_err(|(code, _)| code)?;
+        if required > line.limit {
+            return Err("pq_trustline_limit");
+        }
+        balance
+    } else {
+        line.balance
+            .checked_sub(amount)
+            .ok_or("pq_insufficient_issued_balance")?
+    };
+    Ok((index, balance))
 }

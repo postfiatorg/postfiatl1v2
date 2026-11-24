@@ -1,0 +1,1 @@
+GO BENCH (pclmul=true, trials=50): med=36.32 ms p95=38.78 ms max=40.40 ms (wire=138508 B)

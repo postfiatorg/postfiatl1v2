@@ -14,6 +14,14 @@ enough that public edge behavior must be explicit.
 - Concurrency and rate limits exist for remote verifier work.
 - Child-process isolation exists for selected RPC operations.
 
+## PFSH02 admission and block limits
+
+The rehearsal genesis admits at most four PQ proofs and 596,520 charged archive bytes per block, with a per-payment ceiling of 149,130 bytes. The charge includes the canonical body, archive reference and storage framing. The largest body read back in M8 was 144,397 bytes and its charge was 145,140 bytes. A four-proof block charged 578,304 bytes. Ordinary payments continued in separate blocks on the same chain.
+
+The admission service checks the candidate inclusion height and repeats state-dependent checks at dispatch. Activation at rehearsal height 6 permitted the first PFT shield. A signed zero-value amendment finalized at height 29 made candidates at heights 30 and 31 ineligible. Ordinary traffic finalized at height 30. Receipt lookup, private pool pages and full replay remain available while inclusion is paused. Quorum round time includes transport and persistence. The deterministic validity rules count proofs and bytes. [Rehearsal record](../evidence/pq-private-payments-m8/rehearsal-record.md).
+
+On the shared AMD EPYC rehearsal host, the accelerated settlement path's slowest single action took 36.60 ms over accepted and rejected samples. The portable path reached 50.23 ms on CPU 13 and 55.32 ms on its pinned CPU 11 rerun, above the 50 ms release target. The protocol does not use machine time to decide whether a block is valid.
+
 ## RPC Resource Gates
 
 ```mermaid

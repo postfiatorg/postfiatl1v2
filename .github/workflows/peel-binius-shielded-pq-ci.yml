@@ -1,0 +1,76 @@
+name: peel-binius-shielded-pq-ci
+
+on:
+  push:
+    branches: [feat/peel-binius-shielded-pq]
+    paths:
+      - "tools/pft-binius-shielded-pq/**"
+      - ".github/workflows/peel-binius-shielded-pq-ci.yml"
+  pull_request:
+    paths:
+      - "tools/pft-binius-shielded-pq/**"
+      - ".github/workflows/peel-binius-shielded-pq-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Rust 1.95.0
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+          rustc --version
+
+      - name: Install Go 1.25.1
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.1"
+          cache: false
+
+      - name: Install Python z3-solver
+        run: |
+          python3 --version
+          python3 -m pip install --quiet z3-solver
+          python3 -c "import z3; print('z3-solver version:', z3.get_version_string())"
+
+      - name: Runner CPU info
+        run: |
+          uname -a
+          lscpu | grep -E "Model name|CPU\(s\)|Thread|Core|Socket" || true
+
+      - name: Verify SHA256SUMS manifest
+        working-directory: tools/pft-binius-shielded-pq
+        run: sha256sum -c SHA256SUMS
+
+      - name: Run 7-step independent verification suite (verify.sh)
+        working-directory: tools/pft-binius-shielded-pq
+        run: |
+          GO_BIN="$(command -v go)" PY_BIN="$(command -v python3)" ./verify.sh
+
+      - name: Second-host 1-core verify benchmarks (Rust & Go)
+        working-directory: tools/pft-binius-shielded-pq
+        run: |
+          GOMAXPROCS=1 taskset -c 0 ./go-verifier/binius-shielded-verifier bench \
+            -tx payments/tx_hop1.bin -ledger payments/ledger_hop1.json -trials 50
+          GOMAXPROCS=1 taskset -c 0 ./go-verifier/binius-shielded-verifier-purego bench \
+            -tx payments/tx_hop1.bin -ledger payments/ledger_hop1.json -trials 10
+          python3 - <<'PY'
+          import statistics, subprocess, time, os
+          for label, cmd in [
+              ("RUST COLD 1C (10 procs)", ["taskset", "-c", "0", "./rust-prover/target/release/pft-binius-shielded", "verify", "--tx", "payments/tx_hop1.bin", "--ledger", "payments/ledger_hop1.json"]),
+              ("GO   COLD 1C (10 procs)", ["env", "GOMAXPROCS=1", "taskset", "-c", "0", "./go-verifier/binius-shielded-verifier", "verify", "-tx", "payments/tx_hop1.bin", "-ledger", "payments/ledger_hop1.json"]),
+          ]:
+              ts = []
+              for _ in range(10):
+                  t0 = time.perf_counter()
+                  subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
+                  ts.append((time.perf_counter() - t0) * 1000.0)
+              print(f"{label}: wall med={statistics.median(ts):.2f} ms min={min(ts):.2f} ms max={max(ts):.2f} ms")
+          PY

@@ -95,10 +95,10 @@ block; the metadata is written last, so reads use the archive scan until then.
 
 ## Upgrade Backfill
 
-Index schema `postfiat-account-tx-index-v4` (disk index
-`postfiat-account-tx-disk-index-v4`, account files
-`postfiat-account-tx-account-head-v4` and `postfiat-account-tx-account-chunk-v4`)
-is the chunked layout above. v4 rows differ from v3 only in the
+Index schema `postfiat-account-tx-index-v5` (disk index
+`postfiat-account-tx-disk-index-v5`, account files
+`postfiat-account-tx-account-head-v5` and `postfiat-account-tx-account-chunk-v5`)
+uses the chunked layout and includes public PQ deposits and exit credits. v4 rows differ from v3 only in the
 `escrow_finish` row, whose `from` is now the recipient who signed and paid it
 (v3 named the owner). Schema v3 introduced the chunked layout; v2 added
 `payment_v2` memo contents and shielded-withdrawal rows. After installing a binary with a new schema, run
@@ -109,8 +109,8 @@ postfiat-node account-tx-index-build --data-dir <validator-data>
 postfiat-node account-tx-index-status --data-dir <validator-data>
 ```
 
-An older index (v1, v2 or v3) is never read or extended, so this build re-reads
-every retained block and writes the v4 files; for a v1 index that also
+An older index (v1, v2, v3 or v4) is never read or extended, so this build re-reads
+every retained block and writes the v5 files; for a v1 index that also
 backfills memo contents and historical shielded withdrawals. Before the
 rebuild, status reports `index_usable: false` with
 `unsupported account_tx index schema` (and `disk_index_reason` with the disk

@@ -18,6 +18,21 @@ export function make_rpc_request(method: string, params_json: string): string;
 export function parse_rpc_response(response_json: string): any;
 
 /**
+ * Check the public checksum and network before asking the native prover to pay.
+ */
+export function pq_check_address(chain: string, genesis_hex: string, address: string): void;
+
+/**
+ * Encode only the recipient's public owner commitment and ML-KEM encapsulation key.
+ */
+export function pq_encode_address(chain: string, genesis_hex: string, owner: Uint8Array, kem: Uint8Array): string;
+
+/**
+ * Decode the same canonical payment as a validator. Amount strings preserve all u64 bits.
+ */
+export function pq_review_payment(action_json: string): string;
+
+/**
  * Generate a random 32-byte master seed (64 hex chars).
  *
  * Uses getrandom with the `js` feature for browser-compatible randomness.
@@ -162,11 +177,12 @@ export function wallet_sign_payment_v2(backup_json: string, fields_json: string)
 export function wallet_sign_pftl_swap_intent(backup_json: string, intent_json: string): any;
 
 /**
- * Sign a transfer only when an RPC quote matches the exact reviewed intent.
+ * Sign transfer fields from an RPC quote only when they match the exact
+ * locally reviewed sender, recipient, and amount.
  *
  * backup_json: WalletBackupFile as JSON string
  * quote_json: TransferFeeQuoteSummary as JSON string
- * intent_json: closed object with the reviewed from, to, and amount
+ * intent_json: closed object with the reviewed `from`, `to`, and `amount`
  * Returns: SignedTransfer as JS object
  */
 export function wallet_sign_transfer(backup_json: string, quote_json: string, intent_json: string): any;
@@ -188,6 +204,9 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly make_rpc_request: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly parse_rpc_response: (a: number, b: number) => [number, number, number];
+    readonly pq_check_address: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+    readonly pq_encode_address: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly pq_review_payment: (a: number, b: number) => [number, number, number, number];
     readonly random_master_seed: () => [number, number, number, number];
     readonly wallet_address_from_seed: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly wallet_fastpay_transfer_certificate_digest: (a: number, b: number) => [number, number, number, number];
@@ -209,7 +228,7 @@ export interface InitOutput {
     readonly wallet_sign_owned_unwrap_v3: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly wallet_sign_payment_v2: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly wallet_sign_pftl_swap_intent: (a: number, b: number, c: number, d: number) => [number, number, number];
-    readonly wallet_sign_transfer: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly wallet_sign_transfer: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly wallet_sign_transfer_fields: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly wallet_verify_fastpay_apply_ack: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly __wbindgen_malloc: (a: number, b: number) => number;

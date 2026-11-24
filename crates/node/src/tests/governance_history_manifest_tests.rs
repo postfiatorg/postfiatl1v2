@@ -345,6 +345,19 @@
         .expect("ratify crypto v2");
         apply_governance_file("crypto-policy-v2", crypto_v2_file);
 
+        // Base rehearsal history could carry a bare schedule on a different
+        // genesis, signed or unsigned on archival paths, without activating PQ.
+        let bare_file = data_dir.join("bare-schedule.json");
+        let mut subset = EssentialSubsetConfig::all_of(validators.clone());
+        subset.quorum = 1;
+        let genesis = NodeStore::new(&data_dir).read_genesis().unwrap();
+        let bare = ratify_governance_amendment_with_lifecycle(&cobalt_domain(&genesis), &subset,
+            postfiat_types::PQ_REHEARSAL_V1, 100, vec![validators[0].clone()],
+            GovernanceAmendmentLifecycle { activation_height:0, veto_until_height:0, paused:false }).unwrap();
+        write_amendment_file(&bare_file, &bare).unwrap();
+        apply_governance_file("bare", bare_file);
+        assert!(verify_blocks(NodeOptions { data_dir:data_dir.clone() }).unwrap().verified);
+
         let bridge_v2_file = data_dir.join("bridge-witness-epoch-v2.json");
         ratify_governance(RatifyGovernanceOptions {
             data_dir: data_dir.clone(),
@@ -411,7 +424,7 @@
             data_dir: data_dir.clone(),
         })
         .expect("verify governance");
-        assert_eq!(final_report.amendment_count, 5);
+        assert_eq!(final_report.amendment_count, 6);
         assert_eq!(final_report.amendment_supersession_record_count, 2);
         assert_eq!(final_report.amendment_rollback_record_count, 1);
 
@@ -454,8 +467,8 @@
             })
             .expect("verify amendment replay bundle");
         assert!(report.verified);
-        assert_eq!(report.amendment_count, 5);
-        assert_eq!(report.activation_record_count, 5);
+        assert_eq!(report.amendment_count, 6);
+        assert_eq!(report.activation_record_count, 6);
         assert_eq!(report.supersession_record_count, 2);
         assert_eq!(report.rollback_record_count, 1);
 

@@ -717,3 +717,299 @@
         assert!(PrivateActionAdmissionStore::open(&data_dir).is_err());
         fs::remove_dir_all(data_dir).ok();
     }
+
+#[test]
+fn pq_reproves_reserve_one_statement_and_release_after_pause() {
+    use pft_binius_shielded::payment::{create_profiled_tx, ShieldedWallet, SpendInput};
+    use postfiat_crypto_provider::{
+        ml_dsa_65_keygen_from_seed, ml_dsa_65_sign_with_context_seed, TX_SIGNATURE_CONTEXT,
+    };
+    use postfiat_privacy_binius::MerkleTree24;
+    use postfiat_types::pq_payment::{PqPayment, POOL_ID};
+    use rand::{rngs::StdRng, RngCore, SeedableRng};
+    use std::cell::RefCell;
+
+    // Reset only the prover coins when the complete header has been built.
+    struct SharedRng<'a>(&'a RefCell<StdRng>, Option<usize>);
+    impl RngCore for SharedRng<'_> {
+        fn next_u32(&mut self) -> u32 {
+            self.0.borrow_mut().next_u32()
+        }
+        fn next_u64(&mut self) -> u64 {
+            self.0.borrow_mut().next_u64()
+        }
+        fn fill_bytes(&mut self, out: &mut [u8]) {
+            if let Some(remaining) = &mut self.1 {
+                if *remaining == 0 {
+                    *self.0.borrow_mut() = StdRng::seed_from_u64(937);
+                    self.1 = None;
+                } else {
+                    *remaining -= 1;
+                }
+            }
+            self.0.borrow_mut().fill_bytes(out)
+        }
+        fn try_fill_bytes(&mut self, out: &mut [u8]) -> Result<(), rand::Error> {
+            self.fill_bytes(out);
+            Ok(())
+        }
+    }
+    let dir = unique_test_dir("pq-queue");
+    let genesis = pq_payment_activation::rehearsal_genesis(&dir);
+    let disk = NodeStore::new(&dir);
+    let mut gov = disk.read_governance().unwrap();
+    let mut atomic = pq_payment_activation::amendment(&genesis, 1);
+    atomic.kind = GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT.into();
+    gov.apply(atomic);
+    let key = ml_dsa_65_keygen_from_seed(&[7; 32]);
+    let other = ml_dsa_65_keygen_from_seed(&[8; 32]);
+    let mut ledger = disk.read_ledger().unwrap();
+    ledger.accounts[0].balance -= 2000;
+    ledger
+        .ensure_account(&address_from_public_key(&other.public_key))
+        .balance = 1000;
+    ledger
+        .ensure_account(&address_from_public_key(&key.public_key))
+        .balance = 1000;
+    disk.write_ledger(&ledger).unwrap();
+    let publish = |g: &GovernanceState| {
+        disk.write_governance(g).unwrap();
+        let mut tip = read_chain_tip_or_reconstruct_for_genesis(&disk, &genesis).unwrap();
+        tip.state_root = lifecycle_queries::current_replicated_state_root(&disk, &genesis).unwrap();
+        disk.write_chain_tip(&tip).unwrap();
+    };
+    publish(&gov);
+    let domain = PrivateActionSubmitDomain {
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        pool_id: POOL_ID.into(),
+        session_scope: "native:wallet".into(),
+    };
+    let make = |p: &PqPayment, pretty| {
+        let action = ShieldedAction::PqPaymentV1(p.clone());
+        let json = if pretty {
+            serde_json::to_string_pretty(&action)
+        } else {
+            serde_json::to_string(&action)
+        }
+        .unwrap();
+        PrivateActionSubmitRequest {
+            intent_id: private_action_intent_id(&domain.intent_domain(), &json).unwrap(),
+            action_hash: private_action_hash_for_json(&json).unwrap(),
+            action_json: json,
+            domain: domain.clone(),
+        }
+    };
+    let chain = postfiat_types::pq_payment::Chain {
+        id: &genesis.chain_id,
+        genesis: hex_to_bytes(&domain.genesis_hash)
+            .unwrap()
+            .try_into()
+            .unwrap(),
+        protocol: genesis.protocol_version,
+    };
+    let prove = |coins: u64, change: u64, one_common_serial: bool| {
+        let mut terms = pq_payment_activation::payment("pft-shield")
+            .parts()
+            .unwrap()
+            .0;
+        let stream = RefCell::new(StdRng::seed_from_u64(817));
+        let mut rng = SharedRng(&stream, None);
+        let wallet = ShieldedWallet::from_seed(&mut rng);
+        let signer = if one_common_serial {
+            // Keep the first dummy secret and blinder. Generate the second
+            // input and both outputs from a different stream and fund from
+            // a different authorized account.
+            rng.1 = Some(2);
+            let account = terms.account.as_mut().unwrap();
+            account.id = hex_to_bytes(&address_from_public_key(&other.public_key)[2..])
+                .unwrap()
+                .try_into()
+                .unwrap();
+            account.public_key.copy_from_slice(&other.public_key);
+            &other
+        } else {
+            &key
+        };
+        let (tx, _, _) = create_profiled_tx(
+            &MerkleTree24::new(),
+            SpendInput::Dummy,
+            SpendInput::Dummy,
+            &wallet.stealth_address(),
+            99 - change,
+            &wallet.stealth_address(),
+            change,
+            100,
+            0,
+            [0; 32],
+            1,
+            None,
+            Some(&|raw| {
+                *stream.borrow_mut() = StdRng::seed_from_u64(coins);
+                terms.statement_context(chain, raw)
+            }),
+            &mut rng,
+        )
+        .unwrap();
+        let signature = ml_dsa_65_sign_with_context_seed(
+            &signer.private_key,
+            &terms.signing_message(chain, tx.statement().tx_ctx).unwrap(),
+            TX_SIGNATURE_CONTEXT,
+            &[coins as u8; 32],
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+        let p = PqPayment::encode(&terms, Some(&signature), &tx.to_bytes()).unwrap();
+        postfiat_privacy_binius::verify_l1(&p, chain).unwrap();
+        p
+    };
+    let first = prove(1, 0, false);
+    let second = prove(2, 0, false);
+    assert_ne!(first.parts().unwrap().2, second.parts().unwrap().2);
+    let a = make(&first, false);
+    let b = make(&second, true);
+    assert_ne!(a.action_hash, b.action_hash);
+    assert!(private_action_submit(&dir, &a)
+        .unwrap_err()
+        .to_string()
+        .contains("pq_settlement_inactive"));
+    gov.apply(pq_payment_activation::amendment(&genesis, 1));
+    publish(&gov);
+    let mut unsettled = ledger.clone();
+    unsettled.accounts[0].balance -= 1;
+    disk.write_ledger(&unsettled).unwrap();
+    assert_refused(
+        private_action_submit(&dir, &a).unwrap_err(),
+        "private_action_stale_tip",
+    );
+    disk.write_ledger(&ledger).unwrap();
+    let reports = std::thread::scope(|scope| {
+        let x = scope.spawn(|| private_action_submit(&dir, &a).unwrap());
+        let y = scope.spawn(|| private_action_submit(&dir, &b).unwrap());
+        [x.join().unwrap(), y.join().unwrap()]
+    });
+    assert_eq!(reports.iter().filter(|r| !r.existing).count(), 1);
+    assert_eq!(reports[0].record, reports[1].record);
+    // A different body can overlap just one serial, with distinct output
+    // keys and no payer reservation. Admission checks the held serial before
+    // spending CPU on the unrelated proof.
+    let internal = pq_payment_activation::payment("pft-pay");
+    let (terms, _, inner) = internal.parts().unwrap();
+    let mut changed = inner.to_vec();
+    changed[112..160].copy_from_slice(&first.parts().unwrap().2[112..160]);
+    let single = make(&PqPayment::encode(&terms, None, &changed).unwrap(), false);
+    assert_refused(
+        private_action_submit(&dir, &single).unwrap_err(),
+        "private_action_duplicate",
+    );
+    let overlap = prove(4, 0, true);
+    let overlap_batch = build_atomic_shielded_action_batch(
+        &genesis,
+        vec![ShieldedAction::PqPaymentV1(overlap.clone())],
+    )
+    .unwrap();
+    let path = dir.join("overlapping-shield.json");
+    fs::write(&path, serde_json::to_vec(&overlap_batch).unwrap()).unwrap();
+    assert!(
+        simulate_shielded_batch(ShieldedBatchSimulateOptions {
+            data_dir: dir.clone(),
+            batch_file: path
+        })
+        .unwrap()
+        .all_accepted
+    );
+    let header = overlap.parts().unwrap().2;
+    let original = first.parts().unwrap().2;
+    assert_eq!(header[112..160], original[112..160]);
+    for offset in [160, 208, 256] {
+        assert_ne!(header[offset..offset + 48], original[offset..offset + 48]);
+    }
+    assert_refused(
+        private_action_submit(&dir, &make(&overlap, false)).unwrap_err(),
+        "private_action_duplicate",
+    );
+    let mut foreign = a.clone();
+    foreign.domain.session_scope.push('x');
+    assert_refused(
+        private_action_submit(&dir, &foreign).unwrap_err(),
+        "private_intent_conflict",
+    );
+    let conflict = make(&prove(3, 1, false), false);
+    assert_refused(
+        private_action_submit(&dir, &conflict).unwrap_err(),
+        "private_action_duplicate",
+    );
+    gov.apply(pq_payment_activation::amendment(&genesis, 0));
+    publish(&gov);
+    let steps =
+        private_action_service_step(&dir, |_| Ok(true), |_, _| panic!("paused dispatch")).unwrap();
+    assert_eq!(steps[0].to, PrivateActionState::Abandoned);
+    gov.apply(pq_payment_activation::amendment(&genesis, 1));
+    publish(&gov);
+    let retry = private_action_submit(&dir, &conflict).unwrap();
+    assert!(!retry.existing);
+    let timeout = private_action_service_step(
+        &dir,
+        |_| Ok(true),
+        |_, _| PrivateActionDispatch::Failed {
+            message: "no final response".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(timeout[0].to, PrivateActionState::Unknown);
+    assert!(
+        private_action_service_step(&dir, |_| Ok(true), |_, _| panic!("ambiguous redispatch"))
+            .unwrap()
+            .is_empty()
+    );
+    let tip = read_chain_tip_or_reconstruct_for_genesis(&disk, &genesis).unwrap();
+    let mut expiry_tip = tip.clone();
+    expiry_tip.height += 64;
+    disk.write_chain_tip(&expiry_tip).unwrap();
+    let expiry =
+        private_action_service_step(&dir, |_| Ok(true), |_, _| panic!("expired dispatch")).unwrap();
+    assert_eq!(expiry[0].code, "pq_queue_expired");
+    assert_eq!(expiry[0].to, PrivateActionState::Abandoned);
+    disk.write_chain_tip(&tip).unwrap();
+    assert!(!private_action_submit(&dir, &conflict).unwrap().existing);
+    let steps = private_action_service_step(
+        &dir,
+        |_| Ok(true),
+        |record, _| {
+            assert_eq!(apply_reserved_batch(&dir, record).len(), 1);
+            PrivateActionDispatch::Failed {
+                message: "reply lost after commit".into(),
+            }
+        },
+    )
+    .unwrap();
+    assert_eq!(steps[0].to, PrivateActionState::Accepted);
+    assert!(
+        private_action_service_step(&dir, |_| Ok(true), |_, _| panic!("duplicate dispatch"))
+            .unwrap()
+            .is_empty()
+    );
+    let live = disk.read_shielded().unwrap().pq_pool_v1.unwrap();
+    assert_eq!(live.head.pairs, 1);
+    // Cold recovery cannot attach a final spend to an unrelated journal
+    // record solely because it claims the already included batch ID.
+    let mut broken = retry.record;
+    broken.intent_id = "01".repeat(48);
+    broken.state = PrivateActionState::Dispatched;
+    let log_path = dir.join("private_action_admission/records.jsonl");
+    let mut journal = fs::OpenOptions::new().append(true).open(&log_path).unwrap();
+    std::io::Write::write_all(&mut journal, &serde_json::to_vec(&broken).unwrap()).unwrap();
+    std::io::Write::write_all(&mut journal, b"\n").unwrap();
+    journal.sync_all().unwrap();
+    let receipt = private_action_receipt(&dir, &broken.intent_id).unwrap();
+    let outcome = receipt.record.unwrap().outcome.unwrap();
+    assert!(!outcome.accepted);
+    assert!(outcome.inclusion.is_none());
+    assert_eq!(outcome.code, "private_action_binding_mismatch");
+    let owner = private_action_submit(&dir, &conflict).unwrap();
+    assert!(owner.existing);
+    assert_eq!(owner.record.state, PrivateActionState::Accepted);
+    fs::remove_dir_all(dir).unwrap();
+}

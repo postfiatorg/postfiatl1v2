@@ -51,6 +51,86 @@ export function parse_rpc_response(response_json) {
 }
 
 /**
+ * Check the public checksum and network before asking the native prover to pay.
+ * @param {string} chain
+ * @param {string} genesis_hex
+ * @param {string} address
+ */
+export function pq_check_address(chain, genesis_hex, address) {
+    const ptr0 = passStringToWasm0(chain, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(genesis_hex, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(address, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.pq_check_address(ptr0, len0, ptr1, len1, ptr2, len2);
+    if (ret[1]) {
+        throw takeFromExternrefTable0(ret[0]);
+    }
+}
+
+/**
+ * Encode only the recipient's public owner commitment and ML-KEM encapsulation key.
+ * @param {string} chain
+ * @param {string} genesis_hex
+ * @param {Uint8Array} owner
+ * @param {Uint8Array} kem
+ * @returns {string}
+ */
+export function pq_encode_address(chain, genesis_hex, owner, kem) {
+    let deferred6_0;
+    let deferred6_1;
+    try {
+        const ptr0 = passStringToWasm0(chain, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(genesis_hex, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray8ToWasm0(owner, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passArray8ToWasm0(kem, wasm.__wbindgen_malloc);
+        const len3 = WASM_VECTOR_LEN;
+        const ret = wasm.pq_encode_address(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
+        var ptr5 = ret[0];
+        var len5 = ret[1];
+        if (ret[3]) {
+            ptr5 = 0; len5 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred6_0 = ptr5;
+        deferred6_1 = len5;
+        return getStringFromWasm0(ptr5, len5);
+    } finally {
+        wasm.__wbindgen_free(deferred6_0, deferred6_1, 1);
+    }
+}
+
+/**
+ * Decode the same canonical payment as a validator. Amount strings preserve all u64 bits.
+ * @param {string} action_json
+ * @returns {string}
+ */
+export function pq_review_payment(action_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(action_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.pq_review_payment(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Generate a random 32-byte master seed (64 hex chars).
  *
  * Uses getrandom with the `js` feature for browser-compatible randomness.
@@ -532,11 +612,12 @@ export function wallet_sign_pftl_swap_intent(backup_json, intent_json) {
 }
 
 /**
- * Sign a transfer only when an RPC quote matches the exact reviewed intent.
+ * Sign transfer fields from an RPC quote only when they match the exact
+ * locally reviewed sender, recipient, and amount.
  *
  * backup_json: WalletBackupFile as JSON string
  * quote_json: TransferFeeQuoteSummary as JSON string
- * intent_json: closed object with the reviewed from, to, and amount
+ * intent_json: closed object with the reviewed `from`, `to`, and `amount`
  * Returns: SignedTransfer as JS object
  * @param {string} backup_json
  * @param {string} quote_json
@@ -544,30 +625,13 @@ export function wallet_sign_pftl_swap_intent(backup_json, intent_json) {
  * @returns {any}
  */
 export function wallet_sign_transfer(backup_json, quote_json, intent_json) {
-    let quote;
-    let intent;
-    try {
-        quote = JSON.parse(quote_json);
-        intent = JSON.parse(intent_json);
-    } catch (_) {
-        throw new Error('transfer quote and intent must be valid JSON');
-    }
-    if (
-        !intent
-        || typeof intent !== 'object'
-        || Array.isArray(intent)
-        || Object.keys(intent).sort().join(',') !== 'amount,from,to'
-        || quote?.from !== intent.from
-        || quote?.to !== intent.to
-        || quote?.amount !== intent.amount
-    ) {
-        throw new Error('transfer quote does not match the reviewed sender, recipient, and amount');
-    }
     const ptr0 = passStringToWasm0(backup_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(quote_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.wallet_sign_transfer(ptr0, len0, ptr1, len1);
+    const ptr2 = passStringToWasm0(intent_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.wallet_sign_transfer(ptr0, len0, ptr1, len1, ptr2, len2);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -615,6 +679,10 @@ export function wallet_verify_fastpay_apply_ack(acknowledgement_json, validator_
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg_Error_92b29b0548f8b746: function(arg0, arg1) {
+            const ret = Error(getStringFromWasm0(arg0, arg1));
+            return ret;
+        },
         __wbg___wbindgen_is_function_1ff95bcc5517c252: function(arg0) {
             const ret = typeof(arg0) === 'function';
             return ret;
@@ -788,6 +856,13 @@ function handleError(f, args) {
 
 function isLikeNone(x) {
     return x === undefined || x === null;
+}
+
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 
 function passStringToWasm0(arg, malloc, realloc) {

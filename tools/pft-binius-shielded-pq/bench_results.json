@@ -1,0 +1,14 @@
+{
+  "trials": 50,
+  "rayon_threads": 32,
+  "prove_ms_med": 2891.757154,
+  "prove_ms_p95": 3056.9459970000003,
+  "prove_ms_max": 3072.578631,
+  "verify_1c_ms_med": 22.530724,
+  "verify_1c_ms_p95": 25.154521,
+  "verify_1c_ms_max": 31.94954,
+  "wire_bytes_min": 137500,
+  "wire_bytes_med": 138508,
+  "wire_bytes_max": 139180,
+  "budget_bytes": 149130
+}

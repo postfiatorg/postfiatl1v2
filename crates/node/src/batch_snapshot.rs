@@ -1813,7 +1813,7 @@ fn export_snapshot_with_basis(
 
     let mut files = Vec::new();
     for &file_name in SNAPSHOT_FILES {
-        let bytes = snapshot_file_bytes(&store, &options.data_dir, file_name, basis)?;
+        let bytes = snapshot_file_bytes(&store, &options.data_dir, &snapshot_dir, file_name, basis)?;
         atomic_write(snapshot_dir.join(file_name), &bytes)?;
         files.push(SnapshotFile {
             name: (*file_name).to_string(),
@@ -3498,6 +3498,7 @@ fn empty_consensus_v2_artifact_snapshot_bytes(directory: &str) -> io::Result<Vec
 fn snapshot_file_bytes(
     store: &NodeStore,
     data_dir: &Path,
+    snapshot_dir: &Path,
     file_name: &str,
     basis: SnapshotVerificationBasis,
 ) -> io::Result<Vec<u8>> {
@@ -3510,11 +3511,19 @@ fn snapshot_file_bytes(
         HISTORY_CHECKPOINT_FILE => {
             snapshot_json_bytes(&read_history_checkpoint_state_optional(store)?)
         }
-        BATCH_ARCHIVE_FILE => snapshot_json_bytes(&store.read_batch_archive()?),
+        BATCH_ARCHIVE_FILE => snapshot_json_bytes(
+            &postfiat_storage::pq_archive::SnapshotBatchArchive::from_archive(
+                store.read_batch_archive()?,
+            )?,
+        ),
         ORDERED_BATCHES_FILE => snapshot_json_bytes(&store.read_ordered_batches()?),
         RECEIPTS_FILE => snapshot_json_bytes(&store.read_receipts()?),
         MEMPOOL_FILE => snapshot_json_bytes(&store.read_mempool()?),
-        SHIELDED_FILE => snapshot_json_bytes(&store.read_shielded()?),
+        SHIELDED_FILE => {
+            let state = store.read_shielded()?;
+            postfiat_storage::pq_pool::audit(data_dir, &state, Some(snapshot_dir))?;
+            snapshot_json_bytes(&state)
+        }
         BRIDGE_FILE => snapshot_json_bytes(&store.read_bridge()?),
         CONSENSUS_V2_SAFETY_SNAPSHOT_FILE => {
             if basis == SnapshotVerificationBasis::FinalizedCheckpoint {
@@ -3836,6 +3845,19 @@ fn import_snapshot_into_staging(
                 io::ErrorKind::InvalidData,
                 format!("snapshot file `{}` byte length mismatch", file.name),
             ));
+        }
+        if file.name == BATCH_ARCHIVE_FILE {
+            let portable: postfiat_storage::pq_archive::SnapshotBatchArchive =
+                serde_json::from_slice(&bytes).map_err(invalid_data)?;
+            atomic_write(
+                data_dir.join(&file.name),
+                snapshot_json_bytes(&portable.stage(data_dir)?)?,
+            )?;
+            continue;
+        }
+        if file.name == SHIELDED_FILE {
+            let state: ShieldedState = serde_json::from_slice(&bytes).map_err(invalid_data)?;
+            postfiat_storage::pq_pool::audit(snapshot_dir, &state, Some(data_dir))?;
         }
         if file.name == HISTORY_CHECKPOINT_FILE {
             let checkpoint: Option<HistoryCheckpointState> =

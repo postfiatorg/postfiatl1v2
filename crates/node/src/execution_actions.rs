@@ -1319,6 +1319,12 @@ pub(super) fn execute_governance_batch_with_replay(
                 code,
                 message,
             ));
+        } else if amendment.kind == postfiat_types::PQ_REHEARSAL_V1
+            && amendment.value != 0
+            && governance.pq_fee_schedule_in_force(block_height)
+        {
+            receipts.push(Receipt::rejected(amendment.amendment_id.clone(), "pq_fee_unconfigured",
+                "Supply the replacement fee or explicitly pause the pool with value zero"));
         } else if governance
             .amendments
             .iter()
@@ -1343,6 +1349,29 @@ pub(super) fn execute_governance_batch_with_replay(
                         amendment.amendment_id.clone(),
                         "solana_exit_decision_rejected",
                         message,
+                    ));
+                    continue;
+                }
+            }
+            if let Some(recipient) = postfiat_types::pq_fee_withdraw_recipient(&amendment.kind) {
+                let result = (|| {
+                    if amendment.value == 0 {
+                        return Err("pq_fee_balance");
+                    }
+                    crate::pq_payment_actions::withdraw_fees(
+                        genesis.ok_or("pq_genesis")?,
+                        governance,
+                        ledger.as_deref_mut().ok_or("pq_ledger")?,
+                        recipient,
+                        u64::from(amendment.value),
+                        block_height,
+                    )
+                })();
+                if let Err(code) = result {
+                    receipts.push(Receipt::rejected(
+                        amendment.amendment_id.clone(),
+                        code,
+                        "PQ fee withdrawal refused",
                     ));
                     continue;
                 }
@@ -2264,6 +2293,19 @@ pub(super) fn external_lane_amendment_authority_rejection(
     )
 }
 
+pub(super) fn pq_governance_domain_rejection(
+    amendment: &GovernanceAmendment, genesis: Option<&Genesis>,
+) -> Option<(&'static str, String)> {
+    if postfiat_types::pq_fee_governance_kind(&amendment.kind)
+        && !(postfiat_types::pq_rehearsal_domain(&amendment.chain_id, &amendment.genesis_hash)
+            && genesis.is_some_and(|g| postfiat_types::pq_rehearsal_domain(&g.chain_id, &genesis_hash(g))))
+    {
+        return Some(("unsupported_governance_amendment_kind",
+            format!("unsupported governance amendment kind `{}`", amendment.kind)));
+    }
+    None
+}
+
 /// The lifecycle checks, then the ones that read the genesis: every path that
 /// accepts an amendment (admission, batch building, execution, replay) runs it.
 pub(super) fn governance_amendment_rejection_with_genesis(
@@ -2271,7 +2313,8 @@ pub(super) fn governance_amendment_rejection_with_genesis(
     block_height: u64,
     genesis: Option<&Genesis>,
 ) -> Option<(&'static str, String)> {
-    governance_amendment_lifecycle_rejection(amendment, block_height)
+    pq_governance_domain_rejection(amendment, genesis)
+        .or_else(|| governance_amendment_lifecycle_rejection(amendment, block_height))
         .or_else(|| external_lane_export_root_consensus_v2_rejection(amendment, genesis))
 }
 
@@ -2360,6 +2403,15 @@ pub(super) fn governance_amendment_lifecycle_rejection(
             "invalid_bridge_exit_root_activation_height",
             "bridge-exit-root activation must be scheduled strictly after the amendment block"
                 .to_string(),
+        ));
+    }
+    if postfiat_types::is_pq_rehearsal_kind(&amendment.kind)
+        && amendment.value != 0
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "pq_activation_height",
+            "schedule PQ rehearsal after the amendment block".into(),
         ));
     }
     if amendment.kind == GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
@@ -2592,6 +2644,10 @@ pub(super) fn apply_governance_amendment_with_lifecycle_records(
 /// its commit height needs the genesis lane (its cap and window), which the
 /// governance-only replay paths do not carry. `external_lane_info` reports
 /// the cap in force (`release_cap_schedule_at`).
+fn same_amendment_family(left: &str, right: &str) -> bool {
+    left == right || (postfiat_types::is_pq_rehearsal_kind(left) && postfiat_types::is_pq_rehearsal_kind(right))
+}
+
 pub(super) fn governance_amendment_current_value(governance: &GovernanceState, kind: &str) -> u32 {
     match kind {
         GOVERNANCE_KIND_VALIDATOR_SET => governance.active_validator_count,
@@ -2652,6 +2708,12 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .external_lane_export_root_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
+        kind if postfiat_types::is_pq_rehearsal_kind(kind) => governance
+            .amendments
+            .iter()
+            .rev()
+            .find(|a| same_amendment_family(&a.kind, kind))
+            .map_or(0, |a| a.value),
         GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT => governance
             .shielded_atomic_batch_activation_height()
             .and_then(|height| u32::try_from(height).ok())
@@ -2673,6 +2735,9 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
 }
 
 fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
+    if postfiat_types::is_pq_rehearsal_kind(kind) {
+        return true;
+    }
     matches!(
         kind,
         GOVERNANCE_KIND_VALIDATOR_SET
@@ -3106,7 +3171,7 @@ pub(super) fn governance_amendment_supersession_record(
         .amendments
         .iter()
         .rev()
-        .find(|existing| existing.kind == amendment.kind)?;
+        .find(|existing| same_amendment_family(&existing.kind, &amendment.kind))?;
     let mut record = GovernanceAmendmentSupersessionRecord {
         schema: GOVERNANCE_AMENDMENT_SUPERSESSION_SCHEMA.to_string(),
         supersession_record_id: String::new(),
@@ -3159,7 +3224,7 @@ pub(super) fn governance_amendment_rollback_record(
         .amendments
         .iter()
         .rev()
-        .find(|existing| existing.kind == amendment.kind)?;
+        .find(|existing| same_amendment_family(&existing.kind, &amendment.kind))?;
     let restored = governance
         .amendments
         .iter()
@@ -3389,7 +3454,7 @@ pub(super) fn expected_governance_amendment_supersessions(
     for (index, amendment) in amendments.iter().enumerate() {
         if let Some(previous_index) = amendments[..index]
             .iter()
-            .rposition(|previous| previous.kind == amendment.kind)
+            .rposition(|previous| same_amendment_family(&previous.kind, &amendment.kind))
         {
             expected.push((&amendments[previous_index], amendment));
         }
@@ -3439,7 +3504,7 @@ pub(super) fn verify_governance_amendment_supersession_record_for_domain(
         || record.genesis_hash != superseding.genesis_hash
         || record.protocol_version != superseding.protocol_version
         || record.kind != superseding.kind
-        || record.kind != superseded.kind
+        || !same_amendment_family(&record.kind, &superseded.kind)
         || record.new_value != superseding.value
     {
         return Err(io::Error::new(
@@ -3548,7 +3613,7 @@ pub(super) fn expected_governance_amendment_rollbacks(
         let previous = &amendments[..index];
         let Some(rolled_back_index) = previous
             .iter()
-            .rposition(|existing| existing.kind == rollback.kind)
+            .rposition(|existing| same_amendment_family(&existing.kind, &rollback.kind))
         else {
             continue;
         };
@@ -3611,7 +3676,7 @@ pub(super) fn verify_governance_amendment_rollback_record_for_domain(
         || record.chain_id != rollback.chain_id
         || record.genesis_hash != rollback.genesis_hash
         || record.protocol_version != rollback.protocol_version
-        || record.kind != rolled_back.kind
+        || !same_amendment_family(&record.kind, &rolled_back.kind)
         || record.kind != restored.kind
         || record.kind != rollback.kind
         || record.restored_value != restored.value
@@ -3677,7 +3742,7 @@ pub(super) fn execute_shielded_batch(
     asset_execution_compatibility: AssetExecutionCompatibility,
     orchard_pool_paused: bool,
     shielded_atomic_batch_activation_height: Option<u64>,
-    egress_policies: &postfiat_types::AssetOrchardEgressPolicyRegistry,
+    governance: &GovernanceState,
     archive_replay: bool,
 ) -> Vec<Receipt> {
     if !batch.atomic {
@@ -3689,7 +3754,7 @@ pub(super) fn execute_shielded_batch(
             block_height,
             asset_execution_compatibility,
             orchard_pool_paused,
-            egress_policies,
+            governance,
             archive_replay,
         );
     }
@@ -3725,7 +3790,7 @@ pub(super) fn execute_shielded_batch(
         block_height,
         asset_execution_compatibility,
         orchard_pool_paused,
-        egress_policies,
+        governance,
         archive_replay,
     );
     if receipts.iter().all(|receipt| receipt.accepted) {
@@ -3765,12 +3830,19 @@ pub(super) fn ensure_atomic_shielded_batch_accepted(
         ));
     }
     if let Some(receipt) = receipts.iter().find(|receipt| !receipt.accepted) {
+        // Earlier successful actions acquire rollback receipts. Preserve that
+        // status and report the action that caused the rollback as well.
+        let mut reason = receipt.code.clone();
+        if reason == "atomic_batch_aborted" {
+            if let Some(cause) = receipts.iter().find(|r| !r.accepted && r.code != reason) {
+                reason.push_str(" (");
+                reason.push_str(&cause.code);
+                reason.push(')');
+            }
+        }
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!(
-                "atomic shielded batch rejected before proposal: {}",
-                receipt.code
-            ),
+            format!("atomic shielded batch rejected before proposal: {reason}"),
         ));
     }
     Ok(())
@@ -3784,10 +3856,13 @@ fn execute_shielded_batch_actions(
     block_height: u64,
     asset_execution_compatibility: AssetExecutionCompatibility,
     orchard_pool_paused: bool,
-    egress_policies: &postfiat_types::AssetOrchardEgressPolicyRegistry,
+    governance: &GovernanceState,
     archive_replay: bool,
 ) -> Vec<Receipt> {
-    if orchard_pool_paused {
+    let isolated_pq_batch = batch.atomic && batch.actions.iter().all(
+        |action| matches!(action, ShieldedAction::PqPaymentV1(_)),
+    );
+    if orchard_pool_paused && !isolated_pq_batch {
         return batch
             .actions
             .iter()
@@ -3805,8 +3880,31 @@ fn execute_shielded_batch_actions(
     let genesis_hash_hex = genesis_hash(genesis);
     let debug_pool_enabled =
         debug_shielded_pool_enabled_for_chain(&genesis.chain_id, &genesis_hash_hex);
+    let egress_policies = governance.asset_orchard_egress_policy_registry();
     for (index, action) in batch.actions.iter().enumerate() {
         let receipt = match action {
+            ShieldedAction::PqPaymentV1(payment) if batch.atomic => {
+                pq_payment_actions::apply(
+                    genesis, &genesis_hash_hex, ledger, shielded, payment, block_height,
+                    asset_execution_compatibility, governance, &egress_policies,
+                )
+                .unwrap_or_else(|code| {
+                    Receipt::rejected(shielded_action_rejection_id(&batch.batch_id, index, code), code, code)
+                })
+            }
+            ShieldedAction::PqPaymentV1(_) => Receipt::rejected(
+                shielded_action_rejection_id(&batch.batch_id, index, "pq_settlement_inactive"),
+                "pq_settlement_inactive",
+                "PQ settlement awaits pool and account activation",
+            ),
+            ShieldedAction::PqFixtureHop { payment_hex } => {
+                match pq_payment_fixture::apply(&genesis_hash_hex, shielded, payment_hex) {
+                    Ok(id) => Receipt::accepted(id, "PFSH02 fixture hop"),
+                    Err(code) => Receipt::rejected(
+                        shielded_action_rejection_id(&batch.batch_id, index, code), code, code,
+                    ),
+                }
+            }
             ShieldedAction::Mint(action) => {
                 if !archive_replay {
                     legacy_cleartext_shielded_action_disabled_receipt(
@@ -3988,7 +4086,7 @@ fn execute_shielded_batch_actions(
                     block_height,
                     index,
                     action,
-                    egress_policies,
+                    &egress_policies,
                     archive_replay,
                 )
             }

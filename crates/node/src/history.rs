@@ -657,6 +657,7 @@ fn verify_history_rebuild_shadow(
         shadow_store.write_governance(state.governance)?;
         shadow_store.write_ledger(state.ledger)?;
         shadow_store.write_ordered_batches(state.ordered_batches)?;
+        postfiat_storage::pq_pool::audit(source_store.data_dir(), state.shielded, Some(&shadow_dir))?;
         shadow_store.write_shielded(state.shielded)?;
         shadow_store.write_bridge(state.bridge)?;
         shadow_store.write_blocks(state.blocks)?;
@@ -1256,7 +1257,7 @@ fn sorted_history_prune_receipt_ids(ids: HashSet<String>) -> Vec<String> {
 pub(super) fn read_history_checkpoint_state_optional(
     store: &NodeStore,
 ) -> io::Result<Option<HistoryCheckpointState>> {
-    let checkpoint = if store.transactional_storage_active()? {
+    let mut checkpoint: Option<HistoryCheckpointState> = if store.transactional_storage_active()? {
         store
             .transactional_store()?
             .current_state_raw("retained_history_checkpoint")?
@@ -1270,7 +1271,8 @@ pub(super) fn read_history_checkpoint_state_optional(
             Err(error) => return Err(error),
         }
     };
-    if let Some(checkpoint) = checkpoint.as_ref() {
+    if let Some(checkpoint) = checkpoint.as_mut() {
+        postfiat_storage::pq_pool::hydrate(store.data_dir(), &mut checkpoint.shielded)?;
         validate_history_checkpoint_state(store, checkpoint)?;
     }
     Ok(checkpoint)
@@ -1683,7 +1685,7 @@ fn build_history_checkpoint_state_from_sources(
         governance = GovernanceState::new(genesis.validator_count);
         ledger = genesis_ledger_state(&genesis, faucet_account)?;
         ordered_batches = Vec::new();
-        shielded = ShieldedState::empty();
+        shielded = pq_payment_fixture::genesis_shielded_state(&genesis)?;
         bridge = BridgeState::empty();
         registry_update_ids = HashSet::new();
     }

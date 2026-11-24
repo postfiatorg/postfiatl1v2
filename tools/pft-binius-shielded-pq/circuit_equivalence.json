@@ -1,0 +1,11 @@
+{
+  "z3_version": "5.4.1",
+  "z3_conservation_66bit_mint_unshield": "unsat",
+  "z3_merkle_mux_2bit": "unsat",
+  "z3_is_dummy_gating": "unsat",
+  "z3_chi_iota": "unsat",
+  "ltrp_basis_verified": 1600,
+  "keccak_56perm_dag_bits_covered": 2150400,
+  "group_c_3way_rust_go_python": 42444,
+  "group_abc_weights_rust_eq_go": true
+}
