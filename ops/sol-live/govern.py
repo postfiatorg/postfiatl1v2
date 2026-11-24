@@ -142,21 +142,31 @@ def allowed_quorums(kind, n=6, rules=None):
     return {required_signatures(kind, n, rules=rules)}
 
 
+class ReviewRefused(RuntimeError):
+    """A host's own reviewer refused to sign; its reason is reported, apart from unreachable hosts."""
+
+
 def collect(kind, step, n=6, need=None):
-    """Run `step` on every validator; keep going while the chain's quorum can still sign."""
+    """Run `step` on every validator; keep going while the chain's quorum can still sign. A host
+    whose reviewer refused is reported with its reason even when the others reach the quorum."""
     with ThreadPoolExecutor(n) as pool:
         futures = {i: pool.submit(step, i) for i in range(n)}
-    done, lost = {}, []
+    done, lost, refused = {}, [], []
     for i, future in futures.items():
         try:
             done[i] = future.result()
+        except ReviewRefused as error:
+            refused.append(f"validator-{i}: {error}")
         except Exception:
             lost.append(f"validator-{i}")
+    if refused:
+        print(f"{kind}: refused by its own reviewer: " + "; ".join(refused), flush=True)
     need = required_signatures(kind, n) if need is None else need
     if len(done) < need:
         raise RuntimeError(
             f"{kind}: {len(done)} of {n} validators available, {need} required; "
-            f"unavailable: {', '.join(lost)}"
+            f"unavailable: {', '.join(lost) or 'none'}"
+            + (f"; refused by its own reviewer: {'; '.join(refused)}" if refused else "")
         )
     return done
 
@@ -373,9 +383,15 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         if independent:
             # The host's own reviewer signs exactly the amendment it reviewed: it builds the
             # node's signing command itself and takes no command from this caller.
-            remote(i, ["runuser", "-u", "postfiat", "--", REVIEWER_PYTHON, "-I", REVIEWER, "sign",
-                       "--amendment-file", work[i] + "/amend", "--proposal-slot", h,
-                       "--expires-at-height", h + 30, "--authorization-file", work[i] + "/auth"])
+            try:
+                remote(i, ["runuser", "-u", "postfiat", "--", REVIEWER_PYTHON, "-I", REVIEWER, "sign",
+                           "--amendment-file", work[i] + "/amend", "--proposal-slot", h,
+                           "--expires-at-height", h + 30, "--authorization-file", work[i] + "/auth"])
+            except subprocess.CalledProcessError as error:
+                if error.returncode == 2:  # the reviewer's named refusal, not an unreachable host
+                    reason = ((error.stderr or "").strip().splitlines() or ["refused"])[-1]
+                    raise ReviewRefused(reason) from None
+                raise
             return get(i, "auth")
         tool(
             i,
