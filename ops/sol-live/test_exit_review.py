@@ -418,6 +418,32 @@ class SignCommandTest(unittest.TestCase):
         self.assertFalse(self.binary.with_name("argv.json").exists())
 
 
+class SigningConfigTest(unittest.TestCase):
+    """The signing step trusts the public key and the config only when the signing user cannot replace them."""
+
+    def test_a_public_key_or_config_the_signing_user_could_replace_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            etc = Path(d) / "etc"
+            etc.mkdir(mode=0o755)
+            etc.chmod(0o755)
+            config, public = etc / "sol-exit-review.json", etc / "sol-exit-review.pub"
+            config.write_text(json.dumps(dict(validator="validator-3", node=["127.0.0.1", 1], solana_rpc="https://x")))
+            public.write_text(str(HOST_KEY.pubkey()) + "\n")
+            for path in (config, public):
+                path.chmod(0o644)
+            cfg = rv.load_config(config, public=public, reviewer=False, owner=os.getuid())
+            self.assertEqual(cfg.public, HOST_KEY.pubkey())
+            with self.assertRaisesRegex(rv.Refused, "not owned by root"):
+                rv.load_config(config, public=public, reviewer=False, owner=4321)
+            etc.chmod(0o775)
+            with self.assertRaisesRegex(rv.Refused, "writable"):
+                rv.load_config(config, public=public, reviewer=False, owner=os.getuid())
+            etc.chmod(0o755)
+            public.chmod(0o666)
+            with self.assertRaisesRegex(rv.Refused, "writable"):
+                rv.load_config(config, public=public, reviewer=False, owner=os.getuid())
+
+
 class ConstantsAndClearanceTest(unittest.TestCase):
     def test_constants_equal_the_service_constants(self):
         import exit_payout
