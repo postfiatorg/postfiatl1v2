@@ -456,7 +456,7 @@ esac
   case $a in -o|-g) skip=1 ;; *) args+=("$a") ;; esac; done; exec /usr/bin/install "${args[@]}" """,
     "stat": r"""case "$*" in *fee-payer.json*) f=${@: -1}; echo "59900:$(/usr/bin/stat -c %a:%h "$f")" ;; *) exec /usr/bin/stat "$@" ;; esac""",
     "python3": r"""if [[ "$1 $2 $3" == "-I -m venv" ]]; then mkdir -p "$4/bin"; printf '#!/bin/bash\nexit 0\n' > "$4/bin/python"; chmod 755 "$4/bin/python"; exit 0; fi
-if [[ $2 == *exit_install_credential.py ]]; then exec /bin/cp "$3" "$4"; fi
+if [[ $2 == *exit_install_credential.py ]]; then exec /usr/bin/install -m600 "$3" "$4"; fi
 exec /usr/bin/python3 "$@" """,
 }
 for _name in ("cp", "ln", "mv", "chmod", "rm"):
