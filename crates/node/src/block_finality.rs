@@ -34,27 +34,27 @@ pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityRepo
     let tx_id = options.tx_id;
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let receipt_log = store.read_receipts()?;
-    let blocks = store.read_blocks()?;
+    let keyed = !options.audit_block_log && !archived_receipt_id_drift_possible(&genesis);
+    let history = match keyed {
+        true => keyed_finality_history(&store, &tx_id)?,
+        false => None,
+    };
+    let history = match history {
+        Some(history) => history,
+        None => full_finality_history(&store, &tx_id)?,
+    };
 
     let (receipt, block, receipt_index) = {
-        let matching_receipts = receipt_log
-            .iter()
-            .filter(|receipt| receipt.tx_id == tx_id)
-            .cloned()
-            .collect::<Vec<_>>();
+        let matching_receipts = &history.matching_receipts;
         if matching_receipts.is_empty() {
             return Err(tx_finality_transaction_not_found(&tx_id));
         }
 
-        let mut matches = Vec::new();
-        for block in &blocks.blocks {
-            for (index, receipt_id) in block.receipt_ids.iter().enumerate() {
-                if receipt_id == &tx_id {
-                    matches.push((block, index as u64));
-                }
-            }
-        }
+        let matches = history
+            .linking_blocks
+            .iter()
+            .map(|(block, index)| (block, *index))
+            .collect::<Vec<_>>();
         // A retried governance amendment keeps its id, so it may be linked
         // from several governance blocks: with one receipt per link
         // (transactional store) or one terminal receipt (legacy log). `tx`
@@ -110,23 +110,18 @@ pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityRepo
                 verification.state_root,
             )
         } else {
-            let tip_hash = blocks.tip_hash();
-            let tip_state_root = blocks
-                .blocks
-                .last()
-                .map(|block| block.header.state_root.clone())
-                .unwrap_or_default();
             (
                 "selected-block-hot-path".to_string(),
                 false,
-                blocks.len() as u64,
-                tip_hash,
-                tip_state_root,
+                history.block_count,
+                history.tip_hash.clone(),
+                history.tip_state_root.clone(),
             )
         };
 
     let proof_id = tx_finality_proof_id(&genesis, &receipt, receipt_index, &block)?;
-    let transaction_rows = tx_finality_transaction_rows(&store, &block, &receipt_log, &tx_id);
+    let transaction_rows =
+        tx_finality_transaction_rows(&store, &block, &tx_id, |block| history.receipts_of(block));
     Ok(TxFinalityReport {
         schema: "postfiat-tx-finality-v1".to_string(),
         proof_id,
@@ -148,6 +143,135 @@ pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityRepo
     })
 }
 
+/// What `tx` reads from the retained history: the receipts of the
+/// transaction in block order, every block that links it with the receipt's
+/// index there, and the retained tip.
+struct FinalityHistory {
+    matching_receipts: Vec<Receipt>,
+    linking_blocks: Vec<(BlockRecord, u64)>,
+    block_count: u64,
+    tip_hash: String,
+    tip_state_root: String,
+    /// The whole receipt log when it was read; `None` on the keyed path.
+    receipt_log: Option<Vec<Receipt>>,
+    store: Option<std::sync::Arc<postfiat_storage::TransactionalStore>>,
+}
+
+impl FinalityHistory {
+    /// The latest receipt of each transaction in `block`, keyed by `tx_id`.
+    fn receipts_of(&self, block: &BlockRecord) -> io::Result<HashMap<String, Receipt>> {
+        let block_receipt_ids = block
+            .receipt_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<HashSet<_>>();
+        if let Some(receipt_log) = &self.receipt_log {
+            return Ok(receipt_log
+                .iter()
+                .filter(|receipt| block_receipt_ids.contains(receipt.tx_id.as_str()))
+                .map(|receipt| (receipt.tx_id.clone(), receipt.clone()))
+                .collect());
+        }
+        let store = self
+            .store
+            .as_ref()
+            .ok_or_else(|| io::Error::other("keyed finality history has no store"))?;
+        let mut receipts = HashMap::new();
+        for receipt_id in block_receipt_ids {
+            if let Some(receipt) = store.receipts_for_tx_id(receipt_id)?.pop() {
+                receipts.insert(receipt.tx_id.clone(), receipt);
+            }
+        }
+        Ok(receipts)
+    }
+}
+
+/// The finality inputs from the whole block and receipt history.
+fn full_finality_history(store: &NodeStore, tx_id: &str) -> io::Result<FinalityHistory> {
+    let receipt_log = store.read_receipts()?;
+    let blocks = store.read_blocks()?;
+    let matching_receipts = receipt_log
+        .iter()
+        .filter(|receipt| receipt.tx_id == tx_id)
+        .cloned()
+        .collect();
+    let mut linking_blocks = Vec::new();
+    for block in &blocks.blocks {
+        for (index, receipt_id) in block.receipt_ids.iter().enumerate() {
+            if receipt_id == tx_id {
+                linking_blocks.push((block.clone(), index as u64));
+            }
+        }
+    }
+    Ok(FinalityHistory {
+        matching_receipts,
+        linking_blocks,
+        block_count: blocks.len() as u64,
+        tip_hash: blocks.tip_hash(),
+        tip_state_root: blocks
+            .blocks
+            .last()
+            .map(|block| block.header.state_root.clone())
+            .unwrap_or_default(),
+        receipt_log: Some(receipt_log),
+        store: None,
+    })
+}
+
+/// The same inputs by key: the transaction's receipt record, the blocks at
+/// its heights and the tip block. `None` unless transactional storage is
+/// active. Exact under the rule of `receipts_for_tx_id`, which the caller
+/// checks (no audit replay asked for, no chain with receipt-id drift).
+fn keyed_finality_history(store: &NodeStore, tx_id: &str) -> io::Result<Option<FinalityHistory>> {
+    if !store.transactional_storage_active()? {
+        return Ok(None);
+    }
+    let transactional = store.transactional_store()?;
+    let occurrences = transactional.receipt_occurrences_for_tx_id(tx_id)?;
+    let mut linking_blocks = Vec::new();
+    let mut heights = occurrences.iter().map(|(height, _)| *height).collect::<Vec<_>>();
+    heights.dedup();
+    for height in heights {
+        let block = transactional.block(height)?.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("canonical block {height} is missing"),
+            )
+        })?;
+        for (index, receipt_id) in block.receipt_ids.iter().enumerate() {
+            if receipt_id == tx_id {
+                linking_blocks.push((block.clone(), index as u64));
+            }
+        }
+    }
+    let meta = transactional.meta()?;
+    let block_count = meta
+        .finalized_height
+        .checked_sub(meta.history_base_height)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid history range"))?;
+    let (tip_hash, tip_state_root) = match block_count {
+        0 => ("genesis".to_string(), String::new()),
+        _ => {
+            let tip = transactional.block(meta.finalized_height)?.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("canonical block {} is missing", meta.finalized_height),
+                )
+            })?;
+            (tip.header.block_hash, tip.header.state_root)
+        }
+    };
+    Ok(Some(FinalityHistory {
+        matching_receipts: occurrences.into_iter().map(|(_, receipt)| receipt).collect(),
+        linking_blocks,
+        block_count,
+        tip_hash,
+        tip_state_root,
+        receipt_log: None,
+        store: Some(transactional),
+    }))
+}
+
 /// The `account_tx` rows of `tx_id`, decoded from the archived batch of the
 /// block that finalized it. This is a read-only decoration of the finality
 /// report: any failure to read or decode the archived batch (for example a
@@ -155,8 +279,8 @@ pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityRepo
 fn tx_finality_transaction_rows(
     store: &NodeStore,
     block: &BlockRecord,
-    receipts: &[Receipt],
     tx_id: &str,
+    receipts_of: impl FnOnce(&BlockRecord) -> io::Result<HashMap<String, Receipt>>,
 ) -> Vec<AccountTxRow> {
     if !account_tx_indexes_batch_kind(&block.header.batch_kind) {
         return Vec::new();
@@ -164,15 +288,12 @@ fn tx_finality_transaction_rows(
     let Ok(Some(archive_entry)) = read_archived_batch_for_block(store, block) else {
         return Vec::new();
     };
-    let block_receipt_ids = block
-        .receipt_ids
-        .iter()
-        .map(String::as_str)
-        .collect::<HashSet<_>>();
+    let Ok(receipts) = receipts_of(block) else {
+        return Vec::new();
+    };
     let receipt_by_tx = receipts
         .iter()
-        .filter(|receipt| block_receipt_ids.contains(receipt.tx_id.as_str()))
-        .map(|receipt| (receipt.tx_id.as_str(), receipt))
+        .map(|(tx_id, receipt)| (tx_id.as_str(), receipt))
         .collect::<HashMap<_, _>>();
     account_tx_rows_for_archived_block(block, &archive_entry, &receipt_by_tx)
         .map(|rows| rows.into_iter().filter(|row| row.tx_id == tx_id).collect())
