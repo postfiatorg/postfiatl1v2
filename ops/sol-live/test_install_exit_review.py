@@ -114,13 +114,27 @@ class InstallTest(unittest.TestCase):
                 if key.exists():
                     self.assertEqual(key.stat().st_mode & 0o077, 0, "never readable by others")
 
-    def test_the_runbook_install_commands_copy_the_archive_and_the_script_separately(self):
+    def test_the_runbook_install_commands_work_in_a_temporary_root(self):
         text = (HERE / "RUNBOOK-LIVE.md").read_text().split("### Independent settlement reviews", 1)[1]
         block = text.split("```bash", 1)[1].split("```", 1)[0]
-        self.assertIn("git archive -o exit-review.tar", block)
-        self.assertIn("scp exit-review.tar ops/sol-live/install-exit-review.sh", block)
-        self.assertIn("bash /root/install-exit-review.sh validator-<i>", block)
         self.assertNotIn("< ops/sol-live/install-exit-review.sh", block)
+        self.addCleanup(lambda: (HERE.parents[1] / "exit-review.tar").unlink(missing_ok=True))
+        with tempfile.TemporaryDirectory() as d:
+            host = Host(d)
+            (host.root / "root").mkdir()
+            # scp copies into the host's /root; ssh runs the command on the "host" (the temporary root).
+            (host.bin / "scp").write_text('#!/bin/bash\nfor a in "${@:1:$#-1}"; do cp "$a" "$INSTALL_ROOT/root/"; done\n')
+            (host.bin / "ssh").write_text('#!/bin/bash\nshift\nexec bash -c "${*//\\/root\\//$INSTALL_ROOT/root/}"\n')
+            for name in ("scp", "ssh"):
+                (host.bin / name).chmod(0o755)
+            env = dict(os.environ, PATH=f"{host.bin}:{os.environ['PATH']}", LOG=str(host.log), STATE=str(host.d),
+                       REAL_PYTHON=sys.executable, INSTALL_ROOT=str(host.root), COMMIT="HEAD", HOST="validator-host",
+                       VALIDATOR="validator-3", PORT="27653", URL="https://solana.example/host-3")
+            result = subprocess.run(["bash", "-euo", "pipefail", "-c", block], cwd=HERE.parents[1], env=env,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Reviewer installed for validator-3", result.stdout)
+            self.assertTrue((host.root / "opt/postfiat/sol-exit-review/exit_review.py").exists())
 
 
 if __name__ == "__main__":

@@ -483,12 +483,12 @@ Under the second release, five of six signatures decide paid, close, re-open and
 
 `exit_review.py show-clearance` gives that host's own sealed rotation clearance for an opening or re-opening. A first-release chain keeps the go-live review files and six signatures. The go-live tools `operator/settle.py` (now only with `--single-owner-fleet`) and `operator/clearance.py` write those files from the relay host, and the reviewer replaces them. Update `settle.py` and `settler.sh` together: without the flag `settle.py` exits and prints the command to run, and `settler.sh` prints an `ALERT` line for any failed settle.
 
-**Install, one host at a time.** Copy the archive and the script to the host, then run the script there as root:
+**Install, one host at a time.** Set `COMMIT` (the reviewed commit), `HOST`, `VALIDATOR` (`validator-0` to `validator-5`), `PORT` (that node's RPC port) and `URL` (that host's own Solana RPC URL). Copy the archive and the script to the host, then run the script there as root:
 
 ```bash
-git archive -o exit-review.tar <reviewed commit> ops/sol-live
-scp exit-review.tar ops/sol-live/install-exit-review.sh root@<host>:/root/
-ssh root@<host> bash /root/install-exit-review.sh validator-<i> <node RPC port> <this host's Solana RPC URL> /root/exit-review.tar
+git archive -o exit-review.tar "$COMMIT" ops/sol-live
+scp exit-review.tar ops/sol-live/install-exit-review.sh "root@$HOST:/root/"
+ssh "root@$HOST" bash /root/install-exit-review.sh "$VALIDATOR" "$PORT" "$URL" /root/exit-review.tar
 ```
 
 The script needs Python 3.10 or newer and `setfacl` (the `acl` package). Any failed step stops it with its reason. It installs:
@@ -500,10 +500,10 @@ The script needs Python 3.10 or newer and `setfacl` (the `acl` package). Any fai
 
 The script runs the first review and stops if it ends in an RPC or access error.
 
-**Check the six providers.** Use at least three different Solana providers across the six hosts. This prints each host's provider (host name only) and warns when fewer than three differ:
+**Check the six providers.** Use at least three different Solana providers across the six hosts. With `HOSTS` set to the six hosts, this prints each host's provider (host name only) and warns when fewer than three differ:
 
 ```bash
-for h in <six hosts>; do ssh root@$h cat /etc/postfiat/sol-exit-review.json; echo; done | python3 ops/sol-live/exit_review.py endpoints
+for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; done | python3 ops/sol-live/exit_review.py endpoints
 ```
 
 **What stays open.**
