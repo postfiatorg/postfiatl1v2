@@ -101,23 +101,103 @@ class RecoveryTest(unittest.TestCase):
             self.assertEqual(j.pending(), second)
             self.assertEqual(j.get(BURN)["stage"], "queued")
 
-    def test_a_reply_too_large_is_filed_with_its_reason_not_retried(self):
+    @staticmethod
+    def too_large(method):
+        return svc.ReplyTooLarge(
+            f"0 {method}: rpc response of 5000000 bytes exceeds the 4194304-byte frame limit", method=method
+        )
+
+    @staticmethod
+    def row(j, burn):
+        with closing(j.connect()) as db:
+            return db.execute("SELECT * FROM jobs WHERE burn_tx_id=?", (burn,)).fetchone()
+
+    @staticmethod
+    def make_due(j):
+        with closing(j.connect()) as db, db:
+            db.execute("UPDATE jobs SET due=0")
+
+    def test_a_reply_too_large_waits_longer_each_time_and_fails_only_at_the_bound(self):
+        import io
+        import time
+        from contextlib import redirect_stdout
         with tempfile.TemporaryDirectory() as d:
             j = svc.Journal(Path(d) / "db")
             j.enqueue(BURN)
-            too_large = svc.ReplyTooLarge(
-                "0 pfusdc_egress_witness: rpc response of 5000000 bytes exceeds the 4194304-byte frame limit"
-            )
-            with patch.object(svc, "process", side_effect=too_large):
+            waits, out = [], io.StringIO()
+            with patch.object(svc, "process", side_effect=self.too_large("pfusdc_egress_witness")), redirect_stdout(out):
+                for _ in range(svc.TOO_LARGE_TRIES):
+                    self.assertTrue(svc.process_next(j, Path(d)))
+                    row = self.row(j, BURN)
+                    self.assertEqual(row["stage"], "queued")
+                    waits.append(row["due"] - int(time.time()))
+                    # The job API shows why it waits.
+                    self.assertEqual(j.get(BURN)["detail"], svc.TOO_LARGE_DETAIL)
+                    self.assertIsNone(j.pending(), "not retried at full speed")
+                    self.make_due(j)
                 svc.process_next(j, Path(d))
-            with closing(j.connect()) as db:
-                stage, error = db.execute("SELECT stage, error FROM jobs WHERE burn_tx_id=?", (BURN,)).fetchone()
-            self.assertEqual(stage, "failed")
-            self.assertIn("Node reply too large", error)
-            self.assertIn("4194304-byte frame limit", error)
-            self.assertIsNone(j.pending())
-            # A later submission of the burn queues it again.
+            self.assertTrue(all(abs(w - e) <= 2 for w, e in zip(waits, [300, 600, 1200, 2400, 4800, 9600])), waits)
+            self.assertEqual(max(waits), svc.TOO_LARGE_CAP)
+            self.assertEqual(waits, sorted(waits))
+            row = self.row(j, BURN)
+            self.assertEqual(row["stage"], "failed")
+            self.assertIn("Node reply too large", row["error"])
+            alerts = [line for line in out.getvalue().splitlines() if line.startswith("ALERT")]
+            self.assertEqual(len(alerts), 2, alerts)  # the first wait and the final failure, not one per attempt
+            self.assertIn("retrying with a growing wait", alerts[0])
+            self.assertIn("filed as failed", alerts[1])
+            # A later submission queues it again with a fresh count.
             self.assertEqual(j.enqueue(BURN)["stage"], "queued")
+            self.assertEqual(self.row(j, BURN)["too_large"], 0)
+
+    def test_a_reply_too_large_is_retried_by_itself_once_the_cause_is_gone(self):
+        with tempfile.TemporaryDirectory() as d:
+            j = svc.Journal(Path(d) / "db")
+            j.enqueue(BURN)
+            with patch.object(svc, "process", side_effect=self.too_large("batch_archive")):
+                svc.process_next(j, Path(d))
+            self.make_due(j)
+            with patch.object(svc, "process") as fits:
+                self.assertTrue(svc.process_next(j, Path(d)))
+            fits.assert_called_once()
+            self.assertEqual(self.row(j, BURN)["too_large"], 0)
+
+    def test_a_too_large_status_read_is_one_fault_of_the_read_not_every_burn(self):
+        import io
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as d:
+            j = svc.Journal(Path(d) / "db")
+            second = "01" * 48
+            j.enqueue(BURN)
+            j.enqueue(second)
+            out = io.StringIO()
+            with patch.object(svc, "process", side_effect=self.too_large("vault_bridge_status")) as status, \
+                    redirect_stdout(out):
+                self.assertTrue(svc.process_next(j, Path(d)))
+                # While the status read waits, no burn is tried.
+                for _ in range(3):
+                    self.make_due(j)
+                    self.assertFalse(svc.process_next(j, Path(d)))
+                self.assertEqual(status.call_count, 1)
+                # Its wait grows too; the burns are never counted or filed.
+                j.status_fault["until"] = 0
+                self.make_due(j)
+                svc.process_next(j, Path(d))
+                self.assertEqual(j.status_fault["tries"], 2)
+            for burn in (BURN, second):
+                row = self.row(j, burn)
+                self.assertEqual((row["stage"], row["too_large"]), ("queued", 0))
+            self.assertEqual(j.get(BURN)["detail"], svc.STATUS_TOO_LARGE_DETAIL)
+            alerts = [line for line in out.getvalue().splitlines() if line.startswith("ALERT")]
+            self.assertEqual(len(alerts), 1, alerts)
+            self.assertIn("vault_bridge_status", alerts[0])
+            self.assertNotIn(BURN, alerts[0])
+            # Once the read fits again the fault clears.
+            j.status_fault["until"] = 0
+            self.make_due(j)
+            with patch.object(svc, "process"):
+                svc.process_next(j, Path(d))
+            self.assertIsNone(j.status_fault)
 
     def test_public_paid_status_is_reconciled_and_can_be_rebuilt(self):
         with tempfile.TemporaryDirectory() as d:
