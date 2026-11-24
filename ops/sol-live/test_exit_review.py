@@ -201,6 +201,80 @@ class SignTest(unittest.TestCase):
             rv.authorize(self.cfg, dict(self.amend(), value=0))
 
 
+FAKE_NODE = """#!/usr/bin/env python3
+import json, sys
+from pathlib import Path
+args = sys.argv[1:]
+flag = {args[k]: args[k + 1] for k in range(len(args) - 1) if args[k].startswith("--")}
+Path(sys.argv[0]).with_name("argv.json").write_text(json.dumps(sys.argv))
+if Path(sys.argv[0]).with_name("mutate").exists():
+    Path(flag["--amendment-file"]).write_text(json.dumps(dict(kind="solana_exit_r8_paid:OTHER", value=1, paused=False)))
+Path(flag["--authorization-file"]).write_text("auth")
+"""
+
+
+class SignCommandTest(unittest.TestCase):
+    """`sign` runs the node's own signing command for exactly the reviewed amendment file."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.data = root / "var/lib/postfiat/validator-3"
+        (self.data / "sol-live/round").mkdir(parents=True)
+        self.binary = root / "opt/postfiat/releases/r1/postfiat-node"
+        self.binary.parent.mkdir(parents=True)
+        self.binary.write_text(FAKE_NODE)
+        self.binary.chmod(0o755)
+        proc = root / "proc/4242"
+        proc.mkdir(parents=True)
+        (proc / "cmdline").write_bytes("\0".join([str(self.binary), "transport-validator-serve", "--data-dir",
+                                                    str(self.data), "--topology", "t"]).encode() + b"\0")
+        self.cfg = rv.Config(validator="validator-3", node=Node(), solana=Solana(), review_dir=root / "review",
+                             key=b"k" * 32, data_dir=self.data, proc=root / "proc",
+                             releases=root / "opt/postfiat/releases")
+        self.assertEqual(rv.run_review(self.cfg, "paid", BURN), 0)
+        self.amend = self.data / "sol-live/round/amend"
+        self.amend.write_text(json.dumps(dict(kind=PAID_KIND, value=1, paused=False, activation_height=1901)))
+        self.auth = self.data / "sol-live/round/auth"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_signs_exactly_the_reviewed_file_with_its_own_command(self):
+        rv.sign(self.cfg, self.amend, 1901, 1931, self.auth)
+        argv = json.loads(self.binary.with_name("argv.json").read_text())
+        self.assertEqual(argv, [str(self.binary), "governance-authorization-sign", "--data-dir", str(self.data),
+                                "--amendment-file", str(self.amend), "--validator", "validator-3",
+                                "--validator-key-file", str(self.data / "validator_keys.json"),
+                                "--proposal-slot", "1901", "--expires-at-height", "1931",
+                                "--authorization-file", str(self.auth)])
+        self.assertEqual(self.auth.read_text(), "auth")
+
+    def test_a_caller_supplied_command_or_any_other_argument_is_refused(self):
+        for extra in (["--", "/bin/echo", "signed"], ["--validator-key-file", "/tmp/k"], ["extra"]):
+            with self.subTest(extra=extra), self.assertRaises(SystemExit) as stop:
+                rv.main(["sign", "--amendment-file", str(self.amend), "--proposal-slot", "1901",
+                         "--expires-at-height", "1931", "--authorization-file", str(self.auth), *extra])
+            self.assertEqual(stop.exception.code, 2)
+        self.assertFalse(self.binary.with_name("argv.json").exists())
+
+    def test_an_amendment_changed_while_it_is_signed_is_refused_and_its_signature_removed(self):
+        self.binary.with_name("mutate").write_text("")
+        with self.assertRaisesRegex(rv.Refused, "changed"):
+            rv.sign(self.cfg, self.amend, 1901, 1931, self.auth)
+        self.assertFalse(self.auth.exists())
+
+    def test_an_unreviewed_amendment_or_a_file_outside_the_data_directory_is_refused(self):
+        self.amend.write_text(json.dumps(dict(kind=REFUND_KIND, value=1, paused=False)))
+        with self.assertRaisesRegex(rv.Refused, "no review"):
+            rv.sign(self.cfg, self.amend, 1901, 1931, self.auth)
+        outside = Path(self.tmp.name) / "amend"
+        outside.write_text(json.dumps(dict(kind=PAID_KIND, value=1, paused=False)))
+        with self.assertRaisesRegex(rv.Refused, "data directory"):
+            rv.sign(self.cfg, outside, 1901, 1931, self.auth)
+        self.assertFalse(self.binary.with_name("argv.json").exists())
+
+
 class ConstantsAndClearanceTest(unittest.TestCase):
     def test_constants_equal_the_service_constants(self):
         import exit_payout
