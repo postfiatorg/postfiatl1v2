@@ -5,7 +5,8 @@ out of credit. `ops/b24-live/prover_credit.py` reports before that happens, thro
 as the daily B24 reading (`B24_READING_NOTIFY`, sent by `ops/b24-live/reading_alert.py`).
 
 Every 15 minutes it reads the account credit (`vastai show user --raw`) and the hourly cost of the
-running instances (`vastai show instances --raw`, sum of `dph_total`), and divides one by the other.
+instances (`vastai show instances --raw`: `dph_total` of each running instance, which includes its
+storage, plus `storage_total_cost` of each stopped one), and divides one by the other.
 It reports once when the hours left fall under 24, and once more, marked URGENT, under 6. A top-up
 above 24 hours re-arms both. If the credit cannot be read, it reports that once and exits with
 status 1 until a read succeeds. A reply of an unexpected shape counts the same: no `credit` field
@@ -55,5 +56,7 @@ URGENT: proving hosts stop in about 5.0 h: Vast credit 30.00 USD at 6.00 USD/h f
 Proving hosts: Vast credit could not be read (vastai user exited 1: …); the reading is not usable and the low-credit alert is blind until it can (…)
 ```
 
-The hourly cost counts running instances only. Storage on stopped instances is not counted.
+A stopped instance is billed for its disk until it is destroyed, so it counts with its
+`storage_total_cost`; all instances stopped with the credit nearly gone still reports. A stopped
+instance without that field makes the reading not usable.
 Credit at or below zero counts as zero hours left.

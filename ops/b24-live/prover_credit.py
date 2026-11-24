@@ -3,11 +3,12 @@
 
 Every 15 minutes (prover-credit-alert.timer): read the account's remaining
 credit (`vastai show user --raw`) and the hourly cost of its instances
-(`vastai show instances --raw`, sum of `dph_total`), and report through the
-B24 reading's hook (reading_alert.notify, B24_READING_NOTIFY) when the hours
-left fall under --warn-hours (24) and again, louder, under --urgent-hours (6).
-Each crossing is reported once; a credit that cannot be read is reported once
-until it can be read again. The Vast CLI reads its own key file; this script
+(`vastai show instances --raw`: `dph_total` of running instances plus
+`storage_total_cost` of stopped ones), and report through the B24 reading's
+hook (reading_alert.notify, B24_READING_NOTIFY) when the hours left fall under
+--warn-hours (24) and again, louder, under --urgent-hours (6). Each crossing is
+reported once it is delivered; a credit that cannot be read is reported once,
+and again every 6 hours while it stays unreadable. The Vast CLI reads its own key file; this script
 reads that file only to strip the key from anything it prints or sends.
 Standard library only, so it runs with `python3 -I` like the failure hook.
 """
@@ -55,7 +56,9 @@ def vastai(*args):
 def number(value):return isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value)
 
 def read_credit(run=vastai):
-    """Return (credit in USD, spend in USD per hour, running instance count).
+    """Return (credit in USD, spend in USD per hour, running count, stopped count billed for storage).
+    A running instance costs its `dph_total` (storage included); any other instance still costs its
+    `storage_total_cost` (USD per hour) until it is destroyed.
     A reply of any other shape raises, so it is reported as not usable, never as endless hours."""
     user=run('show','user')
     # `credit` only: nothing in the Vast CLI's documentation says `balance` means the same.
@@ -63,19 +66,24 @@ def read_credit(run=vastai):
     if not number(credit):raise RuntimeError('vastai show user: no credit field')
     instances=run('show','instances')
     if not isinstance(instances,list) or not all(isinstance(i,dict) for i in instances):raise RuntimeError('vastai show instances: not a list of instances')
-    live=[i for i in instances if RUNNING&{i.get('actual_status'),i.get('intended_status'),i.get('cur_state')}]
-    for i in live:
-        if not number(i.get('dph_total')) or i['dph_total']<=0:raise RuntimeError(f"vastai show instances: running instance {i.get('id','?')} has no positive dph_total")
-    return float(credit),sum(float(i['dph_total']) for i in live),len(live)
+    spend,count,stored=0.0,0,0
+    for i in instances:
+        if RUNNING&{i.get('actual_status'),i.get('intended_status'),i.get('cur_state')}:
+            if not number(i.get('dph_total')) or i['dph_total']<=0:raise RuntimeError(f"vastai show instances: running instance {i.get('id','?')} has no positive dph_total")
+            spend,count=spend+i['dph_total'],count+1
+        else:
+            if not number(i.get('storage_total_cost')) or i['storage_total_cost']<0:raise RuntimeError(f"vastai show instances: stopped instance {i.get('id','?')} has no storage_total_cost")
+            spend,stored=spend+i['storage_total_cost'],stored+(i['storage_total_cost']>0)
+    return float(credit),float(spend),count,stored
 
 def level(hours,warn,urgent):
     return 'urgent' if hours<urgent else 'warn' if hours<warn else 'ok'
 
-def message(kind,credit=0,spend=0,count=0,hours=0,warn=24,urgent=6,error=''):
+def message(kind,credit=0,spend=0,count=0,hours=0,warn=24,urgent=6,error='',stored=0):
     if kind=='unreadable':return f'Proving hosts: Vast credit could not be read ({error}); the reading is not usable and the low-credit alert is blind until it can ({utc_now()})'
     head='URGENT: proving hosts stop' if kind=='urgent' else 'Proving hosts stop'
     limit=urgent if kind=='urgent' else warn
-    return f'{head} in about {hours:.1f} h: Vast credit {credit:.2f} USD at {spend:.2f} USD/h for {count} running instance(s), under the {limit:g} h limit. Top up the Vast account ({utc_now()})'
+    return f'{head} in about {hours:.1f} h: Vast credit {credit:.2f} USD at {spend:.2f} USD/h for {count} running instance(s){f' and {stored} stopped instance(s) billed for storage' if stored else ''}, under the {limit:g} h limit. Top up the Vast account ({utc_now()})'
 
 def load(path):
     try:state=json.loads(path.read_text())
@@ -91,7 +99,7 @@ def check(warn=24.0,urgent=6.0,state_path=STATE,run=vastai,send=notify):
     """One run: returns the state written. A report counts as made only when delivered;
     an undelivered report stays pending for the next run and the run fails (ok=False)."""
     state=load(state_path)
-    try:credit,spend,count=read_credit(run)
+    try:credit,spend,count,stored=read_credit(run)
     except Exception as error:
         line=message('unreadable',error=redact(str(error))[:300])
         if not state['unreadable']:
@@ -101,10 +109,10 @@ def check(warn=24.0,urgent=6.0,state_path=STATE,run=vastai,send=notify):
         write(state_path,state);return dict(state,ok=False)
     state['unreadable']=False
     hours=0.0 if credit<=0 else float('inf') if spend<=0 else credit/spend
-    now=level(hours,warn,urgent);summary=f'credit {credit:.2f} USD, spend {spend:.2f} USD/h, {count} running, {hours:.1f} h left, level {now}'
+    now=level(hours,warn,urgent);summary=f'credit {credit:.2f} USD, spend {spend:.2f} USD/h, {count} running, {stored} stopped billed for storage, {hours:.1f} h left, level {now}'
     ok=True
     if LEVELS.index(now)>LEVELS.index(state['level']):
-        result=send(message(now,credit,spend,count,hours,warn,urgent))
+        result=send(message(now,credit,spend,count,hours,warn,urgent,stored=stored))
         if not delivered(result):now,ok=state['level'],False
         summary+=f'; notification {result}'
     print(summary)
