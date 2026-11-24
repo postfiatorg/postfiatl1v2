@@ -510,7 +510,7 @@ done
 # The live tree is a root-owned symlink into $trees, or a directory from an installer before it.
 if [[ -L $app ]]; then [[ $(readlink -- "$app") == "$trees"/* ]]; fi
 state=$(systemctl list-unit-files --type=service --no-legend --no-pager | awk -v unit="$unit" '$1 == unit {print $2}')
-if [[ -n $state && $state != disabled ]]; then
+if ! [[ -z $state || $state == disabled ]]; then
     echo "$unit is $state; it must be disabled or absent before installing." >&2
     exit 1
 fi
