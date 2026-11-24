@@ -3251,6 +3251,9 @@ impl VaultBridgeRedemption {
             return Err("vault_bridge_redemption.settled_atoms exceeds amount_atoms".to_string());
         }
         validate_vault_bridge_redemption_state(&self.state)?;
+        if self.state == VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED && self.settled_atoms != 0 {
+            return Err("vault_bridge_redemption refunded state requires settled_atoms == 0".to_string());
+        }
         if self.state == VAULT_BRIDGE_REDEMPTION_STATE_SETTLED
             && self.settled_atoms != self.amount_atoms
         {

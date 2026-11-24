@@ -40,15 +40,18 @@ pub(super) fn second_release(genesis: &Genesis, height: u64) -> bool {
     solana_exit::second_release_active(&genesis.chain_id, &genesis_hash(genesis), height)
 }
 
-/// The minimum-withdrawal kind exists only where the second release is active at the block
-/// that includes it, whatever its activation height; elsewhere it is refused with the first
-/// release's text for an unknown kind.
+/// The minimum-withdrawal and refund kinds exist only where the second release is active at
+/// the block that includes them, whatever their activation height; elsewhere they are refused
+/// with the first release's text for an unknown kind.
 pub(super) fn refuse_unreleased_kind(
     genesis: &Genesis,
     amendment: &GovernanceAmendment,
     height: u64,
 ) -> io::Result<()> {
-    if amendment.kind.starts_with(solana_exit::MIN_WITHDRAWAL) && !second_release(genesis, height) {
+    if (amendment.kind.starts_with(solana_exit::MIN_WITHDRAWAL)
+        || amendment.kind.starts_with(solana_exit::REFUND))
+        && !second_release(genesis, height)
+    {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("unsupported governance amendment kind `{}`", amendment.kind),
@@ -190,6 +193,8 @@ pub(super) fn validate_decision(
         }
     } else if amendment.kind.starts_with(solana_exit::MIN_WITHDRAWAL) {
         solana_exit::minimum_withdrawal(&amendment.kind)?;
+    } else if amendment.kind.starts_with(solana_exit::REFUND) {
+        solana_exit::refund_fields(&amendment.kind)?;
     } else {
         solana_exit::payout_fields(&amendment.kind)?;
     }
@@ -242,6 +247,17 @@ pub(super) fn apply_decision(
     }
     if amendment.kind == solana_exit::CLOSE || amendment.kind.starts_with(solana_exit::MIN_WITHDRAWAL) {
         return Ok(());
+    }
+    if amendment.kind.starts_with(solana_exit::REFUND) {
+        // Each signer read this burn's marker as cancelled at the finalized slot.
+        let cancelled = solana_exit::refund_fields(&amendment.kind)?;
+        return postfiat_execution::refund_cancelled_solana_burn(
+            ledger.ok_or("Solana refund requires canonical ledger")?,
+            &genesis.chain_id,
+            cancelled.packet_hash,
+            &amendment.amendment_id,
+            height,
+        );
     }
     let payout = solana_exit::payout_fields(&amendment.kind)?;
     if governance

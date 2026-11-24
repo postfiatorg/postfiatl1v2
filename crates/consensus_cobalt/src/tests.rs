@@ -5048,6 +5048,38 @@
     }
 
     #[test]
+    fn solana_exit_refund_kind_is_signable_only_under_the_second_release() {
+        let validators: Vec<String> = (0..6).map(|i| format!("validator-{i}")).collect();
+        let config = EssentialSubsetConfig { validators: validators.clone(), quorum: 5 };
+        let domain = CobaltDomain {
+            chain_id: "postfiat-wan-devnet-2".into(),
+            genesis_hash: "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9".into(),
+            protocol_version: 1,
+        };
+        let kind = format!(
+            "{}{}:473300000:{}",
+            postfiat_types::solana_exit::REFUND,
+            "ab".repeat(48),
+            "cd".repeat(64)
+        );
+        let ratify = |height| {
+            let lifecycle = GovernanceAmendmentLifecycle {
+                activation_height: height,
+                ..GovernanceAmendmentLifecycle::immediate()
+            };
+            ratify_governance_amendment_with_lifecycle(&domain, &config, &kind, 1, validators[..5].to_vec(), lifecycle)
+                .map(|_| ())
+        };
+        let unknown = Err(format!("unsupported governance amendment kind `{kind}`"));
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        assert_eq!(ratify(1900), unknown);
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(1900));
+        assert_eq!(ratify(1899), unknown);
+        assert_eq!(ratify(1900), Ok(()));
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+    }
+
+    #[test]
     fn solana_exit_minimum_kind_is_signable_only_under_the_second_release() {
         let validators: Vec<String> = (0..6).map(|i| format!("validator-{i}")).collect();
         let config = EssentialSubsetConfig { validators: validators.clone(), quorum: 5 };

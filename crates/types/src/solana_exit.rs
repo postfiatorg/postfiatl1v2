@@ -153,7 +153,12 @@ pub const DEFAULT_MIN_WITHDRAWAL_ATOMS: u64 = 300_000;
 /// A re-opening after a close uses the close quorum (`required_quorum`).
 /// The first release needs every validator for every decision.
 pub fn decision_quorum(kind: &str, validator_count: usize, second: bool) -> usize {
-    if second && (kind == CLOSE || kind.starts_with(PAID) || kind.starts_with(MIN_WITHDRAWAL)) {
+    if second
+        && (kind == CLOSE
+            || kind.starts_with(PAID)
+            || kind.starts_with(MIN_WITHDRAWAL)
+            || kind.starts_with(REFUND))
+    {
         external_lane_amendment_threshold(validator_count)
     } else {
         validator_count
@@ -196,7 +201,7 @@ pub fn closed_since_registration(g: &GovernanceState) -> bool {
 pub fn is_decision(kind: &str, second: bool) -> bool {
     matches!(kind, OPEN | CLOSE | RETIRE)
         || kind.starts_with(PAID)
-        || (second && kind.starts_with(MIN_WITHDRAWAL))
+        || (second && (kind.starts_with(MIN_WITHDRAWAL) || kind.starts_with(REFUND)))
 }
 
 /// The amount of a minimum-withdrawal decision: canonical decimal atoms, at least 1.
@@ -238,8 +243,31 @@ pub struct CancelledBurn<'a> {
     pub signature_hex: &'a str,
 }
 
-pub fn refund_fields(_kind: &str) -> Result<CancelledBurn<'_>, String> {
-    Err("expected Solana refund amendment".into())
+pub fn refund_fields(kind: &str) -> Result<CancelledBurn<'_>, String> {
+    let mut fields = kind
+        .strip_prefix(REFUND)
+        .ok_or("expected Solana refund amendment")?
+        .split(':');
+    let packet = fields.next().ok_or("missing withdrawal packet hash")?;
+    let slot = fields.next().ok_or("missing finalized Solana slot")?;
+    let signature = fields.next().ok_or("missing Solana cancel signature")?;
+    validate_lower_hex_len("withdrawal packet hash", packet, 96)?;
+    validate_lower_hex_len("Solana cancel signature", signature, 128)?;
+    let number = slot
+        .parse::<u64>()
+        .map_err(|_| "invalid finalized Solana slot")?;
+    if fields.next().is_some()
+        || number == 0
+        || number.to_string() != slot
+        || signature.bytes().all(|b| b == b'0')
+    {
+        return Err("invalid finalized Solana cancel reference".into());
+    }
+    Ok(CancelledBurn {
+        packet_hash: packet,
+        slot: number,
+        signature_hex: signature,
+    })
 }
 
 pub struct FinalizedPayout<'a> {

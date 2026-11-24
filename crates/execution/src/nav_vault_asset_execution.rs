@@ -7657,14 +7657,66 @@ pub fn settle_governed_solana_payout(
 }
 
 /// Credit back a pending Solana exit burn whose marker reads cancelled on Solana.
+/// The burn's own bucket regains the amount as outstanding and loses it from its redemption
+/// queue; the burner's line in the same series is credited, so the series supply rises by
+/// the same amount. Counted reserves stay: the USDC never left the vault.
 pub fn refund_cancelled_solana_burn(
-    _ledger: &mut LedgerState,
-    _chain_id: &str,
-    _packet_hash: &str,
-    _amendment_id: &str,
-    _block_height: u64,
+    ledger: &mut LedgerState,
+    chain_id: &str,
+    packet_hash: &str,
+    amendment_id: &str,
+    block_height: u64,
 ) -> Result<(), String> {
-    Err("Solana refund not implemented".into())
+    use postfiat_types::solana_exit;
+    let redemption_index = ledger
+        .vault_bridge_redemptions
+        .iter()
+        .position(|r| r.withdrawal_packet_hash == packet_hash)
+        .ok_or("unknown Solana withdrawal packet")?;
+    let red = ledger.vault_bridge_redemptions[redemption_index].clone();
+    let bucket_index = ledger
+        .vault_bridge_bucket_states
+        .iter()
+        .position(|b| b.bucket_id == red.bucket_id && solana_exit::matches_bucket(b, true))
+        .ok_or("missing governed Solana refund bucket")?;
+    red.validate_for_chain(chain_id)?;
+    if red.asset_id != solana_exit::FAMILY
+        || red.withdrawal_packet.source_chain_id != postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
+        || !red.destination_ref.starts_with("solana-spl:")
+        || red.state != VAULT_BRIDGE_REDEMPTION_STATE_PENDING
+        || red.settled_atoms != 0
+        || red.created_at_height >= block_height
+    {
+        return Err("Solana refund requires the exact pending Solana-custody burn".into());
+    }
+    let series = postfiat_types::solana_source_series_id(chain_id, &red.asset_id, &red.bucket_id);
+    let mut staged = ledger.clone();
+    let line = staged
+        .trustlines
+        .iter_mut()
+        .find(|l| l.account == red.owner && l.asset_id == series)
+        .ok_or("Solana refund requires the burner's line in the burned series")?;
+    line.balance = line
+        .balance
+        .checked_add(red.amount_atoms)
+        .ok_or("Solana refund overflows the burner's balance")?;
+    let bucket = &mut staged.vault_bridge_bucket_states[bucket_index];
+    bucket.outstanding_vault_bridge_atoms = bucket
+        .outstanding_vault_bridge_atoms
+        .checked_add(red.amount_atoms)
+        .ok_or("Solana refund overflows bucket outstanding")?;
+    bucket.redemption_queue_atoms = bucket
+        .redemption_queue_atoms
+        .checked_sub(red.amount_atoms)
+        .ok_or("Solana refund exceeds the bucket redemption queue")?;
+    bucket.last_updated_height = block_height;
+    bucket.validate()?;
+    let refunded = &mut staged.vault_bridge_redemptions[redemption_index];
+    refunded.state = postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED.to_string();
+    refunded.settlement_receipt_hash = amendment_id.into();
+    refunded.validate_for_chain(chain_id)?;
+    *ledger = staged;
+    Ok(())
 }
 
 fn apply_vault_bridge_settlement_accounting(

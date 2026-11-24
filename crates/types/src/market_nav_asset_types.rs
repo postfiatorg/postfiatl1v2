@@ -1778,6 +1778,8 @@ fn validate_vault_bridge_redemption_state(state: &str) -> Result<(), String> {
     validate_text_field("vault_bridge_redemption.state", state)?;
     match state {
         VAULT_BRIDGE_REDEMPTION_STATE_PENDING | VAULT_BRIDGE_REDEMPTION_STATE_SETTLED => Ok(()),
+        // Reached only through a second-release Solana refund decision.
+        VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED => Ok(()),
         _ => Err("vault_bridge_redemption.state must be pending or settled".to_string()),
     }
 }

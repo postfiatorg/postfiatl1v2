@@ -1495,6 +1495,8 @@ pub fn verify_governance_amendment(
     // The minimum-withdrawal kind exists from the second release only.
     if second && amendment.kind.starts_with(postfiat_types::solana_exit::MIN_WITHDRAWAL) {
         postfiat_types::solana_exit::minimum_withdrawal(&amendment.kind)?;
+    } else if second && amendment.kind.starts_with(postfiat_types::solana_exit::REFUND) {
+        postfiat_types::solana_exit::refund_fields(&amendment.kind)?;
     } else {
         validate_amendment_kind(&amendment.kind)?;
     }
@@ -1745,6 +1747,15 @@ pub(crate) fn validate_signing_kind(
         )
     {
         return postfiat_types::solana_exit::minimum_withdrawal(kind).map(|_| ());
+    }
+    if kind.starts_with(postfiat_types::solana_exit::REFUND)
+        && postfiat_types::solana_exit::second_release_active(
+            &domain.chain_id,
+            &domain.genesis_hash,
+            activation_height,
+        )
+    {
+        return postfiat_types::solana_exit::refund_fields(kind).map(|_| ());
     }
     validate_amendment_kind(kind)
 }
