@@ -280,7 +280,11 @@ def run(args):
          "--rpc-port", str(port), "--faucet-port", str(port + 10), "--mint", str(payer.pubkey()),
          "--upgradeable-program", str(VERIFIER), str(args.old), str(authority.pubkey()),
          "--upgradeable-program", str(local_id.pubkey()), str(args.old), str(authority.pubkey()),
-         "--upgradeable-program", str(VAULT), str(snap / "vault.so"), "none", *accounts],
+         "--upgradeable-program", str(VAULT), str(snap / "vault.so"), "none", *accounts,
+         # A test validator activates every feature. Mainnet (24 November 2026) has SIMD-0433 and
+         # SIMD-0685 inactive, so ExtendProgram still works there and an upgrade does not resize.
+         "--deactivate-feature", "EhisBfVtGvEA8bVCVN5VMaYEaX6iTfoUrmcDi8LY7Kxy",
+         "--deactivate-feature", "5Ach9H8V5NCNDQg7Md6HnJmVttF3tzHwiWWucnnFd4jz"],
         stdout=subprocess.DEVNULL, stderr=open(work / "validator.err", "w"))
     local = Local(f"http://127.0.0.1:{port}", args.tools, work)
     results = []
