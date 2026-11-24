@@ -14,6 +14,8 @@ from solders.keypair import Keypair
 
 import exit_review as rv
 
+# This host's reviewer key: the reviewer holds the keypair, the signing step only its public key.
+HOST_KEY = Keypair()
 BURN = "b1" * 48
 PACKET = "a1" * 48
 OWNER = Keypair().pubkey()
@@ -194,7 +196,7 @@ class ReviewTest(unittest.TestCase):
     def test_an_rpc_error_exits_non_zero_by_name(self):
         with tempfile.TemporaryDirectory() as d:
             cfg = rv.Config(validator="validator-3", node=Node(), solana=Solana(fail="getTransaction"),
-                            review_dir=Path(d), key=b"k" * 32)
+                            review_dir=Path(d), key=HOST_KEY)
             code = rv.run_review(cfg, "paid", BURN)
             self.assertEqual(code, rv.EXIT_RPC)
             self.assertEqual(list(Path(d).iterdir()), [])
@@ -204,7 +206,7 @@ class SignTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         self.cfg = rv.Config(validator="validator-3", node=Node(), solana=Solana(), review_dir=Path(self.dir.name),
-                             key=b"k" * 32)
+                             key=HOST_KEY)
 
     def tearDown(self):
         self.dir.cleanup()
@@ -232,7 +234,7 @@ class SignTest(unittest.TestCase):
             rv.authorize(self.cfg, self.amend(), now=time.time() + rv.REVIEW_MAX_AGE + 1)
         # A file written by anything but this host's reviewer (another host, a copy) is refused.
         other = rv.Config(validator="validator-3", node=Node(), solana=Solana(), review_dir=Path(self.dir.name),
-                          key=b"x" * 32)
+                          key=Keypair())
         with self.assertRaisesRegex(rv.Refused, "not written by this host's reviewer"):
             rv.authorize(other, self.amend())
         (path,) = Path(self.dir.name).iterdir()
@@ -244,6 +246,25 @@ class SignTest(unittest.TestCase):
         os.chmod(path, 0o666)
         with self.assertRaisesRegex(rv.Refused, "unsafe"):
             rv.authorize(self.cfg, self.amend())
+
+    def test_the_signing_step_can_check_a_verdict_but_not_produce_one(self):
+        rv.run_review(self.cfg, "paid", BURN)
+        signer = rv.Config(validator="validator-3", node=None, solana=None, review_dir=Path(self.dir.name),
+                           key=None, public=HOST_KEY.pubkey())
+        rv.authorize(signer, self.amend())
+        with self.assertRaisesRegex(rv.Refused, "no reviewer key"):
+            rv.write_verdict(signer, dict(action="refund", burn=BURN, decision=REFUND_KIND, finalized_slot=1))
+        # A verdict sealed with any other key, as a forger without the reviewer key would, is refused.
+        forger = rv.Config(validator="validator-3", node=Node(), solana=Solana(tag=10, marker=b"\x02"),
+                           review_dir=Path(self.dir.name), key=Keypair())
+        rv.run_review(forger, "refund", BURN)
+        with self.assertRaisesRegex(rv.Refused, "not written by this host's reviewer"):
+            rv.authorize(signer, self.amend(REFUND_KIND))
+
+    def test_the_installer_keeps_the_reviewer_key_from_the_signing_user(self):
+        text = (Path(rv.__file__).parent / "install-exit-review.sh").read_text()
+        self.assertNotIn("root:postfiat", text)
+        self.assertIn("pf-sol-exit-review", text)
 
     def test_an_amendment_that_is_not_a_plain_decision_is_refused(self):
         rv.run_review(self.cfg, "paid", BURN)
@@ -280,7 +301,7 @@ class SignCommandTest(unittest.TestCase):
         (proc / "cmdline").write_bytes("\0".join([str(self.binary), "transport-validator-serve", "--data-dir",
                                                     str(self.data), "--topology", "t"]).encode() + b"\0")
         self.cfg = rv.Config(validator="validator-3", node=Node(), solana=Solana(), review_dir=root / "review",
-                             key=b"k" * 32, data_dir=self.data, proc=root / "proc",
+                             key=HOST_KEY, data_dir=self.data, proc=root / "proc",
                              releases=root / "opt/postfiat/releases")
         self.assertEqual(rv.run_review(self.cfg, "paid", BURN), 0)
         self.amend = self.data / "sol-live/round/amend"
@@ -347,7 +368,7 @@ class ConstantsAndClearanceTest(unittest.TestCase):
             safety.mkdir()
             (safety / "height-1899.json").write_text("{}")
             cfg = rv.Config(validator="validator-3", node=Head(), solana=Solana(), review_dir=Path(d) / "r",
-                            key=b"k" * 32)
+                            key=HOST_KEY)
             body = rv.review_clearance(cfg, data_dir=d)
             self.assertTrue(body["decision"].startswith("solana_exit_rotation_clearance:validator-3:1900:"))
             (safety / "height-1950.json").write_text("{}")
@@ -367,7 +388,7 @@ class ClearanceAccessTest(unittest.TestCase):
             safety.chmod(0)
             try:
                 cfg = rv.Config(validator="validator-3", node=Node(), solana=Solana(), review_dir=Path(d) / "r",
-                                key=b"k" * 32, data_dir=Path(d))
+                                key=HOST_KEY, data_dir=Path(d))
                 with self.assertRaisesRegex(rv.AccessError, "cannot read"):
                     rv.review_clearance(cfg, data_dir=d)
                 err = io.StringIO()
