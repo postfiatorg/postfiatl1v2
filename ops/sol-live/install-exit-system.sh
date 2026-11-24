@@ -31,8 +31,8 @@ unit_dir=/etc/systemd/system
 # Masks here override unit files in /etc/systemd/system; `systemctl mask --runtime` writes to
 # /run/systemd/system, which /etc overrides, so its mask would not hold for these units.
 mask_dir=/run/systemd/system.control
-# Written with the masks: they belong to a run of this installer. Like them, it goes at a reboot.
-mask_marker=$mask_dir/.pf-sol-exit-install.mask
+# Written in $mask_dir with the masks: they belong to a run of this installer. Like them, it goes at a reboot.
+mask_marker=.pf-sol-exit-install.mask
 masked=0
 mountinfo=/proc/self/mountinfo
 
@@ -303,7 +303,7 @@ switch_in() {
 mask_units() {
     local name
     install -d -m755 "$mask_dir" || return 1
-    printf 'run %s started %s\n' "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$mask_marker" || return 1
+    printf 'run %s started %s\n' "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$mask_dir/$mask_marker" || return 1
     for name in "$unit" "$test_unit"; do
         ln -sfnT /dev/null "$mask_dir/$name" || return 1
         masked=1
@@ -316,7 +316,7 @@ unmask_units() {
     for name in "$unit" "$test_unit"; do
         rm -f -- "$mask_dir/$name" || status=1
     done
-    if (( status == 0 )); then rm -f -- "$mask_marker" || status=1; fi
+    if (( status == 0 )); then rm -f -- "$mask_dir/$mask_marker" || status=1; fi
     systemctl daemon-reload || status=1
     if (( status == 0 )); then masked=0; fi
     return $status
@@ -331,15 +331,15 @@ clear_stale_mask() {
         if [[ -L $mask_dir/$name ]]; then found=1; fi
     done
     if (( ! found )); then
-        rm -f -- "$mask_marker" || return 1
+        rm -f -- "$mask_dir/$mask_marker" || return 1
         return 0
     fi
-    if [[ ! -f $mask_marker ]]; then
+    if [[ ! -f $mask_dir/$mask_marker ]]; then
         echo "$unit or $test_unit is masked by something other than this installer (in $mask_dir); find out why before installing." >&2
         return 1
     fi
-    echo "Removing the masks left by an earlier run of this installer that did not finish ($(cat -- "$mask_marker"))."
-    unmask_units || { echo "Removing the stale masks failed: rm $mask_dir/$unit $mask_dir/$test_unit $mask_marker; systemctl daemon-reload" >&2; return 1; }
+    echo "Removing the masks left by an earlier run of this installer that did not finish ($(cat -- "$mask_dir/$mask_marker"))."
+    unmask_units || { echo "Removing the stale masks failed: rm $mask_dir/$unit $mask_dir/$test_unit $mask_dir/$mask_marker; systemctl daemon-reload" >&2; return 1; }
 }
 
 build_tree() {
