@@ -355,5 +355,34 @@ class ConstantsAndClearanceTest(unittest.TestCase):
                 rv.review_clearance(cfg, data_dir=d)
 
 
+class ClearanceAccessTest(unittest.TestCase):
+    def test_a_signing_history_the_reviewer_cannot_read_is_a_named_error_with_a_failing_exit(self):
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as d:
+            safety = Path(d) / "consensus-v2-safety"
+            safety.mkdir()
+            (safety / "height-1899.json").write_text("{}")
+            safety.chmod(0)
+            try:
+                cfg = rv.Config(validator="validator-3", node=Node(), solana=Solana(), review_dir=Path(d) / "r",
+                                key=b"k" * 32, data_dir=Path(d))
+                with self.assertRaisesRegex(rv.AccessError, "cannot read"):
+                    rv.review_clearance(cfg, data_dir=d)
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    self.assertEqual(rv.run_review(cfg, "clearance", None), rv.EXIT_ACCESS)
+                self.assertIn("access error: clearance: cannot read", err.getvalue())
+                self.assertFalse((Path(d) / "r").exists())
+            finally:
+                safety.chmod(0o700)
+
+    def test_the_unit_counts_only_a_named_refusal_as_success(self):
+        unit = (Path(rv.__file__).parent / "pft-sol-exit-review.service").read_text()
+        self.assertIn("SuccessExitStatus=2\n", unit)
+        self.assertNotEqual(rv.EXIT_ACCESS, rv.EXIT_REFUSED)
+
+
 if __name__ == "__main__":
     unittest.main()
