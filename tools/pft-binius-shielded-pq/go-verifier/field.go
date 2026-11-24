@@ -123,7 +123,7 @@ func (t *KTables) kmul(a, b uint32) uint32 {
 	if a01 != 0 && b01 != 0 {
 		p2 = t.exp16[int(t.log16[a01])+int(t.log16[b01])]
 	}
-	lo := p0 ^ reducePoly16_31(uint64(p1)<<11)
+	lo := p0 ^ mulC32Inline(p1)
 	hi := p2 ^ p0
 	return uint32(lo) | (uint32(hi) << 16)
 }
@@ -247,10 +247,29 @@ func (e E) ScaleK(k uint32, t *KTables) E {
 	if k == 1 {
 		return e
 	}
+	b0 := uint16(k & 0xFFFF)
+	b1 := uint16(k >> 16)
+	b01 := b0 ^ b1
+	lb0 := int(t.log16[b0])
+	lb1 := int(t.log16[b1])
+	lb01 := int(t.log16[b01])
 	var out E
 	for i := 0; i < 12; i++ {
-		if e.C[i] != 0 {
-			out.C[i] = t.kmul(e.C[i], k)
+		if av := e.C[i]; av != 0 {
+			a0 := uint16(av & 0xFFFF)
+			a1 := uint16(av >> 16)
+			a01 := a0 ^ a1
+			var p0, p1, p2 uint16
+			if a0 != 0 && b0 != 0 {
+				p0 = t.exp16[int(t.log16[a0])+lb0]
+			}
+			if a1 != 0 && b1 != 0 {
+				p1 = t.exp16[int(t.log16[a1])+lb1]
+			}
+			if a01 != 0 && b01 != 0 {
+				p2 = t.exp16[int(t.log16[a01])+lb01]
+			}
+			out.C[i] = uint32(p0^mulC32Inline(p1)) | (uint32(p2^p0) << 16)
 		}
 	}
 	return out
@@ -264,9 +283,28 @@ func (e *E) AddMulK(k uint32, rhs E, t *KTables) {
 		e.AddAssign(rhs)
 		return
 	}
+	b0 := uint16(k & 0xFFFF)
+	b1 := uint16(k >> 16)
+	b01 := b0 ^ b1
+	lb0 := int(t.log16[b0])
+	lb1 := int(t.log16[b1])
+	lb01 := int(t.log16[b01])
 	for i := 0; i < 12; i++ {
-		if rhs.C[i] != 0 {
-			e.C[i] ^= t.kmul(rhs.C[i], k)
+		if av := rhs.C[i]; av != 0 {
+			a0 := uint16(av & 0xFFFF)
+			a1 := uint16(av >> 16)
+			a01 := a0 ^ a1
+			var p0, p1, p2 uint16
+			if a0 != 0 && b0 != 0 {
+				p0 = t.exp16[int(t.log16[a0])+lb0]
+			}
+			if a1 != 0 && b1 != 0 {
+				p1 = t.exp16[int(t.log16[a1])+lb1]
+			}
+			if a01 != 0 && b01 != 0 {
+				p2 = t.exp16[int(t.log16[a01])+lb01]
+			}
+			e.C[i] ^= uint32(p0^mulC32Inline(p1)) | (uint32(p2^p0) << 16)
 		}
 	}
 }
@@ -304,7 +342,7 @@ func addMulKPair(k uint32, a, b, dstA, dstB *E, t *KTables) {
 			if a01 != 0 && b01 != 0 {
 				p2 = t.exp16[int(t.log16[a01])+lb01]
 			}
-			dstA.C[i] ^= uint32(p0^reducePoly16_31(uint64(p1)<<11)) | (uint32(p2^p0) << 16)
+			dstA.C[i] ^= uint32(p0^mulC32Inline(p1)) | (uint32(p2^p0) << 16)
 		}
 		if bv := b.C[i]; bv != 0 {
 			a0 := uint16(bv & 0xFFFF)
@@ -320,7 +358,7 @@ func addMulKPair(k uint32, a, b, dstA, dstB *E, t *KTables) {
 			if a01 != 0 && b01 != 0 {
 				p2 = t.exp16[int(t.log16[a01])+lb01]
 			}
-			dstB.C[i] ^= uint32(p0^reducePoly16_31(uint64(p1)<<11)) | (uint32(p2^p0) << 16)
+			dstB.C[i] ^= uint32(p0^mulC32Inline(p1)) | (uint32(p2^p0) << 16)
 		}
 	}
 }
@@ -361,6 +399,13 @@ func (e E) mulByY() E {
 	return out
 }
 
+// mulC32Inline computes p1 * 0x0800 mod (X^16 + X^5 + X^3 + X + 1) in one step.
+// Because (p1 >> 5) < 2^11, ((p1 >> 5) << 5) < 2^16, so no second reduction pass is needed.
+func mulC32Inline(p1 uint16) uint16 {
+	h := uint32(p1 >> 5)
+	return uint16((uint32(p1) << 11) ^ h ^ (h << 1) ^ (h << 3) ^ (h << 5))
+}
+
 func reducePoly16_31(w uint64) uint16 {
 	h2 := w >> 16
 	w = (w & 0xFFFF) ^ h2 ^ (h2 << 1) ^ (h2 << 3) ^ (h2 << 5)
@@ -369,26 +414,53 @@ func reducePoly16_31(w uint64) uint16 {
 }
 
 func kmulAlphaBranchless(v uint32) uint32 {
-	v0 := uint64(v & 0xFFFF)
-	v1 := uint64(v >> 16)
-	lo := reducePoly16_31((v0 << 1) ^ (v1 << 11))
-	hi := reducePoly16_31(v0 ^ v1 ^ (v1 << 1))
+	v0 := uint32(v & 0xFFFF)
+	v1 := uint32(v >> 16)
+	// v0 * X mod Poly16 + v1 * X^11 mod Poly16
+	lo := uint16((v0 << 1) ^ (uint32(-int32(v0>>15)) & Poly16)) ^ mulC32Inline(uint16(v1))
+	// v0 + v1 * (1 + X) mod Poly16
+	hi := uint16(v0 ^ v1 ^ (v1 << 1) ^ (uint32(-int32(v1>>15)) & Poly16))
 	return uint32(lo) | (uint32(hi) << 16)
 }
 
 func karatsuba3Portable(a0, a1, a2, b0, b1, b2 uint32, t *KTables) [5]uint32 {
-	p0 := t.kmul(a0, b0)
-	p1 := t.kmul(a1, b1)
-	p2 := t.kmul(a2, b2)
-	q01 := t.kmul(a0^a1, b0^b1)
-	q02 := t.kmul(a0^a2, b0^b2)
-	q12 := t.kmul(a1^a2, b1^b2)
+	pa := [6]uint32{a0, a1, a2, a0 ^ a1, a0 ^ a2, a1 ^ a2}
+	pb := [6]uint32{b0, b1, b2, b0 ^ b1, b0 ^ b2, b1 ^ b2}
+	var pr [6]uint32
+	log16 := &t.log16
+	exp16 := &t.exp16
+	for i := 0; i < 6; i++ {
+		av := pa[i]
+		bv := pb[i]
+		if av == 0 || bv == 0 {
+			continue
+		}
+		x0 := uint16(av & 0xFFFF)
+		x1 := uint16(av >> 16)
+		y0 := uint16(bv & 0xFFFF)
+		y1 := uint16(bv >> 16)
+		var p0, p1, p2 uint16
+		if x0 != 0 && y0 != 0 {
+			p0 = exp16[int(log16[x0])+int(log16[y0])]
+		}
+		if x1 != 0 && y1 != 0 {
+			p1 = exp16[int(log16[x1])+int(log16[y1])]
+		}
+		x01 := x0 ^ x1
+		y01 := y0 ^ y1
+		if x01 != 0 && y01 != 0 {
+			p2 = exp16[int(log16[x01])+int(log16[y01])]
+		}
+		h := uint32(p1 >> 5)
+		lo := p0 ^ uint16((uint32(p1)<<11)^h^(h<<1)^(h<<3)^(h<<5))
+		pr[i] = uint32(lo) | (uint32(p2^p0) << 16)
+	}
 	return [5]uint32{
-		p0,
-		q01 ^ p0 ^ p1,
-		q02 ^ p0 ^ p1 ^ p2,
-		q12 ^ p1 ^ p2,
-		p2,
+		pr[0],
+		pr[3] ^ pr[0] ^ pr[1],
+		pr[4] ^ pr[0] ^ pr[1] ^ pr[2],
+		pr[5] ^ pr[1] ^ pr[2],
+		pr[2],
 	}
 }
 
@@ -560,22 +632,32 @@ func newRingSwitchLinearMap(wRS []E) *RingSwitchLinearMap {
 }
 
 func (m *RingSwitchLinearMap) applyPortable(z E) E {
-	var acc E
+	var c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11 uint32
 	for v := 0; v < 12; v++ {
 		w := z.C[v]
 		if w != 0 {
 			base := v * 8
-			acc.AddAssign(m.table[base][w&0xF])
-			acc.AddAssign(m.table[base+1][(w>>4)&0xF])
-			acc.AddAssign(m.table[base+2][(w>>8)&0xF])
-			acc.AddAssign(m.table[base+3][(w>>12)&0xF])
-			acc.AddAssign(m.table[base+4][(w>>16)&0xF])
-			acc.AddAssign(m.table[base+5][(w>>20)&0xF])
-			acc.AddAssign(m.table[base+6][(w>>24)&0xF])
-			acc.AddAssign(m.table[base+7][(w>>28)&0xF])
+			for nib := 0; nib < 8; nib++ {
+				n := (w >> (uint(nib) * 4)) & 0xF
+				if n != 0 {
+					p := &m.table[base+nib][n]
+					c0 ^= p.C[0]
+					c1 ^= p.C[1]
+					c2 ^= p.C[2]
+					c3 ^= p.C[3]
+					c4 ^= p.C[4]
+					c5 ^= p.C[5]
+					c6 ^= p.C[6]
+					c7 ^= p.C[7]
+					c8 ^= p.C[8]
+					c9 ^= p.C[9]
+					c10 ^= p.C[10]
+					c11 ^= p.C[11]
+				}
+			}
 		}
 	}
-	return acc
+	return E{C: [12]uint32{c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11}}
 }
 
 func (m *RingSwitchLinearMap) apply(z E) E {
