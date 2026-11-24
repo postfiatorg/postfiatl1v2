@@ -1894,7 +1894,7 @@ fn handle_rpc_serve_connection(
             merge_rpc_serve_runtime_metrics(result, context.runtime_metrics.snapshot());
         }
     }
-    let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
+    let response = write_rpc_serve_response(reader.get_mut().tcp_stream_mut(), response);
     let mut event = rpc_serve_event(
         &context.node_id,
         request_index,
@@ -1916,6 +1916,40 @@ fn handle_rpc_serve_connection(
     });
     event.handler_ms = Some(monotonic_elapsed_ms(handler_started));
     event
+}
+
+/// Writes the reply. One larger than the frame limit is answered with
+/// `rpc_response_too_large` instead, naming the limit and the reply's size,
+/// so the caller reads an error rather than waiting for its idle timeout and
+/// the connection stays usable. Returns the response sent.
+fn write_rpc_serve_response(stream: &mut TcpStream, response: RpcResponse) -> RpcResponse {
+    let size = match serde_json::to_vec(&response) {
+        Ok(json) if json.len() as u64 <= MAX_TRANSPORT_FRAME_BYTES => {
+            let _ = stream
+                .write_all(&json)
+                .and_then(|_| stream.write_all(b"\n"));
+            return response;
+        }
+        Ok(json) => json.len(),
+        Err(error) => {
+            let response = rpc_serve_error_response(
+                &response.id,
+                "rpc_internal",
+                &format!("rpc response serialization failed: {error}"),
+            );
+            let _ = write_json_line(stream, &response);
+            return response;
+        }
+    };
+    let response = rpc_serve_error_response(
+        &response.id,
+        "rpc_response_too_large",
+        &format!(
+            "rpc response of {size} bytes exceeds the {MAX_TRANSPORT_FRAME_BYTES}-byte frame limit; request less data"
+        ),
+    );
+    let _ = write_json_line(stream, &response);
+    response
 }
 
 fn merge_rpc_serve_runtime_metrics(
@@ -5827,6 +5861,110 @@ mod child_dispatch_limit_tests {
             error.contains("global concurrent child dispatch limit 2"),
             "{error}"
         );
+    }
+}
+
+#[cfg(test)]
+mod oversized_reply_tests {
+    use super::*;
+
+    fn status_with_revision(build_git_revision: String) -> StatusReport {
+        StatusReport {
+            chain_id: "oversized-reply-test".to_string(),
+            genesis_hash: "00".repeat(48),
+            protocol_version: 1,
+            rpc_schema: "postfiat-local-rpc-v1".to_string(),
+            build_git_revision,
+            build_profile: "test".to_string(),
+            active_nav_profiles: Vec::new(),
+            deployment_manifest_sha256: None,
+            deployment_manifest_verified: false,
+            deployment_validator_id: None,
+            deployment_service_artifacts: Vec::new(),
+            deployment_runtime_artifacts: None,
+            validator_count: 1,
+            node_id: "test-node".to_string(),
+            status: "ok".to_string(),
+            last_run_unix: 1,
+            state_root: "state-root".to_string(),
+            block_height: 1,
+            block_tip_hash: "tip".to_string(),
+            mempool_pending: 0,
+            storage: None,
+        }
+    }
+
+    fn cache_status(context: &RpcServeConnectionContext, report: StatusReport) {
+        let mut cache = context.health_cache.lock().expect("health cache");
+        cache.status = Some(report);
+        cache.status_checked_at = Some(Instant::now());
+    }
+
+    /// A reply over the frame limit is answered with an error the caller can
+    /// read, and the same connection then carries the next request's reply.
+    #[test]
+    fn a_reply_over_the_frame_limit_is_answered_with_an_error_and_the_connection_stays_usable() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let mut client = TcpStream::connect(listener.local_addr().expect("addr")).expect("connect");
+        client
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .expect("client read timeout");
+        let (server, _) = listener.accept().expect("accept");
+        for id in ["too-large", "fits"] {
+            write_json_line(&mut client, &RpcRequest::empty(id, "status")).expect("send request");
+        }
+        let mut context = child_dispatch_limit_tests::child_dispatch_test_context(8, 8);
+        let mut reader = BufReader::new(RpcServeDeadlineStream::new(server, 10_000));
+
+        cache_status(
+            &context,
+            status_with_revision("a".repeat(MAX_TRANSPORT_FRAME_BYTES as usize)),
+        );
+        let first_event = handle_rpc_serve_connection(&mut reader, 1, &mut context);
+        cache_status(&context, status_with_revision("test-revision".to_string()));
+        let second_event = handle_rpc_serve_connection(&mut reader, 2, &mut context);
+
+        let mut client_reader = BufReader::new(client);
+        let mut read_reply = || {
+            let line = read_transport_line_from(&mut client_reader);
+            serde_json::from_str::<RpcResponse>(&line).expect("reply json")
+        };
+        let first = read_reply();
+        assert_eq!(
+            first.id, "too-large",
+            "the oversized reply was not answered"
+        );
+        assert!(!first.ok);
+        let error = first.error.expect("error");
+        assert_eq!(error.code, "rpc_response_too_large");
+        let limit = MAX_TRANSPORT_FRAME_BYTES.to_string();
+        assert!(error.message.contains(&limit), "{}", error.message);
+        // The message also names the reply's size, which is over the limit.
+        assert!(
+            error
+                .message
+                .split(|character: char| !character.is_ascii_digit())
+                .filter_map(|number| number.parse::<u64>().ok())
+                .any(|number| number > MAX_TRANSPORT_FRAME_BYTES),
+            "{}",
+            error.message
+        );
+        assert_eq!(
+            first_event.error_code.as_deref(),
+            Some("rpc_response_too_large")
+        );
+
+        let second = read_reply();
+        assert_eq!(second.id, "fits");
+        assert!(second.ok, "{:?}", second.error);
+        assert!(second_event.ok);
+    }
+
+    fn read_transport_line_from(reader: &mut BufReader<TcpStream>) -> String {
+        let mut line = String::new();
+        reader.read_line(&mut line).expect("read reply");
+        assert!(!line.is_empty(), "connection closed without a reply");
+        line
     }
 }
 
