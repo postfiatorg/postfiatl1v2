@@ -440,6 +440,47 @@ After the finalized payout and its verified L1 settlement, enable admission usin
 
 ## Before the second release height is set
 
+### The second Solana withdrawal release: what it changes, what is signed, in which order
+
+**What a user gets, from the release height H on:**
+- Every Solana deposit can be withdrawn, from any Solana-source bucket of the shared custody, not only the revision-8 batch of 23 November.
+- A withdrawal that can never be paid (for example, the destination token account is frozen or closed) can be cancelled on Solana by its destination owner or by the pause key. It is then refunded on Post Fiat to the burner, in the same asset and bucket, by a decision of five of six validators. A burn is never both paid and refunded.
+- A minimum of 0.30 USDC per withdrawal, a governed value.
+- The payout address is checked before the burn: its owner must be a wallet key.
+- Five of six validators can close, pay, re-open and refund.
+
+**What the owner signs, and with which key:**
+- **Upgrade authority** `4JJEuaYtJvgtMVixTbXfppHJPh6tcU5g7g7UtkvxK3sB` (today on the relay host): the three steps of "Upgrade the initialised Solana verifier": the extension by 10,240 bytes (about 0.052 SOL), the upgrade (buffer and upgrade), and the migration (tag 9).
+- **Pause key** `ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx`: later, and only after H, a cancel of one unpayable burn. The transaction is prepared and checked with `exit_cancel.py` ("Cancel a burn with the pause key"); the tool never holds the key.
+- **Optional:** after the migration's read-back, move the upgrade authority to an offline key or a multisig (step 11 of the upgrade). Never `--final`.
+
+**What each of the six validator operators installs:**
+- the release build of `postfiat-node` with the same H, before H;
+- the per-host reviewer, with that host's own Solana endpoint ("Independent settlement reviews").
+
+**The order from today's state to live:**
+
+| Step | Must be true first | How to go back |
+| --- | --- | --- |
+| 1. Merge the release; build `postfiat-node` and the verifier from the merge; replay the live chain | The replay ends in the live tip hash and state root. | Nothing is deployed yet. |
+| 2. Install the per-host reviewer on the six hosts, one at a time | The relay's settler runs with `--single-owner-fleet`. On each host the release binaries and `/etc/postfiat` are owned by root. | Stop and disable the reviewer's timer; the first release does not use it. |
+| 3. Upgrade the verifier: extend, upgrade, migrate | The payout worker is stopped and admission disabled. The on-chain upgrade authority equals the signer. | Before the migration: upgrade back to the deployed build (`3b16fc30…`). After it: only the new build again. |
+| 4. Pin `VERIFIER_SHA256` to the read-back hash and restart the worker | The pinned hash equals the chain's. | Stop the worker. |
+| 5. Set H in source; build the release; install it on all six validators | Every validator reports the release build, and H is far enough ahead for all six. | Before H, return to the first release's build: nothing has changed on the chain. |
+| 6. Reach H | Every paid burn is settled, and the settler is stopped just before H. | None after H: the rules are on the chain. Close withdrawals with five of six. |
+| 7. Run from H | The relay runs `exit_govern.py paid` and `refund`; each host signs from its own review. | Close withdrawals with five of six. |
+
+**Numbers:**
+- **Verifier after the upgrade:** 123,152 bytes, SHA-256 `4091ee16db29154e7aae642b637320c0a0d0cdee110da88d07416ab7b1c15b21`. It fits the deployed 116,928 bytes plus the 10,240-byte extension. The deployed program today: 116,928 bytes, `3b16fc309501814e0bba718ecadb80f02993f6f355153a13f37ae9d47d29354c`.
+- **Node:** the replayed release build of `postfiat-node` has SHA-256 `b7015cda92dd94aa510e25a948c43c9700f10b80d0ea0b45ac815cdefb293ac8`. With H unset it reproduced the live chain block for block to the live tip and state root. No node code has changed since that build.
+
+**Not in this release:**
+- **Paying across a validator-set rotation.** A burn in the block after a rotation waits, with a named status, until a later checkpoint makes it payable.
+- **A user-facing cancel.** Users have no button or command for it; only the destination owner's own Solana signature or the pause key, through `exit_cancel.py`.
+- **A cancel made through another program.** Refund drafting reads only top-level instructions, so such a cancel is not found.
+
+### Checklist
+
 H (`SECOND_RELEASES` in `crates/types/src/solana_exit.rs`) is a source constant today, not a governed value. Every validator must run a build with the same H before H, or it diverges at the first block that uses the second release's rules.
 
 - [ ] Every validator's status read reports the second-release build (`build_git_revision`).
