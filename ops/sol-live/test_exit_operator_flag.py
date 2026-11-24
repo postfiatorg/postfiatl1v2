@@ -17,6 +17,13 @@ class OperatorFlagTest(unittest.TestCase):
                               capture_output=True, text=True, env=env, timeout=60)
         self.assertNotEqual(done.returncode, 0)
         self.assertIn("--single-owner-fleet", done.stderr)
+        # It says what to run instead, with the arguments it was given.
+        self.assertIn(f"settle.py rev {'ab' * 48} --single-owner-fleet", done.stderr)
+
+    def test_the_settler_reports_a_failed_settle_instead_of_looping_silently(self):
+        text = (HERE / "operator/settler.sh").read_text()
+        self.assertIn("PIPESTATUS", text)
+        self.assertIn("ALERT settle.py failed", text)
 
     def test_go_live_tools_name_their_replacement(self):
         for name in ("settle.py", "clearance.py"):

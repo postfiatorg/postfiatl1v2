@@ -7,7 +7,8 @@ writes its verdict into a local review directory. The signing step on the same h
 that decision. One review covers a paid decision (marker byte 1, one payout instruction),
 a refund (marker byte 2, one cancel instruction) or this host's rotation clearance.
 
-Exit codes: 0 approved, 2 refused with a named reason, 3 RPC error with a named reason.
+Exit codes: 0 approved, 2 refused with a named reason, 3 RPC error with a named reason,
+4 a local file this reviewer must read is not readable (a failure of the install, not a verdict).
 """
 
 import argparse
@@ -15,20 +16,23 @@ import base64
 import dataclasses
 import datetime
 import hashlib
-import hmac
 import json
 import os
 import re
 import socket
 import stat
+import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
 
 import base58
+from solders.keypair import Keypair
 from solders.pubkey import Pubkey
+from solders.signature import Signature
 
 VERIFIER = Pubkey.from_string("8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF")
 VAULT = Pubkey.from_string("GFkpeTibgdRAAAndgUMYsJnSTck91tUbrpuWBWan6z1G")
@@ -46,9 +50,19 @@ MAGIC = b"PFTL-PFUSDC-TIER4"
 EGRESS = b"postfiat.pfusdc.egress_public_values.v1"
 REVIEWER = "exit_review.py/1"
 REVIEW_MAX_AGE = 900
-EXIT_REFUSED, EXIT_RPC = 2, 3
+# History reads: getSignaturesForAddress returns at most PAGE signatures per call, newest first.
+# The reviewer pages back at most MAX_PAGES (20,000 transactions naming one address) and refuses
+# by name beyond that; the timer reviews a marker within a minute of its creation.
+PAGE = 1000
+MAX_PAGES = 20
+# Verdicts are rewritten every minute while a burn is pending; older ones are removed after a day.
+PRUNE_AGE = 86400
+EXIT_REFUSED, EXIT_RPC, EXIT_ACCESS = 2, 3, 4
 CONFIG = Path("/etc/postfiat/sol-exit-review.json")
+# The reviewer's verdict key: the keypair is readable only by the reviewer user; the signing step
+# (run as the node user) reads only the public key, so it can check a verdict but not make one.
 KEY = Path("/etc/postfiat/sol-exit-review.key")
+PUBLIC = Path("/etc/postfiat/sol-exit-review.pub")
 ACTIONS = {"paid": (b"\x01", 2), "refund": (b"\x02", 10)}
 
 
@@ -58,6 +72,10 @@ class Refused(ValueError):
 
 class RpcError(RuntimeError):
     """A node or Solana read failed; nothing is written."""
+
+
+class AccessError(RuntimeError):
+    """A local file the reviewer must read is not readable by it; nothing is written."""
 
 
 def require(ok, reason):
@@ -142,6 +160,56 @@ def node_rpc(address):
     return call
 
 
+def signatures(sol, address, before=None):
+    """Finalized transactions naming `address`, newest first, paged back to its first one."""
+    for _ in range(MAX_PAGES):
+        params = dict(commitment="finalized", limit=PAGE)
+        if before:
+            params["before"] = before
+        page = sol("getSignaturesForAddress", [address, params])
+        yield from page
+        if len(page) < PAGE:
+            return
+        before = page[-1]["signature"]
+    raise Refused(f"history: more than {PAGE * MAX_PAGES} transactions name {address}")
+
+
+def account_keys(tx):
+    """Every account key of a transaction, including those loaded from lookup tables."""
+    loaded = tx["meta"].get("loadedAddresses") or {}
+    return tx["transaction"]["message"]["accountKeys"] + loaded.get("writable", []) + loaded.get("readonly", [])
+
+
+def verifier_instructions(tx, tag):
+    """The top-level instructions of the exit verifier with this tag."""
+    keys = account_keys(tx)
+    return [ix for ix in tx["transaction"]["message"]["instructions"]
+            if keys[ix["programIdIndex"]] == str(VERIFIER) and base58.b58decode(ix["data"])[:1] == bytes([tag])]
+
+
+def creating_transaction(sol, key, tag):
+    """The successful transaction whose verifier instruction created the marker `key`.
+
+    The verifier creates a marker once (`create` in its lib.rs transfers only the missing rent,
+    so a prefund does not stop it, and a second creation fails with Replay). The newest successful
+    transaction with a verifier instruction of this tag naming the marker as its seventh account is
+    therefore the only one. Lamport transfers to the address, before or after, and transactions
+    that only name it are skipped, as the program itself ignores them."""
+    failed = False
+    for row in signatures(sol, str(key)):
+        tx = transaction(sol, row["signature"])
+        keys = account_keys(tx)
+        creating = [ix for ix in verifier_instructions(tx, tag)
+                    if len(ix["accounts"]) >= 7 and keys[ix["accounts"][6]] == str(key)]
+        if creating and (row["err"] is not None or tx["meta"]["err"] is not None):
+            failed = True
+            continue
+        if creating:
+            return row["signature"], tx
+    require(not failed, "failed transaction: the marker's writer did not succeed")
+    raise Refused("program: no successful instruction of the exit verifier created the marker")
+
+
 def transaction(sol, sig):
     tx = sol("getTransaction", [sig, dict(commitment="finalized", encoding="json", maxSupportedTransactionVersion=0)])
     if tx is None:
@@ -149,18 +217,31 @@ def transaction(sol, sig):
     return tx
 
 
-def uploaded_values(sol, buffer):
-    """Rebuild the values buffer the proof was checked against from its tag-5 uploads."""
-    chunks = []
-    for row in reversed(sol("getSignaturesForAddress", [buffer, dict(commitment="finalized", limit=50)])):
+def uploaded_values(sol, buffer, payout):
+    """Rebuild the values the proof was checked against: the buffer's own uploads (tag 5, the
+    buffer as first account; the program requires it to sign) before the payout transaction,
+    back to the buffer's last reclaim (tag 6). Transactions that only name it are skipped."""
+    newest_first = []
+    for row in signatures(sol, buffer, before=payout):
         if row["err"] is not None:
             continue
         tx = transaction(sol, row["signature"])
-        keys = tx["transaction"]["message"]["accountKeys"]
-        for ix in tx["transaction"]["message"]["instructions"]:
+        if tx["meta"]["err"] is not None:
+            continue
+        keys = account_keys(tx)
+        own = [ix for ix in tx["transaction"]["message"]["instructions"]
+               if keys[ix["programIdIndex"]] == str(VERIFIER) and ix["accounts"] and keys[ix["accounts"][0]] == buffer]
+        reclaimed = False
+        for ix in reversed(own):
             data = base58.b58decode(ix["data"])
-            if keys[ix["programIdIndex"]] == str(VERIFIER) and data[:1] == b"\x05":
-                chunks.append((int.from_bytes(data[1:3], "little"), data[3:]))
+            if data[:1] == b"\x06":
+                reclaimed = True
+                break
+            if data[:1] == b"\x05":
+                newest_first.append((int.from_bytes(data[1:3], "little"), data[3:]))
+        if reclaimed:
+            break
+    chunks = list(reversed(newest_first))
     out = bytearray()
     for offset, chunk in chunks:
         out.extend(b"\0" * max(0, offset + len(chunk) - len(out)))
@@ -184,17 +265,11 @@ def review_burn(action, burn, node, sol):
             and base64.b64decode(account["data"][0]) == want_marker,
             f"marker: {key} does not read {want_marker[0]} at finalized")
     finalized = sol("getSlot", [dict(commitment="finalized")])
-    history = [r for r in sol("getSignaturesForAddress", [str(key), dict(commitment="finalized", limit=100)])]
-    require(len(history) >= 1, "marker: no transaction wrote it")
-    sig = history[-1]["signature"]
-    tx = transaction(sol, sig)
-    require(tx["meta"]["err"] is None, "failed transaction: the marker's writer did not succeed")
+    sig, tx = creating_transaction(sol, key, want_tag)
     require(0 < tx["slot"] <= finalized, "finalized: the transaction is not below the finalized slot")
-    message = tx["transaction"]["message"]
-    keys = message["accountKeys"]
-    tagged = [ix for ix in message["instructions"]
-              if base58.b58decode(ix["data"])[:1] == bytes([want_tag]) and len(ix["accounts"]) >= 7
-              and keys[ix["accounts"][6]] == str(key)]
+    keys = account_keys(tx)
+    tagged = [ix for ix in verifier_instructions(tx, want_tag)
+              if len(ix["accounts"]) >= 7 and keys[ix["accounts"][6]] == str(key)]
     require(len(tagged) == 1, "exactly one: the transaction has not exactly one such instruction for this marker")
     for group in tx["meta"].get("innerInstructions") or []:
         require(not any(keys[i["programIdIndex"]] == str(VERIFIER) for i in group["instructions"]),
@@ -203,7 +278,7 @@ def review_burn(action, burn, node, sol):
     require(keys[ix["programIdIndex"]] == str(VERIFIER), "program: the instruction is not the exit verifier's")
     used = [keys[i] for i in ix["accounts"]]
     require(used[1] == str(LIGHT), "program: the instruction names another light account")
-    values = fields(uploaded_values(sol, used[4]))
+    values = fields(uploaded_values(sol, used[4], sig))
     require(values[23].hex() == burn and values[20] == values[23], "public values: another burn")
     require(int.from_bytes(values[26], "big") == red["amount_atoms"], "public values: another amount")
     require(values[28] == destination_hash(owner), "public values: another destination")
@@ -246,27 +321,77 @@ class Config:
     node: object
     solana: object
     review_dir: Path
-    key: bytes
+    key: object
+    data_dir: Path = None
+    proc: Path = Path("/proc")
+    releases: Path = Path("/opt/postfiat/releases")
+    public: object = None
+
+    def __post_init__(self):
+        if self.public is None and self.key is not None:
+            self.public = self.key.pubkey()
 
 
-def mac(key, body):
-    return hmac.new(key, json.dumps(body, sort_keys=True).encode(), hashlib.sha256).hexdigest()
+def canonical(body):
+    return json.dumps(body, sort_keys=True).encode()
+
+
+def seal(key, body):
+    """The reviewer's Ed25519 signature over the verdict body."""
+    require(key is not None, "no reviewer key: only the reviewer writes verdicts")
+    return str(key.sign_message(canonical(body)))
+
+
+def sealed_by(public, body, signature):
+    try:
+        return Signature.from_string(signature).verify(public, canonical(body))
+    except (ValueError, TypeError):
+        return False
 
 
 def write_verdict(cfg, body):
     body = dict(body, validator=cfg.validator, reviewer=REVIEWER, verdict="approve",
                 decision_sha256=hashlib.sha256(body["decision"].encode()).hexdigest(),
-                solana_endpoint=getattr(cfg.solana, "endpoint", "unknown"),
+                solana_endpoint=endpoint_host(getattr(cfg.solana, "endpoint", "")),
                 time=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                 unix_time=int(time.time()))
-    doc = dict(body, mac=mac(cfg.key, body))
-    cfg.review_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+    doc = dict(body, seal=seal(cfg.key, body))
+    cfg.review_dir.mkdir(mode=0o750, parents=True, exist_ok=True)
     path = cfg.review_dir / f"{body['decision_sha256']}.json"
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(doc, indent=1, sort_keys=True))
-    os.chmod(tmp, 0o644)
+    os.chmod(tmp, 0o640)
     os.replace(tmp, path)
     return path
+
+
+def endpoint_host(url):
+    """The endpoint's host only: a provider's API key in the URL stays out of every record."""
+    return urllib.parse.urlsplit(url).hostname or "unknown"
+
+
+def endpoints(configs):
+    """Print each host's configured Solana provider (host name only); warn, and return 1, when
+    fewer than three different providers serve the six hosts."""
+    hosts = {c["validator"]: endpoint_host(c["solana_rpc"]) for c in configs}
+    for validator, host in sorted(hosts.items()):
+        print(f"{validator} {host}")
+    different = len(set(hosts.values()))
+    if different < 3:
+        print(f"WARNING: only {different} different Solana providers serve these hosts; use at least three")
+        return 1
+    return 0
+
+
+def prune(cfg, now=None):
+    """Remove verdicts older than PRUNE_AGE."""
+    limit = (now or time.time()) - PRUNE_AGE
+    for path in cfg.review_dir.glob("*.json"):
+        try:
+            if path.stat().st_mtime < limit:
+                path.unlink()
+        except FileNotFoundError:
+            continue
 
 
 def run_review(cfg, action, burn):
@@ -275,12 +400,18 @@ def run_review(cfg, action, burn):
             body = review_clearance(cfg)
         else:
             body = review_burn(action, burn, cfg.node, cfg.solana)
+    except AccessError as error:
+        print(f"access error: {error}", file=sys.stderr)
+        return EXIT_ACCESS
     except RpcError as error:
         print(f"rpc error: {error}", file=sys.stderr)
         return EXIT_RPC
     except Refused as error:
         print(f"refused: {error}", file=sys.stderr)
         return EXIT_REFUSED
+    except Exception as error:  # a reply of an unexpected shape: named, never a traceback
+        print(f"rpc error: unexpected {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_RPC
     print(write_verdict(cfg, body))
     return 0
 
@@ -288,8 +419,14 @@ def run_review(cfg, action, burn):
 def review_clearance(cfg, data_dir=None):
     """This host's rotation clearance: its own signing history ends at or below its node's tip."""
     head = cfg.node("status")
-    directory = Path(data_dir or f"/var/lib/postfiat/{cfg.validator}") / "consensus-v2-safety"
-    names = sorted(p.name for p in directory.glob("*.json"))
+    directory = Path(data_dir or cfg.data_dir or f"/var/lib/postfiat/{cfg.validator}") / "consensus-v2-safety"
+    try:
+        names = sorted(name for name in os.listdir(directory) if name.endswith(".json"))
+    except FileNotFoundError:
+        names = []
+    except PermissionError as error:
+        raise AccessError(f"clearance: cannot read {directory}: {error.strerror}; "
+                          "the installer grants the reviewer read access to it") from None
     require(names, "clearance: no resident signing history")
     for name in names:
         match = re.fullmatch(r"height-([0-9]+)\.json", name) or re.fullmatch(
@@ -312,11 +449,11 @@ def load_review(cfg, decision, now=None):
         raise Refused(f"no review of this decision on {cfg.validator}") from None
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
-        require(stat.S_ISREG(info.st_mode) and not info.st_mode & 0o022 and info.st_uid in (0, os.getuid())
-                and info.st_size <= 65536, "unsafe review file")
+        require(stat.S_ISREG(info.st_mode) and not info.st_mode & 0o022 and info.st_size <= 65536,
+                "unsafe review file")
         doc = json.loads(stream.read())
-    body = {k: v for k, v in doc.items() if k != "mac"}
-    require(hmac.compare_digest(str(doc.get("mac", "")), mac(cfg.key, body))
+    body = {k: v for k, v in doc.items() if k != "seal"}
+    require(cfg.public is not None and sealed_by(cfg.public, body, str(doc.get("seal", "")))
             and body.get("validator") == cfg.validator and body.get("reviewer") == REVIEWER,
             "review not written by this host's reviewer")
     require(body.get("decision") == decision and body.get("decision_sha256") == digest
@@ -333,30 +470,122 @@ def authorize(cfg, amendment, now=None):
     return load_review(cfg, amendment["kind"], now)
 
 
-def load_config(path=CONFIG, key=KEY):
+def read_regular(path):
+    """The bytes of a regular file opened without following a symlink."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as stream:
+        require(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), f"not a regular file: {path}")
+        return stream.read(1 << 20)
+
+
+def inside(directory, path):
+    """`path` lies inside `directory` and its last part is not a symlink."""
+    path = Path(path)
+    return not path.is_symlink() and path.parent.resolve().is_relative_to(Path(directory).resolve())
+
+
+def resident_binary(cfg):
+    """The release binary of this host's resident validator for this data directory."""
+    found = set()
+    for cmdline in cfg.proc.glob("[0-9]*/cmdline"):
+        try:
+            args = cmdline.read_bytes().split(b"\0")
+        except OSError:
+            continue
+        args = [a.decode(errors="replace") for a in args if a]
+        if (len(args) > 3 and args[1] == "transport-validator-serve" and "--data-dir" in args
+                and args[args.index("--data-dir") + 1] == str(cfg.data_dir)):
+            binary = Path(args[0])
+            if (binary.name == "postfiat-node" and binary.parent.parent == cfg.releases
+                    and re.fullmatch(r"[A-Za-z0-9_.-]+", binary.parent.name)):
+                found.add(binary)
+    require(len(found) == 1, f"sign: expected one resident validator for {cfg.data_dir}, found {len(found)}")
+    return found.pop()
+
+
+def sign(cfg, amendment_file, proposal_slot, expires_at_height, output, run=subprocess.run):
+    """Sign exactly the reviewed amendment with this host's validator key: the command is built
+    here, never taken from the caller, and the file must not change before or while it is signed."""
+    for path in (amendment_file, output):
+        require(inside(cfg.data_dir, path), f"sign: {path} is not inside the data directory {cfg.data_dir}")
+    raw = read_regular(amendment_file)
+    digest = hashlib.sha256(raw).hexdigest()
+    authorize(cfg, json.loads(raw))
+    command = [str(resident_binary(cfg)), "governance-authorization-sign", "--data-dir", str(cfg.data_dir),
+               "--amendment-file", str(amendment_file), "--validator", cfg.validator,
+               "--validator-key-file", str(Path(cfg.data_dir) / "validator_keys.json"),
+               "--proposal-slot", str(int(proposal_slot)), "--expires-at-height", str(int(expires_at_height)),
+               "--authorization-file", str(output)]
+    require(hashlib.sha256(read_regular(amendment_file)).hexdigest() == digest,
+            "sign: the amendment changed before it was signed")
+    result = run(command, capture_output=True, text=True)
+    if hashlib.sha256(read_regular(amendment_file)).hexdigest() != digest:
+        Path(output).unlink(missing_ok=True)
+        raise Refused("sign: the amendment changed while it was signed")
+    if result.returncode != 0:
+        Path(output).unlink(missing_ok=True)
+        raise RpcError(f"sign: the node's signing command failed: {(result.stderr or '').strip()[-300:]}")
+    require(Path(output).is_file(), "sign: the node wrote no authorization")
+    return output
+
+
+def load_config(path=CONFIG, key=KEY, public=PUBLIC, reviewer=True):
+    """The reviewer loads its keypair; the signing step (`reviewer=False`) only the public key."""
     raw = json.loads(Path(path).read_text())
-    secret = Path(key).read_bytes()
-    require(len(secret) >= 32, "review key too short")
+    keypair = Keypair.from_bytes(Path(key).read_bytes()) if reviewer else None
     return Config(validator=raw["validator"], node=node_rpc(raw["node"]), solana=solana_rpc(raw["solana_rpc"]),
-                  review_dir=Path(raw.get("review_dir", "/var/lib/postfiat-exit-review")), key=secret)
+                  review_dir=Path(raw.get("review_dir", "/var/lib/postfiat-exit-review")), key=keypair,
+                  data_dir=Path(raw.get("data_dir", f"/var/lib/postfiat/{raw['validator']}")),
+                  public=Pubkey.from_string(Path(public).read_text().strip()))
 
 
-def pending_burns(cfg):
-    """Pending covered burns whose marker reads paid or cancelled: what the timer reviews."""
+def pending_burns(cfg, errors):
+    """Pending covered burns whose marker reads paid or cancelled: what the timer reviews. A burn
+    whose marker cannot be read is named in `errors` and does not stop the others."""
     status = cfg.node("vault_bridge_status", asset_id=ASSET)
     for red in status["redemptions"]:
-        if red["state"] != "pending" or red["settled_atoms"] != 0:
+        if red.get("state") != "pending" or red.get("settled_atoms") != 0:
             continue
-        account = cfg.solana("getAccountInfo", [str(marker(red["burn_tx_id"])),
-                                                dict(commitment="finalized", encoding="base64")])["value"]
-        if account and account["owner"] == str(VERIFIER):
-            byte = base64.b64decode(account["data"][0])
-            for action, (want, _) in ACTIONS.items():
-                if byte == want:
-                    yield action, red["burn_tx_id"]
+        try:
+            account = cfg.solana("getAccountInfo", [str(marker(red["burn_tx_id"])),
+                                                    dict(commitment="finalized", encoding="base64")])["value"]
+            byte = base64.b64decode(account["data"][0]) if account and account["owner"] == str(VERIFIER) else None
+        except Exception as error:
+            errors.append(f"{red.get('burn_tx_id')}: {type(error).__name__}: {error}")
+            continue
+        for action, (want, _) in ACTIONS.items():
+            if byte == want:
+                yield action, red["burn_tx_id"]
+
+
+def scan(cfg):
+    """The timer's job: review every pending burn whose marker is written, then the clearance,
+    then prune old verdicts. One failing burn or read stops nothing else."""
+    codes, errors, work = [0], [], []
+    try:
+        work = list(pending_burns(cfg, errors))
+    except Exception as error:
+        errors.append(f"pending burns: {type(error).__name__}: {error}")
+    for error in errors:
+        print(f"rpc error: {error}", file=sys.stderr)
+        codes.append(EXIT_RPC)
+    codes += [run_review(cfg, action, burn) for action, burn in work]
+    codes.append(run_review(cfg, "clearance", None))
+    prune(cfg)
+    return max(codes)
 
 
 def main(argv=None):
+    try:
+        return command(argv)
+    except SystemExit:
+        raise
+    except Exception as error:  # a broken config or key: named, never a traceback
+        print(f"rpc error: unexpected {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_RPC
+
+
+def command(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("paid", "refund"):
@@ -365,22 +594,32 @@ def main(argv=None):
     sub.add_parser("clearance")
     sub.add_parser("show-clearance", help="print this host's own fresh clearance for its node's current tip")
     sub.add_parser("scan", help="review every pending burn whose marker is written (the timer's job)")
-    s = sub.add_parser("sign", help="run the node's signing command only for a reviewed decision")
+    sub.add_parser("endpoints", help="read six hosts' configs (JSON lines on stdin) and check their providers")
+    s = sub.add_parser("sign", help="sign exactly a reviewed decision with this host's validator key")
     s.add_argument("--amendment-file", required=True, type=Path)
-    s.add_argument("command_line", nargs=argparse.REMAINDER)
+    s.add_argument("--proposal-slot", required=True, type=int)
+    s.add_argument("--expires-at-height", required=True, type=int)
+    s.add_argument("--authorization-file", required=True, type=Path)
     args = parser.parse_args(argv)
-    cfg = load_config()
+    if args.command == "endpoints":
+        return endpoints([json.loads(line) for line in sys.stdin if line.strip()])
+    cfg = load_config(reviewer=args.command not in ("sign", "show-clearance"))
     if args.command == "sign":
         try:
-            authorize(cfg, json.loads(args.amendment_file.read_text()))
+            sign(cfg, args.amendment_file, args.proposal_slot, args.expires_at_height, args.authorization_file)
+        except RpcError as error:
+            print(f"rpc error: {error}", file=sys.stderr)
+            return EXIT_RPC
         except Refused as error:
             print(f"refused: {error}", file=sys.stderr)
             return EXIT_REFUSED
-        command = [a for a in args.command_line if a != "--"]
-        os.execv(command[0], command)
+        return 0
     if args.command == "show-clearance":
         try:
             print(json.dumps(load_review(cfg, review_clearance(cfg)["decision"])))
+        except AccessError as error:
+            print(f"access error: {error}", file=sys.stderr)
+            return EXIT_ACCESS
         except RpcError as error:
             print(f"rpc error: {error}", file=sys.stderr)
             return EXIT_RPC
@@ -389,12 +628,7 @@ def main(argv=None):
             return EXIT_REFUSED
         return 0
     if args.command == "scan":
-        try:
-            work = list(pending_burns(cfg))
-        except RpcError as error:
-            print(f"rpc error: {error}", file=sys.stderr)
-            return EXIT_RPC
-        return max([run_review(cfg, action, burn) for action, burn in work] + [run_review(cfg, "clearance", None)])
+        return scan(cfg)
     return run_review(cfg, args.command, getattr(args, "burn", None))
 
 

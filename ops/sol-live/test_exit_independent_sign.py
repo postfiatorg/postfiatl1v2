@@ -36,9 +36,9 @@ class ReviewedFleet(Fleet):
             approved = self.approved(i) if self.approved else {kind}
             if kind not in approved:
                 raise subprocess.CalledProcessError(2, args, stderr="refused: no review of this decision")
-            command = rest[rest.index("--") + 1:]
-            assert command[0] == BIN and command[1] == "governance-authorization-sign", command
-            return super().remote(i, args[:4] + command, data)
+            # No command is passed: the reviewer builds the signing command itself.
+            assert "--" not in rest and BIN not in rest, rest
+            return super().remote(i, args, data)
         return super().remote(i, args, data)
 
 
@@ -87,6 +87,20 @@ class IndependentSignTest(unittest.TestCase):
         fleet = ReviewedFleet(approved=lambda i: {fleet.kind} if i in (0, 1, 2) else set())
         with tempfile.TemporaryDirectory() as d, self.assertRaisesRegex(RuntimeError, "required"):
             paid(fleet, d)
+
+    def test_a_refusing_reviewer_is_reported_with_its_reason_apart_from_an_unreachable_host(self):
+        import contextlib
+        import io
+
+        fleet = ReviewedFleet(approved=lambda i: set() if i == 4 else {fleet.kind})
+        out = io.StringIO()
+        with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(out), \
+                self.assertRaises(RuntimeError) as failed:
+            paid(fleet, d)
+        message = str(failed.exception)
+        self.assertIn("unavailable: validator-3", message)
+        self.assertIn("refused by its own reviewer: validator-4: refused: no review of this decision", message)
+        self.assertIn("refused by its own reviewer: validator-4", out.getvalue())
 
     def test_first_release_keeps_the_go_live_reviews_and_six_signatures(self):
         # A first-release chain reports no rules: every validator must answer and sign, and the
