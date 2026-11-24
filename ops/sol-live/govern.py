@@ -371,14 +371,14 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         if i != lead:
             put(i, "amend", amend)
         if independent:
-            # The host checks its own fresh review of exactly this decision, then signs.
-            def signer(*args):
-                return remote(i, ["runuser", "-u", "postfiat", "--", REVIEWER_PYTHON, "-I", REVIEWER,
-                                  "sign", "--amendment-file", work[i] + "/amend", "--", runtime[i][0], *args])
-        else:
-            def signer(*args):
-                return tool(i, *args)
-        signer(
+            # The host's own reviewer signs exactly the amendment it reviewed: it builds the
+            # node's signing command itself and takes no command from this caller.
+            remote(i, ["runuser", "-u", "postfiat", "--", REVIEWER_PYTHON, "-I", REVIEWER, "sign",
+                       "--amendment-file", work[i] + "/amend", "--proposal-slot", h,
+                       "--expires-at-height", h + 30, "--authorization-file", work[i] + "/auth"])
+            return get(i, "auth")
+        tool(
+            i,
             "governance-authorization-sign",
             "--data-dir",
             dirs[i],

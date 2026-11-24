@@ -36,9 +36,9 @@ class ReviewedFleet(Fleet):
             approved = self.approved(i) if self.approved else {kind}
             if kind not in approved:
                 raise subprocess.CalledProcessError(2, args, stderr="refused: no review of this decision")
-            command = rest[rest.index("--") + 1:]
-            assert command[0] == BIN and command[1] == "governance-authorization-sign", command
-            return super().remote(i, args[:4] + command, data)
+            # No command is passed: the reviewer builds the signing command itself.
+            assert "--" not in rest and BIN not in rest, rest
+            return super().remote(i, args, data)
         return super().remote(i, args, data)
 
 

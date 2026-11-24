@@ -103,8 +103,17 @@ class Fleet:
             return self.files[(i, args[1])]
         rest = args[4:]
         if rest[:4] == [govern.REVIEWER_PYTHON, "-I", govern.REVIEWER, "sign"]:
-            # The host's own reviewer approved this decision; its wrapper runs the signing command.
-            rest = rest[rest.index("--") + 1:]
+            # The host's own reviewer approved this decision and runs the node's signing command
+            # itself, with its own data directory, validator name and key file.
+            flag = {rest[k]: rest[k + 1] for k in range(4, len(rest) - 1, 2)}
+            assert sorted(flag) == ["--amendment-file", "--authorization-file", "--expires-at-height",
+                                    "--proposal-slot"], rest
+            data = f"/var/lib/postfiat/validator-{i}"
+            rest = [BIN, "governance-authorization-sign", "--data-dir", data,
+                    "--amendment-file", flag["--amendment-file"], "--validator", f"validator-{i}",
+                    "--validator-key-file", data + "/validator_keys.json",
+                    "--proposal-slot", flag["--proposal-slot"], "--expires-at-height", flag["--expires-at-height"],
+                    "--authorization-file", flag["--authorization-file"]]
         if rest[0] == "mkdir":
             return ""
         if rest[0] == "tee":

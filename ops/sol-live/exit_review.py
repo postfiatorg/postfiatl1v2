@@ -21,6 +21,7 @@ import os
 import re
 import socket
 import stat
+import subprocess
 import sys
 import time
 import urllib.request
@@ -247,6 +248,9 @@ class Config:
     solana: object
     review_dir: Path
     key: bytes
+    data_dir: Path = None
+    proc: Path = Path("/proc")
+    releases: Path = Path("/opt/postfiat/releases")
 
 
 def mac(key, body):
@@ -333,12 +337,72 @@ def authorize(cfg, amendment, now=None):
     return load_review(cfg, amendment["kind"], now)
 
 
+def read_regular(path):
+    """The bytes of a regular file opened without following a symlink."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as stream:
+        require(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), f"not a regular file: {path}")
+        return stream.read(1 << 20)
+
+
+def inside(directory, path):
+    """`path` lies inside `directory` and its last part is not a symlink."""
+    path = Path(path)
+    return not path.is_symlink() and path.parent.resolve().is_relative_to(Path(directory).resolve())
+
+
+def resident_binary(cfg):
+    """The release binary of this host's resident validator for this data directory."""
+    found = set()
+    for cmdline in cfg.proc.glob("[0-9]*/cmdline"):
+        try:
+            args = cmdline.read_bytes().split(b"\0")
+        except OSError:
+            continue
+        args = [a.decode(errors="replace") for a in args if a]
+        if (len(args) > 3 and args[1] == "transport-validator-serve" and "--data-dir" in args
+                and args[args.index("--data-dir") + 1] == str(cfg.data_dir)):
+            binary = Path(args[0])
+            if (binary.name == "postfiat-node" and binary.parent.parent == cfg.releases
+                    and re.fullmatch(r"[A-Za-z0-9_.-]+", binary.parent.name)):
+                found.add(binary)
+    require(len(found) == 1, f"sign: expected one resident validator for {cfg.data_dir}, found {len(found)}")
+    return found.pop()
+
+
+def sign(cfg, amendment_file, proposal_slot, expires_at_height, output, run=subprocess.run):
+    """Sign exactly the reviewed amendment with this host's validator key: the command is built
+    here, never taken from the caller, and the file must not change before or while it is signed."""
+    for path in (amendment_file, output):
+        require(inside(cfg.data_dir, path), f"sign: {path} is not inside the data directory {cfg.data_dir}")
+    raw = read_regular(amendment_file)
+    digest = hashlib.sha256(raw).hexdigest()
+    authorize(cfg, json.loads(raw))
+    command = [str(resident_binary(cfg)), "governance-authorization-sign", "--data-dir", str(cfg.data_dir),
+               "--amendment-file", str(amendment_file), "--validator", cfg.validator,
+               "--validator-key-file", str(Path(cfg.data_dir) / "validator_keys.json"),
+               "--proposal-slot", str(int(proposal_slot)), "--expires-at-height", str(int(expires_at_height)),
+               "--authorization-file", str(output)]
+    require(hashlib.sha256(read_regular(amendment_file)).hexdigest() == digest,
+            "sign: the amendment changed before it was signed")
+    result = run(command, capture_output=True, text=True)
+    if hashlib.sha256(read_regular(amendment_file)).hexdigest() != digest:
+        Path(output).unlink(missing_ok=True)
+        raise Refused("sign: the amendment changed while it was signed")
+    if result.returncode != 0:
+        Path(output).unlink(missing_ok=True)
+        raise RpcError(f"sign: the node's signing command failed: {(result.stderr or '').strip()[-300:]}")
+    require(Path(output).is_file(), "sign: the node wrote no authorization")
+    return output
+
+
 def load_config(path=CONFIG, key=KEY):
     raw = json.loads(Path(path).read_text())
     secret = Path(key).read_bytes()
     require(len(secret) >= 32, "review key too short")
     return Config(validator=raw["validator"], node=node_rpc(raw["node"]), solana=solana_rpc(raw["solana_rpc"]),
-                  review_dir=Path(raw.get("review_dir", "/var/lib/postfiat-exit-review")), key=secret)
+                  review_dir=Path(raw.get("review_dir", "/var/lib/postfiat-exit-review")), key=secret,
+                  data_dir=Path(raw.get("data_dir", f"/var/lib/postfiat/{raw['validator']}")))
 
 
 def pending_burns(cfg):
@@ -365,19 +429,23 @@ def main(argv=None):
     sub.add_parser("clearance")
     sub.add_parser("show-clearance", help="print this host's own fresh clearance for its node's current tip")
     sub.add_parser("scan", help="review every pending burn whose marker is written (the timer's job)")
-    s = sub.add_parser("sign", help="run the node's signing command only for a reviewed decision")
+    s = sub.add_parser("sign", help="sign exactly a reviewed decision with this host's validator key")
     s.add_argument("--amendment-file", required=True, type=Path)
-    s.add_argument("command_line", nargs=argparse.REMAINDER)
+    s.add_argument("--proposal-slot", required=True, type=int)
+    s.add_argument("--expires-at-height", required=True, type=int)
+    s.add_argument("--authorization-file", required=True, type=Path)
     args = parser.parse_args(argv)
     cfg = load_config()
     if args.command == "sign":
         try:
-            authorize(cfg, json.loads(args.amendment_file.read_text()))
+            sign(cfg, args.amendment_file, args.proposal_slot, args.expires_at_height, args.authorization_file)
+        except RpcError as error:
+            print(f"rpc error: {error}", file=sys.stderr)
+            return EXIT_RPC
         except Refused as error:
             print(f"refused: {error}", file=sys.stderr)
             return EXIT_REFUSED
-        command = [a for a in args.command_line if a != "--"]
-        os.execv(command[0], command)
+        return 0
     if args.command == "show-clearance":
         try:
             print(json.dumps(load_review(cfg, review_clearance(cfg)["decision"])))
