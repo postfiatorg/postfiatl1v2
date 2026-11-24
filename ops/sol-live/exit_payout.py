@@ -751,11 +751,15 @@ PAID_NO_HISTORY = object()
 CANCELLED = "cancelled: refund on Post Fiat"
 
 
-class BurnCancelled(ValueError):
-    """The burn's marker on Solana reads cancelled: it can never be paid."""
+CANCELLED_EARLY = CANCELLED + " once the second release is active"
 
-    def __init__(self):
-        super().__init__(CANCELLED)
+
+class BurnCancelled(ValueError):
+    """The burn's marker on Solana reads cancelled: it can never be paid. Before the second
+    release the chain has no refund decision yet, and the message says so."""
+
+    def __init__(self, early=False):
+        super().__init__(CANCELLED_EARLY if early else CANCELLED)
 
 
 class UnknownBurn(ValueError):
@@ -1255,7 +1259,10 @@ def process(burn, work, update, *, attempt=None, before_send=None):
         recipient=str(owner),
         burn_height=h,
     )
-    paid = signature(c, burn, attempt[0] if attempt else None)
+    try:
+        paid = signature(c, burn, attempt[0] if attempt else None)
+    except BurnCancelled:
+        raise BurnCancelled(early=chain_rules()["release"] == 1) from None
     if paid:
         finish_payment(update, paid)
         prune_work(c, work)
