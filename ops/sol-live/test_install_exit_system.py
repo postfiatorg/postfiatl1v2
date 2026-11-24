@@ -25,6 +25,7 @@ FAKES = {
     "python3": 'if [[ "$1 $2 $3" == "-I -m venv" ]]; then mkdir -p "$4/bin"; '
                'printf "#!/bin/bash\\n[[ -z \\${PIP_FAILS:-} ]]\\n" > "$4/bin/python"; chmod 755 "$4/bin/python"; exit 0; fi; '
                'exec /usr/bin/python3 "$@"',
+    "ln": '[[ -z ${LN_FAILS:-} ]] || exit 1; exec /bin/ln "$@"',
     "runuser": 'case "$*" in *verify_local_host*) [[ -z ${HOST_CHECK_FAILS:-} ]] || exit 1;; '
                '*FEE_PAYER*) [[ -z ${PAYER_CHECK_FAILS:-} ]] || exit 1;; esac; exit 0',
 }
@@ -42,6 +43,7 @@ class Installer:
         self.log.touch()
         self.systemctl_log = self.root / "systemctl.log"
         self.systemctl_log.touch()
+        (self.root / "mountinfo").touch()
 
     def run(self, body, **env):
         """Source the installer with its paths under the root, then run `body`."""
@@ -266,7 +268,7 @@ class MaskTests(unittest.TestCase):
         body = SCRIPT.read_text().split("!= \"$0\" ]]; then return 0; fi", 1)[1]
         masked = body.index("mask_units")
         self.assertLess(body.index("trap cleanup EXIT"), masked)
-        for later in ("rollback_tree", "migrate_account_id", "install_tree", "create_account"):
+        for later in ("rollback_install", "migrate_account_id", "install_tree", "create_account"):
             self.assertLess(masked, body.index(later), later)
         # Checked again after masking, right before the ID move, and in switch_in before the switch.
         self.assertGreaterEqual(body.count('require_stopped "$unit" "$test_unit"'), 3)
@@ -275,6 +277,78 @@ class MaskTests(unittest.TestCase):
                          body.rindex("\n", 0, move - 1) + 1)
         switch = SCRIPT.read_text().split("switch_in() {", 1)[1].split("}", 1)[0]
         self.assertLess(switch.index("require_stopped"), switch.index("switch_tree"))
+
+
+class LegacyAndHousekeepingTests(unittest.TestCase):
+    def test_an_interrupted_move_of_todays_tree_is_finished_by_a_rerun(self):
+        with tempfile.TemporaryDirectory() as d:
+            installer = Installer(d)
+            app, legacy = Path(d, "opt/sol-exit"), Path(d, f"opt/sol-exit.d/{REV_A}.legacy")
+            app.mkdir(parents=True)
+            (app / "revision").write_text(REV_A + "\n")
+            # Cut short after the move, before the link: the worker's path is missing.
+            cut = installer.run("adopt_legacy_tree", LN_FAILS="1")
+            self.assertNotEqual(cut.returncode, 0)
+            self.assertFalse(app.exists() or app.is_symlink())
+            self.assertTrue((legacy / "revision").exists())
+            self.assertEqual(Path(d, "opt/sol-exit.history").read_text(), REV_A + "\n")
+            again = installer.run("adopt_legacy_tree")
+            self.assertEqual(again.returncode, 0, again.stderr)
+            self.assertEqual(os.readlink(app), str(legacy))
+            # The downgrade check and the rollback target survive: install B, then A is refused and is the previous tree.
+            installer.tree(REV_B)
+            self.assertEqual(os.readlink(Path(d, "opt/sol-exit.previous")), str(legacy))
+            refused = installer.run(f'check_not_downgrade {REV_A} {REV_B} 0 "$app/ancestry" "$history"')
+            self.assertIn("installed here before", refused.stderr)
+            self.assertEqual(Path(d, "opt/sol-exit.history").read_text().split(), [REV_A, REV_B])
+
+    def test_rollback_puts_back_the_previous_trees_unit_files(self):
+        with tempfile.TemporaryDirectory() as d:
+            installer = Installer(d)
+            for rev in (REV_A, REV_B):
+                result = installer.run(
+                    f'mkdir -p "$trees"; t=$(mktemp -d "$trees/{rev}.XXXX"); mkdir -p "$t/ops/sol-live"; '
+                    f'for u in "$unit" "$test_unit"; do echo "{rev[0]}" > "$t/ops/sol-live/$u"; done; '
+                    f'install_units "$t"; switch_tree "$app" "$previous" "$t"; record_revision "$app" {rev} "$history"')
+                self.assertEqual(result.returncode, 0, result.stderr)
+            Path(d, "passed").write_text("x")
+            result = installer.run("rollback_install")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((Path(d, "opt/sol-exit") / "revision").read_text(), REV_A + "\n")
+            for name in ("pft-sol-mainnet-withdraw.service", "pft-sol-exit-self-test.service"):
+                self.assertEqual(Path(d, "units", name).read_text(), "a\n")
+            self.assertTrue(Path(d, "units/pft-sol-mainnet-withdraw.service.d/self-test-gate.conf").exists())
+            self.assertFalse(Path(d, "passed").exists())
+
+    def test_interrupted_stages_are_cleaned_and_old_trees_pruned_only_on_request(self):
+        with tempfile.TemporaryDirectory() as d:
+            installer = Installer(d)
+            for rev in (REV_A, REV_B, REV_C):
+                installer.tree(rev)
+            stage = Path(d, f"opt/sol-exit.d/{REV_C}.stage")
+            stage.mkdir()
+            names = lambda: sorted(p.name[:40] for p in Path(d, "opt/sol-exit.d").iterdir())
+            result = installer.run("clean_stages")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(stage.exists())
+            self.assertEqual(names(), [REV_A, REV_B, REV_C], "installed trees stay without --prune")
+            result = installer.run("prune_trees")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(names(), [REV_B, REV_C])
+            self.assertIn("--prune) prune=1", SCRIPT.read_text())
+
+    def test_the_id_move_refuses_a_mount_under_the_service_directory(self):
+        with tempfile.TemporaryDirectory() as d:
+            installer = Installer(d)
+            Path(d, "svc").mkdir()
+            Path(d, "mountinfo").write_text(f"36 35 98:0 / {d}/svc/jobs rw - ext4 /dev/x rw\n"
+                                            f"37 35 98:0 / {d}/svcother rw - ext4 /dev/y rw\n")
+            result = installer.run('migrate_account_id pf-sol-exit 59900 "$svc"')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f"mounted under {d}/svc", result.stderr)
+            self.assertEqual(installer.log.read_text(), "", "nothing was moved")
+            Path(d, "mountinfo").write_text(f"37 35 98:0 / {d}/svcother rw - ext4 /dev/y rw\n")
+            self.assertEqual(installer.run('refuse_submounts "$svc"').returncode, 0)
 
 
 class AccountTests(unittest.TestCase):
@@ -324,7 +398,7 @@ class AccountTests(unittest.TestCase):
         text = SCRIPT.read_text()
         body = text.split("!= \"$0\" ]]; then return 0; fi", 1)[1]
         stopped = body.index('require_stopped "$unit" "$test_unit"')
-        for later in ("migrate_account_id \"$account\"", "install_tree \"$bundle\"", "rollback_tree \"$app\"",
+        for later in ("migrate_account_id \"$account\"", "install_tree \"$bundle\"", "rollback_install",
                       "install -m644 /dev/null /var/log/pf-sol-exit/self-test.log"):
             self.assertLess(stopped, body.index(later), later)
 

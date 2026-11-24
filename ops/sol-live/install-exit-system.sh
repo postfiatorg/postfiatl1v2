@@ -1,7 +1,8 @@
 #!/bin/bash
 # Run only from the owner's digest-verified private stage:
 #   install-exit-system.sh [--allow-downgrade]   install or upgrade to the bundle's revision
-#   install-exit-system.sh --rollback            put the previous tree back
+#   install-exit-system.sh --rollback            put the previous tree and its unit files back
+#   install-exit-system.sh --prune               remove trees other than the live and previous ones
 set -euo pipefail
 umask 022
 operator=postfiat
@@ -31,6 +32,7 @@ unit_dir=/etc/systemd/system
 # /run/systemd/system, which /etc overrides, so its mask would not hold for these units.
 mask_dir=/run/systemd/system.control
 masked=0
+mountinfo=/proc/self/mountinfo
 
 # A unit counts as stopped only when inactive or failed: activating, deactivating or reloading
 # units still run code from the live tree.
@@ -102,14 +104,103 @@ rollback_tree() {
     mv -T -- "$before.next" "$before" || return 1
 }
 
-# Record the revision of the live tree, only after the switch, and its first-install order.
-record_revision() {
-    local link=$1 rev=$2 order=$3 at=""
-    printf '%s\n' "$rev" > "$link/revision.next" || return 1
-    mv -T -- "$link/revision.next" "$link/revision" || return 1
+# Roll back: the previous tree's own unit files and the gates are loaded first, then the trees
+# swap; the self-test must pass again before the worker starts.
+rollback_install() {
+    local earlier
+    [[ -L $app && -L $previous ]] || { echo "No previous tree to roll back to." >&2; return 1; }
+    earlier=$(readlink -- "$previous") || return 1
+    rm -f -- "$passed" || return 1
+    install_units "$earlier" || return 1
+    rollback_tree "$app" "$previous" || return 1
+}
+
+# Today's installs keep the tree as a plain directory at $app. Its revision is added to the
+# history first, then it is moved to $trees/<revision>.legacy, then $app links to it. A run cut
+# short after the move finds $app missing and the one legacy tree, and finishes the link, so the
+# downgrade check and the rollback target survive.
+adopt_legacy_tree() {
+    local installed="" legacy found
+    if [[ -d $app && ! -L $app ]]; then
+        if [[ -f $app/revision ]]; then installed=$(cat -- "$app/revision") || return 1; fi
+        if [[ -n $installed ]]; then add_history "$installed" "$history" || return 1; fi
+        install -d -m755 -o root -g root "$trees" || return 1
+        legacy="$trees/${installed:-legacy}.legacy"
+        [[ ! -e $legacy ]] || { echo "$legacy already exists; move it aside before installing." >&2; return 1; }
+        mv -T -- "$app" "$legacy" || return 1
+    fi
+    if [[ -e $app || -L $app ]]; then return 0; fi
+    [[ -d $trees ]] || return 0
+    found=$(find "$trees" -mindepth 1 -maxdepth 1 -type d -name '*.legacy') || return 1
+    [[ -n $found ]] || return 0
+    if [[ $found == *$'\n'* ]]; then
+        echo "$app is missing and $trees holds more than one legacy tree; link the right one by hand." >&2
+        return 1
+    fi
+    ln -sfnT -- "$found" "$app.next" || return 1
+    mv -T -- "$app.next" "$app" || return 1
+}
+
+add_history() {
+    local rev=$1 order=$2 at=""
     if [[ -f $order ]]; then at=$(line_of "$rev" "$order") || return 1; fi
     if [[ -z $at ]]; then printf '%s\n' "$rev" >> "$order" || return 1; fi
     return 0
+}
+
+# The trees $app and $previous point at.
+kept_trees() {
+    local link
+    for link in "$app" "$previous"; do
+        if [[ -L $link ]]; then readlink -- "$link" || return 1; fi
+    done
+}
+
+# A staged tree that never went live has no revision file: a run cut short left it. Remove those.
+clean_stages() {
+    local kept tree
+    [[ -d $trees ]] || return 0
+    kept=$(kept_trees) || return 1
+    for tree in "$trees"/*/; do
+        tree=${tree%/}
+        [[ -d $tree && $tree != *.legacy && ! -e $tree/revision ]] || continue
+        if grep -qxF -- "$tree" <<<"$kept"; then continue; fi
+        echo "Removing $tree, left by an interrupted install."
+        rm -rf -- "$tree" || return 1
+    done
+}
+
+# Only with --prune: remove every tree but the live and the previous one.
+prune_trees() {
+    local kept tree
+    kept=$(kept_trees) || return 1
+    for tree in "$trees"/*/; do
+        tree=${tree%/}
+        [[ -d $tree ]] || continue
+        if grep -qxF -- "$tree" <<<"$kept"; then continue; fi
+        echo "Removing $tree."
+        rm -rf -- "$tree" || return 1
+    done
+}
+
+# The ID move re-owns files with `find -xdev`, which does not cross into another filesystem; a
+# mount under $1 would keep the old IDs unnoticed, so it is refused instead.
+refuse_submounts() {
+    local mounts
+    mounts=$(awk -v top="$1/" 'index($5, top) == 1 { print $5 }' "$mountinfo") ||
+        { echo "Cannot read $mountinfo." >&2; return 1; }
+    if [[ -n $mounts ]]; then
+        echo "A filesystem is mounted under $1 ($mounts); the ID move would not reach its files. Unmount it first." >&2
+        return 1
+    fi
+}
+
+# Record the revision of the live tree, only after the switch, and its first-install order.
+record_revision() {
+    local link=$1 rev=$2 order=$3
+    printf '%s\n' "$rev" > "$link/revision.next" || return 1
+    mv -T -- "$link/revision.next" "$link/revision" || return 1
+    add_history "$rev" "$order" || return 1
 }
 
 # Install the bundle: build and check a staged tree beside the live one, then put its unit files
@@ -252,6 +343,7 @@ migrate_account_id() {
     [[ $old_uid =~ ^[0-9]+$ && $old_gid =~ ^[0-9]+$ ]] || { echo "Cannot read the IDs of $name." >&2; return 1; }
     if [[ $old_uid == "$id" && $old_gid == "$id" ]]; then return 0; fi
     check_account_id "$id" "$name" || return 1
+    refuse_submounts "$home" || return 1
     echo "Moving $name from user ID $old_uid and group ID $old_gid to $id."
     groupmod -g "$id" "$name" || return 1
     usermod -u "$id" "$name" || return 1
@@ -313,11 +405,12 @@ cleanup() {
 # Tests source this file for the functions above.
 if [[ ${BASH_SOURCE[0]} != "$0" ]]; then return 0; fi
 
-allow_downgrade=0 rollback=0
+allow_downgrade=0 rollback=0 prune=0
 for arg in "$@"; do
     case $arg in
         --allow-downgrade) allow_downgrade=1 ;;
         --rollback) rollback=1 ;;
+        --prune) prune=1 ;;
         *) echo "Unknown argument $arg." >&2; exit 2 ;;
     esac
 done
@@ -349,9 +442,14 @@ require_stopped "$unit" "$test_unit"
 trap cleanup EXIT
 mask_units
 require_stopped "$unit" "$test_unit"
+adopt_legacy_tree
+clean_stages
+if (( prune )); then
+    prune_trees
+    exit 0
+fi
 if (( rollback )); then
-    rm -f -- "$passed"
-    rollback_tree "$app" "$previous"
+    rollback_install
     restored=$(cat "$app/revision")
     echo "Rolled back to $restored. Run the archive self-test before starting the worker."
     exit 0
@@ -378,18 +476,6 @@ install -d -m750 -o root -g "$account" "$svc"
 install -d -m700 -o "$account" -g "$account" "$svc/jobs"
 install -m640 -o root -g "$account" "$bundle/known_hosts" "$svc/known_hosts"
 bash "$bundle/runtime/ops/sol-live/check-prover-host.sh" "$svc/known_hosts"
-# A tree from an installer before this one becomes the first entry under $trees, in one rename.
-if [[ -d $app && ! -L $app ]]; then
-    install -d -m755 -o root -g root "$trees"
-    legacy="$trees/${installed:-legacy}.legacy"
-    mv -T -- "$app" "$legacy"
-    ln -sT -- "$legacy" "$app"
-    if [[ -n $installed ]]; then
-        at=""
-        if [[ -f $history ]]; then at=$(line_of "$installed" "$history"); fi
-        if [[ -z $at ]]; then printf '%s\n' "$installed" >> "$history"; fi
-    fi
-fi
 # Credentials go through a private directory in $svc (root and the worker's group only), never
 # through a world-readable place, and end at mode 600 owned by the worker.
 tmp=$(mktemp -d "$svc/.install.XXXXXXXX")
