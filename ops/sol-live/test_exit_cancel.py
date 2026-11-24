@@ -79,6 +79,18 @@ class CancelToolTest(unittest.TestCase):
                     xc.verify(out, bytes(Transaction.new_signed_with_payer(
                         [], other.pubkey(), [other], unsigned.message.recent_blockhash)))
 
+    def test_a_recorded_attempt_counts_as_in_flight_until_its_block_height(self):
+        import exit_service as svc
+
+        with tempfile.TemporaryDirectory() as d:
+            j = svc.Journal(Path(d) / "jobs.sqlite")
+            j.enqueue(BURN)
+            j.record_attempt(BURN, "sig", 500)
+            self.assertTrue(xc.pending_attempts(Path(d) / "jobs.sqlite", BURN, 400))
+            j.update(BURN, "queued")
+            self.assertTrue(xc.pending_attempts(Path(d) / "jobs.sqlite", BURN, 500))
+            self.assertFalse(xc.pending_attempts(Path(d) / "jobs.sqlite", BURN, 501))
+
     def test_send_refuses_before_the_second_release(self):
         with tempfile.TemporaryDirectory() as d:
             self.prepare(d)
