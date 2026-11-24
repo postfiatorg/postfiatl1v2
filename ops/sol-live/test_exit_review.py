@@ -62,10 +62,36 @@ class Solana:
     endpoint = "https://solana.example/host-3"
 
     def __init__(self, marker=b"\x01", tag=2, err=None, extra_payout=False, buffer=None, delta=AMOUNT,
-                 mint=None, program=None, fail=None, tx_slot=SLOT):
+                 mint=None, program=None, fail=None, tx_slot=SLOT, prefund=False, crowd=0, stranger_upload=False):
         self.marker, self.tag, self.err, self.extra = marker, tag, err, extra_payout
         self.buffer = values() if buffer is None else buffer
         self.delta, self.mint, self.program, self.fail, self.tx_slot = delta, mint, program, fail, tx_slot
+        payout = dict(signature=base58.b58encode(SIG).decode(), err=None, slot=tx_slot)
+        # Each address's finalized history, newest first, as getSignaturesForAddress pages it.
+        later = [dict(signature=f"later{n}", err=None, slot=tx_slot + 1 + n) for n in reversed(range(crowd))]
+        self.histories = {
+            str(rv.marker(BURN)): later + [payout] + ([dict(signature="prefund", err=None, slot=SLOT - 9)]
+                                                    if prefund else []),
+            BUFFER: later + [payout]
+            + ([dict(signature="stranger", err=None, slot=SLOT - 3)] if stranger_upload else [])
+            + [dict(signature="upload", err=None, slot=SLOT - 5)],
+        }
+        self.pages = 0
+
+    def history(self, address, params):
+        rows = self.histories.get(address, [])
+        if params.get("before"):
+            rows = rows[[r["signature"] for r in rows].index(params["before"]) + 1:]
+        self.pages += 1
+        return rows[:params["limit"]]
+
+    def naming(self, signature, *named, program=None, data=b"\x02" + b"\0" * 11):
+        """A successful transaction that only names addresses: a lamport transfer or a stranger's call."""
+        keys = ["payer", *named, str(program or rv.SYSTEM)]
+        return dict(slot=SLOT, meta=dict(err=None, innerInstructions=[]), transaction=dict(
+            signatures=[signature], message=dict(accountKeys=keys, instructions=[
+                dict(programIdIndex=len(keys) - 1, accounts=list(range(len(keys) - 1)),
+                     data=base58.b58encode(data).decode())])))
 
     def __call__(self, method, params):
         if self.fail == method:
@@ -79,10 +105,14 @@ class Solana:
             import base64
             return dict(value=dict(owner=str(rv.VERIFIER), data=[base64.b64encode(self.marker).decode(), "base64"]))
         if method == "getSignaturesForAddress":
-            if params[0] == marker:
-                return [dict(signature=base58.b58encode(SIG).decode(), err=None, slot=self.tx_slot)]
-            return [dict(signature="upload", err=None, slot=SLOT - 5)]
+            return self.history(params[0], params[1])
         if method == "getTransaction":
+            if params[0] == "prefund" or params[0].startswith("later"):
+                return self.naming(params[0], marker, BUFFER)
+            if params[0] == "stranger":
+                # Someone else's verifier upload into its own buffer, naming this buffer read-only.
+                data = bytes([5]) + (0).to_bytes(2, "little") + values(amount=1)
+                return self.naming("stranger", str(Keypair().pubkey()), BUFFER, program=rv.VERIFIER, data=data)
             if params[0] == "upload":
                 data = bytes([5]) + (0).to_bytes(2, "little") + self.buffer
                 keys = [str(rv.VERIFIER), BUFFER]
@@ -140,6 +170,26 @@ class ReviewTest(unittest.TestCase):
             with self.assertRaises(rv.Refused, msg=name) as caught:
                 self.review(**case)
             self.assertIn(name.strip(), str(caught.exception))
+
+    def test_a_prefunded_or_crowded_marker_is_still_reviewed_by_its_creating_transaction(self):
+        for case in (dict(prefund=True), dict(crowd=150), dict(prefund=True, crowd=150)):
+            with self.subTest(**case):
+                self.assertEqual(self.review(sol=Solana(**case))["decision"], PAID_KIND)
+        # Pages of fewer signatures: the reviewer pages back to the creating transaction.
+        from unittest.mock import patch
+        sol = Solana(prefund=True, crowd=150)
+        with patch.object(rv, "PAGE", 40):
+            self.assertEqual(self.review(sol=sol)["decision"], PAID_KIND)
+        self.assertGreater(sol.pages, 4)
+
+    def test_a_history_beyond_the_stated_bound_is_refused_by_name(self):
+        from unittest.mock import patch
+        with patch.object(rv, "PAGE", 10), patch.object(rv, "MAX_PAGES", 3):
+            with self.assertRaisesRegex(rv.Refused, "more than 30 transactions"):
+                self.review(sol=Solana(crowd=150))
+
+    def test_a_strangers_upload_naming_the_buffer_is_ignored(self):
+        self.assertEqual(self.review(sol=Solana(stranger_upload=True, crowd=20))["decision"], PAID_KIND)
 
     def test_an_rpc_error_exits_non_zero_by_name(self):
         with tempfile.TemporaryDirectory() as d:
