@@ -84,6 +84,33 @@ ACTIVATED = "vault bridge route profile activated"
 BLOCK_PAGE = 8
 
 
+def checked_blocks(start):
+    """The block headers from height `start` to the tip, read BLOCK_PAGE at a time.
+
+    Each page must start at the height asked for and run on without a gap or a repeat, and each
+    block must name the block before it as its parent, across pages too. A short page is the tip:
+    if the tip moved between pages, reading simply goes on by height and ends at the first short
+    page; blocks committed after that are read on the next run. Reads that came from a chain other
+    than the one already read fail the parent check.
+    """
+    height, parent = start, None
+    while True:
+        blocks = rpc(0, "blocks", from_height=height, limit=BLOCK_PAGE)
+        if len(blocks) > BLOCK_PAGE:
+            raise RuntimeError(f"blocks page from {height} has {len(blocks)} blocks, more than {BLOCK_PAGE}")
+        for offset, block in enumerate(blocks):
+            header = block["header"]
+            if header["height"] != height + offset:
+                raise RuntimeError(f"blocks page from {height}: block {offset} has height {header['height']}")
+            if parent is not None and header["parent_hash"] != parent:
+                raise RuntimeError(f"block {header['height']} does not link to block {header['height'] - 1}")
+            parent = header["block_hash"]
+            yield header
+        if len(blocks) < BLOCK_PAGE:
+            return
+        height += BLOCK_PAGE
+
+
 def accepted_activation(tx_id):
     found = rpc(0, "receipts", tx_id=tx_id, limit=1)
     return bool(found) and found[-1].get("accepted") is True and found[-1].get("message") == ACTIVATED
@@ -97,27 +124,22 @@ def chain_revision(old):
     that amendment's receipt must be accepted and its kind must name the profile's hash.
     """
     route, current = old["profile"]["route_id"], old["profile"]["route_epoch"]
-    later, height = [], old["height"] + 1
-    while True:
-        blocks = rpc(0, "blocks", from_height=height, limit=BLOCK_PAGE)
-        for block in blocks:
-            header = block["header"]
-            if header["batch_kind"] != "governance":
-                continue
-            for entry in rpc(0, "batch_archive", batch_kind="governance", batch_id=header["batch_id"], limit=1):
-                for activation in json.loads(entry["payload_json"]).get("vault_bridge_route_profile_activations", []):
-                    candidate = activation["profile"]
-                    if candidate["route_id"] != route or candidate["route_epoch"] <= current:
-                        continue
-                    amendment = activation["amendment"]
-                    if not accepted_activation(amendment["amendment_id"]):
-                        continue
-                    if amendment["kind"].split(":")[-1] != profile_hash(candidate):
-                        raise RuntimeError(f"route activation {amendment['amendment_id']} differs from its amendment")
-                    later.append((amendment["amendment_id"], header["height"], candidate))
-        if len(blocks) < BLOCK_PAGE:
-            break
-        height = blocks[-1]["header"]["height"] + 1
+    later = []
+    # The current revision's own block is read first only to anchor the parent links.
+    for header in checked_blocks(old["height"]):
+        if header["height"] == old["height"] or header["batch_kind"] != "governance":
+            continue
+        for entry in rpc(0, "batch_archive", batch_kind="governance", batch_id=header["batch_id"], limit=1):
+            for activation in json.loads(entry["payload_json"]).get("vault_bridge_route_profile_activations", []):
+                candidate = activation["profile"]
+                if candidate["route_id"] != route or candidate["route_epoch"] <= current:
+                    continue
+                amendment = activation["amendment"]
+                if not accepted_activation(amendment["amendment_id"]):
+                    continue
+                if amendment["kind"].split(":")[-1] != profile_hash(candidate):
+                    raise RuntimeError(f"route activation {amendment['amendment_id']} differs from its amendment")
+                later.append((amendment["amendment_id"], header["height"], candidate))
     if not later:
         return None
     latest = max(later, key=lambda found: found[2]["route_epoch"])
