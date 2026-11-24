@@ -202,7 +202,8 @@ impl KTables {
         let p0 = self.kmul16(a0, b0);
         let p1 = self.kmul16(a1, b1);
         let p2 = self.kmul16(a0 ^ a1, b0 ^ b1);
-        let lo = p0 ^ reduce_poly16_31((p1 as u64) << 11);
+        let h = (p1 >> 5) as u32;
+        let lo = p0 ^ (((p1 as u32) << 11) ^ h ^ (h << 1) ^ (h << 3) ^ (h << 5)) as u16;
         let hi = p2 ^ p0;
         (lo as u32) | ((hi as u32) << 16)
     }
@@ -629,7 +630,8 @@ impl E {
             } else {
                 0
             };
-            let lo = p0 ^ reduce_poly16_31((p1 as u64) << 11);
+            let h = (p1 >> 5) as u32;
+            let lo = p0 ^ (((p1 as u32) << 11) ^ h ^ (h << 1) ^ (h << 3) ^ (h << 5)) as u16;
             let hi = p2 ^ p0;
             out[i] = (lo as u32) | ((hi as u32) << 16);
         }
@@ -1066,22 +1068,23 @@ impl RingSwitchLinearMap {
         }
         #[cfg(any(not(target_arch = "x86_64"), feature = "portable"))]
         {
-            let mut acc = E::ZERO;
+            let mut acc = [0u32; 12];
             for v in 0..12 {
                 let w = z.c[v];
                 if w != 0 {
                     let base = v * 8;
-                    acc.add_assign(self.table[base][(w & 0xF) as usize]);
-                    acc.add_assign(self.table[base + 1][((w >> 4) & 0xF) as usize]);
-                    acc.add_assign(self.table[base + 2][((w >> 8) & 0xF) as usize]);
-                    acc.add_assign(self.table[base + 3][((w >> 12) & 0xF) as usize]);
-                    acc.add_assign(self.table[base + 4][((w >> 16) & 0xF) as usize]);
-                    acc.add_assign(self.table[base + 5][((w >> 20) & 0xF) as usize]);
-                    acc.add_assign(self.table[base + 6][((w >> 24) & 0xF) as usize]);
-                    acc.add_assign(self.table[base + 7][((w >> 28) & 0xF) as usize]);
+                    for s in 0..8 {
+                        let nib = ((w >> (s * 4)) & 0xF) as usize;
+                        if nib != 0 {
+                            let row = unsafe { &self.table.get_unchecked(base + s).get_unchecked(nib).c };
+                            for i in 0..12 {
+                                acc[i] ^= row[i];
+                            }
+                        }
+                    }
                 }
             }
-            acc
+            E { c: acc }
         }
     }
 
