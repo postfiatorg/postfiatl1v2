@@ -197,17 +197,8 @@ fn read_archived_batch_for_block(
 
 pub fn blocks(options: BlockQueryOptions) -> io::Result<Vec<BlockRecord>> {
     let store = NodeStore::new(options.data_dir);
-    let mut blocks = store.read_blocks()?.blocks;
     let limit = bounded_read_query_limit(options.limit, "blocks")?;
-    if let Some(from_height) = options.from_height {
-        blocks.retain(|block| block.header.height >= from_height);
-        if blocks.len() > limit {
-            blocks.truncate(limit);
-        }
-    } else if blocks.len() > limit {
-        blocks = blocks[blocks.len() - limit..].to_vec();
-    }
-    Ok(blocks)
+    store.read_blocks_window(options.from_height, limit)
 }
 
 pub fn account_tx(options: AccountTxQueryOptions) -> io::Result<AccountTxReport> {
