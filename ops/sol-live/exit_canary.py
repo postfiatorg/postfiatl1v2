@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 import time
+import exit_rules
 
 import requests
 from exit_setup import (
@@ -28,7 +29,19 @@ from exit_setup import (
     save,
     six,
 )
-from exit_payout import ATA, MINT, PREFIX, TOKEN, marker, pda, signature
+from exit_payout import (
+    ATA,
+    MINT,
+    PREFIX,
+    SOURCE_DOMAIN,
+    TOKEN,
+    covered_buckets,
+    destination_refusal,
+    DestinationNotWallet,
+    marker,
+    pda,
+    signature,
+)
 
 OWNER = "pf5c266a1bdb18320e140961411a8c4d8383eaafb2"
 PHANTOM = pk("Ce5Yv528pKVrVq4JbQchZ8zasCAzxT3f9uCfatTZcfo8")
@@ -59,7 +72,22 @@ def check_unsigned(unsigned, fields):
     )
 
 
-def token_deltas(tx, owner=PHANTOM):
+def canary_amount(r):
+    """The canary burns the chain's governed minimum withdrawal (0.30 USDC by default), or
+    the first release's 0.02 USDC where readiness reports the first release."""
+    if r.get("min_withdrawal_atoms") is None and r.get("exit_release") == 1:
+        return exit_rules.FIRST_RELEASE_CANARY_ATOMS
+    minimum = int(r.get("min_withdrawal_atoms") or 0)
+    require(minimum > 0, "Readiness does not report the governed minimum withdrawal.")
+    return minimum
+
+
+def planned_amount(plan):
+    # Plans written before the governed minimum burned the fixed 0.02 USDC canary.
+    return plan["fields"].get("operation", {}).get("amount_atoms", 20000)
+
+
+def token_deltas(tx, amount, owner=PHANTOM):
     meta = tx["meta"]
     require(meta["err"] is None, "Solana payout failed.")
     keys = tx["transaction"]["message"]["accountKeys"]
@@ -85,21 +113,23 @@ def token_deltas(tx, owner=PHANTOM):
             amounts.append(int(rows[0]["uiTokenAmount"]["amount"]))
         deltas[name] = amounts[1] - amounts[0]
     require(
-        deltas == {"custody": -20000, "recipient": 20000},
+        deltas == {"custody": -amount, "recipient": amount},
         "Canary transaction token deltas differ.",
     )
     return deltas
 
 
-def balances(c):
+def balances(c, series):
     from exit_precheck import recipient_atoms
 
     addr = pda(ATA, bytes(PHANTOM), bytes(TOKEN), bytes(MINT))
     acc = c.account(addr)
-    line = rpc(0, "account_assets", account=OWNER, asset_id=SERIES, limit=1)["assets"]
+    line = rpc(
+        0, "account_assets", account=OWNER, asset_id=series["series_asset_id"], limit=1
+    )["assets"]
     require(
         len(line) == 1
-        and line[0]["source_bucket_id"] == BUCKET
+        and line[0]["source_bucket_id"] == series["bucket_id"]
         and line[0]["authorized"]
         and not line[0]["frozen"],
         "missing test series",
@@ -111,23 +141,41 @@ def balances(c):
     )
 
 
+def choose_series(r, amount):
+    """The custody series the canary burns: the one with most redeemable, then by bucket."""
+    offer = [s for s in r.get("series", []) if int(s["redeemable_atoms"]) >= amount]
+    require(offer, "Insufficient Solana-backed pfUSDC")
+    best = max(offer, key=lambda s: (int(s["redeemable_atoms"]), s["bucket_id"]))
+    return dict(bucket_id=best["bucket_id"], series_asset_id=best["series_asset_id"])
+
+
+def require_wallet_destination(c):
+    """Run the payout service's owner check before the burn is built."""
+    reason = destination_refusal(c, PHANTOM)
+    if reason is not None:
+        raise DestinationNotWallet(reason)
+
+
 def prepare(out, *, allow_closed=False):
-    r = requests.get(API + "/readiness", timeout=60).json()
+    r = requests.get(API + "/readiness", params=dict(account=OWNER), timeout=60).json()
     require(
         (r["ready"] or (allow_closed and r["payout_ready"] and not r["burns_open"]))
-        and r["bucket_id"] == BUCKET
-        and r["series_asset_id"] == SERIES,
+        and r["source_domain"] == SOURCE_DOMAIN,
         "Payout is unavailable",
     )
-    before = balances(cluster())
-    require(before["pfusdc_atoms"] >= 20000, "Insufficient Solana-backed pfUSDC")
+    amount = canary_amount(r)
+    series = choose_series(r, amount)
+    c = cluster()
+    require_wallet_destination(c)
+    before = balances(c, series)
+    require(before["pfusdc_atoms"] >= amount, "Insufficient Solana-backed pfUSDC")
     op = dict(
         operation="vault_bridge_burn_to_redeem",
         owner=OWNER,
         issuer=r["issuer"],
         asset_id=ASSET,
-        bucket_id=BUCKET,
-        amount_atoms=20000,
+        bucket_id=series["bucket_id"],
+        amount_atoms=amount,
         epoch=r["epoch"],
         reserve_packet_hash=r["reserve_packet_hash"],
         destination_ref=DEST,
@@ -152,6 +200,7 @@ def prepare(out, *, allow_closed=False):
     )
     return dict(
         before=before,
+        series=series,
         parent=head,
         fields=dict(
             chain_id=q["chain_id"],
@@ -199,8 +248,9 @@ def verified_burn_id(raw, fields):
         and fields["source"] == op["owner"] == OWNER
         and op["asset_id"] == ASSET
         and op["destination_ref"] == DEST
-        and op["bucket_id"] == BUCKET
-        and op["amount_atoms"] == 20000,
+        and op["bucket_id"]
+        in covered_buckets(rpc(0, "vault_bridge_status", asset_id=ASSET)["buckets"])
+        and op["amount_atoms"] > 0,
         "Unexpected canary intent.",
     )
     result = subprocess.run(
@@ -296,6 +346,11 @@ def recover(out):
     raise ValueError("Six validators refused proposer role")
 
 
+def plan_series(plan):
+    # Plans written before custody-wide payouts burned the revision-8 series.
+    return plan.get("series", dict(bucket_id=BUCKET, series_asset_id=SERIES))
+
+
 def burn_debit(report, transaction, tx, *, owner, sequence, bucket, amount, destination):
     require(report["asset_id"] == ASSET, "Unexpected burn report asset.")
     matches = [r for r in report["redemptions"] if r["burn_tx_id"] == tx]
@@ -325,10 +380,12 @@ def check(out):
     tx = verified_burn_id((out / "signed.json").read_text(), plan["fields"])
 
     def verify_debit(i):
+        # The plan's own bucket and governed amount, for any bucket of the custody.
         return burn_debit(
             rpc(i, "vault_bridge_status", asset_id=ASSET), rpc(i, "tx", tx_id=tx), tx,
-            owner=OWNER, sequence=plan["fields"]["sequence"], bucket=BUCKET,
-            amount=20000, destination=DEST,
+            owner=OWNER, sequence=plan["fields"]["sequence"],
+            bucket=plan_series(plan)["bucket_id"],
+            amount=planned_amount(plan), destination=DEST,
         )
 
     fleet()
@@ -355,7 +412,7 @@ def check(out):
                 job["solana_tx"],
                 dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
             )
-            deltas = token_deltas(finalized)
+            deltas = token_deltas(finalized, amount=planned_amount(plan))
             require(
                 signature(c, tx, job["solana_tx"]) == job["solana_tx"],
                 "Canary payout signature mismatch",
@@ -368,6 +425,7 @@ def check(out):
                 l1_debit_atoms=debit["amount_atoms"],
                 burn_receipts=[dict(validator=i, **record) for i, record in enumerate(confirmations)],
                 token_deltas=deltas,
+                amount_atoms=planned_amount(plan),
                 finalized_slot=finalized["slot"],
                 withdrawal_packet_hash=debit["packet"],
                 marker=str(marker(tx)),
@@ -396,7 +454,7 @@ def finalized_reference(paid, tx):
     )
     raw = base58.b58decode(sig)
     require(len(raw) == 64 and any(raw), "Invalid transaction signature.")
-    token_deltas(tx)
+    token_deltas(tx, amount=paid.get("amount_atoms", 20000))
     msg = tx["transaction"]["message"]
     keys = msg["accountKeys"]
     require(not msg.get("addressTableLookups"), "Unexpected lookup-table payout.")
@@ -454,8 +512,8 @@ def match_reference(amendment, ref):
     )
 
 
-def review_paid(paid):
-    from exit_precheck import agreement
+def review_paid(paid, need=6):
+    from live import agreeing, survey
 
     c = cluster()
     tx = c.call(
@@ -480,28 +538,32 @@ def review_paid(paid):
         )
         return settlement_state(status, paid)
 
-    agreement(six(verify))
+    # Settlement is decided by five of six: that many must agree on the record.
+    rows = survey(verify, need)
+    agreeing(rows, lambda r: json.dumps(r, sort_keys=True), need, "Validator records differ.")
     return ref
 
 
 def settlement_state(status, paid):
     (row,) = [r for r in status["redemptions"] if r["burn_tx_id"] == paid["burn_tx_id"]]
+    bucket_id = row["bucket_id"]
     require(
-        row["bucket_id"] == BUCKET
-        and row["amount_atoms"] == 20000
+        bucket_id in covered_buckets(status["buckets"])
+        and row["amount_atoms"] == paid.get("amount_atoms", 20000)
         and row["withdrawal_packet_hash"] == paid["withdrawal_packet_hash"],
         "Settlement does not identify the original withdrawal packet.",
     )
-    (bucket,) = [b for b in status["buckets"] if b["bucket_id"] == BUCKET]
+    (bucket,) = [b for b in status["buckets"] if b["bucket_id"] == bucket_id]
     allocations = [
         a for a in status["allocations"]
-        if a["purpose"] == "vault_bridge_supply" and a["bucket_id"] == BUCKET
+        if a["purpose"] == "vault_bridge_supply" and a["bucket_id"] == bucket_id
     ]
     others = [
         r for r in status["redemptions"]
-        if r["bucket_id"] == BUCKET and r["burn_tx_id"] != paid["burn_tx_id"]
+        if r["bucket_id"] == bucket_id and r["burn_tx_id"] != paid["burn_tx_id"]
     ]
     return dict(
+        amount=row["amount_atoms"],
         state=row["state"],
         settled=row["settled_atoms"],
         receipt=row["settlement_receipt_hash"],
@@ -511,7 +573,7 @@ def settlement_state(status, paid):
         supply=sum(a["remaining_atoms"] for a in allocations),
         activity=dict(
             issued=sum(a["amount_atoms"] for a in allocations),
-            credited=sum(r["counted_value_atoms"] for r in status["receipts"] if r["bucket_id"] == BUCKET),
+            credited=sum(r["counted_value_atoms"] for r in status["receipts"] if r["bucket_id"] == bucket_id),
             other_burns=sum(r["amount_atoms"] for r in others),
             other_settled=sum(r["settled_atoms"] for r in others),
         ),
@@ -527,18 +589,19 @@ def check_settlement(before, after, amendment):
         require(before["packet"] == after["packet"], "Baseline names another packet.")
         delta = {k: after["activity"][k] - before["activity"][k] for k in delta}
         require(min(delta.values()) >= 0, "Cumulative bucket activity regressed.")
-    settled = 20000 + delta["other_settled"]
+    amount = before.get("amount", 20000)
+    settled = amount + delta["other_settled"]
     require(
         before["state"] == "pending"
         and before["settled"] == 0
         and after["state"] == "settled"
-        and after["settled"] == 20000
+        and after["settled"] == amount
         and after["receipt"] == amendment
         and after["outstanding"] == before["outstanding"] + delta["issued"] - delta["other_burns"]
         and after["queue"] == before["queue"] + delta["other_burns"] - settled
         and after["supply"] == before["supply"] + delta["issued"] - settled
         and after["counted"] == before["counted"] + delta["credited"] - settled,
-        "Settlement receipt or revision-8 accounting differs.",
+        "Settlement receipt or bucket accounting differs.",
     )
 
 

@@ -162,6 +162,8 @@ pub const VAULT_BRIDGE_ALLOCATION_PURPOSE_REDEMPTION: &str = "redemption";
 pub const VAULT_BRIDGE_ALLOCATION_PURPOSE_OTHER: &str = "other";
 pub const VAULT_BRIDGE_REDEMPTION_STATE_PENDING: &str = "pending";
 pub const VAULT_BRIDGE_REDEMPTION_STATE_SETTLED: &str = "settled";
+/// A Solana exit burn whose marker reads cancelled on Solana, credited back on Post Fiat.
+pub const VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED: &str = "refunded";
 pub const ESCROW_STATE_OPEN: &str = "open";
 pub const ESCROW_STATE_FINISHED: &str = "finished";
 pub const ESCROW_STATE_CANCELED: &str = "canceled";

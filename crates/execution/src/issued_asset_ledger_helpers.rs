@@ -1,61 +1,226 @@
-/// Live claims for exactly one source series, including the Orchard turnstile.
-pub struct SolanaExitAccounting {
+/// The covered custody bucket of a Solana-source series. First release: the revision-8 series
+/// only. Second release: also a series whose source bucket belongs to the shared custody and
+/// derives this series ID.
+pub fn solana_exit_series_bucket(
+    chain_id: &str,
+    ledger: &LedgerState,
+    asset_id: &str,
+    second: bool,
+) -> Option<String> {
+    use postfiat_types::solana_exit::{matches_bucket, BUCKET, FAMILY, SERIES};
+    if asset_id == SERIES {
+        return Some(BUCKET.into());
+    }
+    if !second {
+        return None;
+    }
+    let asset = ledger.asset_definition(asset_id)?;
+    let bucket = ledger
+        .vault_bridge_bucket(&asset.source_bucket_id)
+        .filter(|b| matches_bucket(b, true))?;
+    (asset_id == postfiat_types::solana_source_series_id(chain_id, FAMILY, &bucket.bucket_id))
+        .then(|| bucket.bucket_id.clone())
+}
+
+/// `solana_exit_series_bucket` with the second release decided at `height`. The genesis is
+/// hashed only for a series the second release could cover and that is not the revision-8 one.
+pub fn solana_exit_series_bucket_at(
+    genesis: &Genesis,
+    ledger: &LedgerState,
+    asset_id: &str,
+    height: u64,
+) -> Option<String> {
+    let bucket = solana_exit_series_bucket(&genesis.chain_id, ledger, asset_id, true)?;
+    (asset_id == postfiat_types::solana_exit::SERIES
+        || postfiat_types::solana_exit::second_release_active(
+            &genesis.chain_id,
+            &genesis_hash(genesis),
+            height,
+        ))
+    .then_some(bucket)
+}
+
+/// Live claims for one source series of the shared custody, including the Orchard turnstile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SolanaSeriesClaims {
+    pub bucket_id: String,
+    pub series_id: String,
     pub supply: u64,
     pub outstanding: u64,
     counted: u64,
 }
 
+/// Live claims of the covered buckets: the revision-8 series under the first release (with
+/// its exact receipts), every covered bucket of the shared custody under the second.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SolanaExitAccounting {
+    pub buckets: Vec<SolanaSeriesClaims>,
+    second: bool,
+}
+
 impl SolanaExitAccounting {
     pub fn read(
+        chain_id: &str,
         ledger: &LedgerState,
         orchard: &[AssetOrchardAssetBalance],
+        second: bool,
     ) -> Result<Self, (&'static str, String)> {
-        use postfiat_types::solana_exit::{BUCKET, SERIES};
-        let mut balances = orchard.iter().filter(|balance| balance.asset_id == SERIES);
-        let orchard_supply = balances.next().map_or(0, |balance| balance.live_total);
-        if balances.next().is_some() {
-            return Err((
-                "issued_supply_duplicate_custody",
-                "duplicate revision-8 Orchard balance".into(),
-            ));
+        use postfiat_types::solana_exit::{matches_bucket, BUCKET, FAMILY, SERIES};
+        let mut ids = if second {
+            ledger
+                .vault_bridge_bucket_states
+                .iter()
+                .filter(|b| matches_bucket(b, true))
+                .map(|b| b.bucket_id.clone())
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        if !ids.iter().any(|id| id == BUCKET) {
+            ids.push(BUCKET.into());
         }
-        let supply = issued_asset_supply(ledger, SERIES)?
-            .checked_add(orchard_supply)
-            .ok_or_else(|| {
-                (
-                    "issued_supply_overflow",
-                    "revision-8 supply overflows u64".into(),
-                )
-            })?;
-        let bucket = ledger.vault_bridge_bucket(BUCKET);
-        Ok(Self {
-            supply,
-            outstanding: bucket.map_or(0, |b| b.outstanding_vault_bridge_atoms),
-            counted: bucket.map_or(0, |b| b.counted_value_atoms),
-        })
+        ids.sort();
+        ids.dedup();
+        let mut buckets = Vec::with_capacity(ids.len());
+        for bucket_id in ids {
+            let series_id = if second {
+                postfiat_types::solana_source_series_id(chain_id, FAMILY, &bucket_id)
+            } else {
+                SERIES.to_string()
+            };
+            let mut balances = orchard.iter().filter(|balance| balance.asset_id == series_id);
+            let orchard_supply = balances.next().map_or(0, |balance| balance.live_total);
+            if balances.next().is_some() {
+                return Err((
+                    "issued_supply_duplicate_custody",
+                    if second {
+                        format!("duplicate Orchard balance for Solana series {series_id}")
+                    } else {
+                        "duplicate revision-8 Orchard balance".into()
+                    },
+                ));
+            }
+            let supply = issued_asset_supply(ledger, &series_id)?
+                .checked_add(orchard_supply)
+                .ok_or_else(|| {
+                    (
+                        "issued_supply_overflow",
+                        if second {
+                            format!("Solana series {series_id} supply overflows u64")
+                        } else {
+                            "revision-8 supply overflows u64".into()
+                        },
+                    )
+                })?;
+            let bucket = ledger.vault_bridge_bucket(&bucket_id);
+            buckets.push(SolanaSeriesClaims {
+                outstanding: bucket.map_or(0, |b| b.outstanding_vault_bridge_atoms),
+                counted: bucket.map_or(0, |b| b.counted_value_atoms),
+                bucket_id,
+                series_id,
+                supply,
+            });
+        }
+        Ok(Self { buckets, second })
     }
 
+    pub fn bucket(&self, bucket_id: &str) -> Option<&SolanaSeriesClaims> {
+        self.buckets.iter().find(|b| b.bucket_id == bucket_id)
+    }
+
+    /// Adds a paired Orchard credit of `amount` to the series `series_id`.
+    pub fn credit(&mut self, series_id: &str, amount: u64) -> Result<(), (&'static str, String)> {
+        if amount == 0 {
+            return Ok(());
+        }
+        let claims = self
+            .buckets
+            .iter_mut()
+            .find(|b| b.series_id == series_id)
+            .ok_or_else(|| {
+                (
+                    "solana_exit_unmatched_supply_change",
+                    format!("paired credit names no covered Solana series {series_id}"),
+                )
+            })?;
+        let second = self.second;
+        claims.supply = claims.supply.checked_add(amount).ok_or_else(|| {
+            (
+                "issued_supply_overflow",
+                if second {
+                    format!("Solana series {series_id} ingress supply overflows")
+                } else {
+                    "revision-8 ingress supply overflows".into()
+                },
+            )
+        })?;
+        Ok(())
+    }
+
+    /// Every covered bucket's series supply equals its outstanding.
     pub fn require_reconciled(&self) -> Result<(), (&'static str, String)> {
-        if self.supply != self.outstanding {
+        self.buckets
+            .iter()
+            .try_for_each(|b| self.require_bucket_reconciled(&b.bucket_id))
+    }
+
+    pub fn require_bucket_reconciled(&self, bucket_id: &str) -> Result<(), (&'static str, String)> {
+        let claims = self.bucket(bucket_id).ok_or_else(|| {
+            (
+                "solana_exit_supply_mismatch",
+                format!("bucket {bucket_id} is not a covered Solana custody bucket"),
+            )
+        })?;
+        if claims.supply != claims.outstanding {
             return Err((
                 "solana_exit_supply_mismatch",
-                format!(
-                    "revision-8 series supply {} differs from bucket outstanding {}",
-                    self.supply, self.outstanding,
-                ),
+                if self.second {
+                    format!(
+                        "Solana series supply {} differs from bucket outstanding {} in bucket {}",
+                        claims.supply, claims.outstanding, claims.bucket_id,
+                    )
+                } else {
+                    format!(
+                        "revision-8 series supply {} differs from bucket outstanding {}",
+                        claims.supply, claims.outstanding,
+                    )
+                },
             ));
         }
         Ok(())
     }
 
+    /// In every covered bucket the supply change equals the outstanding change, and an
+    /// increase is matched by counted backing. A bucket new in `after` starts from zero.
     pub fn verify_change(&self, after: &Self) -> Result<(), (&'static str, String)> {
-        let supply = i128::from(after.supply) - i128::from(self.supply);
-        let outstanding = i128::from(after.outstanding) - i128::from(self.outstanding);
-        let counted = i128::from(after.counted) - i128::from(self.counted);
-        if supply != outstanding || (supply > 0 && counted < supply) {
-            return Err(("solana_exit_unmatched_supply_change", format!(
-                "revision-8 supply change {supply} requires matching outstanding and counted backing (outstanding change {outstanding}, counted change {counted})"
-            )));
+        let zero = |b: &SolanaSeriesClaims| SolanaSeriesClaims {
+            supply: 0,
+            outstanding: 0,
+            counted: 0,
+            ..b.clone()
+        };
+        for later in &after.buckets {
+            let earlier = self
+                .bucket(&later.bucket_id)
+                .cloned()
+                .unwrap_or_else(|| zero(later));
+            let supply = i128::from(later.supply) - i128::from(earlier.supply);
+            let outstanding = i128::from(later.outstanding) - i128::from(earlier.outstanding);
+            let counted = i128::from(later.counted) - i128::from(earlier.counted);
+            if supply != outstanding || (supply > 0 && counted < supply) {
+                return Err(("solana_exit_unmatched_supply_change", if self.second { format!(
+                    "Solana series supply change {supply} in bucket {} requires matching outstanding and counted backing (outstanding change {outstanding}, counted change {counted})",
+                    later.bucket_id,
+                ) } else { format!(
+                    "revision-8 supply change {supply} requires matching outstanding and counted backing (outstanding change {outstanding}, counted change {counted})"
+                ) }));
+            }
+        }
+        if let Some(gone) = self.buckets.iter().find(|b| after.bucket(&b.bucket_id).is_none()) {
+            return Err((
+                "solana_exit_unmatched_supply_change",
+                format!("covered Solana bucket {} disappeared", gone.bucket_id),
+            ));
         }
         Ok(())
     }
@@ -97,13 +262,24 @@ fn apply_issued_payment(
     }
 
     if operation.from == operation.issuer
-        && operation.asset_id == postfiat_types::solana_exit::SERIES
         && postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
             .is_some_and(|h| block_height >= h)
+        && solana_exit_series_bucket_at(genesis, ledger, &operation.asset_id, block_height)
+            .is_some()
     {
+        let second = postfiat_types::solana_exit::second_release_active(
+            &genesis.chain_id,
+            &genesis_hash(genesis),
+            block_height,
+        );
         return Err((
             "solana_exit_issuer_payment_disabled",
-            "revision-8 issuer payments cannot create redeemable claims".into(),
+            if second {
+                "Solana-source issuer payments cannot create redeemable claims"
+            } else {
+                "revision-8 issuer payments cannot create redeemable claims"
+            }
+            .into(),
         ));
     }
     let from_index = if operation.from == operation.issuer {

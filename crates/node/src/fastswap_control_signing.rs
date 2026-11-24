@@ -601,6 +601,25 @@ mod tests {
         FastLaneCheckpointCertificateV1 { votes }
     }
 
+    include!("solana_exit_release_height_fastlane_cases.rs");
+
+    /// `release_height_fastlane_cases::outcomes()` run on origin/main a720cc80f.
+    const RELEASE_HEIGHT_FASTLANE_GOLDEN: [(u64, &str, &str); 3] = [
+        (1840, "true: fastlane_checkpoint_anchored: FastLane checkpoint anchored", "revision-8 reserve None"),
+        (1841, "false: solana_exit_unmatched_supply_change: FastLane checkpoint fees cannot burn revision-8 reserves", "ledger unchanged"),
+        (1842, "false: solana_exit_unmatched_supply_change: FastLane checkpoint fees cannot burn revision-8 reserves", "ledger unchanged"),
+    ];
+
+    #[test]
+    fn unset_second_release_refuses_fastlane_fee_burns_as_the_first_release() {
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        let golden: Vec<(u64, String, String)> = RELEASE_HEIGHT_FASTLANE_GOLDEN
+            .iter()
+            .map(|(h, v, d)| (*h, v.to_string(), d.to_string()))
+            .collect();
+        assert_eq!(release_height_fastlane_cases::outcomes(), golden);
+    }
+
     #[test]
     #[ignore = "release rehearsal at height 1760"]
     fn exit_review5_fastlane_checkpoint_cannot_burn_revision8_reserves() {

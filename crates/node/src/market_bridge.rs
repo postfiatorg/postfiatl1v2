@@ -1257,13 +1257,18 @@ pub(super) fn vault_bridge_route_at_height(
     let family = bucket.map_or(asset_id, |b| b.asset_id.as_str());
     let deny = |error: String| io::Error::new(io::ErrorKind::PermissionDenied, error);
     let is_solana = bucket.is_some_and(|b| b.source_domain.starts_with("spl:"));
+    let second = postfiat_types::solana_exit::second_release_active(
+        &genesis.chain_id,
+        &genesis_hash(genesis),
+        height,
+    );
     let (record, amendment) = if is_solana {
         let released =
             postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis));
         let (isolated, amendment) =
             postfiat_types::solana_exit::active(governance, height).map_err(deny)?;
         if released.is_none_or(|h| h > isolated.authorized_height)
-            || !bucket.is_some_and(postfiat_types::solana_exit::matches_bucket)
+            || !bucket.is_some_and(|b| postfiat_types::solana_exit::matches_bucket(b, second))
         {
             return Err(deny("Solana source bucket has no active exit route".into()));
         }
@@ -1372,8 +1377,17 @@ pub(super) fn vault_bridge_route_at_height(
     };
     let (nav, trust_class) = if is_solana {
         let bucket = bucket.ok_or_else(|| deny("Solana source bucket is missing".into()))?;
-        let claims = postfiat_execution::SolanaExitAccounting::read(ledger, orchard_balances)
-            .map_err(|(_, message)| io::Error::new(io::ErrorKind::InvalidData, message))?;
+        let accounting = postfiat_execution::SolanaExitAccounting::read(
+            &genesis.chain_id,
+            ledger,
+            orchard_balances,
+            second,
+        )
+        .map_err(|(_, message)| io::Error::new(io::ErrorKind::InvalidData, message))?;
+        // The reported bucket's own series, for any covered bucket of the custody.
+        let claims = accounting
+            .bucket(&bucket.bucket_id)
+            .ok_or_else(|| deny("Solana source bucket is not covered".into()))?;
         (
             VaultBridgeNavReport::SolanaExit {
                 family_nav_profile: FamilyNavProfileReport {
@@ -1408,6 +1422,23 @@ pub(super) fn vault_bridge_route_at_height(
         burns_open: is_solana.then(|| {
             postfiat_types::solana_exit::open_height(governance).is_some_and(|h| h <= height)
         }),
+        // Second-release rules only; absent, the first release's rules apply (revision 8
+        // only, every decision unanimous, no minimum), as the first release reports them.
+        min_withdrawal_atoms: (is_solana && second)
+            .then(|| postfiat_types::solana_exit::min_withdrawal_atoms(governance)),
+        closed_since_registration: (is_solana && second)
+            .then(|| postfiat_types::solana_exit::closed_since_registration(governance)),
+        covered_bucket_ids: (is_solana && second).then(|| {
+            ledger
+                .vault_bridge_bucket_states
+                .iter()
+                .filter(|b| postfiat_types::solana_exit::matches_bucket(b, true))
+                .map(|b| b.bucket_id.clone())
+                .collect()
+        }),
+        decision_signatures: (is_solana && second)
+            .then(|| solana_exit_decision_signatures(governance))
+            .transpose()?,
         schema: "postfiat.vault_bridge.route_report.v1".to_string(),
         chain_id: genesis.chain_id.clone(),
         genesis_hash: genesis_hash(genesis),
@@ -1424,6 +1455,28 @@ pub(super) fn vault_bridge_route_at_height(
         live_value_enabled: route.live_value_enabled(),
         active: true,
     })
+}
+
+/// Signatures each Solana exit decision needs now under the second release.
+fn solana_exit_decision_signatures(
+    governance: &GovernanceState,
+) -> io::Result<std::collections::BTreeMap<String, usize>> {
+    use postfiat_types::solana_exit::{
+        required_quorum, CLOSE, MIN_WITHDRAWAL, OPEN, PAID, REFUND, RETIRE,
+    };
+    let n = active_validator_ids(governance)?.len();
+    let reopening = postfiat_types::solana_exit::closed_since_registration(governance);
+    Ok([
+        ("open", OPEN),
+        ("close", CLOSE),
+        ("paid", PAID),
+        ("min_withdrawal", MIN_WITHDRAWAL),
+        ("refund", REFUND),
+        ("retire", RETIRE),
+    ]
+    .into_iter()
+    .map(|(name, kind)| (name.to_string(), required_quorum(kind, reopening, n, true)))
+    .collect())
 }
 
 include!("b23_facility_queries.rs");

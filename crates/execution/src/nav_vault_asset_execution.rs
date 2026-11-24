@@ -7229,13 +7229,21 @@ fn apply_vault_bridge_burn_to_redeem(
                 .to_string(),
         ));
     }
+    // Only a governed interval or a Solana destination can reach a second-release rule.
+    let second = (compatibility.solana_exit_heights.is_some()
+        || operation.destination_ref.starts_with("solana-spl:"))
+        && postfiat_types::solana_exit::second_release_active(
+            &genesis.chain_id,
+            &genesis_hash(genesis),
+            block_height,
+        );
     let solana_exit = compatibility
         .solana_exit_heights
         .is_some_and(|(start, end)| (start..end).contains(&block_height))
-        && postfiat_types::solana_exit::matches_bucket(&bucket);
+        && postfiat_types::solana_exit::matches_bucket(&bucket, second);
     if !solana_exit
         && operation.destination_ref.starts_with("solana-spl:")
-        && postfiat_types::solana_exit::matches_bucket(&bucket)
+        && postfiat_types::solana_exit::matches_bucket(&bucket, second)
         && postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(genesis))
             .is_some_and(|h| h <= block_height)
     {
@@ -7254,7 +7262,8 @@ fn apply_vault_bridge_burn_to_redeem(
                 "Solana exit burns are closed pending explicit governance opening".into(),
             ));
         }
-        SolanaExitAccounting::read(ledger, orchard_balances)?.require_reconciled()?;
+        SolanaExitAccounting::read(&genesis.chain_id, ledger, orchard_balances, second)?
+            .require_bucket_reconciled(&bucket.bucket_id)?;
         if bucket.status != VAULT_BRIDGE_BUCKET_STATUS_ACTIVE
             || bucket.impairment_factor_bps != 10_000
             || bucket.counted_value_atoms
@@ -7299,7 +7308,12 @@ fn apply_vault_bridge_burn_to_redeem(
         {
             return Err((
                 "solana_exit_series_mismatch",
-                "Solana exit requires its canonical revision-8 series".into(),
+                if second {
+                    "Solana exit requires the canonical series of its bucket"
+                } else {
+                    "Solana exit requires its canonical revision-8 series"
+                }
+                .into(),
             ));
         }
         if matches.next().is_some() {
@@ -7351,6 +7365,23 @@ fn apply_vault_bridge_burn_to_redeem(
         block_height,
     )
     .map_err(|error| ("bad_vault_bridge_redemption", error))?;
+    // The owner and minimum rules are second-release rules.
+    if solana_exit && second && !solana_destination_owner_is_wallet(&operation.destination_ref) {
+        return Err((
+            "solana_exit_destination_not_wallet",
+            "Solana exit owner must be an Ed25519 wallet key, not a program-derived or token account"
+                .into(),
+        ));
+    }
+    if solana_exit && second && operation.amount_atoms < compatibility.solana_exit_min_atoms {
+        return Err((
+            "solana_exit_below_minimum",
+            format!(
+                "Solana exit burn is below the governed minimum of {} atoms",
+                compatibility.solana_exit_min_atoms
+            ),
+        ));
+    }
     if compatibility.emit_legacy_domainless_withdrawal_packet {
         redemption.withdrawal_packet.source_chain_id = 0;
         redemption.withdrawal_packet.vault_address.clear();
@@ -7408,6 +7439,26 @@ fn apply_vault_bridge_burn_to_redeem(
     ledger.vault_bridge_bucket_states[bucket_index] = bucket_after;
     ledger.vault_bridge_redemptions.push(redemption);
     Ok(())
+}
+
+/// Program-derived addresses, which include associated token accounts, are off the
+/// Ed25519 curve; nobody can sign for a token account paid to such an owner.
+fn solana_destination_owner_is_wallet(destination_ref: &str) -> bool {
+    destination_ref
+        .rsplit(':')
+        .next()
+        .and_then(|owner| hex_to_bytes(owner).ok())
+        .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
+        .is_some_and(|bytes| {
+            // A keypair wallet is a canonical, full-order point. The identity,
+            // small-order points and non-canonical encodings are no wallet keys;
+            // program-derived addresses (multisig vaults too) are off the curve.
+            curve25519_dalek::edwards::CompressedEdwardsY(bytes)
+                .decompress()
+                .is_some_and(|point| {
+                    !point.is_small_order() && point.compress().to_bytes() == bytes
+                })
+        })
 }
 
 #[allow(dead_code)]
@@ -7537,21 +7588,38 @@ pub fn settle_governed_solana_payout(
     packet_hash: &str,
     amendment_id: &str,
     block_height: u64,
+    second: bool,
 ) -> Result<(), String> {
     use postfiat_types::solana_exit;
-    let bucket_index = ledger
-        .vault_bridge_bucket_states
-        .iter()
-        .position(solana_exit::matches_bucket)
-        .ok_or("missing governed Solana payout bucket")?;
+    // First release: the revision-8 bucket only, found before the redemption, as released.
+    let first_bucket = if second {
+        None
+    } else {
+        Some(
+            ledger
+                .vault_bridge_bucket_states
+                .iter()
+                .position(|b| solana_exit::matches_bucket(b, false))
+                .ok_or("missing governed Solana payout bucket")?,
+        )
+    };
     let redemption_index = ledger
         .vault_bridge_redemptions
         .iter()
         .position(|r| r.withdrawal_packet_hash == packet_hash)
         .ok_or("unknown Solana withdrawal packet")?;
     let red = &ledger.vault_bridge_redemptions[redemption_index];
+    // Second release: each payout retires its own bucket's queue, counted value and allocations.
+    let bucket_index = match first_bucket {
+        Some(index) => index,
+        None => ledger
+            .vault_bridge_bucket_states
+            .iter()
+            .position(|b| b.bucket_id == red.bucket_id && solana_exit::matches_bucket(b, true))
+            .ok_or("missing governed Solana payout bucket")?,
+    };
     red.validate_for_chain(chain_id)?;
-    if red.bucket_id != solana_exit::BUCKET
+    if (!second && red.bucket_id != solana_exit::BUCKET)
         || red.asset_id != solana_exit::FAMILY
         || red.withdrawal_packet.source_chain_id != postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
         || !red.destination_ref.starts_with("solana-spl:")
@@ -7559,7 +7627,12 @@ pub fn settle_governed_solana_payout(
         || red.settled_atoms != 0
         || red.created_at_height >= block_height
     {
-        return Err("Solana settlement requires the exact pending revision-8 payout".into());
+        return Err(if second {
+            "Solana settlement requires the exact pending Solana-custody payout"
+        } else {
+            "Solana settlement requires the exact pending revision-8 payout"
+        }
+        .into());
     }
     let op = VaultBridgeRedeemSettleOperation {
         issuer_or_redemption_account: red.issuer.clone(),
@@ -7579,6 +7652,69 @@ pub fn settle_governed_solana_payout(
         true,
     )
     .map_err(|(_, message)| message)?;
+    *ledger = staged;
+    Ok(())
+}
+
+/// Credit back a pending Solana exit burn whose marker reads cancelled on Solana.
+/// The burn's own bucket regains the amount as outstanding and loses it from its redemption
+/// queue; the burner's line in the same series is credited, so the series supply rises by
+/// the same amount. Counted reserves stay: the USDC never left the vault.
+pub fn refund_cancelled_solana_burn(
+    ledger: &mut LedgerState,
+    chain_id: &str,
+    packet_hash: &str,
+    amendment_id: &str,
+    block_height: u64,
+) -> Result<(), String> {
+    use postfiat_types::solana_exit;
+    let redemption_index = ledger
+        .vault_bridge_redemptions
+        .iter()
+        .position(|r| r.withdrawal_packet_hash == packet_hash)
+        .ok_or("unknown Solana withdrawal packet")?;
+    let red = ledger.vault_bridge_redemptions[redemption_index].clone();
+    let bucket_index = ledger
+        .vault_bridge_bucket_states
+        .iter()
+        .position(|b| b.bucket_id == red.bucket_id && solana_exit::matches_bucket(b, true))
+        .ok_or("missing governed Solana refund bucket")?;
+    red.validate_for_chain(chain_id)?;
+    if red.asset_id != solana_exit::FAMILY
+        || red.withdrawal_packet.source_chain_id != postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
+        || !red.destination_ref.starts_with("solana-spl:")
+        || red.state != VAULT_BRIDGE_REDEMPTION_STATE_PENDING
+        || red.settled_atoms != 0
+        || red.created_at_height >= block_height
+    {
+        return Err("Solana refund requires the exact pending Solana-custody burn".into());
+    }
+    let series = postfiat_types::solana_source_series_id(chain_id, &red.asset_id, &red.bucket_id);
+    let mut staged = ledger.clone();
+    let line = staged
+        .trustlines
+        .iter_mut()
+        .find(|l| l.account == red.owner && l.asset_id == series)
+        .ok_or("Solana refund requires the burner's line in the burned series")?;
+    line.balance = line
+        .balance
+        .checked_add(red.amount_atoms)
+        .ok_or("Solana refund overflows the burner's balance")?;
+    let bucket = &mut staged.vault_bridge_bucket_states[bucket_index];
+    bucket.outstanding_vault_bridge_atoms = bucket
+        .outstanding_vault_bridge_atoms
+        .checked_add(red.amount_atoms)
+        .ok_or("Solana refund overflows bucket outstanding")?;
+    bucket.redemption_queue_atoms = bucket
+        .redemption_queue_atoms
+        .checked_sub(red.amount_atoms)
+        .ok_or("Solana refund exceeds the bucket redemption queue")?;
+    bucket.last_updated_height = block_height;
+    bucket.validate()?;
+    let refunded = &mut staged.vault_bridge_redemptions[redemption_index];
+    refunded.state = postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED.to_string();
+    refunded.settlement_receipt_hash = amendment_id.into();
+    refunded.validate_for_chain(chain_id)?;
     *ledger = staged;
     Ok(())
 }
