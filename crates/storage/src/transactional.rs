@@ -1133,6 +1133,53 @@ impl TransactionalStore {
         Ok(blocks)
     }
 
+    /// The blocks `blocks_in_height_order` returns from `from_height` on (the
+    /// last ones when `None`), at most `limit`, read by height instead of
+    /// loading the whole history.
+    pub fn blocks_window(
+        &self,
+        from_height: Option<u64>,
+        limit: usize,
+    ) -> StorageResult<Vec<BlockRecord>> {
+        let meta = self.meta()?;
+        if meta.finalized_height < meta.history_base_height {
+            return Err(StorageError::new(
+                StorageErrorCode::CountMismatch,
+                "invalid history range",
+            ));
+        }
+        let first = meta.history_base_height.saturating_add(1);
+        let last = meta.finalized_height;
+        let span = u64::try_from(limit).unwrap_or(u64::MAX);
+        if span == 0 || last < first {
+            return Ok(Vec::new());
+        }
+        let (start, end) = match from_height {
+            Some(from) => {
+                let start = from.max(first);
+                (start, last.min(start.saturating_add(span - 1)))
+            }
+            None => (last.saturating_sub(span - 1).max(first), last),
+        };
+        let mut blocks = Vec::new();
+        for height in start..=end {
+            let block = self.block(height)?.ok_or_else(|| {
+                StorageError::new(
+                    StorageErrorCode::CorruptRecord,
+                    format!("canonical block {height} is missing"),
+                )
+            })?;
+            if block.header.height != height {
+                return Err(StorageError::new(
+                    StorageErrorCode::CorruptRecord,
+                    format!("canonical block {height} has a mismatched embedded height"),
+                ));
+            }
+            blocks.push(block);
+        }
+        Ok(blocks)
+    }
+
     pub fn receipts_in_block_order(&self) -> StorageResult<Vec<Receipt>> {
         let meta = self.meta()?;
         let capacity = usize::try_from(meta.receipt_count).map_err(|_| {
@@ -5594,6 +5641,32 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    /// The windowed read returns byte for byte what the full history read
+    /// returns after the `blocks` query's own filter, for every window.
+    #[test]
+    fn block_window_equals_the_filtered_full_history() {
+        let (_dir, store) = committed_two_blocks("block-window");
+        let all = store.blocks_in_height_order().expect("full history");
+        for from in [None, Some(0), Some(1), Some(2), Some(3), Some(u64::MAX)] {
+            for limit in [0, 1, 2, 3, usize::MAX] {
+                let mut expected = all.clone();
+                match from {
+                    Some(from) => {
+                        expected.retain(|block| block.header.height >= from);
+                        expected.truncate(limit);
+                    }
+                    None => expected = expected[expected.len().saturating_sub(limit)..].to_vec(),
+                }
+                let window = store.blocks_window(from, limit).expect("window");
+                assert_eq!(
+                    serde_json::to_vec(&window).expect("encode window"),
+                    serde_json::to_vec(&expected).expect("encode expected"),
+                    "from {from:?} limit {limit}"
+                );
+            }
+        }
     }
 
     include!("transactional/tamper_tests.rs");

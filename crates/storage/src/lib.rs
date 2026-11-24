@@ -642,6 +642,29 @@ impl NodeStore {
         Ok(blocks)
     }
 
+    /// Blocks from `from_height` on (the last ones when `None`), at most
+    /// `limit`. Transactional storage reads only those blocks by height; the
+    /// legacy log is read whole and filtered as before.
+    pub fn read_blocks_window(
+        &self,
+        from_height: Option<u64>,
+        limit: usize,
+    ) -> io::Result<Vec<BlockRecord>> {
+        if self.transactional_storage_active()? {
+            return Ok(self
+                .transactional_store()?
+                .blocks_window(from_height, limit)?);
+        }
+        let mut blocks = self.read_blocks()?.blocks;
+        if let Some(from_height) = from_height {
+            blocks.retain(|block| block.header.height >= from_height);
+            blocks.truncate(limit);
+        } else if blocks.len() > limit {
+            blocks = blocks[blocks.len() - limit..].to_vec();
+        }
+        Ok(blocks)
+    }
+
     pub fn append_block(&self, block: BlockRecord) -> io::Result<()> {
         self.append_block_record(&block)
     }
