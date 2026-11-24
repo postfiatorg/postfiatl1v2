@@ -74,6 +74,44 @@ class ValidatorReadTest(unittest.TestCase):
             payout.rpc_any("status")
         self.assertEqual(len([c for c in reads.calls if c[1] == "status"]), 2)
 
+    def test_an_empty_reply_from_one_validator_is_read_from_another(self):
+        calls = []
+
+        def read(i, method, timeout=None, **params):
+            calls.append(i)
+            if i == 1:
+                raise live.EmptyReply(f"{i} {method}: empty reply")
+            return dict(ok=i)
+
+        payout.reset_reads()
+        with patch.object(payout, "rpc", read):
+            self.assertEqual(payout.rpc_any("status"), dict(ok=0))
+            payout.reset_reads()
+            payout._preferred[0] = 1
+            self.assertEqual(payout.rpc_any("status"), dict(ok=2))
+        self.assertEqual(calls, [0, 1, 2])
+
+    def test_an_empty_reply_from_every_validator_counts_as_too_large(self):
+        def read(i, method, timeout=None, **params):
+            raise live.EmptyReply(f"{i} {method}: empty reply")
+
+        payout.reset_reads()
+        with patch.object(payout, "rpc", read):
+            with self.assertRaises(live.ReplyTooLarge):
+                payout.rpc_any("blocks", from_height=1, limit=8)
+
+    def test_an_unknown_burn_is_read_from_the_other_validators(self):
+        red = dict(burn_tx_id="ab" * 48)
+
+        def read(i, method, timeout=None, **params):
+            return dict(redemptions=[red] if i == 4 else [], buckets=[])
+
+        payout.reset_reads()
+        with patch.object(payout, "rpc", read):
+            self.assertEqual(payout.find_redemption("ab" * 48)[0], red)
+            with self.assertRaises(payout.UnknownBurn):
+                payout.find_redemption("cd" * 48)
+
     def test_a_reply_too_large_is_not_retried_on_the_other_validators(self):
         reads = Reads(too_large_above=0)
         payout.reset_reads()
@@ -136,7 +174,8 @@ class ServiceTest(unittest.TestCase):
 
         burn = "d1" * 48
         for error, stage in ((payout.BlockTooLarge("block 9"), "failed"),
-                             (payout.CommitteeRotated(), "failed"),
+                             (payout.CommitteeRotated(), "queued"),
+                             (payout.UnknownBurn("not yet on this validator"), "queued"),
                              (live.ReplyTooLarge("0 blocks: too large"), "failed"),
                              (payout.AttemptExpired("deadline"), "queued")):
             with tempfile.TemporaryDirectory() as d:
@@ -149,8 +188,12 @@ class ServiceTest(unittest.TestCase):
                 self.assertEqual(row[0], stage, error)
                 if stage == "failed":
                     shown = svc.public_row(j.get(burn))["error"]
-                    self.assertTrue(shown.startswith((payout.BLOCK_TOO_LARGE, payout.ROTATED,
-                                                      "Node reply too large")), shown)
+                    self.assertTrue(shown.startswith((payout.BLOCK_TOO_LARGE, "Node reply too large")), shown)
+                elif not isinstance(error, payout.AttemptExpired):
+                    # The waiting cases say why, not "Withdrawal processing failed."
+                    shown = svc.public_row(j.get(burn))
+                    self.assertIsNone(shown["error"])
+                    self.assertIn(shown["detail"], (svc.WAITING_ROTATION, svc.WAITING_BURN))
 
 
 if __name__ == "__main__":
