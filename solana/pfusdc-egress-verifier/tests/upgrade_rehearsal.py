@@ -39,11 +39,20 @@ VAULT_ACCOUNTS = [
     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  # USDC mint
 ]
 ERRORS = {1: "Encoding", 2: "Binding", 3: "Proof", 4: "StaleCheckpoint", 5: "UnknownCheckpoint",
-          6: "Replay", 7: "Paused", 8: "WrongDestination"}
+          6: "Replay", 7: "Paused", 8: "WrongDestination", 9: "TooEarly"}
 MAGIC = b"PFTL-PFUSDC-TIER4"
 # Changed fields of the test-verifier cases (21 and 24 carry a fresh burn ID).
 def burn_id(b):
     return {21: bytes([b]) * 48, 24: bytes([b]) * 48}
+
+
+SOLANA_GENESIS = "45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
+
+
+def destination_hash(owner):
+    dest = f"solana-spl:{SOLANA_GENESIS}:{bytes(owner).hex()}"
+    return hashlib.sha3_384(b"postfiat.vault_bridge.destination_ref_hash.v1\0"
+                            + f"destination_ref_bytes={len(dest)}\ndestination_ref={dest}\n".encode()).digest()
 
 
 R9_BUCKET = bytes.fromhex("4683dbe99fcb2aef277f095e459ff541e1ef0774222aa6c1962e091d8f18c14743b82a54518b1f7eb48c451c9c5b21ce")
@@ -225,12 +234,13 @@ def run(args):
     txs = json.loads((snap / "verifier-txs.json").read_text())
     paid = [t for t in txs if t["tag"] == 2]
     init = next(t for t in txs if t["tag"] == 3)
-    payer, authority, local_id, stranger = Keypair(), Keypair(), Keypair(), Keypair()
+    payer, authority, local_id, stranger, owner = Keypair(), Keypair(), Keypair(), Keypair(), Keypair()
     for name, key in (("payer", payer), ("authority", authority), ("local-id", local_id)):
         (work / f"{name}.json").write_text(json.dumps(list(bytes(key))))
-    # Burn three of 23 November stays unpaid locally so a real proof can pay it once.
-    unpaid = paid[2]
-    skip = {unpaid["accounts"][6]}
+    # Burns two and three of 23 November stay unpaid locally: a real proof pays three once
+    # and cancels two once.
+    unpaid, spare = paid[2], paid[1]
+    skip = {unpaid["accounts"][6], spare["accounts"][6]}
     buffers = {}
     accounts = []
     for path in sorted((snap / "accounts").iterdir()):
@@ -248,7 +258,9 @@ def run(args):
     r9 = {26: R9_BUCKET, **burn_id(0x91)}
     variants = [{26: R9_BUCKET, 21: b"\x99" * 48, 24: b"\x99" * 48}, r9, burn_id(0x92),
                 {23: b"\x23" * 48, **burn_id(0x93)}, {33: b"\x33" * 20, **burn_id(0x94)},
-                {34: b"\x34" * 32, **burn_id(0x95)}, {32: b"ETHEREUM", **burn_id(0x96)}]
+                {34: b"\x34" * 32, **burn_id(0x95)}, {32: b"ETHEREUM", **burn_id(0x96)},
+                {29: destination_hash(owner.pubkey()), **burn_id(0xB1)},
+                {13: (1851 + 300).to_bytes(8, "big"), **burn_id(0xB3)}, burn_id(0xB2)]
     unpaid_values = bytes.fromhex(unpaid["buffer"])
     for i, changes in enumerate(variants):
         data = with_fields(unpaid_values, changes)
@@ -322,6 +334,29 @@ def run(args):
             r = local.simulate(tx, watch=[keys[11]] if watch else ())
             return verdict(r), r.get("unitsConsumed"), verifier_units(r.get("logs")), r, keys
 
+        def cancel(t, changes=None, signer=None, send=False):
+            key = synthetic_key(changes) if changes else buffers[t["sig"]]
+            ix, keys = withdrawal(t, payer, key, changes)
+            who = signer.pubkey() if signer else keys[12]
+            metas = list(ix.accounts[:7]) + [AccountMeta(who, signer is not None, False)]
+            tx = local.tx([Instruction(VERIFIER, b"\x0a" + bytes.fromhex(t["data"])[1:], metas)], payer,
+                          *([signer] if signer else []), limit=400_000)
+            r = local.send(tx) if send else local.simulate(tx)
+            units = r["units"] if send else r.get("unitsConsumed")
+            return verdict(r), units, verifier_units(r.get("logs")), keys
+
+        def pay_to(t, changes, owner_key):
+            ix, _ = withdrawal(t, payer, synthetic_key(changes), changes)
+            metas = list(ix.accounts)
+            metas[12] = AccountMeta(owner_key, False, False)
+            return verdict(local.simulate(local.tx([Instruction(VERIFIER, ix.data, metas)], payer, limit=400_000)))
+
+        def marker_byte(t, burn=None):
+            burn = burn or fields(bytes.fromhex(t["buffer"]))[23]
+            key = Pubkey.find_program_address([b"egress-burn", hashlib.sha256(burn).digest()], VERIFIER)[0]
+            data = local.account(key)
+            return None if data is None else data[0]
+
         def ata_amount(raw):
             return int.from_bytes(raw[64:72], "little")
 
@@ -333,8 +368,8 @@ def run(args):
         case("old program: real proof of burn 3 pays (simulated)", dict(v=v, paid=(after or 0) - before),
              dict(v="ok", paid=amount), units=units, verifier_units=own)
         old_units = (units, own)
-        for i, t in enumerate(paid[:2]):
-            case(f"old program: paid burn {i + 1} refused", pay(t)[0], "Replay")
+        case("old program: paid burn 1 refused", pay(paid[0])[0], "Replay")
+        case("old program: cancel unknown (refused before the upgrade)", cancel(spare)[0], "Encoding")
         fields_arg = migrate(json.loads(args.config.read_text()))
         migrate_ix = lambda signer: Instruction(VERIFIER, b"\x09" + fields_arg, [  # noqa: E731
             AccountMeta(signer.pubkey(), True, False), AccountMeta(LIGHT, False, True),
@@ -392,8 +427,13 @@ def run(args):
         v, units, own, keys = pay(unpaid, send=True)
         case("new program: real proof of burn 3 pays (sent)", dict(v=v, paid=ata_amount(local.account(keys[11])) - before),
              dict(v="ok", paid=amount), units=units, verifier_units=own)
-        for i, t in enumerate(paid):
-            case(f"new program: paid burn {i + 1} of 23 November refused", pay(t)[0], "Replay")
+        for i in (0, 2):
+            case(f"new program: paid burn {i + 1} of 23 November refused", pay(paid[i])[0], "Replay")
+        case("new program: cancel after payout refused (burn 3, real proof)", cancel(unpaid)[0], "Replay")
+        case("new program: cancel of burn 1 paid on mainnet refused", cancel(paid[0])[0], "Replay")
+        case("new program: cancel by anyone before the time limit refused (burn 2)", cancel(spare)[0], "TooEarly")
+        case("new program: cancel signed by a key that is not the owner refused", cancel(spare, signer=stranger)[0],
+             "TooEarly")
         case("new program: real proof with field 26 changed refused", pay(unpaid, variants[0])[0], "Proof")
 
         # Test-verifier image: the same new code with the Groth16 check removed.
@@ -409,12 +449,28 @@ def run(args):
         case("test verifier: another vault (field 33) refused", pay(unpaid, variants[4])[0], "Binding")
         case("test verifier: another vault code (field 34) refused", pay(unpaid, variants[5])[0], "Binding")
         case("test verifier: non-Solana chain tag (field 32) refused", pay(unpaid, variants[6])[0], "Binding")
+        v, units, own, _ = cancel(unpaid, variants[7], signer=owner, send=True)
+        case("test verifier: destination owner cancels at once", dict(v=v, marker=marker_byte(None, b"\xb1" * 48)),
+             dict(v="ok", marker=2), units=units, verifier_units=own)
+        case("test verifier: payout after the owner's cancel refused", pay_to(unpaid, variants[7], owner.pubkey()),
+             "Replay")
+        case("test verifier: second cancel refused", cancel(unpaid, variants[7], signer=owner)[0], "Replay")
+        case("test verifier: payout proving block 2151 advances the light", pay(unpaid, variants[8], send=True)[0], "ok")
+        case("test verifier: light height", int.from_bytes(local.account(LIGHT)[280:288], "little"), 2151)
+        case("test verifier: anyone cancels after the time limit", cancel(unpaid, variants[9], send=True)[0], "ok")
 
         # Rollback: the deployed image on the migrated light.
         upgrade(args.old)
-        case("rollback to the old program: withdrawals refused", pay(paid[1])[0], "Binding")
+        case("rollback to the old program: withdrawals refused", pay(paid[0])[0], "Binding")
         upgrade(args.new)
-        case("re-upgrade: paid burn refused as replay again", pay(paid[1])[0], "Replay")
+        case("re-upgrade: paid burn refused as replay again", pay(paid[0])[0], "Replay")
+        # Real proof of burn 2, now that the light stands 303 blocks past it.
+        v, units, own, _ = cancel(spare, send=True)
+        case("new program: anyone cancels burn 2 after the time limit (real proof)",
+             dict(v=v, marker=marker_byte(spare)), dict(v="ok", marker=2), units=units, verifier_units=own)
+        case("new program: payout of the cancelled burn 2 refused (real proof)", pay(spare)[0], "Replay")
+        case("new program: second cancel of burn 2 refused", cancel(spare)[0], "Replay")
+        case("new program: burn 3 marker stays paid", marker_byte(unpaid), 1)
     finally:
         validator.terminate()
         validator.wait(timeout=30)
