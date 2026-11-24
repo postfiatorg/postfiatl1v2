@@ -1,6 +1,7 @@
 """Prove finalized Post Fiat burns and release to the owner's canonical USDC ATA."""
 
 import base64
+import contextlib
 import hashlib
 import json
 import logging
@@ -9,6 +10,8 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
+import threading
+import time
 from solders.transaction import Transaction
 
 from solders.compute_budget import set_compute_unit_limit
@@ -48,7 +51,7 @@ from exit_setup import (
     rw,
     six,
 )
-from live import agreeing, survey
+from live import ReplyTooLarge, agreeing, survey
 import exit_rules
 from exit_segments import (
     public_checkpoint,
@@ -72,17 +75,124 @@ SOURCE_DOMAIN = (
 ACCOUNT = re.compile(r"pf[0-9a-f]{40}")
 
 
+# A validator that failed a read is asked last for this long, by every thread.
+SKIP_SECONDS = 300
+# Seconds a read may take: small reads are quick; witness and page reads are large.
+SMALL_READ_SECONDS = 20
+READ_SECONDS = {"pfusdc_egress_witness": 120, "pfusdc_checkpoint_witness": 120, "blocks": 60,
+                "vault_bridge_status": 60, "validators": 60}
+# One payout attempt's reads must end within this; proving and Solana sends are not reads.
+ATTEMPT_SECONDS = 1800
+_reads = threading.Lock()
+_skip = {}
+_preferred = [0]
+_attempt = threading.local()
+
+
+class AttemptExpired(RuntimeError):
+    """This payout attempt ran out of time; the job is retried later."""
+
+
+def reset_reads():
+    with _reads:
+        _skip.clear()
+        _preferred[0] = 0
+
+
+@contextlib.contextmanager
+def attempt_deadline(deadline):
+    """Bound the reads of one payout attempt (this thread only); admission and status
+    threads have no deadline and share only the skip memory."""
+    previous = getattr(_attempt, "deadline", None)
+    _attempt.deadline = deadline
+    try:
+        yield
+    finally:
+        _attempt.deadline = previous
+
+
 def rpc_any(method, **params):
-    """Read from validator 0, else the next validator that answers. Any answer is safe:
-    the proof checks committee-signed finality and Solana checks the proof. A second
-    read as a cross-check would double the full-state reads for no safety."""
+    """Read from the validator that answered last, else the next one; a validator that
+    failed is asked last for SKIP_SECONDS. Any answer is safe: the proof checks
+    committee-signed finality and Solana checks the proof. A second read as a
+    cross-check would double the full-state reads for no safety. A reply too large for
+    the node's frame is too large on every validator, so it is not asked elsewhere."""
+    deadline = getattr(_attempt, "deadline", None)
+    limit = READ_SECONDS.get(method, SMALL_READ_SECONDS)
+    with _reads:
+        now = time.monotonic()
+        order = [(_preferred[0] + k) % 6 for k in range(6)]
+        order = [i for i in order if _skip.get(i, 0) <= now] + [
+            i for i in order if _skip.get(i, 0) > now
+        ]
     errors = []
-    for i in range(6):
+    for i in order:
+        timeout = limit
+        if deadline is not None:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise AttemptExpired(f"payout attempt deadline passed before {method}")
+            timeout = min(timeout, left)
         try:
-            return rpc(i, method, **params)
+            result = rpc(i, method, timeout=timeout, **params)
+        except ReplyTooLarge:
+            raise
         except Exception as error:
+            with _reads:
+                _skip[i] = time.monotonic() + SKIP_SECONDS
             errors.append(f"validator-{i}: {error}")
+            continue
+        with _reads:
+            _preferred[0] = i
+        return result
     raise RuntimeError("no validator answered " + method + "; " + "; ".join(errors))
+
+
+BLOCK_TOO_LARGE = "refused: one block's reply exceeds the node's frame limit"
+ROTATED = "refused: the validator set changed in the block before the burn"
+
+
+class BlockTooLarge(ValueError):
+    """Even a one-block page does not fit the node's reply limit."""
+
+    def __init__(self, detail):
+        super().__init__(f"{BLOCK_TOO_LARGE} ({detail})")
+
+
+class CommitteeRotated(ValueError):
+    """The burn block's committee differs from its parent's; the paged witness cannot
+    span it. A checkpoint across the rotation must be advanced first."""
+
+    def __init__(self):
+        super().__init__(ROTATED)
+
+
+def ancestry_pages(start, end):
+    """Blocks start..end-1 in pages of eight, halved down to one block while a reply is
+    too large; checked to link block to block before anything is proved."""
+    blocks, first, size = [], start, 8
+    while first < end:
+        count = min(size, end - first)
+        try:
+            page = rpc_any("blocks", from_height=first, limit=count)
+        except ReplyTooLarge as error:
+            if count == 1:
+                raise BlockTooLarge(f"block {first}: {error}") from error
+            size = max(1, count // 2)
+            continue
+        require(
+            len(page) == count and page[0]["header"]["height"] == first,
+            "Incomplete ancestry page.",
+        )
+        blocks.extend(page)
+        first += count
+    for prev, block in zip(blocks, blocks[1:]):
+        require(
+            block["header"]["parent_hash"] == prev["header"]["block_hash"]
+            and block["header"]["height"] == prev["header"]["height"] + 1,
+            f"Ancestry pages do not link at height {block['header']['height']}.",
+        )
+    return blocks
 
 
 def fetch_any(_i, method, **params):
@@ -1071,27 +1181,16 @@ def egress_witness(c, red, prior, h, work):
     )
     if prior == parent:
         return w
-    start = max(1, h - 65)
-    blocks = []
-    for first in range(start, h, 8):
-        count = min(8, h - first)
-        page = rpc_any("blocks", from_height=first, limit=count)
-        require(
-            len(page) == count and page[0]["header"]["height"] == first,
-            "Incomplete ancestry page.",
-        )
-        blocks.extend(page)
+    blocks = ancestry_pages(max(1, h - 65), h)
     first = next(
         (i for i, b in enumerate(blocks) if b["header"]["parent_hash"] == prior), None
     )
     require(first is not None, "Prior checkpoint outside the guest ancestry bound.")
     blocks = blocks[first:]
     last = blocks[-1]["header"]
-    require(
-        last["block_hash"] == parent
-        and committee(last) == committee(target),
-        "Ancestry does not reach the burn block under one committee.",
-    )
+    require(last["block_hash"] == parent, "Ancestry does not reach the burn block.")
+    if committee(last) != committee(target):
+        raise CommitteeRotated()
     cache = work.parent / "committee.json"
     saved = read(cache) if cache.exists() else {}
     members = saved.get(c.account(checkpoint_pda(prior))["data"].hex())

@@ -245,7 +245,7 @@ class JobsTest(unittest.TestCase):
             decision_signatures=dict(open=6, close=5, paid=5, min_withdrawal=5, retire=6),
         )
 
-        def rpc(index, method, asset_id):
+        def rpc(index, method, asset_id, timeout=None):
             if index == 3:
                 raise RuntimeError("validator-3 unreachable")
             if method == "vault_bridge_route":
@@ -320,7 +320,7 @@ class JobsTest(unittest.TestCase):
             decision_signatures=dict(open=6, close=5, paid=5, min_withdrawal=5, retire=6),
         )
 
-        def rpc(index, method, asset_id):
+        def rpc(index, method, asset_id, timeout=None):
             if method == "vault_bridge_route":
                 self.assertEqual(asset_id, payout.SERIES)
                 return route

@@ -13,10 +13,17 @@ import threading
 import time
 
 from collections import deque, OrderedDict
+from live import ReplyTooLarge
 from exit_payout import (
     CheckpointAdvanced,
+    ATTEMPT_SECONDS,
+    BLOCK_TOO_LARGE,
+    BlockTooLarge,
     BurnCancelled,
     CANCELLED,
+    CommitteeRotated,
+    ROTATED,
+    attempt_deadline,
     DestinationNotWallet,
     UnknownBurn,
     PAID_NO_HISTORY,
@@ -221,7 +228,9 @@ def public_row(row):
     }
     # Older journals may contain raw exception strings. A refused destination
     # keeps its fixed, named reason so the holder learns why.
-    if value["error"] and not value["error"].startswith((NOT_WALLET, CANCELLED)):
+    if value["error"] and not value["error"].startswith(
+        (NOT_WALLET, CANCELLED, BLOCK_TOO_LARGE, ROTATED, "Node reply too large")
+    ):
         value["error"] = "Withdrawal processing failed."
     if value["detail"] not in (
         None,
@@ -354,15 +363,23 @@ def process_next(journal, directory):
     if burn is None or journal.waiting_for_expiry():
         return False
     try:
-        process(
-            burn,
-            directory / burn,
-            lambda stage, **kw: journal.update(burn, stage, **kw),
-            attempt=journal.attempt(burn),
-            before_send=lambda sig, h: journal.record_attempt(burn, sig, h),
-        )
+        with attempt_deadline(time.monotonic() + ATTEMPT_SECONDS):
+            process(
+                burn,
+                directory / burn,
+                lambda stage, **kw: journal.update(burn, stage, **kw),
+                attempt=journal.attempt(burn),
+                before_send=lambda sig, h: journal.record_attempt(burn, sig, h),
+            )
     except UnknownBurn:
         journal.update(burn, "failed", error="Unknown finalized burn.")
+    except (BlockTooLarge, CommitteeRotated) as named:
+        # Asking again cannot help: filed with its reason; a later submission retries it.
+        journal.update(burn, "failed", error=str(named))
+        print(f"ALERT withdrawal {burn} filed as failed: {named}", flush=True)
+    except ReplyTooLarge as error:
+        journal.update(burn, "failed", error=f"Node reply too large: {error}")
+        print(f"ALERT withdrawal {burn} filed as failed: node reply too large: {error}", flush=True)
     except BurnCancelled as cancelled:
         # Cancelled on Solana: never retried; the refund is decided on Post Fiat.
         journal.update(burn, "failed", error=str(cancelled))

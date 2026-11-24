@@ -80,7 +80,8 @@ class ValidatorReadTest(unittest.TestCase):
         with patch.object(payout, "rpc", reads):
             with self.assertRaises(live.ReplyTooLarge):
                 payout.rpc_any("blocks", from_height=1, limit=1)
-        self.assertEqual(len([c for c in reads.calls if c[1] == "blocks"]), 1)
+        # Validator 0 hangs; validator 1 answers too large; nobody else is asked.
+        self.assertEqual([c[0] for c in reads.calls if c[1] == "blocks"], [0, 1])
 
 
 class AncestryPageTest(unittest.TestCase):
@@ -124,6 +125,32 @@ class AncestryPageTest(unittest.TestCase):
         ):
             with self.assertRaises(payout.CommitteeRotated):
                 payout.egress_witness(None, dict(redemption_id="r"), "h100", 120, Path("/nonexistent/w"))
+
+
+class ServiceTest(unittest.TestCase):
+    def test_named_read_failures_are_filed_once_and_an_expired_attempt_is_retried(self):
+        import tempfile
+        from contextlib import closing
+
+        import exit_service as svc
+
+        burn = "d1" * 48
+        for error, stage in ((payout.BlockTooLarge("block 9"), "failed"),
+                             (payout.CommitteeRotated(), "failed"),
+                             (live.ReplyTooLarge("0 blocks: too large"), "failed"),
+                             (payout.AttemptExpired("deadline"), "queued")):
+            with tempfile.TemporaryDirectory() as d:
+                j = svc.Journal(Path(d) / "db")
+                j.enqueue(burn)
+                with patch.object(svc, "process", side_effect=error):
+                    svc.process_next(j, Path(d))
+                with closing(j.connect()) as db:
+                    row = db.execute("SELECT stage, error FROM jobs WHERE burn_tx_id=?", (burn,)).fetchone()
+                self.assertEqual(row[0], stage, error)
+                if stage == "failed":
+                    shown = svc.public_row(j.get(burn))["error"]
+                    self.assertTrue(shown.startswith((payout.BLOCK_TOO_LARGE, payout.ROTATED,
+                                                      "Node reply too large")), shown)
 
 
 if __name__ == "__main__":
