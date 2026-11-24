@@ -571,6 +571,7 @@ class ReanchorTest(unittest.TestCase):
         self.rm.rpc = self.chain_rpc
         # The fake ledger: blocks by height, governance batches and receipts (oldest first).
         self.blocks = {}
+        self.tamper = None
         self.batches = {}
         self.receipts = []
         argv = mock.patch.object(sys, "argv", ["reanchor-mainnet.py"])
@@ -607,8 +608,13 @@ class ReanchorTest(unittest.TestCase):
                                  for a in self.batches.get(b["batch_id"], [])))
             return {"confirmed": True, "block": {"header": self.blocks[height]}}
         if method == "blocks":
-            heights = sorted(h for h in self.blocks if h >= params["from_height"])[: params["limit"]]
-            return [{"header": self.blocks[h]} for h in heights]
+            # Every height up to the tip, as the node serves them, each linked to its parent.
+            tip = max([1709, *self.blocks])
+            heights = range(params["from_height"], min(tip, params["from_height"] + params["limit"] - 1) + 1)
+            page = [{"header": {"height": h, "batch_kind": "transparent", "batch_id": f"E{h}",
+                                **self.blocks.get(h, {}), "block_hash": f"hash-{h}", "parent_hash": f"hash-{h - 1}"}}
+                    for h in heights]
+            return self.tamper(page) if self.tamper else page
         if method == "batch_archive":
             payload = {"vault_bridge_route_profile_activations": self.batches[params["batch_id"]]}
             return [{"batch_id": params["batch_id"], "payload_json": json.dumps(payload)}]
@@ -794,8 +800,57 @@ class ReanchorTest(unittest.TestCase):
         self.rm.main()
         self.assertEqual(self.rm.BLOCK_PAGE, 8)
         self.assertEqual(set(limits), {8})
-        self.assertEqual(len(limits), 3)  # 8 + 8 + 5 blocks: the activation is on the third page
+        # The fake chain now has every height, as the node does: 1709 (the current revision's
+        # block, which anchors the parent links) to 1801 is 93 blocks, 11 full pages and one of 5.
+        self.assertEqual(len(limits), 12)
         self.assertEqual(live.read(self.base / "activation.json")["tx_id"], "T6")
+
+    def test_each_page_must_start_where_asked_and_run_on_without_gap_or_repeat(self):
+        committed = route_profile(6, EPOCH + 1, NEXT + 1500, 1790)
+        self.commit("T6", 1801, committed)
+        broken = {
+            "a page that starts at another height": lambda page: page[1:],
+            "a gap": lambda page: page[:3] + page[4:],
+            "a repeated block": lambda page: page[:4] + page[3:7],
+            "a block whose parent is not the block before it":
+                lambda page: page[:5] + [{"header": {**page[5]["header"], "parent_hash": "hash-other"}}] + page[6:],
+        }
+        for name, change in broken.items():
+            with self.subTest(name):
+                self.tamper = lambda page, change=change: change(page) if page[0]["header"]["height"] == 1717 else page
+                with self.assertRaises(RuntimeError):
+                    self.rm.chain_revision(live.read(self.base / "activation.json"))
+
+    def test_the_parent_link_holds_across_pages(self):
+        self.commit("T6", 1801, route_profile(6, EPOCH + 1, NEXT + 1500, 1790))
+
+        def other_chain(page):
+            # The second page comes from a chain whose block 1716 is not the one already read.
+            if page[0]["header"]["height"] == 1717:
+                page[0] = {"header": {**page[0]["header"], "parent_hash": "hash-1716-elsewhere"}}
+            return page
+
+        self.tamper = other_chain
+        with self.assertRaises(RuntimeError) as error:
+            self.rm.chain_revision(live.read(self.base / "activation.json"))
+        self.assertIn("1717", str(error.exception))
+
+    def test_a_tip_that_moves_between_pages_is_read_on(self):
+        committed = route_profile(6, EPOCH + 1, NEXT + 1500, 1790)
+        self.commit("T6", 1720, committed)
+        grown = []
+
+        def grow(page):
+            # After the first page the node commits more blocks; reading goes on by height.
+            if page[0]["header"]["height"] == 1709 and not grown:
+                grown.append(True)
+                for n in range(1721, 1740):
+                    self.blocks[n] = {"height": n, "batch_kind": "transparent", "batch_id": f"G{n}"}
+            return page
+
+        self.tamper = grow
+        found = self.rm.chain_revision(live.read(self.base / "activation.json"))
+        self.assertEqual(found[:2], ("T6", 1720))
 
     def test_gate_holds_while_a_deposit_is_retrying(self):
         # The relay is retrying D; the public RPC no longer lists it, so only its record shows it.
