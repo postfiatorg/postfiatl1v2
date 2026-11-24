@@ -47,6 +47,11 @@ Both instructions create the account and refuse if it exists. So "paid" and "can
 
 **Pause.** A paused verifier refuses cancels as it refuses payouts.
 
+**Cost and rehearsal.**
+- **Cost:** a cancel signed by the pause authority, with a real proof, costs 157,287 compute units (157,137 in the verifier), against about 172,700 for a payout.
+- **Rehearsal:** this was measured in the local-only rehearsal `solana/pfusdc-egress-verifier/tests/pause_cancel_rehearsal_LOCAL_TEST_KEY.py`, which loads a copy of the dumped light whose pause-authority bytes hold a test key. With real proofs, the cancel of an unpaid burn succeeds; a payout after it, a cancel of a paid burn, and a cancel while paused are all refused.
+- **Tooling:** `ops/sol-live/exit_cancel.py` prepares the unsigned transaction and checks the offline signature; it never reads the key.
+
 **The race.** A payout and a cancel create the same marker account, and Solana orders the two transactions:
 - whichever lands first creates the account;
 - the other fails on the existing account (`Replay`, or the system program refuses the create);
