@@ -340,14 +340,16 @@ async function testS3(proxyUrl) {
     const ws = new WebSocket(proxyUrl);
     const response = await new Promise((resolve, reject) => {
       ws.on('open', () => {
-        ws.send(JSON.stringify({ version: 'postfiat-local-rpc-v1', id: 'x'.repeat(193), method: 'status', params: {} }));
+        ws.send(JSON.stringify({ version: 'postfiat-local-rpc-v1', id: 'x'.repeat(193), method: 'server_info', params: {} }));
       });
       ws.on('message', (data) => resolve(data.toString()));
       ws.on('error', (e) => reject(e));
       setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 5000);
     });
     const parsed = JSON.parse(response);
-    if (parsed.error && parsed.error.code === 'proxy_request_id_too_long' && /192/.test(parsed.error.message)) {
+    // The refusal names which request it refuses: its method and its id's length.
+    if (parsed.error && parsed.error.code === 'proxy_request_id_too_long' && /192/.test(parsed.error.message)
+        && /server_info/.test(parsed.error.message) && /193 bytes/.test(parsed.error.message)) {
       ok('S3.2d: proxy refuses a client id over 192 bytes with proxy_request_id_too_long');
     } else {
       fail('S3.2d', 'unexpected response: ' + response);

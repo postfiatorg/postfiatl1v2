@@ -188,6 +188,8 @@ class RecoveryTest(unittest.TestCase):
                 row = self.row(j, burn)
                 self.assertEqual((row["stage"], row["too_large"]), ("queued", 0))
             self.assertEqual(j.get(BURN)["detail"], svc.STATUS_TOO_LARGE_DETAIL)
+            # The waiting burn shows the real next try: the end of the status pause.
+            self.assertEqual(j.get(BURN)["retry_at"], svc.utc(j.status_fault["until"]))
             alerts = [line for line in out.getvalue().splitlines() if line.startswith("ALERT")]
             self.assertEqual(len(alerts), 1, alerts)
             self.assertIn("vault_bridge_status", alerts[0])
