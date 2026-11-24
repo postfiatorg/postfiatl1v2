@@ -1,66 +1,270 @@
 #!/bin/bash
-# Run only from the owner's digest-verified private stage.
+# Run only from the owner's digest-verified private stage:
+#   install-exit-system.sh [--allow-downgrade]   install or upgrade to the bundle's revision
+#   install-exit-system.sh --rollback            put the previous tree back
 set -euo pipefail
 umask 022
-[[ $EUID == 0 && $# == 0 ]]
-bundle=$(cd -- "$(dirname -- "$0")" && pwd -P)
-[[ $(stat -c '%u:%a' "$bundle") == 0:700 && $bundle == /var/lib/pf-sol-install.* ]]
-cd /
-exec 9>/run/pf-sol-exit-install.lock
-flock -n 9
 operator=postfiat
-operator_uid=$(id -u "$operator")
-operator_home=$(getent passwd "$operator" | cut -d: -f6)
 account=pf-sol-exit
+# The worker's own user and group ID, set here only. 0-1000 hold system and distribution
+# accounts and the users of container images (databases run as 999, 70, 27, 101 or 1000), and
+# 60000 up holds systemd's homed and dynamic users and nobody.
+account_id=59900
 svc=/var/lib/pf-sol-exit
-app=/opt/postfiat/sol-exit
+base=/opt/postfiat
+# The live tree is the symlink $app; each installed revision has its own tree under $trees, and
+# $previous names the tree before the last switch. $history lists revisions in first-install order.
+app=$base/sol-exit
+trees=$base/sol-exit.d
+previous=$base/sol-exit.previous
+history=$base/sol-exit.history
 ops=$app/ops/sol-live
 unit=pft-sol-mainnet-withdraw.service
 test_unit=pft-sol-exit-self-test.service
-rev=$(cat "$bundle/revision")
-[[ $rev =~ ^[0-9a-f]{40}$ ]]
-for dir in /opt/postfiat "$app" "$svc" /var/log/pf-sol-exit; do
-    [[ ! -L "$dir" ]]
-    if [[ -e "$dir" ]]; then
-        [[ -d "$dir" && $(stat -c %u "$dir") == 0 && -z $(find "$dir" -maxdepth 0 -perm /022 -print) ]]
+# The self-test unit records the revision it passed on; the worker starts only on that revision.
+passed=/var/lib/pf-sol-exit-install/self-test-passed
+
+# A unit counts as stopped only when inactive or failed: activating, deactivating or reloading
+# units still run code from the live tree.
+require_stopped() {
+    local current state
+    for current in "$@"; do
+        state=$(systemctl show -p ActiveState --value -- "$current")
+        case $state in
+            inactive|failed) ;;
+            *) echo "Stop $current before installing: it is ${state:-unknown}." >&2; return 1 ;;
+        esac
+    done
+}
+
+# A bundle is a downgrade when the installed tree names its revision as an ancestor (the tree's
+# `ancestry` file, one revision per line, when the bundle carries one), or when this host first
+# installed it before the installed revision.
+check_not_downgrade() {
+    local rev=$1 installed=$2 allow=$3 ancestry=$4 order=$5 at_rev at_installed
+    [[ -z $installed || $rev == "$installed" || $allow == 1 ]] && return 0
+    if [[ -f $ancestry ]] && grep -qxF -- "$rev" "$ancestry"; then
+        echo "Refusing downgrade: $rev is an ancestor of the installed $installed. Pass --allow-downgrade to install it." >&2
+        return 1
     fi
-done
-# A different revision is an upgrade. It is allowed only with both units stopped (checked
-# below). The self-test log is reset, so the self-test must pass again before the worker starts.
-if [[ -f "$app/revision" && $(cat "$app/revision") != "$rev" ]]; then
-    echo "Upgrading installed worker from $(cat "$app/revision") to $rev."
-fi
-state=$(systemctl list-unit-files --type=service --no-legend --no-pager | awk -v unit="$unit" '$1 == unit {print $2}')
-[[ -z "$state" || $state == disabled ]]
-for current in "$unit" "$test_unit"; do
-    if systemctl is-active --quiet "$current"; then echo "Stop $current before installing." >&2; exit 1; fi
-done
+    if [[ -f $order ]]; then
+        at_rev=$(grep -nxF -- "$rev" "$order" | head -1 | cut -d: -f1 || true)
+        at_installed=$(grep -nxF -- "$installed" "$order" | head -1 | cut -d: -f1 || true)
+        if [[ -n $at_rev && -n $at_installed && $at_rev -lt $at_installed ]]; then
+            echo "Refusing downgrade: $rev was installed here before $installed. Pass --allow-downgrade to install it." >&2
+            return 1
+        fi
+    fi
+}
+
+# Point $1 at $3 in one rename; $2 then names the tree $1 named before.
+switch_tree() {
+    local link=$1 before=$2 tree=$3 old=""
+    if [[ -L $link ]]; then old=$(readlink -- "$link"); fi
+    ln -sfnT -- "$tree" "$link.next"
+    mv -T -- "$link.next" "$link"
+    if [[ -n $old && $old != "$tree" ]]; then
+        ln -sfnT -- "$old" "$before.next"
+        mv -T -- "$before.next" "$before"
+    fi
+}
+
+# Swap the live and previous trees, each in one rename.
+rollback_tree() {
+    local link=$1 before=$2 current earlier
+    [[ -L $link && -L $before ]] || { echo "No previous tree to roll back to." >&2; return 1; }
+    current=$(readlink -- "$link")
+    earlier=$(readlink -- "$before")
+    [[ -f $earlier/revision ]] || { echo "The previous tree has no recorded revision." >&2; return 1; }
+    ln -sfnT -- "$earlier" "$link.next"
+    mv -T -- "$link.next" "$link"
+    ln -sfnT -- "$current" "$before.next"
+    mv -T -- "$before.next" "$before"
+}
+
+# Record the revision of the live tree, only after the switch, and its first-install order.
+record_revision() {
+    local link=$1 rev=$2 order=$3
+    printf '%s\n' "$rev" > "$link/revision.next"
+    mv -T -- "$link/revision.next" "$link/revision"
+    if ! { [[ -f $order ]] && grep -qxF -- "$rev" "$order"; }; then printf '%s\n' "$rev" >> "$order"; fi
+}
+
+# Copy the bundle into a staged tree beside the live one, check it, then switch. A failed copy or
+# check removes the staged tree and leaves the live tree and its recorded revision as they were.
+install_tree() {
+    local bundle=$1 rev=$2 stage
+    install -d -m755 -o root -g root "$trees"
+    stage=$(mktemp -d "$trees/$rev.XXXXXXXX")
+    if ! { chmod 0755 "$stage" && build_tree "$bundle" "$stage" && self_test_tree "$stage"; }; then
+        rm -rf -- "$stage"
+        echo "The new tree failed to build or its self-test failed; the installed tree is unchanged." >&2
+        return 1
+    fi
+    rm -f -- "$passed"
+    switch_tree "$app" "$previous" "$stage"
+    record_revision "$app" "$rev" "$history"
+}
+
+build_tree() {
+    local bundle=$1 tree=$2
+    cp -R "$bundle/runtime/." "$tree/"
+    python3 -I -m venv "$tree/venv"
+    PIP_CONFIG_FILE=/dev/null "$tree/venv/bin/python" -I -m pip --isolated --disable-pip-version-check install \
+        --no-cache-dir --no-index --only-binary=:all: --require-hashes --find-links "$bundle/wheels" \
+        -r "$tree/ops/sol-live/exit-requirements.lock"
+}
+
+as_worker() {
+    local tree=$1
+    shift
+    runuser -u "$account" -- env -i PATH=/usr/bin:/bin HOME="$svc" PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONPATH="$tree/ops/sol-live" EXIT_PROOF_HOME="$tree/proof" "$tree/venv/bin/python" "$@"
+}
+
+self_test_tree() {
+    local tree=$1
+    as_worker "$tree" -c 'import exit_service; from exit_proof import verify_local_host; verify_local_host()'
+    if [[ -f $svc/fee-payer.json ]]; then validate_payer "$tree" "$svc/fee-payer.json"; fi
+}
+
+validate_payer() {
+    as_worker "$1" -c 'from exit_setup import FEE_PAYER, load, require; import sys; require(load(sys.argv[1]).pubkey()==FEE_PAYER, "Wrong installed payer")' "$2"
+}
+
+# The service ID must be outside the reserved ranges and used by no other user or group.
+check_account_id() {
+    local id=$1 name=$2 user group
+    if ! [[ $id =~ ^[1-9][0-9]*$ ]] || (( id <= 1000 || id >= 60000 )); then
+        echo "Service ID $id is in a reserved range (system and container users up to 1000, systemd and nobody from 60000)." >&2
+        return 1
+    fi
+    user=$(getent passwd "$id" | cut -d: -f1 || true)
+    group=$(getent group "$id" | cut -d: -f1 || true)
+    if [[ -n $user && $user != "$name" ]] || [[ -n $group && $group != "$name" ]]; then
+        echo "Service ID $id already belongs to ${user:-$group}." >&2
+        return 1
+    fi
+}
+
+# Move an existing account to its own ID, all units stopped: group ID, then user ID (usermod
+# re-owns the files it owns in its home, $svc), then every file under $svc that still has the
+# old group or user. Modes, including 600 on the key files, do not change.
+migrate_account_id() {
+    local name=$1 id=$2 home=$3 old_uid old_gid
+    old_uid=$(id -u "$name")
+    old_gid=$(getent group "$name" | cut -d: -f3)
+    [[ $old_uid == "$id" && $old_gid == "$id" ]] && return 0
+    check_account_id "$id" "$name"
+    echo "Moving $name from user ID $old_uid and group ID $old_gid to $id."
+    groupmod -g "$id" "$name"
+    usermod -u "$id" "$name"
+    find "$home" -xdev -gid "$old_gid" -exec chgrp -h "$id" {} +
+    find "$home" -xdev -uid "$old_uid" -exec chown -h "$id" {} +
+    if [[ -n $(ids_left "$home" "$old_uid" "$old_gid") ]]; then
+        echo "Files under $home still have the old IDs." >&2
+        return 1
+    fi
+}
+
+ids_left() { find "$1" -xdev \( -uid "$2" -o -gid "$3" \) -print -quit; }
+
+create_account() {
+    local name=$1 id=$2 home=$3
+    check_account_id "$id" "$name"
+    groupadd --system --gid "$id" "$name"
+    useradd --system --uid "$id" --gid "$id" --no-create-home --home-dir "$home" --shell /usr/sbin/nologin "$name"
+}
+
+write_gates() {
+    local dir=$1
+    install -d -m755 "$dir/$unit.d" "$dir/$test_unit.d"
+    cat > "$dir/$unit.d/self-test-gate.conf" <<GATE
+[Service]
+ExecStartPre=+/bin/sh -c 'test -s $passed && test "\$\$(cat $passed)" = "\$\$(cat $app/revision)"'
+GATE
+    cat > "$dir/$test_unit.d/record-pass.conf" <<PASS
+[Service]
+ExecStartPost=+/bin/sh -c 'install -d -m755 ${passed%/*} && cp $app/revision $passed'
+PASS
+    chmod 0644 "$dir/$unit.d/self-test-gate.conf" "$dir/$test_unit.d/record-pass.conf"
+}
+
 check_port() {
     local listeners
     listeners=$(ss -H -ltn 'sport = :18089') || return 1
     [[ -z "$listeners" ]]
 }
+
+# Tests source this file for the functions above.
+if [[ ${BASH_SOURCE[0]} != "$0" ]]; then return 0; fi
+
+allow_downgrade=0 rollback=0
+for arg in "$@"; do
+    case $arg in
+        --allow-downgrade) allow_downgrade=1 ;;
+        --rollback) rollback=1 ;;
+        *) echo "Unknown argument $arg." >&2; exit 2 ;;
+    esac
+done
+[[ $EUID == 0 ]]
+bundle=$(cd -- "$(dirname -- "$0")" && pwd -P)
+[[ $(stat -c '%u:%a' "$bundle") == 0:700 && $bundle == /var/lib/pf-sol-install.* ]]
+cd /
+exec 9>/run/pf-sol-exit-install.lock
+flock -n 9
+operator_uid=$(id -u "$operator")
+operator_home=$(getent passwd "$operator" | cut -d: -f6)
+rev=$(cat "$bundle/revision")
+[[ $rev =~ ^[0-9a-f]{40}$ ]]
+for dir in "$base" "$trees" "$svc" /var/log/pf-sol-exit; do
+    [[ ! -L "$dir" ]]
+    if [[ -e "$dir" ]]; then
+        [[ -d "$dir" && $(stat -c %u "$dir") == 0 && -z $(find "$dir" -maxdepth 0 -perm /022 -print) ]]
+    fi
+done
+# The live tree is a root-owned symlink into $trees, or a directory from an installer before it.
+if [[ -L $app ]]; then [[ $(readlink -- "$app") == "$trees"/* ]]; fi
+state=$(systemctl list-unit-files --type=service --no-legend --no-pager | awk -v unit="$unit" '$1 == unit {print $2}')
+[[ -z "$state" || $state == disabled ]]
+require_stopped "$unit" "$test_unit"
+if (( rollback )); then
+    rm -f -- "$passed"
+    rollback_tree "$app" "$previous"
+    echo "Rolled back to $(cat "$app/revision"). Run the archive self-test before starting the worker."
+    exit 0
+fi
+installed=""
+if [[ -f "$app/revision" ]]; then installed=$(cat "$app/revision"); fi
+check_not_downgrade "$rev" "$installed" "$allow_downgrade" "$app/ancestry" "$history"
+if [[ -n $installed && $installed != "$rev" ]]; then
+    echo "Upgrading installed worker from $installed to $rev."
+fi
 check_port
 # Installation begins here. A failed preflight preserves the existing proof.
 install -d -m755 -o root -g root /var/log/pf-sol-exit
 install -m644 /dev/null /var/log/pf-sol-exit/self-test.log
-if ! id "$account" >/dev/null 2>&1; then
-    useradd --system --user-group --no-create-home --home-dir "$svc" --shell /usr/sbin/nologin "$account"
+if id "$account" >/dev/null 2>&1; then
+    migrate_account_id "$account" "$account_id" "$svc"
+else
+    create_account "$account" "$account_id" "$svc"
 fi
 [[ $(getent passwd "$account" | cut -d: -f6,7) == "$svc:/usr/sbin/nologin" ]]
-[[ $(id -Gn "$account") == "$account" && $(id -u "$account") -ne 0 ]]
-install -d -m755 -o root -g root "$app"
+[[ $(id -Gn "$account") == "$account" && $(id -u "$account") == "$account_id" ]]
 install -d -m750 -o root -g "$account" "$svc"
 install -d -m700 -o "$account" -g "$account" "$svc/jobs"
-cp -R "$bundle/runtime/." "$app/"
 install -m640 -o root -g "$account" "$bundle/known_hosts" "$svc/known_hosts"
-bash "$ops/check-prover-host.sh" "$svc/known_hosts"
-python3 -I -m venv "$app/venv"
-PIP_CONFIG_FILE=/dev/null "$app/venv/bin/python" -I -m pip --isolated --disable-pip-version-check install \
-    --no-cache-dir --no-index --only-binary=:all: --require-hashes --find-links "$bundle/wheels" -r "$ops/exit-requirements.lock"
-as_worker=(runuser -u "$account" -- env -i PATH=/usr/bin:/bin HOME="$svc" PYTHONDONTWRITEBYTECODE=1
-           PYTHONPATH="$ops" EXIT_PROOF_HOME="$app/proof" "$app/venv/bin/python")
-"${as_worker[@]}" -c 'import exit_service; from exit_proof import verify_local_host; verify_local_host()'
+bash "$bundle/runtime/ops/sol-live/check-prover-host.sh" "$svc/known_hosts"
+# A tree from an installer before this one becomes the first entry under $trees, in one rename.
+if [[ -d $app && ! -L $app ]]; then
+    install -d -m755 -o root -g root "$trees"
+    legacy="$trees/${installed:-legacy}.legacy"
+    mv -T -- "$app" "$legacy"
+    ln -sT -- "$legacy" "$app"
+    if [[ -n $installed ]]; then grep -qxF -- "$installed" "$history" 2>/dev/null || printf '%s\n' "$installed" >> "$history"; fi
+fi
+# Credentials go through a private directory in $svc (root and the worker's group only), never
+# through a world-readable place, and end at mode 600 owned by the worker.
 tmp=$(mktemp -d "$svc/.install.XXXXXXXX")
 trap 'rm -rf -- "$tmp"; if [[ -n ${sudoers:-} ]]; then rm -f -- "$sudoers"; fi' EXIT
 chgrp "$account" "$tmp"
@@ -71,22 +275,24 @@ stage_credential() {
     chown "$account:$account" "$tmp/$2"
 }
 stage_credential exit-prover-ssh prover
-runuser -u "$account" -- bash "$ops/check-prover-identity.sh" "$tmp/prover" "$(cat "$ops/exit-prover.fingerprint")"
+runuser -u "$account" -- bash "$bundle/runtime/ops/sol-live/check-prover-identity.sh" "$tmp/prover" \
+    "$(cat "$bundle/runtime/ops/sol-live/exit-prover.fingerprint")"
 mv -T "$tmp/prover" "$svc/prover"
 check_port
-validate_payer() {
-    "${as_worker[@]}" -c 'from exit_setup import FEE_PAYER, load, require; import sys; require(load(sys.argv[1]).pubkey()==FEE_PAYER, "Wrong installed payer")' "$1"
-}
 if [[ -f "$svc/fee-payer.json" ]]; then
-    [[ ! -L "$svc/fee-payer.json" && $(stat -c '%u:%a:%h' "$svc/fee-payer.json") == "$(id -u "$account"):600:1" ]]
-    validate_payer "$svc/fee-payer.json"
+    [[ ! -L "$svc/fee-payer.json" && $(stat -c '%u:%a:%h' "$svc/fee-payer.json") == "$account_id:600:1" ]]
 else
     [[ ! -e "$svc/fee-payer.json" && ! -L "$svc/fee-payer.json" ]]
     stage_credential exit-fee-payer.json fee-payer.json
-    validate_payer "$tmp/fee-payer.json"
+fi
+# The new tree is built and checked beside the live one; only then is it switched in.
+install_tree "$bundle" "$rev"
+if [[ -f "$tmp/fee-payer.json" ]]; then
+    validate_payer "$app" "$tmp/fee-payer.json"
     mv -T "$tmp/fee-payer.json" "$svc/fee-payer.json"
 fi
 install -m644 "$ops/$unit" "$ops/$test_unit" /etc/systemd/system/
+write_gates /etc/systemd/system
 sudoers=$(mktemp /etc/sudoers.d/.pf-sol-exit.XXXXXXXX)
 cat > "$sudoers" <<RULES
 $operator ALL=(root) NOPASSWD: /usr/bin/systemctl start pft-sol-exit-self-test.service, /usr/bin/systemctl start $unit, /usr/bin/systemctl stop $unit, /usr/bin/systemctl --no-pager status $unit
@@ -96,5 +302,4 @@ visudo -cf "$sudoers"
 mv -T "$sudoers" /etc/sudoers.d/pf-sol-exit
 systemctl daemon-reload
 [[ $(systemctl is-enabled "$unit") == disabled ]]
-printf '%s\n' "$rev" > "$app/revision"
-echo "Installed disabled worker at $rev. Run the archive self-test."
+echo "Installed disabled worker at $rev. Run the archive self-test; the worker starts only after it passed on $rev."
