@@ -924,6 +924,30 @@ fn handle_rpc_serve_connection(
         }
     };
 
+    if request.id.len() > MAX_RPC_ID_BYTES {
+        // Echoing an over-long id could make even this error reply too large
+        // to send, so it is answered under a placeholder id.
+        let id = format!("remote-{request_index}");
+        let response = rpc_serve_error_response(
+            &id,
+            "rpc_protocol_error",
+            &format!(
+                "rpc request id of {} bytes exceeds the {MAX_RPC_ID_BYTES}-byte limit",
+                request.id.len()
+            ),
+        );
+        let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
+        return rpc_serve_event(
+            &context.node_id,
+            request_index,
+            &context.peer_addr,
+            id,
+            "invalid",
+            None,
+            None,
+            &response,
+        );
+    }
     let id = request.id.clone();
     let method = request.method.clone();
     let mut mempool_submit_counts = None;
@@ -5977,15 +6001,24 @@ mod oversized_reply_tests {
     fn a_request_id_over_the_bound_is_answered_under_a_placeholder_id() {
         let (mut client, server) = connected_pair();
         let long = "i".repeat(5_000_000);
-        let at_bound = "b".repeat(256);
-        for id in [long.as_str(), at_bound.as_str()] {
-            write_json_line(&mut client, &RpcRequest::empty(id, "status")).expect("send request");
-        }
+        let at_bound = at_bound_for_writer();
+        // Requests may be up to MAX_RPC_REQUEST_BYTES, larger than a reply frame,
+        // so the line is written directly.
+        let sender = client.try_clone().expect("clone client");
+        let writer = std::thread::spawn(move || {
+            let mut sender = sender;
+            for id in [long, at_bound_for_writer()] {
+                let mut line = serde_json::to_vec(&RpcRequest::empty(id, "status")).expect("json");
+                line.push(b'\n');
+                sender.write_all(&line).expect("send request");
+            }
+        });
         let mut context = child_dispatch_limit_tests::child_dispatch_test_context(8, 8);
         cache_status(&context, status_with_revision("test-revision".to_string()));
         let mut reader = BufReader::new(RpcServeDeadlineStream::new(server, 10_000));
         let first_event = handle_rpc_serve_connection(&mut reader, 1, &mut context);
         let second_event = handle_rpc_serve_connection(&mut reader, 2, &mut context);
+        writer.join().expect("writer");
 
         let mut client_reader = BufReader::new(client);
         let first: RpcResponse =
@@ -6000,6 +6033,10 @@ mod oversized_reply_tests {
         assert_eq!(second.id, at_bound);
         assert!(second.ok, "{:?}", second.error);
         assert!(second_event.ok);
+    }
+
+    fn at_bound_for_writer() -> String {
+        "b".repeat(256)
     }
 
     /// A reply that cannot be written ends the connection: the event says so
