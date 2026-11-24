@@ -378,10 +378,15 @@ def paid_unsettled(c, redemptions, covered):
             [str(marker(r["burn_tx_id"])) for r in page],
             dict(c.level, encoding="base64"),
         )["value"]
+        # Only a paid marker (byte 1) means the USDC left the custody; a cancelled one
+        # (byte 2) leaves it there for the refund on Post Fiat.
         paid += sum(
             r["amount_atoms"]
             for r, account in zip(page, markers)
-            if account is not None and account["owner"] == str(VERIFIER)
+            if account is not None
+            and account["owner"] == str(VERIFIER)
+            and base64.b64decode(account["data"][0] if isinstance(account["data"], list) else account["data"])
+            == b"\x01"
         )
     return paid
 
@@ -604,6 +609,16 @@ def readiness():
 PAID_NO_HISTORY = object()
 
 
+CANCELLED = "cancelled: refund on Post Fiat"
+
+
+class BurnCancelled(ValueError):
+    """The burn's marker on Solana reads cancelled: it can never be paid."""
+
+    def __init__(self):
+        super().__init__(CANCELLED)
+
+
 class UnknownBurn(ValueError):
     """No finalized L1 redemption exists."""
 
@@ -642,6 +657,8 @@ def signature(c, burn, known=None, *, history_limit=100):
     account = c.account(key)
     if not account or (account["owner"] == str(SYSTEM) and not account["data"]):
         return None
+    if account["owner"] == str(VERIFIER) and account["data"] == b"\x02":
+        raise BurnCancelled()
     require(
         account["owner"] == str(VERIFIER) and account["data"] == b"\x01",
         "Unexpected burn marker.",

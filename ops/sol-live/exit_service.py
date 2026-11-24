@@ -15,6 +15,8 @@ import time
 from collections import deque, OrderedDict
 from exit_payout import (
     CheckpointAdvanced,
+    BurnCancelled,
+    CANCELLED,
     DestinationNotWallet,
     UnknownBurn,
     PAID_NO_HISTORY,
@@ -219,7 +221,7 @@ def public_row(row):
     }
     # Older journals may contain raw exception strings. A refused destination
     # keeps its fixed, named reason so the holder learns why.
-    if value["error"] and not value["error"].startswith(NOT_WALLET):
+    if value["error"] and not value["error"].startswith((NOT_WALLET, CANCELLED)):
         value["error"] = "Withdrawal processing failed."
     if value["detail"] not in (
         None,
@@ -361,6 +363,9 @@ def process_next(journal, directory):
         )
     except UnknownBurn:
         journal.update(burn, "failed", error="Unknown finalized burn.")
+    except BurnCancelled as cancelled:
+        # Cancelled on Solana: never retried; the refund is decided on Post Fiat.
+        journal.update(burn, "failed", error=str(cancelled))
     except DestinationNotWallet as refused:
         # Named and not retried: the holder must see why; a refund is still open.
         journal.update(burn, "failed", error=str(refused))

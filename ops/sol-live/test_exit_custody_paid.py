@@ -53,7 +53,7 @@ class PaidUnsettledTest(unittest.TestCase):
             def call(self, method, keys, *rest):
                 assert method == "getMultipleAccounts"
                 owners = [str(payout.marker(b)) for b in burns if b in self.paid]
-                return dict(value=[dict(owner=str(payout.VERIFIER)) if k in owners else None for k in keys])
+                return dict(value=[dict(owner=str(payout.VERIFIER), data=["AQ==", "base64"]) if k in owners else None for k in keys])
 
         # The first payout left custody; the second is still payable before settlement.
         with (
