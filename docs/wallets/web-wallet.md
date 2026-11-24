@@ -510,15 +510,29 @@ fragmented wallet from hiding spendable FastPay value behind a smaller
 client-side lookup limit.
 
 The live wallet feed (`wallet_subscribe`) reads one `owned_objects` page per
-validator per tick and marks it `owned_complete` (`false` when truncated). The
-wallet selects only from a complete inventory: a complete feed answer replaces
-it; a partial page never does. When the partial page's `view_digest` equals the
-last complete read the inventory stands, otherwise the wallet reads every page
-(`fetchOwnedObjectsSnapshot`) and publishes the result in one step. When that
-read fails, the wallet shows why, either the node is too old for paging or the
-objects kept changing between pages (a busy account, or validators serving
-different views), with a Retry button; partial feed pages neither clear that
-error nor retry on their own.
+validator per tick. The wallet selects only from its own all-pages read
+(`fetchOwnedObjectsSnapshot`), never from a feed answer: nodes expose no
+inventory revision that orders a feed answer against a read, and block height
+does not change with FastPay effects. A feed answer whose `view_digest`
+differs from the selected view, complete or partial, makes selection
+unavailable and starts a read. The wallet publishes a read only when a second
+read returns the same `view_digest`, that digest is the latest feed view (or
+no feed answer has arrived yet), and the wallet has not already replaced that
+view this session. The latest feed view constrains every later refresh, so a
+read of another view (a lagging node, or a newer view the feed has not
+reached) never re-enables selection on its own. When three attempts cannot
+confirm a view, or a read fails, the wallet shows why (a node too old for
+paging, or objects that kept changing) with a Retry button; feed answers
+neither clear that error nor retry on their own. Retry reads again; if the
+latest feed view still differs, Retry adopts a view only after two confirmed
+reads of it, and never one the wallet already replaced. Retry does not ask
+the feed for a new answer, so a lagging node that answers all four reads can
+still pass it with a view this session never published, and a lagging node
+that agrees with an equally lagging feed still looks current; only a node
+revision closes those gaps. A replaced screen coordinator publishes nothing.
+See
+[FastPay Inventory Ordering](fastpay-inventory-ordering.md) for what a node
+revision would add.
 
 ## FastPay Standard Unwrap
 

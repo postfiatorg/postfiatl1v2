@@ -70,11 +70,16 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     setFastpayError(error);
   }, []);
 
-  // Only complete inventories reach fastpayObjects; see fastpay-inventory.js.
+  // Only confirmed all-pages reads reach fastpayObjects; see fastpay-inventory.js.
   const fastpayInventory = useMemo(() => createFastpayInventory({
     read: () => fetchOwnedObjectsSnapshot(rpc, publicKeyHex, { asset: 'PFT', limit: FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT }),
     publish: publishFastpay,
   }), [rpc, publicKeyHex, publishFastpay]);
+  // A replaced coordinator's outstanding read must not publish over its successor.
+  useEffect(() => {
+    fastpayInventory.attach();
+    return () => fastpayInventory.dispose();
+  }, [fastpayInventory]);
 
   const refreshFastpayRecoveries = useCallback(() => {
     if (!publicKeyHex || typeof window === 'undefined') {
@@ -90,7 +95,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
 
   useEffect(() => refreshFastpayRecoveries(), [refreshFastpayRecoveries]);
 
-  const fetchFastpayBalance = useCallback(async ({ showLoading = true } = {}) => {
+  const fetchFastpayBalance = useCallback(async ({ showLoading = true, retry = false } = {}) => {
     if (!publicKeyHex) {
       setFastpayBalance(null);
       setFastpayObjects([]);
@@ -100,7 +105,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     }
 
     if (showLoading) setFastpayStatus('loading');
-    return fastpayInventory.refresh();
+    return retry ? fastpayInventory.retry() : fastpayInventory.refresh();
   }, [publicKeyHex, fastpayInventory]);
 
   const fetchAccount = useCallback(async () => {
@@ -172,7 +177,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     }
 
     if (liveSnapshot.owned) {
-      fastpayInventory.applyFeed(liveSnapshot.owned, liveSnapshot.owned_complete);
+      fastpayInventory.applyFeed(liveSnapshot.owned);
     } else if (liveSnapshot.owned_error && fastpayBalance === null) {
       setFastpayStatus('error');
       setFastpayError(`FastPay balance unavailable: ${humanRpcErrorMessage(liveSnapshot.owned_error)}`);
@@ -757,7 +762,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
               {fastpayStatus === 'error' && fastpayError && (
                 <div className="pf-error" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ flex: 1 }}>{fastpayError}</span>
-                  <button className="pf-ghost" style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => fetchFastpayBalance().catch(() => {})}>Retry</button>
+                  <button className="pf-ghost" style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => fetchFastpayBalance({ retry: true }).catch(() => {})}>Retry</button>
                 </div>
               )}
             </div>
