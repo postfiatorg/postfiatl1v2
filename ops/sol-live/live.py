@@ -52,10 +52,19 @@ def save(p, data):
     os.replace(f.name, p)
 
 
-def rpc(i, method, **params):
+class ReplyTooLarge(RuntimeError):
+    """The node's reply to this read exceeds its frame limit; asking again cannot help."""
+
+
+class EmptyReply(ReplyTooLarge):
+    """An empty line: what a node without `rpc_response_too_large` sends after its idle
+    timeout when the reply would exceed its frame limit."""
+
+
+def rpc(i, method, timeout=120, **params):
     rid = uuid4().hex
     with socket.create_connection(tuple(PEERS[i]), 5) as s:
-        s.settimeout(120)
+        s.settimeout(timeout)
         s.sendall(
             json.dumps(
                 dict(
@@ -67,7 +76,13 @@ def rpc(i, method, **params):
             ).encode()
             + b"\n"
         )
-        r = json.loads(s.makefile("rb").readline(64 << 20))
+        line = s.makefile("rb").readline(64 << 20)
+    if not line.strip():
+        raise EmptyReply(f"{i} {method}: empty reply")
+    r = json.loads(line)
+    error = r.get("error")
+    if r.get("id") == rid and isinstance(error, dict) and error.get("code") == "rpc_response_too_large":
+        raise ReplyTooLarge(f"{i} {method}: {error.get('message')}")
     if r.get("id") != rid or r.get("ok") is not True:
         raise RuntimeError(f"{i} {method}: {r.get('error')}")
     return r["result"]
