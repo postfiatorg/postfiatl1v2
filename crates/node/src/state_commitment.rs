@@ -1642,11 +1642,19 @@ pub(super) fn append_ledger_state(
     }
 
     if let Some(route) = &ledger.solana_route {
-        append_canonical_bytes_commitment(bytes, "ledger.solana_route.v1", &serde_json::to_vec(route)?);
+        append_canonical_bytes_commitment(
+            bytes,
+            "ledger.solana_route.v1",
+            &serde_json::to_vec(route)?,
+        );
     }
 
     if !ledger.additional_solana_routes.is_empty() {
-        append_canonical_bytes_commitment(bytes, "ledger.additional_solana_routes.v1", &serde_json::to_vec(&ledger.additional_solana_routes)?);
+        append_canonical_bytes_commitment(
+            bytes,
+            "ledger.additional_solana_routes.v1",
+            &serde_json::to_vec(&ledger.additional_solana_routes)?,
+        );
     }
 
     if commit_complete_nav_state && !ledger.beacon_finality_states.is_empty() {
@@ -2921,8 +2929,11 @@ pub(super) fn append_vault_bridge_receipt(
         receipt.bridge_deposit_evidence.is_some(),
     );
     if let Some(evidence) = &receipt.solana_deposit_evidence {
-        append_canonical_bytes_commitment(bytes, &format!("{prefix}.solana_deposit"),
-            &serde_json::to_vec(evidence).expect("Solana evidence contains JSON primitives"));
+        append_canonical_bytes_commitment(
+            bytes,
+            &format!("{prefix}.solana_deposit"),
+            &serde_json::to_vec(evidence).expect("Solana evidence contains JSON primitives"),
+        );
     }
     if let Some(evidence) = &receipt.bridge_deposit_evidence {
         append_vault_bridge_deposit_evidence(
