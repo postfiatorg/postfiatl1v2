@@ -11,7 +11,7 @@ test -f "$witness"
 mkdir -p "$(dirname "$app")"
 mkdir -m700 "$app"
 ops=ops/sol-live
-files=("$ops"/{exit_service.py,exit_payout.py,exit_setup.py,exit_precheck.py,exit_keys.py,exit_proof.py,exit_segments.py,profile.py,live.py,exit_sandbox_check.py,exit-sandbox.sh,check-prover-host.sh,check-prover-identity.sh,exit-prover.fingerprint,fixtures})
+files=("$ops"/{exit_service.py,exit_payout.py,exit_setup.py,exit_precheck.py,exit_keys.py,exit_proof.py,exit_segments.py,exit_rules.py,profile.py,live.py,exit_sandbox_check.py,exit-sandbox.sh,check-prover-host.sh,check-prover-identity.sh,exit-prover.fingerprint,fixtures})
 files+=(solana/deploy/{bridge,keys,route_binding}.py solana/pfusdc-egress-verifier/bootstrap.py crates/types/src/solana_exit_profile.json)
 git archive HEAD "${files[@]}" | bash "$ops/install-exit-runtime.sh" "$app" \
     "$HOME/repos/b23-coord/evidence/withdraw" "$witness"
