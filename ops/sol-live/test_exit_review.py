@@ -287,6 +287,13 @@ class SignTest(unittest.TestCase):
         rv.run_review(self.cfg, "paid", BURN)
         with self.assertRaisesRegex(rv.Refused, "decision"):
             rv.authorize(self.cfg, dict(self.amend(), value=0))
+        with self.assertRaisesRegex(rv.Refused, "decision"):
+            rv.authorize(self.cfg, dict(self.amend(), paused=True))
+
+    def test_the_node_omits_paused_when_false_and_the_decision_is_still_plain(self):
+        rv.run_review(self.cfg, "paid", BURN)
+        amend = {k: v for k, v in self.amend().items() if k != "paused"}
+        rv.authorize(self.cfg, amend)
 
 
 FAKE_NODE = """#!/usr/bin/env python3
