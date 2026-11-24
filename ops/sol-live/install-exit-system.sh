@@ -31,6 +31,8 @@ unit_dir=/etc/systemd/system
 # Masks here override unit files in /etc/systemd/system; `systemctl mask --runtime` writes to
 # /run/systemd/system, which /etc overrides, so its mask would not hold for these units.
 mask_dir=/run/systemd/system.control
+# Written with the masks: they belong to a run of this installer. Like them, it goes at a reboot.
+mask_marker=$mask_dir/.pf-sol-exit-install.mask
 masked=0
 mountinfo=/proc/self/mountinfo
 
@@ -259,6 +261,7 @@ switch_in() {
 mask_units() {
     local name
     install -d -m755 "$mask_dir" || return 1
+    printf 'run %s started %s\n' "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$mask_marker" || return 1
     for name in "$unit" "$test_unit"; do
         ln -sfnT /dev/null "$mask_dir/$name" || return 1
         masked=1
@@ -271,9 +274,30 @@ unmask_units() {
     for name in "$unit" "$test_unit"; do
         rm -f -- "$mask_dir/$name" || status=1
     done
+    if (( status == 0 )); then rm -f -- "$mask_marker" || status=1; fi
     systemctl daemon-reload || status=1
     if (( status == 0 )); then masked=0; fi
     return $status
+}
+
+# Called holding the install lock, so no other run of this installer is alive. Masks next to this
+# installer's marker were left by a run that was killed (SIGKILL skips the exit trap): remove them.
+# A mask without the marker was set by someone else and is left alone.
+clear_stale_mask() {
+    local name found=0
+    for name in "$unit" "$test_unit"; do
+        if [[ -L $mask_dir/$name ]]; then found=1; fi
+    done
+    if (( ! found )); then
+        rm -f -- "$mask_marker" || return 1
+        return 0
+    fi
+    if [[ ! -f $mask_marker ]]; then
+        echo "$unit or $test_unit is masked by something other than this installer (in $mask_dir); find out why before installing." >&2
+        return 1
+    fi
+    echo "Removing the masks left by an earlier run of this installer that did not finish ($(cat -- "$mask_marker"))."
+    unmask_units || { echo "Removing the stale masks failed: rm $mask_dir/$unit $mask_dir/$test_unit $mask_marker; systemctl daemon-reload" >&2; return 1; }
 }
 
 build_tree() {
@@ -420,7 +444,8 @@ owner_mode=$(stat -c '%u:%a' "$bundle")
 [[ $owner_mode == 0:700 && $bundle == /var/lib/pf-sol-install.* ]]
 cd /
 exec 9>/run/pf-sol-exit-install.lock
-flock -n 9
+flock -n 9 || { echo "Another run of this installer holds /run/pf-sol-exit-install.lock." >&2; exit 1; }
+clear_stale_mask
 operator_uid=$(id -u "$operator")
 operator_home=$(getent passwd "$operator" | cut -d: -f6)
 rev=$(cat "$bundle/revision")
@@ -436,7 +461,10 @@ done
 # The live tree is a root-owned symlink into $trees, or a directory from an installer before it.
 if [[ -L $app ]]; then [[ $(readlink -- "$app") == "$trees"/* ]]; fi
 state=$(systemctl list-unit-files --type=service --no-legend --no-pager | awk -v unit="$unit" '$1 == unit {print $2}')
-[[ -z "$state" || $state == disabled ]]
+if [[ -n $state && $state != disabled ]]; then
+    echo "$unit is $state; it must be disabled or absent before installing." >&2
+    exit 1
+fi
 require_stopped "$unit" "$test_unit"
 # From here to the end both units are masked; the exit trap unmasks them on success and on any failure.
 trap cleanup EXIT
