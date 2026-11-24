@@ -208,13 +208,55 @@ record_revision() {
 # Install the bundle: build and check a staged tree beside the live one, then put its unit files
 # and the self-test gate in place and load them, and only then switch the tree in. A failed build
 # or check removes the staged tree and leaves the live tree, its revision, the units and the
-# earlier self-test pass as they were. Both units stay masked throughout (mask_units).
+# earlier self-test pass as they were. A failure after the new units are loaded puts the live
+# tree's links and its own unit files back (restore_live); the self-test must pass again. Both
+# units stay masked throughout (mask_units).
 install_tree() {
-    local bundle=$1 rev=$2 payer=${3:-$svc/fee-payer.json}
+    local bundle=$1 rev=$2 payer=${3:-$svc/fee-payer.json} live="" before=""
     stage_tree "$bundle" "$rev" "$payer" || return 1
+    live=$(link_target "$app") || return 1
+    before=$(link_target "$previous") || return 1
     rm -f -- "$passed" || return 1
-    install_units "$staged" || return 1
-    switch_in "$staged" "$rev" || return 1
+    if install_units "$staged" && switch_in "$staged" "$rev"; then return 0; fi
+    echo "Installing $rev failed after its unit files were loaded; putting back the live tree and its own unit files." >&2
+    if ! restore_live "$live" "$before"; then
+        echo "Putting back the live tree's unit files failed: keep both units stopped and run --rollback or this installer again." >&2
+    fi
+    return 1
+}
+
+# The target of link $1, empty when there is none.
+link_target() {
+    if [[ -L $1 ]]; then readlink -- "$1" || return 1; fi
+    return 0
+}
+
+# Point link $1 at $2 again (remove it when $2 is empty), in one rename.
+put_link() {
+    local link=$1 target=$2 now
+    now=$(link_target "$link") || return 1
+    if [[ $now == "$target" ]]; then return 0; fi
+    if [[ -z $target ]]; then rm -f -- "$link" || return 1; return 0; fi
+    ln -sfnT -- "$target" "$link.next" || return 1
+    mv -T -- "$link.next" "$link" || return 1
+}
+
+# After a failure between loading the new units and completing the switch: the live and previous
+# links as they were, and the live tree's own unit files and gates loaded, as --rollback loads
+# them. On a first install there was no live tree: its unit files and gates are removed.
+restore_live() {
+    local live=$1 before=$2 name
+    put_link "$app" "$live" || return 1
+    put_link "$previous" "$before" || return 1
+    if [[ -n $live ]]; then
+        install_units "$live" || return 1
+        return 0
+    fi
+    for name in "$unit" "$test_unit"; do
+        rm -f -- "$unit_dir/$name" "$unit_dir/$name.next" || return 1
+    done
+    rm -f -- "$unit_dir/$unit.d/self-test-gate.conf" "$unit_dir/$test_unit.d/record-pass.conf" || return 1
+    systemctl daemon-reload || return 1
 }
 
 # Build and check a tree under $trees; its path is left in $staged.
