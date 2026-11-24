@@ -16,7 +16,6 @@ import base64
 import dataclasses
 import datetime
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -30,7 +29,9 @@ import uuid
 from pathlib import Path
 
 import base58
+from solders.keypair import Keypair
 from solders.pubkey import Pubkey
+from solders.signature import Signature
 
 VERIFIER = Pubkey.from_string("8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF")
 VAULT = Pubkey.from_string("GFkpeTibgdRAAAndgUMYsJnSTck91tUbrpuWBWan6z1G")
@@ -55,7 +56,10 @@ PAGE = 1000
 MAX_PAGES = 20
 EXIT_REFUSED, EXIT_RPC, EXIT_ACCESS = 2, 3, 4
 CONFIG = Path("/etc/postfiat/sol-exit-review.json")
+# The reviewer's verdict key: the keypair is readable only by the reviewer user; the signing step
+# (run as the node user) reads only the public key, so it can check a verdict but not make one.
 KEY = Path("/etc/postfiat/sol-exit-review.key")
+PUBLIC = Path("/etc/postfiat/sol-exit-review.pub")
 ACTIONS = {"paid": (b"\x01", 2), "refund": (b"\x02", 10)}
 
 
@@ -314,14 +318,32 @@ class Config:
     node: object
     solana: object
     review_dir: Path
-    key: bytes
+    key: object
     data_dir: Path = None
     proc: Path = Path("/proc")
     releases: Path = Path("/opt/postfiat/releases")
+    public: object = None
+
+    def __post_init__(self):
+        if self.public is None and self.key is not None:
+            self.public = self.key.pubkey()
 
 
-def mac(key, body):
-    return hmac.new(key, json.dumps(body, sort_keys=True).encode(), hashlib.sha256).hexdigest()
+def canonical(body):
+    return json.dumps(body, sort_keys=True).encode()
+
+
+def seal(key, body):
+    """The reviewer's Ed25519 signature over the verdict body."""
+    require(key is not None, "no reviewer key: only the reviewer writes verdicts")
+    return str(key.sign_message(canonical(body)))
+
+
+def sealed_by(public, body, signature):
+    try:
+        return Signature.from_string(signature).verify(public, canonical(body))
+    except (ValueError, TypeError):
+        return False
 
 
 def write_verdict(cfg, body):
@@ -330,7 +352,7 @@ def write_verdict(cfg, body):
                 solana_endpoint=getattr(cfg.solana, "endpoint", "unknown"),
                 time=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                 unix_time=int(time.time()))
-    doc = dict(body, mac=mac(cfg.key, body))
+    doc = dict(body, seal=seal(cfg.key, body))
     cfg.review_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
     path = cfg.review_dir / f"{body['decision_sha256']}.json"
     tmp = path.with_suffix(".tmp")
@@ -392,11 +414,11 @@ def load_review(cfg, decision, now=None):
         raise Refused(f"no review of this decision on {cfg.validator}") from None
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
-        require(stat.S_ISREG(info.st_mode) and not info.st_mode & 0o022 and info.st_uid in (0, os.getuid())
-                and info.st_size <= 65536, "unsafe review file")
+        require(stat.S_ISREG(info.st_mode) and not info.st_mode & 0o022 and info.st_size <= 65536,
+                "unsafe review file")
         doc = json.loads(stream.read())
-    body = {k: v for k, v in doc.items() if k != "mac"}
-    require(hmac.compare_digest(str(doc.get("mac", "")), mac(cfg.key, body))
+    body = {k: v for k, v in doc.items() if k != "seal"}
+    require(cfg.public is not None and sealed_by(cfg.public, body, str(doc.get("seal", "")))
             and body.get("validator") == cfg.validator and body.get("reviewer") == REVIEWER,
             "review not written by this host's reviewer")
     require(body.get("decision") == decision and body.get("decision_sha256") == digest
@@ -472,13 +494,14 @@ def sign(cfg, amendment_file, proposal_slot, expires_at_height, output, run=subp
     return output
 
 
-def load_config(path=CONFIG, key=KEY):
+def load_config(path=CONFIG, key=KEY, public=PUBLIC, reviewer=True):
+    """The reviewer loads its keypair; the signing step (`reviewer=False`) only the public key."""
     raw = json.loads(Path(path).read_text())
-    secret = Path(key).read_bytes()
-    require(len(secret) >= 32, "review key too short")
+    keypair = Keypair.from_bytes(Path(key).read_bytes()) if reviewer else None
     return Config(validator=raw["validator"], node=node_rpc(raw["node"]), solana=solana_rpc(raw["solana_rpc"]),
-                  review_dir=Path(raw.get("review_dir", "/var/lib/postfiat-exit-review")), key=secret,
-                  data_dir=Path(raw.get("data_dir", f"/var/lib/postfiat/{raw['validator']}")))
+                  review_dir=Path(raw.get("review_dir", "/var/lib/postfiat-exit-review")), key=keypair,
+                  data_dir=Path(raw.get("data_dir", f"/var/lib/postfiat/{raw['validator']}")),
+                  public=Pubkey.from_string(Path(public).read_text().strip()))
 
 
 def pending_burns(cfg):
@@ -511,7 +534,7 @@ def main(argv=None):
     s.add_argument("--expires-at-height", required=True, type=int)
     s.add_argument("--authorization-file", required=True, type=Path)
     args = parser.parse_args(argv)
-    cfg = load_config()
+    cfg = load_config(reviewer=args.command not in ("sign", "show-clearance"))
     if args.command == "sign":
         try:
             sign(cfg, args.amendment_file, args.proposal_slot, args.expires_at_height, args.authorization_file)
