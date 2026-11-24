@@ -17,8 +17,11 @@ type Verified = (
     String,
     postfiat_privacy_binius::PaymentStatement,
 );
-thread_local! {
-    static VERIFIED: std::cell::RefCell<std::collections::VecDeque<Verified>> = const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
+static VERIFIED: std::sync::OnceLock<std::sync::Mutex<std::collections::VecDeque<Verified>>> =
+    std::sync::OnceLock::new();
+
+fn verified_cache() -> &'static std::sync::Mutex<std::collections::VecDeque<Verified>> {
+    VERIFIED.get_or_init(|| std::sync::Mutex::new(std::collections::VecDeque::new()))
 }
 
 // A local scheduling limit applies to all callers, including peer proposals
@@ -48,33 +51,44 @@ pub(super) fn verify_statement(
     chain: Chain,
 ) -> Result<postfiat_privacy_binius::PaymentStatement, postfiat_privacy_binius::VerifyError> {
     let digest = payment.digest();
-    VERIFIED.with_borrow_mut(|entries| {
+    {
+        let entries = verified_cache().lock().unwrap_or_else(|e| e.into_inner());
         if let Some(entry) = entries.iter().find(|e| {
             e.0 == chain.id && e.1 == chain.genesis && e.2 == chain.protocol && e.3 == digest
         }) {
             return Ok(entry.4.clone());
         }
-        let _slot = VerificationSlot::acquire();
-        #[cfg(test)]
-        PROOF_VERIFICATIONS.with(|n| n.set(n.get() + 1));
-        let statement = postfiat_privacy_binius::verify_l1(payment, chain)?;
-        if entries.len() == postfiat_types::PQ_REHEARSAL_PROOFS {
-            entries.pop_front();
+    }
+    let _slot = VerificationSlot::acquire();
+    #[cfg(test)]
+    PROOF_VERIFICATIONS.with(|n| n.set(n.get() + 1));
+    let statement = postfiat_privacy_binius::verify_l1(payment, chain)?;
+    {
+        let mut entries = verified_cache().lock().unwrap_or_else(|e| e.into_inner());
+        if !entries.iter().any(|e| {
+            e.0 == chain.id && e.1 == chain.genesis && e.2 == chain.protocol && e.3 == digest
+        }) {
+            if entries.len() >= postfiat_types::PQ_REHEARSAL_PROOFS * 4 {
+                entries.pop_front();
+            }
+            entries.push_back((
+                chain.id.to_owned(),
+                chain.genesis,
+                chain.protocol,
+                digest,
+                statement.clone(),
+            ));
         }
-        entries.push_back((
-            chain.id.to_owned(),
-            chain.genesis,
-            chain.protocol,
-            digest,
-            statement.clone(),
-        ));
-        Ok(statement)
-    })
+    }
+    Ok(statement)
 }
 
 #[cfg(test)]
 pub(super) fn clear_verified() {
-    VERIFIED.with_borrow_mut(|entries| entries.clear());
+    verified_cache()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clear();
 }
 
 #[cfg(test)]

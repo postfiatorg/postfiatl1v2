@@ -835,11 +835,15 @@ Theorem 4 (Corrected Mode-2 Split & Multi-Target Target-Preimage Term):
                  + Adv_2ndPre^{source,160}(pk_L1*) + Adv_EUF-CMA^{ML-DSA-65}(A_sig).
 
 Proof:
-  - Mode 3: A different public key deriving the honest source gives a targeted
-    second preimage for the 160-bit address derivation. For the honest key, a
-    new header with a previously signed digest yields a SHA-384 collision in
-    tx_ctx or in the mint digest of Section 1.3. Otherwise the accepted ML-DSA-65
-    signature on that digest under context "postfiat-l1-v2/tx/v1" is a forgery.
+  - Mode 3: On Post Fiat L1, `prepare_pq_account_debit` pins the depositor's full
+    1,952-byte ML-DSA-65 public key in `account.public_key_hex` on first signed
+    transaction. For any key-pinned account, substituting a different public key
+    is rejected deterministically before signature verification, so Mode 3 reduces
+    directly to SHA-384 CR (in tx_ctx or the mint digest) plus ML-DSA-65 EUF-CMA
+    under context "postfiat-l1-v2/tx/v1" (ZERO 160-bit address exposure). Only an
+    unpinned account that has never signed an on-chain transaction before its
+    first shielded deposit incurs the targeted 160-bit address second-preimage
+    term Adv_2ndPre^{source,160}(pk_L1*).
   - Modes 1 & 2 (Clean Two-Hop Hybrid Avoiding Coupled Assumptions):
     First, in Mode 2, header(tx*) != header(tx_i) implies EITHER tx_ctx(tx*) ==
     tx_ctx(tx_i) (a SHA-384 collision on distinct headers) OR x* != x_i (so
@@ -941,8 +945,9 @@ Theorem 5 (Oracle-Complete Corruption-Compatible Reduction — Zero Extraction):
   Adv_GlobalPriv(A) <= 2 * [ Adv_QROM-ZK(P, Q)
                              + 2 * U_users * (Adv_IND-CCA2^{ML-KEM-1024}(q_scan)
                                               + Adv_IK-CCA^{ML-KEM-1024}(q_scan))
-                             + 2 * (Adv_PRF^{HMAC-SHA-384}(q_KDF)
-                                    + Adv_INT-CTXT^{AES-256-GCM}(q_scan)
+                             + 2 * (Adv_IR-PRF^{ML-KEM-1024}
+                                    + 2 * Adv_PRF^{HMAC-SHA-384}(q_KDF)
+                                    + 2 * Adv_INT-CTXT^{AES-256-GCM}(q_scan)
                                     + Adv_IND$-CPA^{AES-256-GCM})
                              + r * U_users * Adv_JointPRF^{SHAKE256}(2)
                              + d * Adv_PRG^{SHAKE256}
@@ -1013,6 +1018,22 @@ in distribution.
           u*_c with ct_kem != ct_kem^*_c uses the IK-CCA Decaps_0 oracle, and
           O_Scan on all u' != u*_c uses dk_{u'} held by the reduction. Replaces
           ct_kem^*_c with Encaps(ek_dummy). Loss <= U_users * Adv_IK-CCA(q_scan).
+    (v)   Implicit-Rejection Non-Recipient Scan Closure (GMP22 fix):
+          For every honest candidate recipient u' != u*_c (in particular
+          recv_c^(1) when recv_c^(1) != recv_c^(0)), an active adversary may
+          query O_Scan(u', coin', ct_kem^*_c || ct_aead') on modified payloads
+          sharing ct_kem^*_c. Because ct_kem^*_c = Encaps(ek_dummy) does not
+          re-encrypt under ek_{u'}, FIPS-203 Decaps(dk_{u'}, ct_kem^*_c) returns
+          the deterministic implicit-rejection secret ss_{u',c}^{ir} =
+          J(z_{u'} || ct_kem^*_c) (where z_{u'} is u''s private 32 B rejection
+          seed). Replacing J(z_{u'} || ct_kem^*_c) with an independent uniform
+          32 B key (Adv_IR-PRF^{ML-KEM-1024}, i.e., SHAKE256 PRF on z_{u'}),
+          applying HMAC-SHA-384 PRF (Adv_PRF^{HMAC-SHA-384}(q_KDF)), and
+          applying AES-256-GCM INT-CTXT (Adv_INT-CTXT^{AES-256-GCM}(q_scan))
+          causes every such O_Scan query to return 0 identically for both
+          candidate worlds b = 0 and b = 1, adding at most
+          Adv_IR-PRF^{ML-KEM-1024} + Adv_PRF^{HMAC-SHA-384}(q_KDF)
+          + Adv_INT-CTXT^{AES-256-GCM}(q_scan) per output slot.
   - Game H_3 (Challenge Nullifier Pseudorandomness): Replace the dummy inputs,
     then the real inputs, in slot order within each group.
     * For each dummy input, replace H_SN(S_dummy, c_dummy) with a fresh uniform
@@ -1351,9 +1372,10 @@ Proof: Peel(M) only peels while |L_i| > 2D, so every peeled slice satisfies
 where M_r(x) in K_32. Lagrange interpolation over any D such points yields
 u_r in K_32[X]_{<D}. []
 
-Lemma 4 (Single-Challenge Ring-Switching Algebra & Soundness).
-Let {beta_b := 2^b}_{b=0..31} be the GF(2)-basis of K_32 and {e_{v,u} :=
-Y^v * 2^u}_{v=0..11, u=0..31} be the 384-element GF(2)-basis of E = GF(2^384).
+Lemma 4 (Single-Challenge Ring-Switching Algebra & Soundness — Adapting Diamond & Posen, Binius 2023-2024).
+Let {beta_u}_{u=0..31} be the fixed GF(2)-basis of K_32 (bit position 1 << u in
+(x, Z) tower coordinates) and {e_{v,u} := Y^v * beta_u}_{v=0..11, u=0..31} be
+the 384-element GF(2)-basis of E = GF(2^384).
 For any u in P(M), define L_{rho_rs}(z) := sum_{j=0}^{383} bit_j(z) * rho_rs^j
 and eta_{1,2,3} := rho_rs^{384,385,386}.
   (i)  Transposition identity: By GF(2)-linearity of L_{rho_rs} over active

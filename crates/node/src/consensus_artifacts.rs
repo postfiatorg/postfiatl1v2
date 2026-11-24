@@ -1815,54 +1815,83 @@ pub(super) fn verify_development_pq_payments(
     genesis: &Genesis,
     batch: &ShieldedActionBatch,
 ) -> io::Result<()> {
-    if batch
+    let payments: Vec<&postfiat_types::pq_payment::PqPayment> = batch
         .actions
         .iter()
-        .filter(|a| matches!(a, ShieldedAction::PqPaymentV1(_)))
-        .count()
-        > postfiat_types::PQ_REHEARSAL_PROOFS
-    {
+        .filter_map(|a| match a {
+            ShieldedAction::PqPaymentV1(payment) => Some(payment),
+            _ => None,
+        })
+        .collect();
+    if payments.len() > postfiat_types::PQ_REHEARSAL_PROOFS {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_block_limit"));
     }
-    for action in &batch.actions {
-        if let ShieldedAction::PqPaymentV1(payment) = action {
-            let hash = genesis_hash(genesis);
-            if genesis.chain_id != pq_payment_fixture::CHAIN_ID
-                || hash != pq_payment_fixture::GENESIS_HASH
+    if payments.is_empty() {
+        return Ok(());
+    }
+    let hash = genesis_hash(genesis);
+    if genesis.chain_id != pq_payment_fixture::CHAIN_ID
+        || hash != pq_payment_fixture::GENESIS_HASH
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PQ L1 profile is restricted to the disposable development genesis",
+        ));
+    }
+    let genesis_bytes: [u8; 48] = hex_to_bytes(&hash)
+        .map_err(invalid_data)?
+        .try_into()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid genesis hash length"))?;
+    let chain = postfiat_types::pq_payment::Chain {
+        id: &genesis.chain_id,
+        genesis: genesis_bytes,
+        protocol: genesis.protocol_version,
+    };
+    // Run cheap encoding and exit-policy checks on every payment before proof verification.
+    for payment in &payments {
+        let (_, _, inner) = payment
+            .parts()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        if inner[64..72] != [0; 8] {
+            let address = format!("pf{}", bytes_to_hex(&inner[84..104]));
+            if let Some((_, reason)) =
+                postfiat_execution::destination_address_rejection(&[("pq_exit", &address)])
             {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "PQ L1 profile is restricted to the disposable development genesis",
-                ));
+                return Err(io::Error::new(io::ErrorKind::InvalidData, reason));
             }
-            let chain = postfiat_types::pq_payment::Chain {
-                id: &genesis.chain_id,
-                genesis: hex_to_bytes(&hash)
-                    .map_err(invalid_data)?
-                    .try_into()
-                    .map_err(|_| {
-                        io::Error::new(io::ErrorKind::InvalidData, "invalid genesis hash length")
-                    })?,
-                protocol: genesis.protocol_version,
-            };
-            let (_, _, inner) = payment
-                .parts()
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            if inner[64..72] != [0; 8] {
-                let address = format!("pf{}", bytes_to_hex(&inner[84..104]));
-                if let Some((_, reason)) =
-                    postfiat_execution::destination_address_rejection(&[("pq_exit", &address)])
-                {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, reason));
-                }
-            }
-            pq_payment_actions::verify_statement(payment, chain).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("PQ L1 verification failed: {e:?}"),
-                )
-            })?;
         }
+    }
+    if payments.len() == 1 {
+        pq_payment_actions::verify_statement(payments[0], chain).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("PQ L1 verification failed: {e:?}"),
+            )
+        })?;
+        return Ok(());
+    }
+    // Verify up to PQ_REHEARSAL_PROOFS (4) proofs in parallel across scoped OS threads.
+    let results: Vec<Result<_, _>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = payments
+            .iter()
+            .map(|payment| scope.spawn(move || pq_payment_actions::verify_statement(payment, chain)))
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| {
+                h.join().map_err(|_| {
+                    io::Error::new(io::ErrorKind::Other, "PQ verifier worker thread panicked")
+                })
+            })
+            .collect()
+    });
+    for result in results {
+        result?.map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("PQ L1 verification failed: {e:?}"),
+            )
+        })?;
     }
     Ok(())
 }

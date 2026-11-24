@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""Mechanized exact-rational cryptographic verification for Peel-Binius-Shielded.
+"""Exact-rational arithmetic recomputation for Peel-Binius-Shielded (PFSH02).
 
-Verifies:
+Evaluates the specification's stated bound formulas and field-tower invariants
+(checking exact rational arithmetic, not formal proof steps):
   1. Irreducibility of the binary tower GF(2) ⊂ K_16 ⊂ K_32 ⊂ E = GF(2^384)
      via K_32[Y] / (Y^12 + Y^3 + Y + 0x00010002), checking all proper divisors d in {1,2,3,4,6}.
   2. Mechanized 58x76 CFS17 G_1 Jacobian full rank (58/58, V_SC1 = 19) AND
      17x32 Sumcheck-2 Jacobian full rank (17/17, V_SC2 = 8, det deg <= 112).
   3. Exact Peel(M) Greedy Peeling Lemma + single-step BCIKS20 Theorem 6.2 parameterized curve
-     + A_both ⊆ D_u union bound (m = 3, L_max = 214, ZERO tensor-folding gap).
-  4. Exact per-round RBR soundness across all 34 IOP rounds with SINGLE-ELEMENT challenges
+     + A_both ⊆ D_u union bound (m = 3, L_max = 86).
+  4. Exact per-round RBR soundness across all 34 IOP rounds with single-element challenges
      per round (single alpha, single gamma, single rho_rs, split lambda_p / lambda_o).
-  5. LITERAL VERBATIM DFMS22 (CRYPTO 2022, Thm 2.4 & Cor 2.7) QROM straight-line extraction
-     on ONE SINGLE FIXED-RANGE COMPILER ORACLE H: {0,1}^* -> {0,1}^{1152} (3 x SHA-384,
-     NIST FIPS 180-4) — ZERO Lemma A.1 multi-range lift, ZERO shared Keccak permutation!
-  6. Multi-proof QROM ZK (P = 2^32) & Multi-proof QROM SE (P = 2^32, L = 2^16),
-     Hard-Capped PoW TV bound (M_pow = 2^27, w_pow = 20), and in-circuit FIPS-202 SHAKE256
-     quantum margins (A/Coin/SN/Node = 384b, S = 384b, R = 624b).
+  5. Standalone Theorem A.3 QROM straight-line extraction on ONE single fixed-range
+     compiler oracle H: {0,1}^* -> {0,1}^{1536} (3 x SHA-512, NIST FIPS 180-4,
+     512-bit internal state, disjoint from in-circuit SHAKE256).
+  6. Multi-proof QROM ZK (P = 2^32), Conjecture A.4 Multi-proof QROM SE (P = 2^32, L = 2^16),
+     Q_tot multi-tx degradation (q_hon = 2^23, 2^32), classical soundness reference,
+     Hard-Capped PoW TV bound (M_pow = 2^27, w_pow = 20), and SHAKE256 sizing references.
   7. Exact byte-level wire accounting (expected & deterministic worst-case <= 149,130 B).
 """
 
@@ -428,16 +429,35 @@ def main():
         ghhm_eff = Fraction(3 * P_sim, 2) * sq_qeff * Fraction(n_prog_calls, 1 << (H_state_bits // 2))
         dfms22_se_p32 = (a_eff + b_eff) ** 2 + readout_L + e3_prob + ghhm_eff
 
+        # Multi-tx honest-prover query inflation Q_tot = Q + q_hon * (2n + M_pow + 68)
+        q_prover = 2 * n + M_pow + n_prog_calls
+        def ext_at(q_tot: int, l_cnt: int) -> Fraction:
+            qv = q_tot + l_cnt * kappa_v
+            c4 = max(eps_rbr_r33a_prox + Fraction(2 * qv, 1 << H_state_bits), p34_hc4_with_pow)
+            sq = rat_sqrt_ceil(Fraction(qv, 1))
+            at = c_tree_cl * qv * sq * Fraction(1, 1 << (H_mt_bits // 2))
+            bt = qv * rat_sqrt_ceil(10 * c4)
+            return (at + bt) ** 2 + Fraction(2 * l_cnt * kappa_v, 1 << H_mt_bits)
+
+        ext_full_tree = ext_at(Q + (1 << 23) * q_prover, 1 << 23)
+        ext_multi_epoch = ext_at(Q + (1 << 32) * q_prover, 1 << 23)
+        classical_soundness = Q * p34_hc4_with_pow + Fraction(Q * Q, 1 << H_mt_bits)
+
         # NIST FIPS-202 SHAKE256 generic sponge capacity c = 512 bits:
         # Quantum collision cap O(Q^3 / 2^512) and output-collision cap O(Q^3 / 2^384)
         bht_384 = Fraction(32 * Q ** 3, 1 << 384)
         sponge_q_cap = Fraction(32 * Q ** 3, 1 << 512)
         qrom_table[f"Q=2^{q_exp}"] = {
-            "dfms22_ext_log2": round(log2_frac(dfms22_ext), 2),
-            "dfms22_se_P2e32_log2": round(log2_frac(dfms22_se_p32), 2),
+            "thm_a3_ext_log2": round(log2_frac(dfms22_ext), 2),
+            "thm_a3_ext_full_tree_q2e23_log2": round(log2_frac(ext_full_tree), 2),
+            "thm_a3_ext_multi_epoch_q2e32_log2": round(log2_frac(ext_multi_epoch), 2),
+            "conj_a4_se_P2e32_log2": round(log2_frac(dfms22_se_p32), 2),
             "qrom_zk_P2e32_log2": round(log2_frac(qrom_zk_p32), 2),
+            "classical_rom_soundness_log2": round(log2_frac(classical_soundness), 2),
             "bht_384_log2": round(log2_frac(bht_384), 2),
             "shake256_c512_qcap_log2": round(log2_frac(sponge_q_cap), 2),
+            "dfms22_ext_log2": round(log2_frac(dfms22_ext), 2),
+            "dfms22_se_P2e32_log2": round(log2_frac(dfms22_se_p32), 2),
         }
 
     # Exact Q_break for single-oracle DFMS22 extraction

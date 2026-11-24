@@ -43,25 +43,40 @@
   "q_break_dfms22_log2": 126.75,
   "qrom_table": {
     "Q=2^64": {
-      "dfms22_ext_log2": -170.98,
-      "dfms22_se_P2e32_log2": -170.97,
+      "thm_a3_ext_log2": -170.98,
+      "thm_a3_ext_full_tree_q2e23_log2": -170.98,
+      "thm_a3_ext_multi_epoch_q2e32_log2": -170.88,
+      "conj_a4_se_P2e32_log2": -170.97,
       "qrom_zk_P2e32_log2": -150.6,
+      "classical_rom_soundness_log2": -238.31,
       "bht_384_log2": -187.0,
-      "shake256_c512_qcap_log2": -315.0
+      "shake256_c512_qcap_log2": -315.0,
+      "dfms22_ext_log2": -170.98,
+      "dfms22_se_P2e32_log2": -170.97
     },
     "Q=2^80": {
-      "dfms22_ext_log2": -137.55,
-      "dfms22_se_P2e32_log2": -137.55,
+      "thm_a3_ext_log2": -137.55,
+      "thm_a3_ext_full_tree_q2e23_log2": -137.55,
+      "thm_a3_ext_multi_epoch_q2e32_log2": -137.55,
+      "conj_a4_se_P2e32_log2": -137.55,
       "qrom_zk_P2e32_log2": -150.6,
+      "classical_rom_soundness_log2": -221.92,
       "bht_384_log2": -139.0,
-      "shake256_c512_qcap_log2": -267.0
+      "shake256_c512_qcap_log2": -267.0,
+      "dfms22_ext_log2": -137.55,
+      "dfms22_se_P2e32_log2": -137.55
     },
     "Q=2^96": {
-      "dfms22_ext_log2": -92.25,
-      "dfms22_se_P2e32_log2": -92.25,
+      "thm_a3_ext_log2": -92.25,
+      "thm_a3_ext_full_tree_q2e23_log2": -92.25,
+      "thm_a3_ext_multi_epoch_q2e32_log2": -92.25,
+      "conj_a4_se_P2e32_log2": -92.25,
       "qrom_zk_P2e32_log2": -150.6,
+      "classical_rom_soundness_log2": -192.0,
       "bht_384_log2": -91.0,
-      "shake256_c512_qcap_log2": -219.0
+      "shake256_c512_qcap_log2": -219.0,
+      "dfms22_ext_log2": -92.25,
+      "dfms22_se_P2e32_log2": -92.25
     }
   },
   "wire_bytes": {

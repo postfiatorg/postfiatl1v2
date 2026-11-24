@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Mechanized formal verification & 3-way cross-language circuit equivalence audit
-for Peel-Binius-Shielded.
+"""Mechanized local-gadget verification & 3-way cross-language circuit equivalence audit
+for Peel-Binius-Shielded (PFSH02).
 
 Checks:
-  1. Z3 5.4.1 UNSAT proof: 65-bit ripple-carry conservation over Z (zero 64-bit wraparound).
+  1. Z3 5.4.1 UNSAT proof: 66-bit ripple-carry conservation over Z (zero 64-bit wraparound).
   2. Z3 5.4.1 UNSAT proof: Merkle conditional-swap mux (dir=0 => left=cur,right=sib; dir=1 => left=sib,right=cur).
   3. Z3 5.4.1 UNSAT proof: Native is_dummy gating (is_dummy=1 => v_in=0; is_dummy=0 => root=anchor).
-  4. Z3 5.4.1 UNSAT proof: Exact Keccak Chi-Iota 5-bit row bijection.
-  5. Exact 1,600-basis GF(2) linear equivalence of L_TRP = pi o rho o theta.
-  6. 3-way bit-for-bit Group-C IR equivalence (42,178 scalar constraints): Rust == Go == Python.
-  7. Cross-language Group A+B+C verifier MLE weight equivalence: Rust == Go (all 5 wb, 5 wc, pub_rhs).
+  4. Exact 1,600-basis GF(2) linear equivalence of L_TRP = pi o rho o theta.
+  5. 3-way bit-for-bit Group-C IR equivalence (42,444 scalar constraints): Rust == Go == Python.
+  6. Cross-language Group A+B+C verifier MLE weight equivalence: Rust == Go (all 5 wb, 5 wc, pub_rhs).
 """
 
 import json

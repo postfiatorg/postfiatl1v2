@@ -104,14 +104,26 @@ func (t *KTables) kmul16(a, b uint16) uint16 {
 }
 
 func (t *KTables) kmul(a, b uint32) uint32 {
+	if a == 0 || b == 0 {
+		return 0
+	}
 	a0 := uint16(a & 0xFFFF)
 	a1 := uint16(a >> 16)
 	b0 := uint16(b & 0xFFFF)
 	b1 := uint16(b >> 16)
-	p0 := t.kmul16(a0, b0)
-	p1 := t.kmul16(a1, b1)
-	p2 := t.kmul16(a0^a1, b0^b1)
-	lo := p0 ^ t.mulC32[p1]
+	var p0, p1, p2 uint16
+	if a0 != 0 && b0 != 0 {
+		p0 = t.exp16[int(t.log16[a0])+int(t.log16[b0])]
+	}
+	if a1 != 0 && b1 != 0 {
+		p1 = t.exp16[int(t.log16[a1])+int(t.log16[b1])]
+	}
+	a01 := a0 ^ a1
+	b01 := b0 ^ b1
+	if a01 != 0 && b01 != 0 {
+		p2 = t.exp16[int(t.log16[a01])+int(t.log16[b01])]
+	}
+	lo := p0 ^ reducePoly16_31(uint64(p1)<<11)
 	hi := p2 ^ p0
 	return uint32(lo) | (uint32(hi) << 16)
 }
@@ -292,7 +304,7 @@ func addMulKPair(k uint32, a, b, dstA, dstB *E, t *KTables) {
 			if a01 != 0 && b01 != 0 {
 				p2 = t.exp16[int(t.log16[a01])+lb01]
 			}
-			dstA.C[i] ^= uint32(p0^t.mulC32[p1]) | (uint32(p2^p0) << 16)
+			dstA.C[i] ^= uint32(p0^reducePoly16_31(uint64(p1)<<11)) | (uint32(p2^p0) << 16)
 		}
 		if bv := b.C[i]; bv != 0 {
 			a0 := uint16(bv & 0xFFFF)
@@ -308,7 +320,7 @@ func addMulKPair(k uint32, a, b, dstA, dstB *E, t *KTables) {
 			if a01 != 0 && b01 != 0 {
 				p2 = t.exp16[int(t.log16[a01])+lb01]
 			}
-			dstB.C[i] ^= uint32(p0^t.mulC32[p1]) | (uint32(p2^p0) << 16)
+			dstB.C[i] ^= uint32(p0^reducePoly16_31(uint64(p1)<<11)) | (uint32(p2^p0) << 16)
 		}
 	}
 }
@@ -364,18 +376,80 @@ func kmulAlphaBranchless(v uint32) uint32 {
 	return uint32(lo) | (uint32(hi) << 16)
 }
 
+func karatsuba3Portable(a0, a1, a2, b0, b1, b2 uint32, t *KTables) [5]uint32 {
+	p0 := t.kmul(a0, b0)
+	p1 := t.kmul(a1, b1)
+	p2 := t.kmul(a2, b2)
+	q01 := t.kmul(a0^a1, b0^b1)
+	q02 := t.kmul(a0^a2, b0^b2)
+	q12 := t.kmul(a1^a2, b1^b2)
+	return [5]uint32{
+		p0,
+		q01 ^ p0 ^ p1,
+		q02 ^ p0 ^ p1 ^ p2,
+		q12 ^ p1 ^ p2,
+		p2,
+	}
+}
+
+func karatsuba6Portable(a, b []uint32, t *KTables) [11]uint32 {
+	z0 := karatsuba3Portable(a[0], a[1], a[2], b[0], b[1], b[2], t)
+	z2 := karatsuba3Portable(a[3], a[4], a[5], b[3], b[4], b[5], t)
+	z1 := karatsuba3Portable(a[0]^a[3], a[1]^a[4], a[2]^a[5], b[0]^b[3], b[1]^b[4], b[2]^b[5], t)
+	return [11]uint32{
+		z0[0],
+		z0[1],
+		z0[2],
+		z0[3] ^ z1[0] ^ z0[0] ^ z2[0],
+		z0[4] ^ z1[1] ^ z0[1] ^ z2[1],
+		z1[2] ^ z0[2] ^ z2[2],
+		z2[0] ^ z1[3] ^ z0[3] ^ z2[3],
+		z2[1] ^ z1[4] ^ z0[4] ^ z2[4],
+		z2[2],
+		z2[3],
+		z2[4],
+	}
+}
+
+// mulPortable uses 2-level Karatsuba (54 K_32 muls instead of 144 schoolbook muls)
+// for dense elements, falling back to schoolbook when either operand has < 3 nonzero limbs.
 func (e E) mulPortable(rhs E, t *KTables) E {
-	var prod [23]uint32
+	na, nb := 0, 0
 	for i := 0; i < 12; i++ {
-		a := e.C[i]
-		if a == 0 {
-			continue
+		if e.C[i] != 0 {
+			na++
 		}
-		for j := 0; j < 12; j++ {
-			b := rhs.C[j]
-			if b != 0 {
-				prod[i+j] ^= t.kmul(a, b)
+		if rhs.C[i] != 0 {
+			nb++
+		}
+	}
+	var prod [23]uint32
+	if na < 3 || nb < 3 {
+		for i := 0; i < 12; i++ {
+			a := e.C[i]
+			if a == 0 {
+				continue
 			}
+			for j := 0; j < 12; j++ {
+				b := rhs.C[j]
+				if b != 0 {
+					prod[i+j] ^= t.kmul(a, b)
+				}
+			}
+		}
+	} else {
+		var aSum, bSum [6]uint32
+		for i := 0; i < 6; i++ {
+			aSum[i] = e.C[i] ^ e.C[i+6]
+			bSum[i] = rhs.C[i] ^ rhs.C[i+6]
+		}
+		low := karatsuba6Portable(e.C[0:6], rhs.C[0:6], t)
+		high := karatsuba6Portable(e.C[6:12], rhs.C[6:12], t)
+		mid := karatsuba6Portable(aSum[:], bSum[:], t)
+		for i := 0; i < 11; i++ {
+			prod[i] ^= low[i]
+			prod[6+i] ^= mid[i] ^ low[i] ^ high[i]
+			prod[12+i] ^= high[i]
 		}
 	}
 	for i := 22; i >= 12; i-- {

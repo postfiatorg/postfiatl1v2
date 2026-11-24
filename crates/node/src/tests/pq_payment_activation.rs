@@ -168,6 +168,7 @@ fn replay_rejects_preactivation_non_atomic_body_before_receipts() {
                 &block,
                 &entry,
                 block_replay_wallet::ArchivedReplayState {
+                    parent_numbered_count: None,
                     governance: &mut governance,
                     ledger: &mut ledger,
                     shielded: &mut shielded,
@@ -472,6 +473,7 @@ fn pq_fee_kinds_are_unknown_during_unrelated_governance_replay() {
                 &block,
                 &entry,
                 block_replay_wallet::ArchivedReplayState {
+                    parent_numbered_count: None,
                     governance: &mut governance,
                     ledger: &mut disk.read_ledger().unwrap(),
                     shielded: &mut disk.read_shielded().unwrap(),
@@ -530,6 +532,7 @@ fn pq_governance_archive_requires_signatures_before_execution() {
         &block,
         &entry,
         block_replay_wallet::ArchivedReplayState {
+            parent_numbered_count: None,
             governance: &mut governance,
             ledger: &mut disk.read_ledger().unwrap(),
             shielded: &mut disk.read_shielded().unwrap(),
@@ -584,6 +587,7 @@ fn pq_failed_atomic_replay_uses_the_schedule_at_inclusion() {
             &block,
             &entry,
             block_replay_wallet::ArchivedReplayState {
+                parent_numbered_count: None,
                 governance: &mut governance,
                 ledger: &mut disk.read_ledger().unwrap(),
                 shielded: &mut disk.read_shielded().unwrap(),
@@ -636,6 +640,7 @@ fn pq_base_history_non_atomic_issued_shield() {
         &block,
         &entry,
         block_replay_wallet::ArchivedReplayState {
+            parent_numbered_count: None,
             governance: &mut governance,
             ledger: &mut ledger,
             shielded: &mut shielded,

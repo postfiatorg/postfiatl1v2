@@ -192,6 +192,9 @@ impl KTables {
 
     #[inline(always)]
     pub fn kmul_portable(&self, a: u32, b: u32) -> u32 {
+        if a == 0 || b == 0 {
+            return 0;
+        }
         let a0 = (a & 0xFFFF) as u16;
         let a1 = (a >> 16) as u16;
         let b0 = (b & 0xFFFF) as u16;
@@ -199,7 +202,7 @@ impl KTables {
         let p0 = self.kmul16(a0, b0);
         let p1 = self.kmul16(a1, b1);
         let p2 = self.kmul16(a0 ^ a1, b0 ^ b1);
-        let lo = p0 ^ unsafe { *self.mul_c32.get_unchecked(p1 as usize) };
+        let lo = p0 ^ reduce_poly16_31((p1 as u64) << 11);
         let hi = p2 ^ p0;
         (lo as u32) | ((hi as u32) << 16)
     }
@@ -584,15 +587,51 @@ impl E {
 
     #[inline(always)]
     pub fn scale_k(self, k: u32, kt: &KTables) -> E {
+        if k == 0 {
+            return E::ZERO;
+        }
+        if k == 1 {
+            return self;
+        }
         #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq") {
                 return unsafe { self.scale_k_pclmul(k) };
             }
         }
+        let b0 = (k & 0xFFFF) as u16;
+        let b1 = (k >> 16) as u16;
+        let b01 = b0 ^ b1;
+        let lb0 = unsafe { *kt.log16.get_unchecked(b0 as usize) } as usize;
+        let lb1 = unsafe { *kt.log16.get_unchecked(b1 as usize) } as usize;
+        let lb01 = unsafe { *kt.log16.get_unchecked(b01 as usize) } as usize;
         let mut out = [0u32; 12];
         for i in 0..12 {
-            out[i] = kt.kmul_portable(self.c[i], k);
+            let a = self.c[i];
+            if a == 0 {
+                continue;
+            }
+            let a0 = (a & 0xFFFF) as u16;
+            let a1 = (a >> 16) as u16;
+            let a01 = a0 ^ a1;
+            let p0 = if a0 != 0 && b0 != 0 {
+                unsafe { *kt.exp16.get_unchecked(*kt.log16.get_unchecked(a0 as usize) as usize + lb0) }
+            } else {
+                0
+            };
+            let p1 = if a1 != 0 && b1 != 0 {
+                unsafe { *kt.exp16.get_unchecked(*kt.log16.get_unchecked(a1 as usize) as usize + lb1) }
+            } else {
+                0
+            };
+            let p2 = if a01 != 0 && b01 != 0 {
+                unsafe { *kt.exp16.get_unchecked(*kt.log16.get_unchecked(a01 as usize) as usize + lb01) }
+            } else {
+                0
+            };
+            let lo = p0 ^ reduce_poly16_31((p1 as u64) << 11);
+            let hi = p2 ^ p0;
+            out[i] = (lo as u32) | ((hi as u32) << 16);
         }
         E { c: out }
     }
