@@ -448,7 +448,7 @@ wss } = runtime;
                     reject(rpcTransportError('rpc_response_id_mismatch', `RPC response id mismatch from ${host}:${port}`));
                     return;
                 }
-                resolve(line);
+                resolve(underRequestId(request, line));
             });
             tcp.on('error', (e) => {
                 if (!settled) {
@@ -494,9 +494,30 @@ wss } = runtime;
         try {
             const response = JSON.parse(line);
             return response !== null && typeof response === 'object'
-                && Object.prototype.hasOwnProperty.call(response, 'id') && response.id !== request.id;
+                && Object.prototype.hasOwnProperty.call(response, 'id') && response.id !== request.id
+                && !nodePlaceholderError(response);
         } catch (_) {
             return false;
+        }
+    }
+
+    // rpc-serve answers a request it could not read whole (an id over its
+    // bound, a parse error) under its placeholder id `remote-N`, in order on
+    // the same connection: that is the node's error for this request.
+    function nodePlaceholderError(response) {
+        return response.ok === false && response.error !== null && typeof response.error === 'object'
+            && typeof response.id === 'string' && /^remote-[0-9]+$/.test(response.id);
+    }
+
+    // The node's error line, under the id of the request it answers.
+    function underRequestId(request, line) {
+        if (typeof request?.id !== 'string') return line;
+        try {
+            const response = JSON.parse(line);
+            if (response === null || typeof response !== 'object' || !nodePlaceholderError(response)) return line;
+            return JSON.stringify({ ...response, id: request.id });
+        } catch (_) {
+            return line;
         }
     }
 
@@ -631,7 +652,7 @@ wss } = runtime;
                         this._processQueue();
                         return;
                     }
-                    item.resolve(line);
+                    item.resolve(underRequestId(item.request, line));
                     // Retire this socket on the node's last response before a
                     // queued request can race its FIN. No submitted request is
                     // replayed, including mutations.
