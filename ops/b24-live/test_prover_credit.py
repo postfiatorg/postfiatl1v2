@@ -16,11 +16,15 @@ KEY='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 def api(credit,*rates,stopped=()):
     """Stub of vastai(): `show user` and `show instances` replies."""
     instances=[dict(id=n,actual_status='running',dph_total=r) for n,r in enumerate(rates)]
-    instances+=[dict(id=100+n,actual_status='exited',intended_status='stopped',dph_total=r) for n,r in enumerate(stopped)]
+    instances+=[dict(id=100+n,actual_status='exited',intended_status='stopped',dph_total=r,storage_total_cost=0.0) for n,r in enumerate(stopped)]
     def run(*args):return dict(id=1,credit=credit,api_key=KEY) if args==('show','user') else instances
     return run
 
 def failing(*args):raise RuntimeError('vastai user exited 1: 401 for /users/current/?api_key='+KEY)
+
+def shaped(user,instances):
+    """Stub with arbitrary replies, for replies of an unexpected shape."""
+    return lambda *args:user if args==('show','user') else instances
 
 class CreditTests(unittest.TestCase):
     def setUp(self):
@@ -95,5 +99,72 @@ class CreditTests(unittest.TestCase):
     def test_missing_credit_field_counts_as_unreadable(self):
         self.run_check(lambda *args:{} if args==('show','user') else [])
         self.assertEqual(len(self.sent),1);self.assertIn('no credit field',self.sent[0])
+
+class FixRoundTests(unittest.TestCase):
+    setUp,send,run_check=CreditTests.setUp,CreditTests.send,CreditTests.run_check
+
+    def test_an_unset_alert_address_is_a_failure_and_the_crossing_stays_pending(self):
+        with patch('sys.stdout'),patch('sys.stderr') as err:
+            result=prover_credit.check(24,6,self.state,api(10.0,3.0),lambda line:'unset')
+        self.assertFalse(result['ok'])
+        self.assertIn('the alert address is not set: nothing was sent',''.join(str(c) for c in err.mock_calls))
+        self.assertEqual(json.loads(self.state.read_text())['level'],'ok')
+        self.run_check(api(10.0,3.0))
+        self.assertEqual(len(self.sent),1);self.assertTrue(self.sent[0].startswith('URGENT'))
+        with patch('sys.stdout'),patch('sys.stderr'):
+            self.assertFalse(prover_credit.check(24,6,self.state,failing,lambda line:'unset')['ok'])
+        self.run_check(failing)
+        self.assertEqual(len(self.sent),2);self.assertIn('could not be read',self.sent[1])
+
+    def test_the_key_is_removed_before_the_error_is_cut_and_fragments_too(self):
+        stderr='x'*150+' api_key='+KEY+' tail'
+        bad=subprocess.CompletedProcess([],1,stdout='',stderr=stderr)
+        with patch('subprocess.run',return_value=bad),self.assertRaises(RuntimeError) as caught:prover_credit.vastai('show','user')
+        for size in range(8,len(KEY)):
+            self.assertNotIn(KEY[:size],str(caught.exception).split('api_key=')[-1]+' ')
+            self.assertNotIn(KEY[-size:],str(caught.exception))
+        self.assertNotIn(KEY[-20:],prover_credit.redact('cut here '+KEY[-20:]+' rest'))
+        self.assertNotIn(KEY[:20],prover_credit.redact('ends with '+KEY[:20]))
+
+    def test_a_reply_of_an_unexpected_shape_is_not_usable_and_alerts(self):
+        cases={
+            'renamed rate':shaped(dict(credit=10.0),[dict(actual_status='running',dph=3.0)]),
+            'missing rate':shaped(dict(credit=10.0),[dict(actual_status='running')]),
+            'zero rate while running':shaped(dict(credit=10.0),[dict(actual_status='running',dph_total=0)]),
+            'instances not a list':shaped(dict(credit=10.0),dict(instances=[])),
+            'balance instead of credit':shaped(dict(balance=10.0),[]),
+        }
+        for name,run in cases.items():
+            with self.subTest(name):
+                self.state.unlink(missing_ok=True);self.sent.clear()
+                result=self.run_check(run)
+                self.assertFalse(result['ok'],name);self.assertNotIn('hours',result)
+                self.assertEqual(len(self.sent),1,name);self.assertIn('not usable',self.sent[0])
+
+    def test_stopped_machines_billed_for_storage_count_and_can_alert(self):
+        def stopped(credit,storage):
+            return shaped(dict(credit=credit),[dict(actual_status='exited',intended_status='stopped',dph_total=1.2,
+                                                     storage_total_cost=storage)])
+        result=self.run_check(stopped(1.0,0.5))
+        self.assertEqual((round(result['hours'],1),result['level']),(2.0,'urgent'))
+        self.assertEqual(len(self.sent),1);self.assertIn('0 running',self.sent[0])
+        self.state.unlink();self.sent.clear()
+        self.assertFalse(self.run_check(shaped(dict(credit=1.0),[dict(actual_status='exited',dph_total=1.2)]))['ok'])
+        self.assertIn('not usable',self.sent[0])
+
+    def test_a_reading_that_stays_unusable_is_reported_again_after_six_hours(self):
+        self.run_check(failing)
+        state=json.loads(self.state.read_text());state['reported_at']-=6*3600+1
+        self.state.write_text(json.dumps(state))
+        self.run_check(failing)
+        self.assertEqual(len(self.sent),2)
+
+    def test_a_failed_run_is_reported_by_its_own_failure_unit(self):
+        unit=Path(__file__).with_name('prover-credit-alert.service').read_text()
+        self.assertIn('OnFailure=prover-credit-alert-failed.service',unit)
+        failed=Path(__file__).with_name('prover-credit-alert-failed.service').read_text()
+        self.assertIn('prover_credit.py --service-failed',failed)
+        runbook=(Path(__file__).parents[2]/'docs/runbooks/prover-credit-alert.md').read_text()
+        self.assertIn('loginctl enable-linger',runbook)
 
 if __name__=='__main__':unittest.main()
