@@ -38,6 +38,27 @@ def cluster(marker_data, tag):
 class RefundKindTest(unittest.TestCase):
     red = dict(burn_tx_id=BURN, withdrawal_packet_hash=PACKET)
 
+    def test_a_cluster_not_set_to_finalized_is_refused(self):
+        c = cluster(b"\2", 10)
+        c.level = {"commitment": "confirmed"}
+        with self.assertRaisesRegex(ValueError, "finalized"):
+            payout.refund_kind(c, self.red)
+        c.account.assert_not_called()
+
+    def test_refund_signatures_come_from_the_chain_report(self):
+        import exit_rules
+
+        report = dict(covered_bucket_ids=[exit_rules.BUCKET], min_withdrawal_atoms=300000,
+                      decision_signatures=dict(open=6, close=5, paid=5, min_withdrawal=5, retire=6))
+        rules = exit_rules.of_route(report)
+        # A chain that does not report refunds cannot take one.
+        with self.assertRaisesRegex(ValueError, "refund"):
+            exit_rules.signatures(rules, "exit-refund")
+        report["decision_signatures"]["refund"] = 5
+        self.assertEqual(exit_rules.signatures(exit_rules.of_route(report), "exit-refund"), 5)
+        with self.assertRaisesRegex(ValueError, "refund"):
+            exit_rules.signatures(exit_rules.first_release(), "exit-refund")
+
     def test_a_cancelled_marker_gives_the_refund_decision(self):
         kind = payout.refund_kind(cluster(b"\2", 10), self.red)
         self.assertEqual(kind, f"solana_exit_refund:{PACKET}:473300000:{bytes(range(64)).hex()}")
