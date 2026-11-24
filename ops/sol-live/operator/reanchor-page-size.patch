@@ -1,0 +1,11 @@
+--- a/ops/sol-live/reanchor-mainnet.py
++++ b/ops/sol-live/reanchor-mainnet.py
+@@ -80,7 +80,7 @@
+ 
+ ACTIVATED = "vault bridge route profile activated"
+ # Blocks read per request while scanning for a successor revision.
+-BLOCK_PAGE = 256
++BLOCK_PAGE = 8
+ 
+ 
+ def accepted_activation(tx_id):
