@@ -1180,6 +1180,51 @@ impl TransactionalStore {
         Ok(blocks)
     }
 
+    /// The receipts `receipts_in_block_order` returns whose `tx_id` is
+    /// `tx_id`, in block order, read from the receipt-id record instead of
+    /// decoding the whole history. Exact when every retained receipt is
+    /// stored under its own `tx_id`: every commit enforces that except a
+    /// legacy migration with `allow_legacy_receipt_id_mismatch`, so callers
+    /// must use the full scan for chains whose history may carry such drift.
+    pub fn receipts_for_tx_id(&self, tx_id: &str) -> StorageResult<Vec<Receipt>> {
+        Ok(self
+            .receipt_occurrences_for_tx_id(tx_id)?
+            .into_iter()
+            .map(|(_, receipt)| receipt)
+            .collect())
+    }
+
+    /// `receipts_for_tx_id` with the finalized height of each receipt's block.
+    pub fn receipt_occurrences_for_tx_id(&self, tx_id: &str) -> StorageResult<Vec<(u64, Receipt)>> {
+        let meta = self.meta()?;
+        if meta.finalized_height < meta.history_base_height {
+            return Err(StorageError::new(
+                StorageErrorCode::CountMismatch,
+                "invalid history range",
+            ));
+        }
+        // Every stored receipt id is a valid identifier, so no other can match.
+        if validate_identifier("receipt id", tx_id).is_err() {
+            return Ok(Vec::new());
+        }
+        let record: Option<StoredReceiptHistoryV1> =
+            self.read_json_record(RECEIPTS_BY_ID, RECEIPTS_BY_ID_TABLE, tx_id.as_bytes())?;
+        let Some(record) = record else {
+            return Ok(Vec::new());
+        };
+        validate_receipt_history(tx_id, &record)?;
+        Ok(record
+            .occurrences
+            .into_iter()
+            .filter(|occurrence| {
+                occurrence.finalized_height > meta.history_base_height
+                    && occurrence.finalized_height <= meta.finalized_height
+                    && occurrence.receipt.tx_id == tx_id
+            })
+            .map(|occurrence| (occurrence.finalized_height, occurrence.receipt))
+            .collect())
+    }
+
     pub fn receipts_in_block_order(&self) -> StorageResult<Vec<Receipt>> {
         let meta = self.meta()?;
         let capacity = usize::try_from(meta.receipt_count).map_err(|_| {
@@ -5666,6 +5711,28 @@ mod tests {
                     "from {from:?} limit {limit}"
                 );
             }
+        }
+    }
+
+    /// The keyed receipt read returns byte for byte what the full receipt
+    /// scan returns after the `receipts` query's own filter by `tx_id`.
+    #[test]
+    fn receipts_for_tx_id_equal_the_filtered_full_scan() {
+        let (_dir, store) = committed_two_blocks("receipts-for-tx");
+        let all = store.receipts_in_block_order().expect("full scan");
+        let long = "x".repeat(MAX_ID_BYTES + 1);
+        for tx_id in ["tx-1", "tx-2", "tx-3", "", "tx\n1", long.as_str()] {
+            let expected = all
+                .iter()
+                .filter(|receipt| receipt.tx_id == tx_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            let keyed = store.receipts_for_tx_id(tx_id).expect("keyed read");
+            assert_eq!(
+                serde_json::to_vec(&keyed).expect("encode keyed"),
+                serde_json::to_vec(&expected).expect("encode expected"),
+                "tx_id {tx_id:?}"
+            );
         }
     }
 

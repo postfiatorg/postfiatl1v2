@@ -514,6 +514,16 @@ impl NodeStore {
         Ok(receipts)
     }
 
+    /// The receipts of `tx_id` in block order by the receipt-id key, or
+    /// `None` when transactional storage is not active (see
+    /// `TransactionalStore::receipts_for_tx_id` for when this is exact).
+    pub fn read_receipts_for_tx_id(&self, tx_id: &str) -> io::Result<Option<Vec<Receipt>>> {
+        if !self.transactional_storage_active()? {
+            return Ok(None);
+        }
+        Ok(Some(self.transactional_store()?.receipts_for_tx_id(tx_id)?))
+    }
+
     pub fn append_receipt(&self, receipt: Receipt) -> io::Result<()> {
         self.append_receipt_record(&receipt)
     }
