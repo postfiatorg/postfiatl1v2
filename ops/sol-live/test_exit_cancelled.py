@@ -22,6 +22,17 @@ class CancelledBurnTest(unittest.TestCase):
         c.call.side_effect = TimeoutError("history unavailable")
         self.assertIs(payout.signature(c, BURN), payout.PAID_NO_HISTORY)
 
+    def test_a_burn_refunded_on_post_fiat_ends_without_a_payout(self):
+        red = dict(burn_tx_id=BURN, state="refunded", bucket_id=payout.BUCKET, amount_atoms=300000,
+                   settled_atoms=0, created_at_height=10, destination_ref="")
+        with (
+            patch.object(payout, "cluster") as cluster,
+            patch.object(payout, "rpc_any", return_value=dict(redemptions=[red], buckets=[])),
+        ):
+            with self.assertRaises(payout.BurnCancelled):
+                payout.process(BURN, Path("/nonexistent"), lambda *a, **k: None)
+            cluster.return_value.account.assert_not_called()
+
     def test_a_cancelled_marker_is_not_counted_as_paid_custody(self):
         reds = [dict(burn_tx_id=b * 48, bucket_id=payout.BUCKET, amount_atoms=a, state="pending",
                      settled_atoms=0) for b, a in (("a1", 300000), ("b2", 400000))]

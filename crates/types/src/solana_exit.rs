@@ -47,6 +47,12 @@ pub fn set_second_release_for_tests(height: Option<u64>) {
     SECOND_RELEASE_FOR_TESTS.with(|h| h.set(height));
 }
 
+/// Whether any chain of this build schedules the second release. While none does, the
+/// second release's records are refused exactly as the first release refuses them.
+pub fn second_release_scheduled() -> bool {
+    true
+}
+
 pub fn second_release_height(chain: &str, genesis: &str) -> Option<u64> {
     SECOND_RELEASES
         .iter()

@@ -1765,6 +1765,25 @@ mod solana_exit_backing_bucket_tests {
     use postfiat_types::solana_exit;
 
     #[test]
+    fn redemption_rows_name_a_known_state_and_refunded_only_with_the_second_release() {
+        let row = |state: &str| {
+            serde_json::json!({
+                "redemption_id": "r", "owner": "o", "owner_sequence": 1, "issuer": "i",
+                "bucket_id": "b", "amount_atoms": 300000, "epoch": 1, "reserve_packet_hash": "",
+                "destination_ref": "", "settled_atoms": 0, "state": state, "created_at_height": 5,
+                "settlement_receipt_hash": "",
+            })
+        };
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        assert!(validate_vault_bridge_status_redemption_row(&row("pending"), "a").is_ok());
+        assert!(validate_vault_bridge_status_redemption_row(&row("refunded"), "a").is_err());
+        assert!(validate_vault_bridge_status_redemption_row(&row("paid"), "a").is_err());
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(2000));
+        assert!(validate_vault_bridge_status_redemption_row(&row("refunded"), "a").is_ok());
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+    }
+
+    #[test]
     fn solana_exit_backing_pins_revision_8_unless_the_report_lists_covered_buckets() {
         let r8 = serde_json::json!({"bucket_id": solana_exit::BUCKET, "policy_hash": solana_exit::POLICY});
         let policy = "09".repeat(48);

@@ -4049,6 +4049,19 @@ fn solana_exit_refund_is_a_second_release_decision_with_a_canonical_cancel_refer
 }
 
 #[test]
+fn refunded_redemption_state_is_refused_while_the_second_release_is_unset() {
+    let main_text = Err("vault_bridge_redemption.state must be pending or settled".to_string());
+    crate::solana_exit::set_second_release_for_tests(None);
+    assert!(!crate::solana_exit::second_release_scheduled());
+    assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED), main_text);
+    assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_SETTLED), Ok(()));
+    crate::solana_exit::set_second_release_for_tests(Some(2000));
+    assert!(crate::solana_exit::second_release_scheduled());
+    assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED), Ok(()));
+    crate::solana_exit::set_second_release_for_tests(None);
+}
+
+#[test]
 fn solana_exit_reopening_after_a_close_needs_only_the_close_quorum() {
     use crate::solana_exit::{required_quorum, signer_floor, CLOSE, OPEN, RETIRE};
     for n in [4usize, 6, 7] {
