@@ -325,6 +325,7 @@ class Config:
     data_dir: Path = None
     proc: Path = Path("/proc")
     releases: Path = Path("/opt/postfiat/releases")
+    release_owner: int = 0
     public: object = None
 
     def __post_init__(self):
@@ -484,22 +485,43 @@ def inside(directory, path):
     return not path.is_symlink() and path.parent.resolve().is_relative_to(Path(directory).resolve())
 
 
+def uid_of(path):
+    return os.stat(path).st_uid
+
+
+def release_binary(cfg, exe):
+    """`exe` when it is a release binary that only its owner (root on a host) can replace."""
+    binary = Path(exe)
+    if binary.name != "postfiat-node" or binary.parent.parent != Path(cfg.releases).resolve():
+        return None
+    for path in (binary, binary.parent, binary.parent.parent):
+        info = os.lstat(path)
+        if stat.S_ISLNK(info.st_mode) or info.st_uid != cfg.release_owner or info.st_mode & 0o022:
+            return None
+    return binary
+
+
 def resident_binary(cfg):
-    """The release binary of this host's resident validator for this data directory."""
-    found = set()
-    for cmdline in cfg.proc.glob("[0-9]*/cmdline"):
+    """The release binary of this host's resident validator for this data directory.
+
+    A process's command line is chosen by whoever started it, so it only selects candidates:
+    the process must belong to the node user (the data directory's owner) and the binary is the
+    one the kernel runs it from (/proc/PID/exe), a release binary only root can replace."""
+    found, node_user = set(), uid_of(cfg.data_dir)
+    for process in Path(cfg.proc).glob("[0-9]*"):
         try:
-            args = cmdline.read_bytes().split(b"\0")
-        except OSError:
+            args = [a.decode(errors="replace") for a in (process / "cmdline").read_bytes().split(b"\0") if a]
+            if (len(args) < 4 or args[1] != "transport-validator-serve"
+                    or str(cfg.data_dir) not in args[args.index("--data-dir") + 1:][:1]
+                    or uid_of(process) != node_user):
+                continue
+            exe = os.readlink(process / "exe")
+        except (OSError, ValueError):
             continue
-        args = [a.decode(errors="replace") for a in args if a]
-        if (len(args) > 3 and args[1] == "transport-validator-serve" and "--data-dir" in args
-                and args[args.index("--data-dir") + 1] == str(cfg.data_dir)):
-            binary = Path(args[0])
-            if (binary.name == "postfiat-node" and binary.parent.parent == cfg.releases
-                    and re.fullmatch(r"[A-Za-z0-9_.-]+", binary.parent.name)):
-                found.add(binary)
-    require(len(found) == 1, f"sign: expected one resident validator for {cfg.data_dir}, found {len(found)}")
+        found.add(release_binary(cfg, exe))
+    require(len(found) == 1 and None not in found,
+            f"sign: expected one resident validator for {cfg.data_dir} running a root-owned release binary, "
+            f"found {sorted(map(str, found))}")
     return found.pop()
 
 

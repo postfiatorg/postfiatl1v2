@@ -231,7 +231,7 @@ class SignTest(unittest.TestCase):
 
     def test_the_verdict_file_names_the_decision_endpoint_slot_and_time(self):
         self.assertEqual(rv.run_review(self.cfg, "paid", BURN), 0)
-        (path,) = Path(self.dir.name).iterdir()
+        (path,) = Path(self.dir.name).glob("*.json")
         verdict = json.loads(path.read_text())
         self.assertEqual(path.name, hashlib.sha256(PAID_KIND.encode()).hexdigest() + ".json")
         self.assertEqual(verdict["decision_sha256"], hashlib.sha256(PAID_KIND.encode()).hexdigest())
@@ -254,7 +254,7 @@ class SignTest(unittest.TestCase):
                           key=Keypair())
         with self.assertRaisesRegex(rv.Refused, "not written by this host's reviewer"):
             rv.authorize(other, self.amend())
-        (path,) = Path(self.dir.name).iterdir()
+        (path,) = Path(self.dir.name).glob("*.json")
         doc = json.loads(path.read_text())
         doc["validator"] = "validator-0"
         path.write_text(json.dumps(doc))
@@ -313,6 +313,8 @@ class SignCommandTest(unittest.TestCase):
         self.binary.parent.mkdir(parents=True)
         self.binary.write_text(FAKE_NODE)
         self.binary.chmod(0o755)
+        for directory in (self.binary.parent, self.binary.parent.parent):
+            directory.chmod(0o755)  # a release only its owner can replace
         proc = root / "proc/4242"
         proc.mkdir(parents=True)
         (proc / "cmdline").write_bytes("\0".join([str(self.binary), "transport-validator-serve", "--data-dir",
@@ -347,19 +349,27 @@ class SignCommandTest(unittest.TestCase):
         (proc / "exe").symlink_to(exe)
 
     def fake_node(self, path):
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+        path.parent.chmod(0o755)
         path.write_text(FAKE_NODE)
         path.chmod(0o755)
         return path
 
     def test_the_binary_is_the_processs_own_executable_not_the_name_in_its_command_line(self):
-        # Any local process may name a release binary in its command line; only /proc/PID/exe counts.
+        # Any local process may name a release binary in its command line; only /proc/PID/exe counts,
+        # and only processes of the node user are candidates.
+        from unittest.mock import patch
         other = self.fake_node(self.binary.parent.parent / "r0/postfiat-node")
         self.add_process(4243, [str(other), "transport-validator-serve", "--data-dir", str(self.data)], "/bin/sleep")
         self.add_process(4244, [str(self.binary), "transport-validator-serve", "--data-dir"], "/bin/sleep")
-        rv.sign(self.cfg, self.amend, 1901, 1931, self.auth)
+        stranger = lambda path: 4321 if path.name == "4243" else os.getuid()  # noqa: E731
+        with patch.object(rv, "uid_of", stranger):
+            rv.sign(self.cfg, self.amend, 1901, 1931, self.auth)
         self.assertEqual(json.loads(self.binary.with_name("argv.json").read_text())[0], str(self.binary))
         self.assertFalse(other.with_name("argv.json").exists())
+        # The node user's own process running something else is not ignored: signing stops.
+        with self.assertRaisesRegex(rv.Refused, "resident validator"):
+            rv.sign(self.cfg, self.amend, 1901, 1931, self.auth)
 
     def test_a_binary_outside_the_releases_or_writable_by_others_or_of_another_user_is_refused(self):
         import shutil
@@ -510,7 +520,7 @@ class RobustScanTest(unittest.TestCase):
             cfg = self.cfg(d, node=TwoBurns())
             code = rv.scan(cfg)
             self.assertEqual(code, rv.EXIT_RPC)
-            names = sorted(p.name for p in (Path(d) / "r").iterdir())
+            names = sorted(p.name for p in (Path(d) / "r").glob("*.json"))
             self.assertIn(hashlib.sha256(PAID_KIND.encode()).hexdigest() + ".json", names)
             self.assertEqual(len(names), 2, "the good burn and the clearance were still reviewed")
 
@@ -518,7 +528,7 @@ class RobustScanTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             cfg = self.cfg(d)
             rv.run_review(cfg, "paid", BURN)
-            (old,) = (Path(d) / "r").iterdir()
+            (old,) = (Path(d) / "r").glob("*.json")
             past = time.time() - rv.PRUNE_AGE - 60
             os.utime(old, (past, past))
             rv.prune(cfg)
