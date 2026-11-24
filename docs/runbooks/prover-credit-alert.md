@@ -30,7 +30,8 @@ Nothing runs until the timer is installed. The unit needs:
   its own key file (`~/.config/vastai/vast_api_key`). The key is never passed as an argument. The
   script reads that file only to strip the key from what it prints or sends;
 - `B24_READING_NOTIFY` in `~/.config/b24-tee-nav/notify.env`, already used by the B24 reading.
-  Without it nothing is sent and the journal still shows each check.
+  Without it a report that is due is not sent: the run fails with "the alert address is not set:
+  nothing was sent", and the report is sent by the first run after the address is set.
 
 ## Thresholds
 

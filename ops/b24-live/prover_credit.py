@@ -73,26 +73,33 @@ def load(path):
     except (OSError,ValueError):state={}
     return dict(level=state.get('level','ok') if state.get('level') in LEVELS else 'ok',unreadable=bool(state.get('unreadable')))
 
+def delivered(result):
+    """True only when the hook took the report. An unset address sends nothing, so it is a failure too."""
+    if result=='unset':print('the alert address is not set: nothing was sent',file=sys.stderr);return False
+    return not result.startswith(('hook failed','hook exited'))
+
 def check(warn=24.0,urgent=6.0,state_path=STATE,run=vastai,send=notify):
-    """One run: returns the state written. A report counts as made unless the hook failed."""
+    """One run: returns the state written. A report counts as made only when delivered;
+    an undelivered report stays pending for the next run and the run fails (ok=False)."""
     state=load(state_path)
     try:credit,spend,count=read_credit(run)
     except Exception as error:
         line=message('unreadable',error=redact(str(error))[:300])
         if not state['unreadable']:
-            result=send(line);state['unreadable']=not result.startswith('hook failed') and not result.startswith('hook exited')
+            result=send(line);state['unreadable']=delivered(result)
             print(line+f'; notification {result}',file=sys.stderr)
         else:print(line+'; already reported',file=sys.stderr)
         write(state_path,state);return dict(state,ok=False)
     state['unreadable']=False
     hours=0.0 if credit<=0 else float('inf') if spend<=0 else credit/spend
     now=level(hours,warn,urgent);summary=f'credit {credit:.2f} USD, spend {spend:.2f} USD/h, {count} running, {hours:.1f} h left, level {now}'
+    ok=True
     if LEVELS.index(now)>LEVELS.index(state['level']):
         result=send(message(now,credit,spend,count,hours,warn,urgent))
-        if result.startswith(('hook failed','hook exited')):now=state['level']
+        if not delivered(result):now,ok=state['level'],False
         summary+=f'; notification {result}'
     print(summary)
-    state['level']=now;write(state_path,state);return dict(state,ok=True,hours=hours)
+    state['level']=now;write(state_path,state);return dict(state,ok=ok,hours=hours)
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
