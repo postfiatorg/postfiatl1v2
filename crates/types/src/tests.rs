@@ -4052,12 +4052,18 @@ fn solana_exit_refund_is_a_second_release_decision_with_a_canonical_cancel_refer
 fn refunded_redemption_state_is_refused_while_the_second_release_is_unset() {
     let main_text = Err("vault_bridge_redemption.state must be pending or settled".to_string());
     crate::solana_exit::set_second_release_for_tests(None);
-    assert!(!crate::solana_exit::second_release_scheduled());
+    // The production table: no chain of this build schedules the second release yet.
+    assert!(!crate::solana_exit::second_release_scheduled_on("postfiat-wan-devnet-2"));
+    assert!(!crate::solana_exit::second_release_scheduled_on("some-other-chain"));
+    // The context-free check is main's, always.
     assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED), main_text);
     assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_SETTLED), Ok(()));
+    // A chain's records accept "refunded" only where that chain schedules the second release.
+    assert_eq!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 0, "postfiat-wan-devnet-2"), main_text);
     crate::solana_exit::set_second_release_for_tests(Some(2000));
-    assert!(crate::solana_exit::second_release_scheduled());
-    assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED), Ok(()));
+    assert_eq!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 0, "postfiat-wan-devnet-2"), Ok(()));
+    assert!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 1, "postfiat-wan-devnet-2").is_err());
+    assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED), main_text);
     crate::solana_exit::set_second_release_for_tests(None);
 }
 

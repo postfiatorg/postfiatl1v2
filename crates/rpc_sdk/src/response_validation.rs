@@ -1776,13 +1776,15 @@ mod solana_exit_backing_bucket_tests {
                 "withdrawal_packet_evm_digest": "",
             })
         };
+        // A client built without the height still reads a status reply with a refunded row.
         postfiat_types::solana_exit::set_second_release_for_tests(None);
         assert!(validate_vault_bridge_status_redemption_row(&row("pending"), "a").is_ok());
-        assert!(validate_vault_bridge_status_redemption_row(&row("refunded"), "a").is_err());
-        assert!(validate_vault_bridge_status_redemption_row(&row("queued"), "a").is_ok());
-        postfiat_types::solana_exit::set_second_release_for_tests(Some(2000));
         assert!(validate_vault_bridge_status_redemption_row(&row("refunded"), "a").is_ok());
-        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        assert!(validate_vault_bridge_status_redemption_row(&row("queued"), "a").is_ok());
+        // A refunded row that claims a settled amount is malformed.
+        let mut settled = row("refunded");
+        settled["settled_atoms"] = serde_json::json!(300000);
+        assert!(validate_vault_bridge_status_redemption_row(&settled, "a").is_err());
     }
 
     #[test]
