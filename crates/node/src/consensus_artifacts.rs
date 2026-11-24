@@ -3118,7 +3118,7 @@ pub(super) fn verify_signed_governance_batch(
             amendment,
             proposal_slot,
         )?;
-        crate::solana_exit_governance::refuse_unreleased_minimum(genesis, amendment, proposal_slot)?;
+        crate::solana_exit_governance::refuse_unreleased_kind(genesis, amendment, proposal_slot)?;
         verify_governance_amendment_evidence(genesis, amendment)?;
         if amendment.validators != validators {
             return Err(io::Error::new(

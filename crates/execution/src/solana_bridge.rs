@@ -715,6 +715,54 @@ mod tests {
     }
 
     #[test]
+    fn a_cancelled_burn_is_refunded_once_in_its_own_series_and_bucket() {
+        let (genesis, mut ledger) = exit_custody_deposit(9);
+        let bucket = ledger.vault_bridge_bucket_states[0].clone();
+        let line = ledger.trustlines[0].clone();
+        let supply = |l: &LedgerState| crate::issued_asset_supply(l, &line.asset_id).unwrap();
+        let supply_before = supply(&ledger);
+        exit_burn(&genesis, &mut ledger, &bucket.bucket_id, EXIT_AMOUNT, exit_destination()).unwrap();
+        let packet = ledger.vault_bridge_redemptions.last().unwrap().withdrawal_packet_hash.clone();
+        assert_eq!(supply(&ledger), supply_before - EXIT_AMOUNT);
+        let refund = "6e".repeat(48);
+        assert!(refund_cancelled_solana_burn(&mut ledger, &genesis.chain_id, &"77".repeat(48), &refund, 21).is_err());
+        refund_cancelled_solana_burn(&mut ledger, &genesis.chain_id, &packet, &refund, 21).unwrap();
+        // The burner holds the amount again, in the same series; the bucket's sums are as before.
+        let after = ledger.vault_bridge_bucket(&bucket.bucket_id).unwrap();
+        assert_eq!(ledger.trustlines[0].balance, line.balance);
+        assert_eq!(ledger.trustlines[0].asset_id, line.asset_id);
+        assert_eq!(after.outstanding_vault_bridge_atoms, bucket.outstanding_vault_bridge_atoms);
+        assert_eq!(after.redemption_queue_atoms, bucket.redemption_queue_atoms);
+        assert_eq!(after.counted_value_atoms, bucket.counted_value_atoms);
+        assert_eq!(supply(&ledger), supply_before);
+        assert_eq!(supply(&ledger), after.outstanding_vault_bridge_atoms);
+        let red = ledger.vault_bridge_redemptions.last().unwrap();
+        assert_eq!(red.state, postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED);
+        assert_eq!((red.settled_atoms, red.settlement_receipt_hash.as_str()), (0, refund.as_str()));
+        red.validate_for_chain(&genesis.chain_id).unwrap();
+        // A second refund, and a payout settlement after the refund, change nothing.
+        let before = ledger.clone();
+        assert!(refund_cancelled_solana_burn(&mut ledger, &genesis.chain_id, &packet, &refund, 22).is_err());
+        assert!(
+            settle_governed_solana_payout(&mut ledger, &genesis.chain_id, &packet, &"5e".repeat(48), 22, true)
+                .is_err()
+        );
+        assert_eq!(ledger, before);
+    }
+
+    #[test]
+    fn a_paid_burn_cannot_be_refunded() {
+        let (genesis, mut ledger) = exit_custody_deposit(9);
+        let bucket = ledger.vault_bridge_bucket_states[0].bucket_id.clone();
+        exit_burn(&genesis, &mut ledger, &bucket, EXIT_AMOUNT, exit_destination()).unwrap();
+        let packet = ledger.vault_bridge_redemptions.last().unwrap().withdrawal_packet_hash.clone();
+        settle_governed_solana_payout(&mut ledger, &genesis.chain_id, &packet, &"5e".repeat(48), 21, true).unwrap();
+        let before = ledger.clone();
+        assert!(refund_cancelled_solana_burn(&mut ledger, &genesis.chain_id, &packet, &"6e".repeat(48), 22).is_err());
+        assert_eq!(ledger, before);
+    }
+
+    #[test]
     fn solana_exit_refuses_owners_that_are_not_wallets() {
         let (genesis, mut ledger) = exit_custody_deposit(9);
         let bucket = ledger.vault_bridge_bucket_states[0].bucket_id.clone();

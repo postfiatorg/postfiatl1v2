@@ -43,7 +43,7 @@ pub(super) fn second_release(genesis: &Genesis, height: u64) -> bool {
 /// The minimum-withdrawal kind exists only where the second release is active at the block
 /// that includes it, whatever its activation height; elsewhere it is refused with the first
 /// release's text for an unknown kind.
-pub(super) fn refuse_unreleased_minimum(
+pub(super) fn refuse_unreleased_kind(
     genesis: &Genesis,
     amendment: &GovernanceAmendment,
     height: u64,

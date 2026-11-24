@@ -4022,6 +4022,33 @@ fn solana_exit_minimum_withdrawal_is_one_canonical_governed_amount() {
 }
 
 #[test]
+fn solana_exit_refund_is_a_second_release_decision_with_a_canonical_cancel_reference() {
+    use crate::solana_exit::{decision_quorum, is_decision, refund_fields, CancelledBurn, REFUND};
+    let packet = "ab".repeat(48);
+    let signature = "cd".repeat(64);
+    let kind = format!("{REFUND}{packet}:473300000:{signature}");
+    // Before the second release the kind is no Solana exit decision.
+    assert!(!is_decision(&kind, false));
+    assert!(is_decision(&kind, true));
+    assert_eq!(decision_quorum(&kind, 6, true), external_lane_amendment_threshold(6));
+    assert_eq!(
+        refund_fields(&kind),
+        Ok(CancelledBurn { packet_hash: &packet, slot: 473_300_000, signature_hex: &signature })
+    );
+    for bad in [
+        format!("{REFUND}{packet}:0:{signature}"),
+        format!("{REFUND}{packet}:0473300000:{signature}"),
+        format!("{REFUND}{packet}:473300000:{}", "0".repeat(128)),
+        format!("{REFUND}{packet}:473300000:{signature}:0"),
+        format!("{REFUND}{}:473300000:{signature}", "AB".repeat(48)),
+        format!("{REFUND}{packet}:473300000"),
+        format!("solana_exit_r8_paid:{packet}:473300000:0:{signature}"),
+    ] {
+        assert!(refund_fields(&bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn solana_exit_reopening_after_a_close_needs_only_the_close_quorum() {
     use crate::solana_exit::{required_quorum, signer_floor, CLOSE, OPEN, RETIRE};
     for n in [4usize, 6, 7] {

@@ -7656,6 +7656,17 @@ pub fn settle_governed_solana_payout(
     Ok(())
 }
 
+/// Credit back a pending Solana exit burn whose marker reads cancelled on Solana.
+pub fn refund_cancelled_solana_burn(
+    _ledger: &mut LedgerState,
+    _chain_id: &str,
+    _packet_hash: &str,
+    _amendment_id: &str,
+    _block_height: u64,
+) -> Result<(), String> {
+    Err("Solana refund not implemented".into())
+}
+
 fn apply_vault_bridge_settlement_accounting(
     ledger: &mut LedgerState,
     operation: &VaultBridgeRedeemSettleOperation,

@@ -134,6 +134,9 @@ pub const CLOSE: &str = "solana_exit_r8_close";
 /// The route profile's activation height is a different field.
 pub const TRUSTED_CHECKPOINT_HEIGHT: u64 = 1753;
 pub const PAID: &str = "solana_exit_r8_paid:";
+/// `solana_exit_refund:<withdrawal packet hash>:<finalized slot>:<cancel signature>` credits
+/// back a burn whose Solana marker reads cancelled (second release only).
+pub const REFUND: &str = "solana_exit_refund:";
 /// `solana_exit_min_withdrawal:<atoms>` sets the smallest Solana exit burn.
 pub const MIN_WITHDRAWAL: &str = "solana_exit_min_withdrawal:";
 /// 0.30 USDC. Each payout leaves the relayer about 4,162,080 lamports of permanent
@@ -227,6 +230,18 @@ pub fn min_withdrawal_atoms(g: &GovernanceState) -> u64 {
 /// The packet hash commits to the burn, amount and source bucket. The burn ID
 /// commits to the signed operation, including the full 32-byte destination.
 /// Solana transaction signatures use their raw 64 bytes encoded as lowercase hex.
+/// The cancelled burn a refund decision names: its packet and the finalized cancel.
+#[derive(Debug, PartialEq, Eq)]
+pub struct CancelledBurn<'a> {
+    pub packet_hash: &'a str,
+    pub slot: u64,
+    pub signature_hex: &'a str,
+}
+
+pub fn refund_fields(_kind: &str) -> Result<CancelledBurn<'_>, String> {
+    Err("expected Solana refund amendment".into())
+}
+
 pub struct FinalizedPayout<'a> {
     pub packet_hash: &'a str,
     pub slot: u64,

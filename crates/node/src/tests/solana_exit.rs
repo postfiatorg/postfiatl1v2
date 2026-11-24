@@ -2230,8 +2230,34 @@ fn solana_exit_decision_signers_follow_the_first_release_until_the_second() {
 }
 
 #[test]
+fn solana_exit_refund_kind_needs_the_second_release_at_the_including_block() {
+    use crate::solana_exit_governance::refuse_unreleased_kind;
+    let g = Genesis::new("postfiat-local");
+    let gov = GovernanceState::new(6);
+    let active = active_validator_ids(&gov).unwrap();
+    let kind = format!("{}{}:473300000:{}", solana_exit::REFUND, "ab".repeat(48), "cd".repeat(64));
+    let amendment: GovernanceAmendment = serde_json::from_value(serde_json::json!({
+        "amendment_id": "a", "chain_id": g.chain_id, "genesis_hash": genesis_hash(&g),
+        "protocol_version": 1, "instance_id": "i", "proposal_id": "p",
+        "certificate_id": "c", "proposer": active[0], "validators": active, "quorum": 5,
+        "kind": kind, "value": 1, "activation_height": 2000, "support": [], "votes": [],
+    }))
+    .unwrap();
+    let main_text = format!("unsupported governance amendment kind `{kind}`");
+    let refused = |height| {
+        refuse_unreleased_kind(&g, &amendment, height).map_err(|e| (e.kind(), e.to_string()))
+    };
+    solana_exit::set_second_release_for_tests(None);
+    assert_eq!(refused(2000), Err((io::ErrorKind::InvalidData, main_text.clone())));
+    solana_exit::set_second_release_for_tests(Some(2000));
+    assert_eq!(refused(1999), Err((io::ErrorKind::InvalidData, main_text)));
+    assert!(refused(2000).is_ok());
+    solana_exit::set_second_release_for_tests(None);
+}
+
+#[test]
 fn solana_exit_minimum_kind_needs_the_second_release_at_the_including_block() {
-    use crate::solana_exit_governance::refuse_unreleased_minimum;
+    use crate::solana_exit_governance::refuse_unreleased_kind;
     let g = Genesis::new("postfiat-local");
     let gov = GovernanceState::new(6);
     let active = active_validator_ids(&gov).unwrap();
@@ -2246,7 +2272,7 @@ fn solana_exit_minimum_kind_needs_the_second_release_at_the_including_block() {
     // The first release's text for this kind, as main's consensus check gives it.
     let main_text = format!("unsupported governance amendment kind `{kind}`");
     let refused = |height| {
-        refuse_unreleased_minimum(&g, &amendment, height)
+        refuse_unreleased_kind(&g, &amendment, height)
             .map_err(|e| (e.kind(), e.to_string()))
     };
     solana_exit::set_second_release_for_tests(None);
