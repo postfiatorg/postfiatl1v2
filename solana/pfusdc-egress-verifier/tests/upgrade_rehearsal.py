@@ -41,7 +41,7 @@ VAULT_ACCOUNTS = [
     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  # USDC mint
 ]
 ERRORS = {1: "Encoding", 2: "Binding", 3: "Proof", 4: "StaleCheckpoint", 5: "UnknownCheckpoint",
-          6: "Replay", 7: "Paused", 8: "WrongDestination", 9: "TooEarly"}
+          6: "Replay", 7: "Paused", 8: "WrongDestination", 9: "CancelNotAllowed"}
 MAGIC = b"PFTL-PFUSDC-TIER4"
 # Changed fields of the test-verifier cases (21 and 24 carry a fresh burn ID).
 def burn_id(b):
@@ -436,9 +436,10 @@ def run(args):
             case(f"new program: paid burn {i + 1} of 23 November refused", pay(paid[i])[0], "Replay")
         case("new program: cancel after payout refused (burn 3, real proof)", cancel(unpaid)[0], "Replay")
         case("new program: cancel of burn 1 paid on mainnet refused", cancel(paid[0])[0], "Replay")
-        case("new program: cancel by anyone before the time limit refused (burn 2)", cancel(spare)[0], "TooEarly")
-        case("new program: cancel signed by a key that is not the owner refused", cancel(spare, signer=stranger)[0],
-             "TooEarly")
+        case("new program: an unsigned cancel refused (burn 2, real proof)", cancel(spare)[0], "CancelNotAllowed")
+        v, units, own, _ = cancel(spare, signer=stranger)
+        case("new program: a cancel signed by a stranger refused (burn 2, real proof)", v, "CancelNotAllowed",
+             units=units, verifier_units=own)
         case("new program: real proof with field 26 changed refused", pay(unpaid, variants[0])[0], "Proof")
 
         # Test-verifier image: the same new code with the Groth16 check removed.
@@ -462,19 +463,19 @@ def run(args):
         case("test verifier: second cancel refused", cancel(unpaid, variants[7], signer=owner)[0], "Replay")
         case("test verifier: payout proving block 2151 advances the light", pay(unpaid, variants[8], send=True)[0], "ok")
         case("test verifier: light height", int.from_bytes(local.account(LIGHT)[280:288], "little"), 2151)
-        case("test verifier: anyone cancels after the time limit", cancel(unpaid, variants[9], send=True)[0], "ok")
+        case("test verifier: a stranger cannot cancel even 300 blocks past the burn",
+             cancel(unpaid, variants[9], signer=stranger)[0], "CancelNotAllowed")
 
         # Rollback: the deployed image on the migrated light.
         upgrade(args.old)
         case("rollback to the old program: withdrawals refused", pay(paid[0])[0], "Binding")
         upgrade(args.new)
         case("re-upgrade: paid burn refused as replay again", pay(paid[0])[0], "Replay")
-        # Real proof of burn 2, now that the light stands 303 blocks past it.
-        v, units, own, _ = cancel(spare, send=True)
-        case("new program: anyone cancels burn 2 after the time limit (real proof)",
-             dict(v=v, marker=marker_byte(spare)), dict(v="ok", marker=2), units=units, verifier_units=own)
-        case("new program: payout of the cancelled burn 2 refused (real proof)", pay(spare)[0], "Replay")
-        case("new program: second cancel of burn 2 refused", cancel(spare)[0], "Replay")
+        # Real proof of burn 2, now that the light stands 303 blocks past it: no block count opens a cancel.
+        case("new program: 303 blocks later an unsigned cancel of burn 2 is still refused (real proof)",
+             cancel(spare)[0], "CancelNotAllowed")
+        case("new program: burn 2 has no marker after the refused cancels", marker_byte(spare), None)
+        case("new program: burn 2 still pays after the refused cancels (real proof, simulated)", pay(spare)[0], "ok")
         case("new program: burn 3 marker stays paid", marker_byte(unpaid), 1)
     finally:
         validator.terminate()
