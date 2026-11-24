@@ -36,50 +36,38 @@ Both instructions create the account and refuse if it exists. So "paid" and "can
 
 **Proof.** A cancel carries the same values and Groth16 proof as the payout of that burn. Without them, anyone could block any burn ID. The verifier checks it exactly as for a payout: chain, prior checkpoint, proof, then the route, vault alias and mint alias of the light. The values give the burn's own Post Fiat block height.
 
-**Who may cancel.**
-- **The destination owner, at any time.** The owner signs, and the owner's key must hash to the burn's proven destination. A holder whose token account is frozen or closed does not have to wait.
-- **Anyone, once the light has moved on.** The verifier's light must stand at least `CANCEL_AFTER = 256` Post Fiat blocks past the burn's block. This covers owners that cannot sign.
-- **Not the validators.** The verifier cannot check their ML-DSA signatures, and the two paths above cover every case.
-
-**Time limit.** The limit is counted in Post Fiat blocks as the light account sees them: `light.height − burn height ≥ 256`. `light.height` is the latest Post Fiat block proven to the verifier, by a checkpoint or a payout. Post Fiat blocks are made on demand, so this is a count of later finalized blocks, not of minutes. The worker pays a payable burn within minutes, and it advances the light while doing so.
+**Who may cancel.** The destination owner, or the verifier's pause authority, signing, at any time. Nobody else may cancel, and there is no time limit.
+- **Owner:** the signer's key, hashed with the light's Solana genesis, must equal the proven destination.
+- **Pause authority:** the signer is the light's `pause_authority`. It cancels burns whose owner cannot sign, after people have checked the burn (`ops/sol-live/RUNBOOK-LIVE.md`, "Cancel a burn with the pause key").
+- **Anyone else:** refused with `CancelNotAllowed` (error 9).
+- **Why this rule:**
+  - An earlier draft let anyone cancel once the light stood 256 Post Fiat blocks past the burn. Those blocks, and the proof that moves the light, are cheap for a stranger. During a prover outage, one stranger could then have cancelled every pending withdrawal.
+  - A cancel moves no funds, and the pause key can already stop every payout. So the pause authority gains no new power: a stolen pause key can grief, but cannot steal.
+  - A later program version could add a firmer permissionless rule, for example a two-step cancel timed in Solana slots. A payout landing within that window would still win.
 
 **Pause.** A paused verifier refuses cancels as it refuses payouts.
 
-## How firm is the time limit
-
-**An outsider can shorten it.** Post Fiat makes a block whenever transactions arrive. Anyone with an account and fees can cause the 256 blocks with plain transfers. At today's finality of about five seconds a block, that takes about 20 minutes and 256 fees.
-
-**Who advances the light, and at what cost.** Blocks alone do not move the light. `light.height` rises only when someone proves a later finalized block to the verifier: a checkpoint (tag 8), a payout or a cancel. Each of these is permissionless. Each needs a Groth16 proof of public chain data, made with the SP1 prover in two to four minutes of GPU time. A checkpoint also pays the rent of a new checkpoint account, about 0.0009 SOL, plus fees.
-- The worker advances the light itself when it falls more than 65 blocks behind a burn.
-- A determined outsider with a prover can do it too.
-
-**The race.** A payout and a cancel create the same marker account. Solana orders the two transactions:
+**The race.** A payout and a cancel create the same marker account, and Solana orders the two transactions:
 - whichever lands first creates the account;
 - the other fails on the existing account (`Replay`, or the system program refuses the create);
 - the failing transaction moves no funds.
 
-So the user is paid (byte 1) or refundable (byte 2), never both, and never neither. The worker reads a cancelled marker as final (`cancelled: refund on Post Fiat`), and the refund decision needs that marker. `upgrade_rehearsal.py` exercises both orders with real proofs. `anyone_may_cancel_only_after_the_time_limit_seen_by_the_light` and `the_time_limit_moves_only_with_the_light` show that the anyone path depends on the light alone.
+So the user is paid (byte 1) or refundable (byte 2), never both, and never neither. `upgrade_rehearsal.py` exercises both orders.
 
-**What it costs a user.** A stranger who cancels a payable burn cannot take funds. The holder gets the pfUSDC back after a refund decision instead of USDC on Solana: a delay, and a second burn if the holder still wants to exit. This can happen while a payout is legitimately pending, for example while the proving hosts are down for hours, if an outsider pays to make 256 blocks and to prove one checkpoint. That is griefing, not loss.
+**Before the second release height.** The cancel exists from the Solana upgrade on, but the refund decision only from the second release's height. A burn cancelled in between can be neither paid nor refunded until that height. Only the owner or the pause key can cause this, so the gap is closed by procedure:
+- the pause key signs no cancel before the height is active;
+- no user-facing cancel exists before then;
+- the worker tells such a user that the refund comes once the second release is active.
 
-**Options for a firmer rule.** These are not implemented; each must ship in the same upgrade, or wait for a later one.
-1. **Two-step cancel on Solana time.**
-   - Anyone may *request* a cancel with the burn's proof. This writes a request account holding the Solana slot.
-   - The cancel completes only after a fixed number of Solana slots, for example three days.
-   - A payout in that window still wins, because it creates the marker first.
-   - Solana slots advance whatever Post Fiat does, so outsiders cannot shorten the window.
-   - Cost: one instruction, one account kind and a slot check (about 40 lines), and a rehearsal that can warp slots (`solana-program-test`).
-   - This is the recommended rule for the single upgrade, if the owner accepts one more review round.
-2. **A larger block count**, for example 4,096. This is simple, but it is still shortened by cheap blocks. It only raises the cost.
-3. **Only the destination owner may cancel.** Burns whose owner cannot sign would then wait for a Post Fiat decision and a later upgrade.
-
-The code keeps the 256-block rule this round.
+**Limits.**
+- `exit_govern.py refund` finds the cancel only as a top-level instruction. A cancel made through another program, for example by a program-owned destination, is not found. Such owners use the pause-authority path instead.
+- A burner who has removed the trust line for the burned series cannot be credited until they re-create it. The refund refuses until then and can be repeated afterwards.
 
 ## Post Fiat refund
 
 The refund sits behind the second release's own height.
 
-**Kind and signers.** A governance decision `solana_exit_refund:<redemption id>:<finalized slot>:<cancel signature>` needs the same quorum as a paid decision under the second release: five of six. Each signer reads the marker of that burn at a finalized slot, checks the byte `2` and the cancel transaction, and only then signs.
+**Kind and signers.** A governance decision `solana_exit_refund:<redemption id>:<finalized slot>:<cancel signature>` needs the same quorum as a paid decision under the second release: five of six. Each signer's own host reads the marker of that burn at a finalized slot, through that host's own Solana endpoint, checks the byte `2` and the cancel transaction, and only then signs (`ops/sol-live/exit_review.py`, runbook "Independent settlement reviews" and "Refund a cancelled burn").
 
 **Effect.**
 - The redemption must be pending and unsettled, in a covered bucket.
@@ -89,7 +77,7 @@ The refund sits behind the second release's own height.
 
 ## Service and user
 
-**The worker.** It reads the marker before it proves and again before it sends. Byte `1` means paid, byte `2` means cancelled. A cancelled burn ends the job as failed with the fixed reason `cancelled: refund on Post Fiat`, and it is not retried. The custody check counts only paid markers as USDC that has left the vault.
+**The worker.** It reads the marker before it proves and again before it sends. Byte `1` means paid, byte `2` means cancelled. A cancelled burn ends the job as failed with the fixed reason `cancelled: refund on Post Fiat` (before the second release: `… once the second release is active`), and it is not retried. The custody check counts only paid markers as USDC that has left the vault.
 
 **In-flight payout.** If a payout is in flight when the cancel arrives, Solana orders the two transactions. Whichever lands first creates the marker, and the other fails on the existing account. A payout that loses ends the job as cancelled; a cancel that loses stays without effect, and the burn is paid.
 
