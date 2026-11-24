@@ -75,7 +75,7 @@ ACCOUNT = re.compile(r"pf[0-9a-f]{40}")
 def rpc_any(method, **params):
     """Read from validator 0, else the next validator that answers. Any answer is safe:
     the proof checks committee-signed finality and Solana checks the proof. A second
-    read as a cross-check would double the full-state reads (finding 3) for no safety."""
+    read as a cross-check would double the full-state reads for no safety."""
     errors = []
     for i in range(6):
         try:
