@@ -82,10 +82,10 @@ class GovernanceTest(unittest.TestCase):
         names = [f"validator-{i}" for i in range(6)]
         parent = g.parent_of(self.head)
         approval = dict(kind="reviewed-paid", parent=parent)
-        # Paid is decided by the five of six the second release reports.
-        rules = dict(__import__("exit_rules").first_release(), release=2)
-        rules["signatures"] = dict(rules["signatures"], paid=5)
-        amendment = dict(kind=approval["kind"], value=1, quorum=5, validators=names,
+        # The first release's go-live path: six protected review files, read before signing.
+        # (The second release signs through each host's own reviewer: test_exit_independent_sign.)
+        rules = __import__("exit_rules").first_release()
+        amendment = dict(kind=approval["kind"], value=1, quorum=6, validators=names,
                          activation_height=parent["block_height"] + 1)
         with tempfile.TemporaryDirectory() as tmp:
             file = Path(tmp) / "review"

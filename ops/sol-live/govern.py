@@ -161,6 +161,18 @@ def collect(kind, step, n=6, need=None):
     return done
 
 
+# The per-host settlement reviewer, installed on every validator host (RUNBOOK-LIVE.md,
+# "Independent settlement reviews"). Its `sign` runs the node's signing command only for a
+# decision that host's own reviewer approved within the last 15 minutes.
+REVIEWER = "/opt/postfiat/sol-exit-review/exit_review.py"
+
+
+def independent_review(kind, rules):
+    """Under the second release, paid and refund are signed only through each host's own
+    reviewer. A first-release chain keeps the go-live review files and six signatures."""
+    return kind in ("exit-paid", "exit-refund") and rules is not None and rules.get("release") == 2
+
+
 # Solana exit decisions bound to a qualified Solana parent and drafted by `ratify-solana-<kind>`.
 EXIT_DECISIONS = ("exit-open", "exit-close", "exit-paid", "exit-refund")
 
@@ -324,7 +336,8 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
     save(local / "amendment.json", amend)
 
     reviewed = set(runtime)
-    if kind in ("exit-paid", "exit-refund"):
+    independent = independent_review(kind, rules)
+    if kind in ("exit-paid", "exit-refund") and not independent:
         # Each signer's operator has checked the payout, or the finalized cancelled marker.
         def verify_review(i):
             if i not in runtime:
@@ -356,8 +369,15 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
     def sign(i):
         if i != lead:
             put(i, "amend", amend)
-        tool(
-            i,
+        if independent:
+            # The host checks its own fresh review of exactly this decision, then signs.
+            def signer(*args):
+                return remote(i, ["runuser", "-u", "postfiat", "--", "/usr/bin/python3", "-I", REVIEWER,
+                                  "sign", "--amendment-file", work[i] + "/amend", "--", runtime[i][0], *args])
+        else:
+            def signer(*args):
+                return tool(i, *args)
+        signer(
             "governance-authorization-sign",
             "--data-dir",
             dirs[i],

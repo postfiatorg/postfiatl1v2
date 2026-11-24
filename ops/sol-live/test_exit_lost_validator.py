@@ -98,6 +98,9 @@ class Fleet:
         if args[0] == "cat":
             return self.files[(i, args[1])]
         rest = args[4:]
+        if rest[:4] == ["/usr/bin/python3", "-I", govern.REVIEWER, "sign"]:
+            # The host's own reviewer approved this decision; its wrapper runs the signing command.
+            rest = rest[rest.index("--") + 1:]
         if rest[0] == "mkdir":
             return ""
         if rest[0] == "tee":

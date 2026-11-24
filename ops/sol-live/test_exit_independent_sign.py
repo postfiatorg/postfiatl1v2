@@ -47,8 +47,14 @@ def paid(fleet, d):
 
     burn = "e7" * 48
     packet = "f7" * 48
+    bucket = dict(
+        bucket_id=payout.BUCKET, policy_hash=payout.POLICY, source_domain=payout.SOURCE_DOMAIN,
+        status="active", redeemable_at_par=True, impairment_factor_bps=10000,
+        outstanding_vault_bridge_atoms=0, redemption_queue_atoms=300000,
+        other_allocations_atoms=0, nav_subscription_allocations_atoms=0, counted_value_atoms=300000,
+    )
     fleet.status = dict(
-        buckets=[], allocations=[], receipts=[],
+        buckets=[bucket], allocations=[], receipts=[],
         redemptions=[dict(burn_tx_id=burn, bucket_id=payout.BUCKET, amount_atoms=300000, state="pending",
                           settled_atoms=0, settlement_receipt_hash="", owner=exit_canary.OWNER,
                           destination_ref=exit_canary.DEST, withdrawal_packet_hash=packet)])
