@@ -4,6 +4,7 @@ from pathlib import Path
 import tarfile
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -74,6 +75,12 @@ class CutoverTest(unittest.TestCase):
                 env=dict(os.environ, L1_SOLANA_WITHDRAWALS_ENABLED=flag),
             ) as child:
                 try:
+                    # Wait until the child has exec'd, so its cmdline names relay.js.
+                    cmdline = Path(f"/proc/{child.pid}/cmdline")
+                    for _ in range(200):
+                        if b"relay.js" in cmdline.read_bytes():
+                            break
+                        time.sleep(0.01)
                     with patch(
                         "exit_cutover.subprocess.check_output",
                         return_value=str(child.pid),

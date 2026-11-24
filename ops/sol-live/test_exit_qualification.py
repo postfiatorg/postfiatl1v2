@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
+import exit_payout
 import exit_precheck as pre
 import exit_setup as setup
 import govern
@@ -178,6 +179,11 @@ class QualificationTest(unittest.TestCase):
             exit_govern.verify_open_parent(
                 rows, "id", dict(parent, block_tip_hash="other")
             )
+        # One validator that answers with a different record does not fail five that agree.
+        other = dict(tx, receipt=dict(tx_id="id", accepted=False))
+        exit_govern.verify_open_parent(rows[:5] + [other], "id", parent, need=5)
+        with self.assertRaises(ValueError):
+            exit_govern.verify_open_parent(rows[:5] + [other], "id", parent)
 
     def test_stationary_service_executes_anchor_once(self):
         import exit_payout as payout
@@ -252,7 +258,7 @@ class QualificationTest(unittest.TestCase):
         responses = [dict(payout_ready=False), dict(
             payout_ready=True,
             burns_open=False,
-            bucket_id=setup.BUCKET,
+            source_domain=exit_payout.SOURCE_DOMAIN,
             qualified_parent=pre.parent_of(new),
             series_supply_atoms="100", bucket_outstanding_atoms="100",
         )]
@@ -267,19 +273,20 @@ class QualificationTest(unittest.TestCase):
                 "sys.argv",
                 ["govern", "open", "--release-height", "8", "--revision", "rev"],
             ),
-            patch.object(g, "fleet", side_effect=lambda: current[0]),
+            patch.object(g, "fleet", side_effect=lambda need=6: current[0]),
             patch.object(g, "ethereum"),
             patch.object(g, "require_closed"),
-            patch.object(g, "six", return_value=[route] * 6),
+            patch.object(g, "survey", return_value=dict(enumerate([route] * 6))),
             patch.object(g, "qualify", side_effect=get),
             patch.object(g, "verify_open_parent"),
             patch.object(g, "rotation_clearance") as clearance,
             patch.object(g, "govern", return_value={"tx_id": "id"}) as submit,
         ):
             g.main()
-            clearance.assert_called_once_with(new)
+            clearance.assert_called_once_with(new, 6)
             submit.assert_called_once_with(
-                "exit-open", compatible="rev", qualified_parent=pre.parent_of(new)
+                "exit-open", compatible="rev", qualified_parent=pre.parent_of(new),
+                rules=__import__("exit_rules").first_release(),
             )
 
     def test_tag3_waits_for_same_parent_after_getting_solana_blockhash(self):

@@ -10,7 +10,8 @@ from unittest.mock import patch
 import exit_canary
 import exit_release_kit as release
 from exit_service import BASE
-from exit_setup import ASSET, BUCKET, EXIT, PROFILE, SERIES
+from exit_setup import ASSET, BUCKET, EXIT, POLICY, PROFILE, SERIES
+from exit_payout import SOURCE_DOMAIN
 
 HERE = Path(__file__).parent
 
@@ -23,6 +24,7 @@ class HandoffTest(unittest.TestCase):
         )
         with (
             patch.object(exit_canary, "cluster"),
+            patch.object(exit_canary, "require_wallet_destination"),
             patch.object(exit_canary, "balances", return_value={"pfusdc_atoms": 20000}),
             patch.object(
                 exit_canary,
@@ -35,8 +37,11 @@ class HandoffTest(unittest.TestCase):
             get.return_value.json.return_value = dict(
                 ready=True,
                 asset_id=ASSET,
-                bucket_id=BUCKET,
-                series_asset_id=SERIES,
+                source_domain=SOURCE_DOMAIN,
+                min_withdrawal_atoms="20000",
+                series=[
+                    dict(bucket_id=BUCKET, series_asset_id=SERIES, redeemable_atoms="20000")
+                ],
                 issuer="issuer",
                 epoch=123,
                 reserve_packet_hash="11" * 48,
@@ -188,6 +193,8 @@ class HandoffTest(unittest.TestCase):
         paid = dict(burn_tx_id="ab" * 48, withdrawal_packet_hash="cd" * 48)
         bucket = dict(
             bucket_id=BUCKET,
+            policy_hash=POLICY,
+            source_domain=SOURCE_DOMAIN,
             counted_value_atoms=30000,
             redemption_queue_atoms=20000,
             outstanding_vault_bridge_atoms=10000,

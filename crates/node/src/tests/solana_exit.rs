@@ -50,7 +50,7 @@ fn export_local_solana_exit_chain() {
     );
 }
 
-fn funded_holder(ledger: &mut LedgerState) -> (String, String, String) {
+fn funded_holder(ledger: &mut LedgerState, series: &str) -> (String, String, String) {
     // Reassign the test holder's local balance line to a fresh, isolated signer.
     let k = ml_dsa_65_keygen().unwrap();
     let owner = address_from_public_key(&k.public_key);
@@ -59,7 +59,7 @@ fn funded_holder(ledger: &mut LedgerState) -> (String, String, String) {
     let line = ledger
         .trustlines
         .iter_mut()
-        .find(|l| l.asset_id == SERIES && l.account == "pf5c266a1bdb18320e140961411a8c4d8383eaafb2")
+        .find(|l| l.asset_id == series && l.account == "pf5c266a1bdb18320e140961411a8c4d8383eaafb2")
         .unwrap();
     let mut local = postfiat_types::TrustLine::new(
         &owner,
@@ -86,15 +86,27 @@ fn funded_holder(ledger: &mut LedgerState) -> (String, String, String) {
     (owner, public, private)
 }
 
-fn funded_burn(g: &Genesis, ledger: &mut LedgerState) -> SignedAssetTransaction {
-    let (owner, public, private) = funded_holder(ledger);
+/// The archive holder burns the governed minimum of the revision-8 series.
+fn funded_burn(g: &Genesis, gov: &GovernanceState, ledger: &mut LedgerState) -> SignedAssetTransaction {
+    let amount = solana_exit::min_withdrawal_atoms(gov);
+    funded_burn_from(g, ledger, solana_exit::BUCKET, SERIES, amount)
+}
+
+fn funded_burn_from(
+    g: &Genesis,
+    ledger: &mut LedgerState,
+    bucket_id: &str,
+    series: &str,
+    amount_atoms: u64,
+) -> SignedAssetTransaction {
+    let (owner, public, private) = funded_holder(ledger, series);
     let nav = ledger.nav_asset(solana_exit::FAMILY).unwrap();
     let op = VaultBridgeBurnToRedeemOperation {
         owner: owner.clone(),
         issuer: nav.issuer.clone(),
         asset_id: solana_exit::FAMILY.into(),
-        bucket_id: solana_exit::BUCKET.into(),
-        amount_atoms: 20000,
+        bucket_id: bucket_id.into(),
+        amount_atoms,
         epoch: nav.finalized_epoch,
         reserve_packet_hash: nav.finalized_reserve_packet_hash.clone(),
         destination_ref: format!(
@@ -118,6 +130,21 @@ fn funded_burn(g: &Genesis, ledger: &mut LedgerState) -> SignedAssetTransaction 
 }
 
 const H: u64 = 1760;
+/// Burn amount of the archive tests; scheduled_parent governs it as the minimum.
+const ARCHIVE_BURN: u64 = 20_000;
+
+/// Record an activated minimum-withdrawal decision just after registration.
+fn govern_minimum(gov: &mut GovernanceState, atoms: u64) {
+    let (descriptor, _) = solana_exit::registered(gov).unwrap();
+    let after = descriptor.authorized_height + 1;
+    let mut record = gov.amendment_activation_records.last().unwrap().clone();
+    record.kind = format!("{}{atoms}", solana_exit::MIN_WITHDRAWAL);
+    record.value = 1;
+    record.activation_height = after;
+    record.activated_height = after;
+    gov.amendment_activation_records.push(record);
+    assert_eq!(solana_exit::min_withdrawal_atoms(gov), atoms);
+}
 const OPEN: &str = "solana_exit_r8_open";
 
 fn archived_parent() -> (Genesis, GovernanceState, LedgerState) {
@@ -148,6 +175,9 @@ fn scheduled_parent(open: bool) -> (Genesis, GovernanceState, LedgerState) {
         H,
     );
     assert!(registered[0].accepted, "{:?}", registered[0]);
+    // The archive holder has 0.02 USDC of revision 8: govern a 20,000-atom minimum
+    // so the 20,000-atom burns below follow the governed minimum, not the default.
+    govern_minimum(&mut gov, ARCHIVE_BURN);
     if open {
         let batch = committee.decision(&g, &gov, OPEN, H + 1);
         verify_live_signed_governance_batch(&g, &gov, &committee.registry, &batch, H + 1).unwrap();
@@ -168,8 +198,8 @@ fn scheduled_parent(open: bool) -> (Genesis, GovernanceState, LedgerState) {
 #[test]
 #[ignore = "requires the copied WAN ledger at height 1753"]
 fn direct_client_explains_closed_burn_before_release() {
-    let (g, _, mut local) = archived_parent();
-    let tx = funded_burn(&g, &mut local);
+    let (g, gov, mut local) = archived_parent();
+    let tx = funded_burn(&g, &gov, &mut local);
     let denied =
         submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
             data_dir: "/var/lib/postfiat/validator-3".into(),
@@ -204,7 +234,7 @@ fn block_burn(
 #[ignore = "copied WAN ledger, release height 1760"]
 fn solana_exit_registration_leaves_burns_closed() {
     let (g, gov, mut ledger) = scheduled_parent(false);
-    let tx = funded_burn(&g, &mut ledger);
+    let tx = funded_burn(&g, &gov, &mut ledger);
     let lookup = |id: &str| {
         crate::market_bridge::vault_bridge_route_at_height(&g, &gov, &ledger, &[], H, id)
     };
@@ -222,12 +252,20 @@ fn solana_exit_registration_leaves_burns_closed() {
         if b.source_domain.starts_with("spl:") && b.bucket_id != solana_exit::BUCKET {
             let earlier =
                 postfiat_types::solana_source_series_id(&g.chain_id, &b.asset_id, &b.bucket_id);
-            assert!(lookup(&earlier).is_err());
+            if solana_exit::matches_bucket(b, true) {
+                // Every revision bucket of the shared custody resolves to the exit descriptor.
+                let report = lookup(&earlier).unwrap();
+                assert_eq!(report.profile_hash, solana_exit::PROFILE_HASH);
+                assert_eq!(report.burns_open, Some(false));
+            } else {
+                assert!(lookup(&earlier).is_err());
+            }
         }
     }
     let report = lookup(SERIES).unwrap();
     assert!(report.active);
     assert_eq!(report.burns_open, Some(false));
+    assert_eq!(report.closed_since_registration, Some(false));
     let receipt = block_burn(&g, &gov, &mut ledger, &tx, H + 1);
     assert_eq!(receipt.code, "solana_exit_burns_closed");
 }
@@ -236,7 +274,7 @@ fn solana_exit_registration_leaves_burns_closed() {
 #[ignore = "copied WAN ledger, release height 1760"]
 fn solana_exit_requires_active_full_backing() {
     let (g, gov, mut ledger) = scheduled_parent(true);
-    let tx = funded_burn(&g, &mut ledger);
+    let tx = funded_burn(&g, &gov, &mut ledger);
     let bucket = ledger
         .vault_bridge_bucket_states
         .iter_mut()
@@ -256,7 +294,7 @@ fn solana_exit_debits_series_with_pooled_switch_off() {
     let (g, mut gov, mut ledger) = scheduled_parent(true);
     gov.amendments
         .retain(|a| a.kind != GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT);
-    let tx = funded_burn(&g, &mut ledger);
+    let tx = funded_burn(&g, &gov, &mut ledger);
     let balance = |l: &LedgerState| {
         l.trustlines
             .iter()
@@ -274,7 +312,7 @@ fn solana_exit_debits_series_with_pooled_switch_off() {
 #[ignore = "copied WAN ledger, release height 1760"]
 fn solana_exit_route_reserves_queued_burn_once() {
     let (g, gov, mut ledger) = scheduled_parent(true);
-    let tx = funded_burn(&g, &mut ledger);
+    let tx = funded_burn(&g, &gov, &mut ledger);
     let row = |l: &LedgerState| {
         l.vault_bridge_route_backing(solana_exit::FAMILY)
             .unwrap()
@@ -522,7 +560,7 @@ fn bucket_amounts(l: &LedgerState) -> (u64, u64, u64, u64) {
 #[ignore = "copied WAN ledger, release height 1760"]
 fn signed_solana_exit_settlement_conserves_backing_and_supply() {
     let (g, mut gov, mut ledger) = scheduled_parent(true);
-    let tx = funded_burn(&g, &mut ledger);
+    let tx = funded_burn(&g, &gov, &mut ledger);
     let receipt = block_burn(&g, &gov, &mut ledger, &tx, H + 2);
     assert!(receipt.accepted, "{receipt:?}");
     let red = ledger.vault_bridge_redemptions.last().unwrap();
@@ -666,7 +704,8 @@ fn certified_fork(output: Option<&Path>) {
     .unwrap();
     // Local committee and holder. Preserve the archive's bridge and balance state.
     gov.validator_registry_updates.clear();
-    let tx = funded_burn(&g, &mut ledger);
+    // The fork governs ARCHIVE_BURN as the minimum (block h + 2) before this burn.
+    let tx = funded_burn_from(&g, &mut ledger, solana_exit::BUCKET, SERIES, ARCHIVE_BURN);
     store.write_ledger(&ledger).unwrap();
     store.write_governance(&gov).unwrap();
     let mut shielded = source.read_shielded().unwrap();
@@ -895,6 +934,15 @@ fn certified_fork(output: Option<&Path>) {
         .burns_open,
         Some(true)
     );
+    // Below the default minimum the burn is refused until a minimum is governed.
+    let minimum = format!("{}{ARCHIVE_BURN}", solana_exit::MIN_WITHDRAWAL);
+    let batch = decision(&minimum, 1, h + 2);
+    commit(
+        BATCH_KIND_GOVERNANCE,
+        &batch.batch_id,
+        serde_json::to_string(&batch).unwrap(),
+        true,
+    );
     submit().unwrap();
     let path = temp.join("burn.json");
     create_mempool_batch(MempoolBatchOptions {
@@ -953,7 +1001,7 @@ fn certified_fork(output: Option<&Path>) {
             burn.withdrawal_packet_hash,
             "bc".repeat(64)
         );
-        let close = decision(solana_exit::CLOSE, 1, h + 3);
+        let close = decision(solana_exit::CLOSE, 1, h + 4);
         commit(
             BATCH_KIND_GOVERNANCE,
             &close.batch_id,
@@ -961,7 +1009,7 @@ fn certified_fork(output: Option<&Path>) {
             true,
         );
         assert!(solana_exit::open_height(&store.read_governance().unwrap()).is_none());
-        let batch = decision(&paid, 1, h + 4);
+        let batch = decision(&paid, 1, h + 5);
         commit(
             BATCH_KIND_GOVERNANCE,
             &batch.batch_id,
@@ -980,7 +1028,7 @@ fn certified_fork(output: Option<&Path>) {
         );
         assert_eq!(holder_balance(&settled), holder_balance(&after));
         settled.validate_asset_state(&g.chain_id).unwrap();
-        let batch = decision(&paid, 1, h + 5);
+        let batch = decision(&paid, 1, h + 6);
         commit(
             BATCH_KIND_GOVERNANCE,
             &batch.batch_id,
@@ -1109,7 +1157,7 @@ fn exit_review_close_drain_rotate_and_reopen() {
         assert!(receipts[0].accepted, "{}", receipts[0].message);
         Ok::<(), io::Error>(())
     };
-    let tx = funded_burn(&g, &mut ledger);
+    let tx = funded_burn(&g, &gov, &mut ledger);
     let source = NodeStore::new("/var/lib/postfiat/validator-3");
     let mut block = source.read_blocks().unwrap().blocks.pop().unwrap();
     block.header.height = H + 6;
@@ -1178,7 +1226,7 @@ fn exit_review_close_drain_rotate_and_reopen() {
 #[ignore = "copied WAN ledger, release height 1760"]
 fn exit_review_unanimous_close_stops_new_burns() {
     let (g, mut gov, mut ledger) = scheduled_parent(true);
-    let tx = funded_burn(&g, &mut ledger);
+    let tx = funded_burn(&g, &gov, &mut ledger);
     let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
     let batch = committee.decision(&g, &gov, "solana_exit_r8_close", H + 2);
     let mut weak = batch.clone();
@@ -1378,7 +1426,7 @@ fn exit_review_registration_holds_rotation_until_open_or_retired() {
     let bucket = ledger
         .vault_bridge_bucket_states
         .iter_mut()
-        .find(|b| solana_exit::matches_bucket(b))
+        .find(|b| solana_exit::matches_bucket(b, true))
         .unwrap();
     bucket.outstanding_vault_bridge_atoms = 0;
     // Model a drained series before testing the remaining ingress obligation.
@@ -1414,7 +1462,7 @@ fn exit_review_registration_holds_rotation_until_open_or_retired() {
         .unwrap_err()
         .to_string()
         .contains("receive deposits"));
-    // A higher ingress revision permanently supersedes revision 8.
+    // A higher ingress revision credits the same custody, whose buckets can all exit.
     let mut successor = ledger
         .solana_clients()
         .max_by_key(|r| r.profile.route_epoch)
@@ -1423,6 +1471,25 @@ fn exit_review_registration_holds_rotation_until_open_or_retired() {
     successor.profile.route_epoch += 1;
     let hash = successor.profile.profile_hash().unwrap();
     ledger.additional_solana_routes.insert(hash, successor);
+    assert!(check(&closed, &ledger)
+        .unwrap_err()
+        .to_string()
+        .contains("receive deposits"));
+    // The checker is free only when no revision can credit the custody and every
+    // custody bucket is empty.
+    if let Some(route) = ledger.solana_route.as_mut() {
+        route.profile.expires_at_height = H;
+    }
+    for route in ledger.additional_solana_routes.values_mut() {
+        route.profile.expires_at_height = H;
+    }
+    for bucket in ledger
+        .vault_bridge_bucket_states
+        .iter_mut()
+        .filter(|b| solana_exit::matches_bucket(b, true))
+    {
+        bucket.outstanding_vault_bridge_atoms = 0;
+    }
     check(&closed, &ledger).unwrap();
     assert!(
         check(&gov, &ledger).is_err(),
@@ -1431,14 +1498,16 @@ fn exit_review_registration_holds_rotation_until_open_or_retired() {
     ledger
         .vault_bridge_bucket_states
         .iter_mut()
-        .find(|b| solana_exit::matches_bucket(b))
+        .filter(|b| solana_exit::matches_bucket(b, true))
+        .last()
         .unwrap()
         .outstanding_vault_bridge_atoms = 1;
     assert!(!retire(&mut gov, &mut ledger).accepted);
     ledger
         .vault_bridge_bucket_states
         .iter_mut()
-        .find(|b| solana_exit::matches_bucket(b))
+        .filter(|b| solana_exit::matches_bucket(b, true))
+        .last()
         .unwrap()
         .outstanding_vault_bridge_atoms = 0;
     let mut short = committee.decision(&g, &gov, solana_exit::RETIRE, H + 2);
@@ -1670,10 +1739,142 @@ fn exit_review4_export_root_genesis_schedule_is_incompatible() {
 }
 
 #[test]
+fn solana_exit_decision_signers_follow_the_normal_quorum_for_close_and_settlement() {
+    let active = (0..6).map(|i| format!("validator-{i}")).collect::<Vec<_>>();
+    let paid = format!("{}{}:12345:0:{}", solana_exit::PAID, "11".repeat(48), "ab".repeat(64));
+    let normal = postfiat_ordering_fast::bft_quorum_threshold(6).unwrap();
+    assert_eq!(normal, 5);
+    let minimum = format!("{}20000", solana_exit::MIN_WITHDRAWAL);
+    for kind in [solana_exit::CLOSE, paid.as_str(), minimum.as_str()] {
+        // One lost validator cannot block closing, settling or setting the minimum.
+        crate::solana_exit_governance::check_decision_signers(kind, &active, normal, normal, &active, false)
+            .unwrap();
+        assert!(crate::solana_exit_governance::check_decision_signers(
+            kind,
+            &active,
+            normal - 1,
+            normal - 1,
+            &active,
+            false
+        )
+        .is_err());
+    }
+    for kind in [solana_exit::OPEN, solana_exit::RETIRE] {
+        assert!(crate::solana_exit_governance::check_decision_signers(
+            kind, &active, normal, normal, &active, false
+        )
+        .is_err());
+        crate::solana_exit_governance::check_decision_signers(kind, &active, 6, 6, &active, false)
+            .unwrap();
+    }
+    // The declared set is always the full active set.
+    assert!(crate::solana_exit_governance::check_decision_signers(
+        solana_exit::CLOSE,
+        &active[..5],
+        5,
+        5,
+        &active,
+        false
+    )
+    .is_err());
+}
+
+#[test]
+fn solana_exit_one_lost_validator_can_close_and_reopen_but_not_open_first() {
+    use crate::solana_exit_governance::check_decision_signers;
+    let active = (0..6).map(|i| format!("validator-{i}")).collect::<Vec<_>>();
+    // Five close burns while validator-5 is lost ...
+    check_decision_signers(solana_exit::CLOSE, &active, 5, 5, &active, false).unwrap();
+    // ... and the same five can open them again after that close.
+    check_decision_signers(solana_exit::OPEN, &active, 5, 5, &active, true).unwrap();
+    // The first opening stays unanimous.
+    let first = check_decision_signers(solana_exit::OPEN, &active, 5, 5, &active, false);
+    assert!(first.unwrap_err().contains("first opening needs every active validator"));
+    check_decision_signers(solana_exit::OPEN, &active, 6, 6, &active, false).unwrap();
+    // Retirement stays unanimous even after a close.
+    assert!(check_decision_signers(solana_exit::RETIRE, &active, 5, 5, &active, true).is_err());
+    // Without a registered descriptor nothing counts as a re-opening.
+    assert!(!solana_exit::closed_since_registration(&GovernanceState::new(6)));
+}
+
+/// Another revision's bucket of the shared custody burns and settles against
+/// itself. Revision 9 when the copied ledger has it, else an earlier revision the
+/// archive holder still holds; never the revision-8 bucket.
+#[test]
+#[ignore = "copied WAN ledger, release height 1760"]
+fn solana_exit_burns_and_settles_another_revision_bucket() {
+    let (g, mut gov, mut ledger) = scheduled_parent(true);
+    let holder = "pf5c266a1bdb18320e140961411a8c4d8383eaafb2";
+    let mut candidates = ledger
+        .vault_bridge_bucket_states
+        .iter()
+        .filter(|b| solana_exit::matches_bucket(b, true) && b.bucket_id != solana_exit::BUCKET)
+        .filter(|b| b.outstanding_vault_bridge_atoms >= ARCHIVE_BURN)
+        .filter_map(|b| {
+            let series =
+                postfiat_types::solana_source_series_id(&g.chain_id, &b.asset_id, &b.bucket_id);
+            ledger
+                .trustlines
+                .iter()
+                .any(|l| l.account == holder && l.asset_id == series && l.balance >= ARCHIVE_BURN)
+                .then(|| {
+                    let revision = gov
+                        .vault_bridge_route_profiles
+                        .iter()
+                        .find(|r| r.profile_hash == b.policy_hash)
+                        .map_or(0, |r| r.profile.route_epoch);
+                    (revision, b.bucket_id.clone(), series)
+                })
+        })
+        .collect::<Vec<_>>();
+    // Prefer the latest revision the holder still holds, revision 9 once present.
+    candidates.sort();
+    let (_, bucket_id, series) = candidates
+        .pop()
+        .expect("the copied ledger has a non-r8 custody series held by the archive holder");
+    let amounts = |l: &LedgerState| {
+        let b = l.vault_bridge_bucket(&bucket_id).unwrap();
+        (b.outstanding_vault_bridge_atoms, b.redemption_queue_atoms, b.counted_value_atoms)
+    };
+    let (outstanding, queue, counted) = amounts(&ledger);
+    let tx = funded_burn_from(&g, &mut ledger, &bucket_id, &series, ARCHIVE_BURN);
+    let receipt = block_burn(&g, &gov, &mut ledger, &tx, H + 2);
+    assert!(receipt.accepted, "{receipt:?}");
+    assert_eq!(amounts(&ledger), (outstanding - ARCHIVE_BURN, queue + ARCHIVE_BURN, counted));
+    let red = ledger.vault_bridge_redemptions.last().unwrap().clone();
+    assert_eq!(red.bucket_id, bucket_id);
+    assert_eq!(red.withdrawal_packet.source_bucket_id, bucket_id);
+    let kind = format!(
+        "{}{}:12345:0:{}",
+        solana_exit::PAID,
+        red.withdrawal_packet_hash,
+        "ab".repeat(64)
+    );
+    let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
+    let batch = committee.decision(&g, &gov, &kind, H + 3);
+    verify_live_signed_governance_batch(&g, &gov, &committee.registry, &batch, H + 3).unwrap();
+    let receipts = crate::execution_actions::execute_governance_batch(
+        &mut gov,
+        Some(&mut ledger),
+        Some(&g),
+        &batch,
+        H + 3,
+    );
+    assert!(receipts[0].accepted, "{:?}", receipts[0]);
+    assert_eq!(amounts(&ledger), (outstanding - ARCHIVE_BURN, queue, counted - ARCHIVE_BURN));
+    ledger.validate_asset_state(&g.chain_id).unwrap();
+    let settled = ledger.vault_bridge_redemptions.last().unwrap();
+    assert_eq!(
+        (settled.settled_atoms, settled.state.as_str()),
+        (ARCHIVE_BURN, postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_SETTLED)
+    );
+}
+
+#[test]
 #[ignore = "copied WAN ledger, release height 1760"]
 fn exit_review5_burn_reconciles_orchard_and_public_claims() {
     let (g, gov, mut ledger) = scheduled_parent(true);
-    let tx = funded_burn(&g, &mut ledger);
+    let tx = funded_burn(&g, &gov, &mut ledger);
     let batch =
         TransactionBatch::new_with_asset_transactions(String::new(), vec![], vec![], vec![tx]);
     let orchard = [postfiat_types::AssetOrchardAssetBalance {
@@ -1778,7 +1979,7 @@ fn exit_review5_route_reports_both_claim_totals() {
 #[ignore = "copied WAN ledger, release height 1760"]
 fn exit_review5_standalone_asset_burn_cannot_orphan_backing() {
     let (g, gov, mut ledger) = archived_parent();
-    let (owner, public, private) = funded_holder(&mut ledger);
+    let (owner, public, private) = funded_holder(&mut ledger, SERIES);
     let op = postfiat_types::AssetBurnOperation {
         owner: owner.clone(),
         issuer: ledger.asset_definition(SERIES).unwrap().issuer.clone(),
@@ -1821,7 +2022,7 @@ fn exit_review5_batch_builder_and_committed_route_include_orchard() {
     let dir = unique_test_dir("revision8-parent");
     let store = NodeStore::new(&dir);
     store.init(&g, &source.read_node_state().unwrap()).unwrap();
-    let burn = funded_burn(&g, &mut ledger);
+    let burn = funded_burn(&g, &gov, &mut ledger);
     let path = dir.join("burn.json");
     std::fs::write(&path, serde_json::to_vec(&burn).unwrap()).unwrap();
     let mut tip = source.read_chain_tip().unwrap();
@@ -1885,7 +2086,7 @@ fn exit_review6_registration_reconciles_public_and_orchard_claims() {
     let (g, mut gov, mut ledger) = archived_parent();
     let committee = LocalCommittee::new(&active_validator_ids(&gov).unwrap());
     let registration = committee.registration(&g, &gov, H);
-    let (owner, public, private) = funded_holder(&mut ledger);
+    let (owner, public, private) = funded_holder(&mut ledger, SERIES);
     let burn = postfiat_types::AssetBurnOperation {
         owner: owner.clone(),
         issuer: ledger.asset_definition(SERIES).unwrap().issuer.clone(),
@@ -1978,4 +2179,82 @@ fn exit_review6_redemption_asset_id_is_additive_on_the_wire() {
     }
     validate(&report);
     serde_json::from_value::<VaultBridgeStatusReport>(report).expect("decode historical rows");
+}
+
+/// With the second release unset, a decision's signers are checked by origin/main's
+/// `require_unanimity` (unchanged); from the second release's height, by its quorum.
+#[test]
+fn solana_exit_decision_signers_follow_the_first_release_until_the_second() {
+    use crate::solana_exit_governance::{check_signers, require_unanimity};
+    let g = Genesis::new("postfiat-local");
+    let gov = GovernanceState::new(6);
+    let active = active_validator_ids(&gov).unwrap();
+    let paid = format!("{}{}:12345:0:{}", solana_exit::PAID, "11".repeat(48), "ab".repeat(64));
+    let signature = |validator: &str| postfiat_types::SignedGovernanceAuthorizationV2 {
+        schema: postfiat_types::SIGNED_GOVERNANCE_AUTHORIZATION_SCHEMA_V2.into(),
+        validator: validator.into(),
+        vote_id: String::new(),
+        old_registry_root: String::new(),
+        committee_epoch: 0,
+        proposal_slot: 1900,
+        expires_at_height: 2000,
+        algorithm_id: String::new(),
+        signature_hex: String::new(),
+    };
+    for kind in [solana_exit::CLOSE, paid.as_str(), solana_exit::OPEN] {
+        let amendment: GovernanceAmendment = serde_json::from_value(serde_json::json!({
+            "amendment_id": "a", "chain_id": g.chain_id, "genesis_hash": genesis_hash(&g),
+            "protocol_version": 1, "instance_id": "i", "proposal_id": "p",
+            "certificate_id": "c", "proposer": active[0], "validators": active, "quorum": 5,
+            "kind": kind, "value": 1, "activation_height": 1900, "support": [], "votes": [],
+        }))
+        .unwrap();
+        let mut amendment = amendment;
+        amendment.signed_authorizations = active[..5].iter().map(|v| signature(v)).collect();
+        // Unset: exactly origin/main's verdict.
+        solana_exit::set_second_release_for_tests(None);
+        let first = check_signers(&g, &gov, &amendment, 1900);
+        assert_eq!(first, require_unanimity(&amendment, &active), "{kind}");
+        assert_eq!(
+            first.unwrap_err(),
+            "Solana exit governance requires every active validator signature"
+        );
+        // Set at 1901: still the first release at 1900.
+        solana_exit::set_second_release_for_tests(Some(1901));
+        assert_eq!(check_signers(&g, &gov, &amendment, 1900), require_unanimity(&amendment, &active));
+        // From the second release's height: five suffice for close and paid, not a first opening.
+        solana_exit::set_second_release_for_tests(Some(1900));
+        assert_eq!(check_signers(&g, &gov, &amendment, 1900).is_ok(), kind != solana_exit::OPEN, "{kind}");
+        solana_exit::set_second_release_for_tests(None);
+    }
+}
+
+#[test]
+fn solana_exit_minimum_kind_needs_the_second_release_at_the_including_block() {
+    use crate::solana_exit_governance::refuse_unreleased_minimum;
+    let g = Genesis::new("postfiat-local");
+    let gov = GovernanceState::new(6);
+    let active = active_validator_ids(&gov).unwrap();
+    let kind = format!("{}300000", solana_exit::MIN_WITHDRAWAL);
+    let amendment: GovernanceAmendment = serde_json::from_value(serde_json::json!({
+        "amendment_id": "a", "chain_id": g.chain_id, "genesis_hash": genesis_hash(&g),
+        "protocol_version": 1, "instance_id": "i", "proposal_id": "p",
+        "certificate_id": "c", "proposer": active[0], "validators": active, "quorum": 5,
+        "kind": kind, "value": 1, "activation_height": 2000, "support": [], "votes": [],
+    }))
+    .unwrap();
+    // The first release's text for this kind, as main's consensus check gives it.
+    let main_text = format!("unsupported governance amendment kind `{kind}`");
+    let refused = |height| {
+        refuse_unreleased_minimum(&g, &amendment, height)
+            .map_err(|e| (e.kind(), e.to_string()))
+    };
+    solana_exit::set_second_release_for_tests(None);
+    assert_eq!(refused(2000), Err((io::ErrorKind::InvalidData, main_text.clone())));
+    // Second release at 2000: an amendment activating at 2000 but included at 1999 is refused
+    // as main refuses it; included at 2000 it passes this check.
+    solana_exit::set_second_release_for_tests(Some(2000));
+    assert_eq!(refused(1999), Err((io::ErrorKind::InvalidData, main_text)));
+    assert!(refused(2000).is_ok());
+    solana_exit::set_second_release_for_tests(None);
 }
