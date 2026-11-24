@@ -652,6 +652,54 @@ def matches_payout(c, key, sig):
     )
 
 
+REFUND_KIND = "solana_exit_refund:"
+
+
+def cancel_slot(c, key, sig):
+    """The finalized slot of `sig` if it is a successful verifier cancel (tag 10) of `key`."""
+    import base58
+
+    tx = c.call(
+        "getTransaction",
+        sig,
+        dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
+    )
+    if not tx or tx["meta"]["err"] is not None or tx["transaction"]["signatures"][0] != sig:
+        return None
+    msg = tx["transaction"]["message"]
+    keys = msg["accountKeys"]
+    found = any(
+        keys[ix["programIdIndex"]] == str(VERIFIER)
+        and len(ix["accounts"]) >= 7
+        and keys[ix["accounts"][6]] == str(key)
+        and base58.b58decode(ix["data"])[:1] == b"\x0a"
+        for ix in msg["instructions"]
+    )
+    return tx["slot"] if found else None
+
+
+def refund_kind(c, red, *, history_limit=100):
+    """The refund decision for a redemption whose marker reads cancelled at the cluster's
+    (finalized) commitment, bound to the cancel transaction. Anything else is refused."""
+    import base58
+
+    key = marker(red["burn_tx_id"])
+    account = c.account(key)
+    require(
+        account is not None
+        and account["owner"] == str(VERIFIER)
+        and account["data"] == b"\x02",
+        "No cancelled marker for this burn; refund refused.",
+    )
+    for row in c.call("getSignaturesForAddress", str(key), dict(c.level, limit=history_limit)):
+        if row["err"] is None:
+            slot = cancel_slot(c, key, row["signature"])
+            if slot:
+                sig = base58.b58decode(row["signature"]).hex()
+                return f"{REFUND_KIND}{red['withdrawal_packet_hash']}:{slot}:{sig}"
+    raise ValueError("No finalized cancel transaction for this burn; refund refused.")
+
+
 def signature(c, burn, known=None, *, history_limit=100):
     key = marker(burn)
     account = c.account(key)
