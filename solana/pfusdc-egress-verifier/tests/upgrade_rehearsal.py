@@ -363,10 +363,13 @@ def run(args):
             return grown
 
         grew = upgrade(args.new)
-        code = local.account(programdata)[45:45 + Path(args.new).stat().st_size]
-        case("upgrade to the new build", hashlib.sha256(code).hexdigest(),
-             hashlib.sha256(Path(args.new).read_bytes()).hexdigest(), extended_bytes=grew,
-             programdata_bytes=len(local.account(programdata)))
+        image = Path(args.new).read_bytes()
+        tail = local.account(programdata)[45:]
+        # The service pins the hash of the whole ProgramData tail: the image, zero-filled.
+        case("upgrade to the new build", dict(code=hashlib.sha256(tail[:len(image)]).hexdigest(),
+                                              fill=set(tail[len(image):]) <= {0}),
+             dict(code=hashlib.sha256(image).hexdigest(), fill=True), extended_bytes=grew,
+             programdata_bytes=len(tail) + 45, service_pin="0x" + hashlib.sha256(tail).hexdigest())
         case("new program before migrate: withdrawal refused", pay(paid[0])[0], "Binding")
         case("migrate by a wrong signer refused",
              verdict(local.send(local.tx([migrate_ix(stranger)], payer, stranger))), "MissingRequiredSignature")
