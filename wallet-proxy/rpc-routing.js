@@ -652,7 +652,16 @@ wss } = runtime;
                         this._processQueue();
                         return;
                     }
-                    item.resolve(underRequestId(item.request, line));
+                    const answered = underRequestId(item.request, line);
+                    item.resolve(answered);
+                    // The node may send more than one placeholder reply for a line
+                    // it could not read whole: retire the socket after one, so no
+                    // later reply is paired one request behind.
+                    if (answered !== line) {
+                        this._retire(socket);
+                        this._processQueue();
+                        return;
+                    }
                     // Retire this socket on the node's last response before a
                     // queued request can race its FIN. No submitted request is
                     // replayed, including mutations.
