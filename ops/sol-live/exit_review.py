@@ -353,11 +353,11 @@ def write_verdict(cfg, body):
                 time=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                 unix_time=int(time.time()))
     doc = dict(body, seal=seal(cfg.key, body))
-    cfg.review_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+    cfg.review_dir.mkdir(mode=0o750, parents=True, exist_ok=True)
     path = cfg.review_dir / f"{body['decision_sha256']}.json"
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(doc, indent=1, sort_keys=True))
-    os.chmod(tmp, 0o644)
+    os.chmod(tmp, 0o640)
     os.replace(tmp, path)
     return path
 
