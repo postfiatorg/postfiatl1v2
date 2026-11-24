@@ -463,7 +463,7 @@ The L1 needs no close. The first release keeps running and revision-8 burns stay
 | 4. `solana program extend 8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF 10240` | upgrade authority `4JJEua…` (with `--payer`) | The loader refuses less than 10,240 bytes; about 0.052 SOL rent. |
 | 5. `solana program write-buffer pfusdc_egress_verifier.so --buffer-authority <upgrade authority>` | payer, upgrade authority | `solana program dump <buffer>` equals the build. |
 | 6. `solana program upgrade <buffer> 8Dxp8bfg…` | upgrade authority | The buffer's rent returns to the spill account. |
-| 7. Read back the program | none | The first bytes equal the build and the rest of ProgramData is zero. Note the SHA-256 of the whole ProgramData tail (`data[45:]`); `profile_code` hashes exactly that. |
+| 7. Read back the program | none | The first bytes equal the build and the rest of ProgramData is zero. Note the SHA-256 of the whole ProgramData tail (`data[45:]`); `profile_code` hashes exactly that. On a local Agave 4.4.1 validator the tail was exactly the image. |
 | 8. Send tag 9 (below) | upgrade authority | Only bytes 136–168 of the light differ from step 2. They now hold `02b02d4b…558e` (`tests/route-vector.txt`). |
 | 9. Set `VERIFIER_SHA256` in `exit_setup.py` to the step-7 hash, then install and self-test the service build | operator | The service refuses any other verifier code. |
 | 10. Start the worker, re-enable admission | operator | Pending revision-8 burns are paid. |
