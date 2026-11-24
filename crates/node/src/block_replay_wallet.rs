@@ -841,6 +841,16 @@ pub(super) fn archived_wan_devnet_legacy_nav_profile_id_allowed(
         && block.header.height <= WAN_DEVNET_LEGACY_NAV_REPLAY_MAX_HEIGHT
 }
 
+/// Whether this chain's archived history may hold a receipt stored under an
+/// id other than its `tx_id`: replay accepts that drift only on these two
+/// archived devnets, so only their migrated stores can carry it.
+pub(super) fn archived_receipt_id_drift_possible(genesis: &Genesis) -> bool {
+    matches!(
+        genesis.chain_id.as_str(),
+        "postfiat-wan-devnet" | "postfiat-wan-devnet-2"
+    )
+}
+
 pub(super) fn archived_wan_devnet2_legacy_receipt_id_drift_allowed(
     genesis: &Genesis,
     block: &BlockRecord,
