@@ -1,3 +1,6 @@
+"""Go-live tool of 23 November: writes all six rotation clearances from one place. It is
+replaced by the per-host reviewer ops/sol-live/exit_review.py (`clearance`), which reads each
+host's own signing history and writes that host's clearance (RUNBOOK-LIVE.md)."""
 import json, subprocess
 from exit_govern import *
 hosts="64.176.220.75 95.179.184.122 66.42.48.39 149.28.63.106 95.179.179.206 45.32.110.170".split()

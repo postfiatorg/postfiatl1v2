@@ -9,6 +9,6 @@ c=cluster()
 for r in rpc(3,"vault_bridge_status",asset_id=ASSET)["redemptions"]:
     if r["bucket_id"]==BUCKET and not r.get("settlement_receipt_hash") and signature(c,r["burn_tx_id"],None): print(r["burn_tx_id"])
 P
-); do echo "$(date -u +%T) settling $burn"; python3 ~/var/sol-exit/live/settle.py 71dbc9b3 "$burn" 2>&1 | tail -3; done
+); do echo "$(date -u +%T) settling $burn"; python3 ~/var/sol-exit/live/settle.py 71dbc9b3 "$burn" --single-owner-fleet 2>&1 | tail -3; done
   sleep 90
 done

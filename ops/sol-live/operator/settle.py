@@ -1,11 +1,19 @@
 """Verify one finalized Solana payout against its L1 burn and attest it as paid (six signers).
 
+Go-live tool of 23 November. It is replaced by the per-host reviewer ops/sol-live/exit_review.py
+(RUNBOOK-LIVE.md, "Independent settlement reviews"): there every validator host reviews and signs
+from its own review. This script writes the review file on all six hosts from one place, so it
+runs only with --single-owner-fleet, while one owner runs all six validators.
+
 General form of the canary settlement in exit_canary.py: any holder, any amount, and either the
 service fee payer or the setup payer as transaction fee payer. Every check the canary makes on the
 payout itself is kept: one top-level tag-2 instruction to the pinned verifier, the burn's marker
 PDA, the exact custody debit and recipient credit, and the withdrawal packet on six validators.
 """
 import sys, json, subprocess, base58
+if "--single-owner-fleet" not in sys.argv[3:]:
+    sys.exit("settle.py writes the review file on every host; run it only with --single-owner-fleet "
+             "while one owner runs all six validators, otherwise use exit_review.py on each host.")
 from exit_payout import *
 from exit_payout import LIGHT, SYSTEM, VERIFIER, ATA, MINT, PREFIX, TOKEN, marker, pda, signature
 from exit_setup import FEE_PAYER, MAINNET_PAYER, VAULT
