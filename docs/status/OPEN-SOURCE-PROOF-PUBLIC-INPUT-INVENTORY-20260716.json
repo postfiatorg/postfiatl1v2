@@ -43,7 +43,7 @@
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/monero_reserve.rs": "fcb8564adf3d9e61e3b1f4a0d7d3d15015d71f78d8a0782e6da5007b6a2fe777",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/b23_nav.rs": "e13e732a764ff4b149cfd96ab4414bd8fb56791d9aac169f339b30b562b26193",
     "tools/nav-reserve-proof/fuzz/Cargo.toml": "db1cdb4c1492532649c69f7f3634aa80e3991797d1873ee16baac7ce7977218e",
-    "tools/nav-reserve-proof/fuzz/Cargo.lock": "bfc2d34bb3450058dc005c1076876115133353f0c05525e4f6c77025cbbb25e2",
+    "tools/nav-reserve-proof/fuzz/Cargo.lock": "8ea701b94d00e7c6d2925778c68737ae7885fb63cb70711f7f53f0e56805ec83",
     "tools/nav-reserve-proof/fuzz/README.md": "c275abec755ed49e92eb67a2d866ebdbc728d580c50e53164abf5d2240c04181",
     "tools/nav-reserve-proof/fuzz/fuzz_targets/source_evidence_json.rs": "dbc80377e6ae9d85b0efc54ed60b765833284baed64859ed0cb952d07b5b082c",
     "tools/nav-reserve-proof/fuzz/fuzz_targets/witness_json.rs": "519265e532cbbae90f335bbae69faf275485654d5586bc0bf1271489d80b7eb0",
@@ -119,7 +119,7 @@
     "crates/types/src/market_nav_asset_types.rs": "917098c84d4cbc318555db8841b5618e191f537554498e39e43c5bbf9daa985f",
     "crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol": "0ccced8deed6a10d1ec631c7b78cfa14dcf5b5490cf50a9ca4bfcd1cdc6aa08a",
     "crates/execution/src/vault_bridge_profile_resolution.rs": "8ffdb016183c6afce588c08625b00071bab0c231506d1065787a963c9962ae16",
-    "crates/node/src/execution_actions.rs": "8fc0420e3650d218c115aec04ef54cfafb832d4b6589d2e7d0bf94659d461956"
+    "crates/node/src/execution_actions.rs": "b1abf649b56ac5b2f7dab3822bfb374c1ae0ffa2c50ee9144e22e4130b135e5a"
   },
   "systems": [
     {
@@ -1641,6 +1641,15 @@
       "tools/nav-reserve-proof/programs/b23-nav-guest/Cargo.lock": "Newly pinned. Guest lock file.",
       "tools/nav-reserve-proof/crates/b23-nav-cli/src/main.rs": "Newly pinned. Native run, profile and public-value decoding commands.",
       "tools/nav-reserve-proof/crates/b23-nav-cli/src/sp1.rs": "Newly pinned. SP1 identity, execute, prove and verify commands."
+    }
+  },
+  "solana_join_source_refresh": {
+    "date": "2026-11-23",
+    "branch": "fix/main-checks-20261123",
+    "scope": "Pins of the sources that still differ from main after main re-pinned the Solana route and withdrawal sources itself: the formatting and clippy repair of execution_actions.rs and the fuzz lock-file repair. No ELF was rebuilt.",
+    "sources": {
+      "crates/node/src/execution_actions.rs": "Re-pinned. Main's source with cargo fmt applied and the one unwrap clippy rejects replaced by the Solana pins already bound in the branch; no rule changes.",
+      "tools/nav-reserve-proof/fuzz/Cargo.lock": "Re-pinned. Only change: solana-epoch-schedule 3.4.0 and solana-sdk-macro 3.0.1, which crates/types now needs, are added."
     }
   }
 }

@@ -56,7 +56,8 @@ fn sha256_file(path: &Path) -> String {
 }
 
 /// The default (single-user) units, byte for byte as before the two-user
-/// shape existed: the digests were measured on `5a69b481a`.
+/// shape existed: the digests were measured on `5a69b481a`, the RPC unit's
+/// again after `d71524e4b` added `--finality-vote-phase-deadline-ms 20000`.
 #[test]
 fn default_stage_writes_the_single_user_units_unchanged() {
     let root = unique_test_dir("postfiat-two-user-default");
@@ -72,7 +73,7 @@ fn default_stage_writes_the_single_user_units_unchanged() {
     assert_eq!(
         digests,
         [
-            "84a1b103f7d3ebd5278a23d0d53c9f66c8fafb7d8e10c520f938020061e95680",
+            "8c013d1d7c6933ab455007eff721016488566641cd8b16a63e9142598a656859",
             "3f010ff03c5430bff047d0e443ab00ec9991480d57af9ac2fa81066c14b32698",
             "2e3fadc4599e64dc560f61c166eafd8d7d1ffe0d862a9ccc7e44a669e999e391",
             "c7c02c1bfe86ca1f76d893820f7c0db0a11079664d56907ac57a5d8096f3d1d0",
