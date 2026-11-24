@@ -201,5 +201,34 @@ class SignTest(unittest.TestCase):
             rv.authorize(self.cfg, dict(self.amend(), value=0))
 
 
+class ConstantsAndClearanceTest(unittest.TestCase):
+    def test_constants_equal_the_service_constants(self):
+        import exit_payout
+        import exit_setup
+
+        self.assertEqual((rv.VERIFIER, rv.VAULT, rv.MINT, rv.ASSET, rv.SERIES, rv.BUCKET),
+                         (exit_setup.VERIFIER, exit_setup.VAULT, exit_setup.MINT, exit_setup.ASSET,
+                          exit_setup.SERIES, exit_setup.BUCKET))
+        self.assertEqual((rv.PREFIX, str(rv.LIGHT), str(rv.marker(BURN))),
+                         (exit_payout.PREFIX, str(exit_setup.LIGHT), str(exit_payout.marker(BURN))))
+
+    def test_clearance_reads_this_hosts_own_signing_history(self):
+        class Head(Node):
+            def __call__(self, method, **params):
+                return dict(block_height=1900, block_tip_hash="ab" * 48, build_git_revision="rev")
+
+        with tempfile.TemporaryDirectory() as d:
+            safety = Path(d) / "consensus-v2-safety"
+            safety.mkdir()
+            (safety / "height-1899.json").write_text("{}")
+            cfg = rv.Config(validator="validator-3", node=Head(), solana=Solana(), review_dir=Path(d) / "r",
+                            key=b"k" * 32)
+            body = rv.review_clearance(cfg, data_dir=d)
+            self.assertTrue(body["decision"].startswith("solana_exit_rotation_clearance:validator-3:1900:"))
+            (safety / "height-1950.json").write_text("{}")
+            with self.assertRaisesRegex(rv.Refused, "uncommitted round"):
+                rv.review_clearance(cfg, data_dir=d)
+
+
 if __name__ == "__main__":
     unittest.main()
