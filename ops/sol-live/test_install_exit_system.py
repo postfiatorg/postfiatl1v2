@@ -519,7 +519,9 @@ class EndToEnd:
         return subprocess.run(command, capture_output=True, text=True, env=environment, timeout=120)
 
     def live(self):
-        return (self.root / "opt/sol-exit/revision").read_text().strip()
+        """The revision of the live tree; its link names the path inside the sandbox."""
+        target = os.readlink(self.root / "opt/sol-exit")
+        return (self.root / "opt" / Path(target).relative_to("/opt/postfiat") / "revision").read_text().strip()
 
     def unit_text(self, unit=UNITS[0]):
         return (self.root / "units" / unit).read_text()
@@ -529,9 +531,13 @@ class EndToEnd:
         return sorted(p.name for p in control.iterdir() if p.is_symlink()) if control.exists() else []
 
     def enabled(self, unit=UNITS[0]):
-        r = subprocess.run([str(self.bin / "systemctl"), "is-enabled", unit], capture_output=True, text=True,
-                           env=dict(os.environ, SYSD=str(self.sysd)), cwd=self.root)
-        return r.stdout.strip()
+        """What the fake systemctl's is-enabled says, read from this root's files."""
+        mask = self.root / "run/systemd/system.control" / unit
+        if mask.is_symlink() and os.readlink(mask) == "/dev/null":
+            return "masked-runtime"
+        if (self.sysd / f"enabled-{unit}").exists():
+            return "enabled"
+        return "disabled" if (self.root / "units" / unit).exists() else "not-found"
 
 
 @unittest.skipUnless(subprocess.run(["bwrap", "--unshare-user", "--uid", "0", "--dev-bind", "/", "/", "true"],
@@ -618,7 +624,7 @@ class EndToEndTests(unittest.TestCase):
                 self.assertEqual(root.live(), REV_A, step)
                 for unit in UNITS:
                     self.assertIn(f"of {REV_A}", root.unit_text(unit), step)
-                self.assertFalse(Path(d, "opt/sol-exit.previous").exists(), step)
+                self.assertFalse(Path(d, "opt/sol-exit.previous").is_symlink(), step)
                 self.assertEqual(root.masks(), [], step)
 
     def test_a_failed_removal_of_the_private_staging_folder_is_reported(self):
