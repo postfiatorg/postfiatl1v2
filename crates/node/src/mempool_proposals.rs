@@ -3532,6 +3532,8 @@ fn build_shielded_batch_proposal_with_timings(
     timings.activation_ms = node_timing_elapsed_ms(stage_start);
 
     consensus_artifacts::check_pq_block(&genesis, &governance, block_height, [&batch])?;
+    pq_pool_state::precheck_batch(shielded.pq_pool_v1.as_ref(), &batch, block_height)
+        .map_err(|code| io::Error::new(io::ErrorKind::InvalidData, code))?;
     verify_shielded_action_batch_id(&genesis, &batch)?;
     reset_asset_orchard_private_egress_timings();
     reset_asset_orchard_private_egress_node_timings();

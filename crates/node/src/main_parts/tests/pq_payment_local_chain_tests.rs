@@ -415,11 +415,13 @@ mod pq_payment_local_chain_tests {
             )],
         )
         .unwrap();
+        // No pfUSDC tree holds the vector's root, so the pool check refuses the
+        // corrupt body before any proof work, in the proposer and in the voter.
         assert!(
             propose_batch_with_timings(proposal(proposer, &fleet.root, &bad))
                 .unwrap_err()
                 .to_string()
-                .contains("PQ L1 verification failed")
+                .contains("pq_unknown_anchor")
         );
         let mut foreign = genesis.clone();
         foreign.chain_id.push('x');
@@ -461,7 +463,7 @@ mod pq_payment_local_chain_tests {
         assert!(create_block_vote(vote.clone())
             .unwrap_err()
             .to_string()
-            .contains("PQ L1 verification failed"));
+            .contains("pq_unknown_anchor"));
         fs::remove_file(bad_opts.batch_file).unwrap();
         assert!(create_block_vote(vote).is_err());
         assert!(!vote_file.exists());

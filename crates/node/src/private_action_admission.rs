@@ -880,7 +880,15 @@ pub fn private_action_submit(
             "this canonical batch is already on chain",
         ));
     }
-    let verdict = verify_private_batch(&state, &batch);
+    // A batch that fails the pool checks is refused before its proofs are verified.
+    let verdict = match pq_pool_state::precheck_batch(
+        state.shielded.pq_pool_v1.as_ref(),
+        &batch,
+        state.tip_height.saturating_add(1),
+    ) {
+        Err(code) => Ok(Err((code.to_owned(), code.to_owned()))),
+        Ok(()) => verify_private_batch(&state, &batch),
+    };
     if reservation.is_some()
         && (!pinned_pq_view(data_dir, &state)?
             || read_chain_tip_or_reconstruct_for_genesis_read_only(
