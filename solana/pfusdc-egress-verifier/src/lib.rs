@@ -641,6 +641,20 @@ mod tests {
     }
 
     #[test]
+    fn the_time_limit_moves_only_with_the_light() {
+        // The anyone path reads nothing but the light's height and the burn's own block:
+        // Post Fiat blocks count once a proof has moved the light past them.
+        for burn in [1, 1848, 1_000_000] {
+            for light in [burn, burn + CANCEL_AFTER - 1] {
+                assert!(cancel_allowed(light, burn, false).is_err());
+            }
+            for light in [burn + CANCEL_AFTER, burn + 10 * CANCEL_AFTER] {
+                assert!(cancel_allowed(light, burn, false).is_ok());
+            }
+        }
+    }
+
+    #[test]
     fn marker_states_are_distinct_one_byte_values() {
         assert_eq!((PAID, CANCELLED), (1, 2));
         assert_eq!(Error::TooEarly as u32, 9);
