@@ -104,5 +104,46 @@ class IndependentSignTest(unittest.TestCase):
         self.assertFalse(govern.independent_review("exit-close", dict(release=2)))
 
 
+class ClearanceTest(unittest.TestCase):
+    def head(self):
+        return dict(block_height=1800, block_tip_hash="tip", state_root="root", build_git_revision=REV)
+
+    def run_clearance(self, answer):
+        import exit_govern
+
+        asked = []
+
+        def remote(i, args, data=None):
+            args = [str(a) for a in args]
+            if args[0] == "find":
+                return "height-1800.json\n"
+            if args[:4] == [govern.REVIEWER_PYTHON, "-I", govern.REVIEWER, "show-clearance"]:
+                asked.append(i)
+                return json.dumps(answer(i))
+            raise AssertionError(args)
+
+        with (
+            patch.object(govern, "remote", side_effect=remote),
+            patch.object(exit_govern, "require_closed"),
+            patch.object(exit_govern, "routes", return_value=[]),
+            patch.object(exit_govern, "fleet", return_value=self.head()),
+        ):
+            rows = exit_govern.rotation_clearance(self.head(), 6, rules=dict(release=2))
+        return asked, rows
+
+    def test_second_release_clearance_comes_from_each_hosts_own_reviewer(self):
+        parent = dict(block_height=1800, block_tip_hash="tip", state_root="root")
+        asked, rows = self.run_clearance(lambda i: dict(
+            validator=f"validator-{i}", parent=parent, revision=REV, outstanding_signed_rotation_rounds=[]))
+        self.assertEqual(sorted(asked), list(range(6)))
+        self.assertEqual(len(rows), 6)
+
+    def test_a_clearance_for_another_parent_is_refused(self):
+        stale = dict(block_height=1799, block_tip_hash="old", state_root="root")
+        with self.assertRaisesRegex(ValueError, "rotation clearance"):
+            self.run_clearance(lambda i: dict(validator=f"validator-{i}", parent=stale, revision=REV,
+                                              outstanding_signed_rotation_rounds=[]))
+
+
 if __name__ == "__main__":
     unittest.main()
