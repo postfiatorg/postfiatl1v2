@@ -7133,12 +7133,12 @@ fn validate_vault_bridge_status_redemption_row(
     clean_string_field_allow_empty(row, "reserve_packet_hash")?;
     clean_string_field_allow_empty(row, "destination_ref")?;
     u64_field(row, "settled_atoms")?;
-    // A Solana refund is a second-release state: before that release a node cannot report it.
+    // "refunded" is a known state (second release); a client built without the height still
+    // reads the reply. A refunded row never claims a settled amount.
     if clean_string_field(row, "state")? == postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED
-        && (!postfiat_types::solana_exit::second_release_scheduled()
-            || row.get("settled_atoms").and_then(Value::as_u64) != Some(0))
+        && row.get("settled_atoms").and_then(Value::as_u64) != Some(0)
     {
-        return Err(invalid_result("state", "refunded redemption before the second Solana exit release"));
+        return Err(invalid_result("state", "refunded redemption with a settled amount"));
     }
     u64_field(row, "created_at_height")?;
     clean_string_field_allow_empty(row, "settlement_receipt_hash")?;

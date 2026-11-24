@@ -1778,13 +1778,28 @@ fn validate_vault_bridge_redemption_state(state: &str) -> Result<(), String> {
     validate_text_field("vault_bridge_redemption.state", state)?;
     match state {
         VAULT_BRIDGE_REDEMPTION_STATE_PENDING | VAULT_BRIDGE_REDEMPTION_STATE_SETTLED => Ok(()),
-        // Reached only through a second-release Solana refund decision; refused as the first
-        // release refuses it until this build schedules the second release.
-        VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED if crate::solana_exit::second_release_scheduled() => {
-            Ok(())
-        }
         _ => Err("vault_bridge_redemption.state must be pending or settled".to_string()),
     }
+}
+
+/// A redemption state on `chain`: "refunded" (with nothing settled) exists only where this
+/// build schedules the second release on that chain; everything else is main's check.
+fn validate_redemption_state_for_chain(
+    state: &str,
+    settled_atoms: u64,
+    chain: &str,
+) -> Result<(), String> {
+    if state == VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED
+        && crate::solana_exit::second_release_scheduled_on(chain)
+    {
+        if settled_atoms != 0 {
+            return Err(
+                "vault_bridge_redemption refunded state requires settled_atoms == 0".to_string(),
+            );
+        }
+        return Ok(());
+    }
+    validate_vault_bridge_redemption_state(state)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

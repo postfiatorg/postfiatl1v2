@@ -3212,6 +3212,11 @@ impl VaultBridgeRedemption {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_in(None)
+    }
+
+    /// `chain`: where the record lives; only there can a second-release state be valid.
+    fn validate_in(&self, chain: Option<&str>) -> Result<(), String> {
         validate_lower_hex_len(
             "vault_bridge_redemption.redemption_id",
             &self.redemption_id,
@@ -3250,9 +3255,11 @@ impl VaultBridgeRedemption {
         if self.settled_atoms > self.amount_atoms {
             return Err("vault_bridge_redemption.settled_atoms exceeds amount_atoms".to_string());
         }
-        validate_vault_bridge_redemption_state(&self.state)?;
-        if self.state == VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED && self.settled_atoms != 0 {
-            return Err("vault_bridge_redemption refunded state requires settled_atoms == 0".to_string());
+        match chain {
+            Some(chain) => {
+                validate_redemption_state_for_chain(&self.state, self.settled_atoms, chain)?
+            }
+            None => validate_vault_bridge_redemption_state(&self.state)?,
         }
         if self.state == VAULT_BRIDGE_REDEMPTION_STATE_SETTLED
             && self.settled_atoms != self.amount_atoms
@@ -3351,7 +3358,7 @@ impl VaultBridgeRedemption {
     }
 
     pub fn validate_for_chain(&self, chain_id: &str) -> Result<(), String> {
-        self.validate()?;
+        self.validate_in(Some(chain_id))?;
         let expected =
             vault_bridge_redemption_id(chain_id, &self.owner, &self.asset_id, self.owner_sequence)?;
         if self.redemption_id != expected {
