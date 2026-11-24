@@ -5960,6 +5960,75 @@ mod oversized_reply_tests {
         assert!(second_event.ok);
     }
 
+    fn connected_pair() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let client = TcpStream::connect(listener.local_addr().expect("addr")).expect("connect");
+        client
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .expect("client read timeout");
+        let (server, _) = listener.accept().expect("accept");
+        (client, server)
+    }
+
+    /// An id longer than the bound is refused when the request is parsed,
+    /// under a placeholder id, so the error reply always fits the frame; an
+    /// id at the bound is answered under its own id.
+    #[test]
+    fn a_request_id_over_the_bound_is_answered_under_a_placeholder_id() {
+        let (mut client, server) = connected_pair();
+        let long = "i".repeat(5_000_000);
+        let at_bound = "b".repeat(256);
+        for id in [long.as_str(), at_bound.as_str()] {
+            write_json_line(&mut client, &RpcRequest::empty(id, "status")).expect("send request");
+        }
+        let mut context = child_dispatch_limit_tests::child_dispatch_test_context(8, 8);
+        cache_status(&context, status_with_revision("test-revision".to_string()));
+        let mut reader = BufReader::new(RpcServeDeadlineStream::new(server, 10_000));
+        let first_event = handle_rpc_serve_connection(&mut reader, 1, &mut context);
+        let second_event = handle_rpc_serve_connection(&mut reader, 2, &mut context);
+
+        let mut client_reader = BufReader::new(client);
+        let first: RpcResponse =
+            serde_json::from_str(&read_transport_line_from(&mut client_reader)).expect("reply json");
+        assert_eq!(first.id, "remote-1");
+        let error = first.error.expect("error");
+        assert_eq!(error.code, "rpc_protocol_error");
+        assert!(error.message.contains("256"), "{}", error.message);
+        assert_eq!(first_event.error_code.as_deref(), Some("rpc_protocol_error"));
+        let second: RpcResponse =
+            serde_json::from_str(&read_transport_line_from(&mut client_reader)).expect("reply json");
+        assert_eq!(second.id, at_bound);
+        assert!(second.ok, "{:?}", second.error);
+        assert!(second_event.ok);
+    }
+
+    /// A reply that cannot be written ends the connection: the event says so
+    /// and the server stops reading from it, so no later reply follows a
+    /// partial line.
+    #[test]
+    fn a_reply_write_that_fails_closes_the_connection() {
+        let (mut client, server) = connected_pair();
+        for id in ["first", "second"] {
+            write_json_line(&mut client, &RpcRequest::empty(id, "status")).expect("send request");
+        }
+        server
+            .shutdown(std::net::Shutdown::Write)
+            .expect("shut the write side");
+        server
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("server read timeout");
+        let mut context = child_dispatch_limit_tests::child_dispatch_test_context(8, 8);
+        cache_status(&context, status_with_revision("test-revision".to_string()));
+        let mut reader = BufReader::new(RpcServeDeadlineStream::new(server, 10_000));
+        let event = handle_rpc_serve_connection(&mut reader, 1, &mut context);
+        assert_eq!(event.error_code.as_deref(), Some("rpc_write_error"));
+        // The read side is shut too: a read ends at once instead of waiting for
+        // the client, which still holds the connection open.
+        let mut byte = [0_u8; 1];
+        let read = reader.get_mut().tcp_stream_mut().read(&mut byte);
+        assert!(matches!(read, Ok(0)), "{read:?}");
+    }
+
     fn read_transport_line_from(reader: &mut BufReader<TcpStream>) -> String {
         let mut line = String::new();
         reader.read_line(&mut line).expect("read reply");
