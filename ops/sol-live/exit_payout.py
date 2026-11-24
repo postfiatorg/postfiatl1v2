@@ -52,7 +52,8 @@ from exit_segments import (
     committee,
 )
 from exit_precheck import inspect_vault, recipient_atoms, parent_of, qualify_path
-from exit_proof import available, prove
+from concurrent.futures import ThreadPoolExecutor
+from exit_proof import available, prove, public_values
 
 ATA = pk("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
 PREFIX = "solana-spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:"
@@ -641,13 +642,20 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
         recipient_atoms(ata, c.account(ata), owner)
     reclaim_completed(c, work)
     check_work_capacity(work)
-    vals, proof = prove(kind, witness, work)
-    require(0 < len(vals) <= 2048 and len(proof) == 356, "Invalid proof size.")
+    # The public values are known at once, so their upload (four finalized Solana
+    # transactions) runs while the GPU proves instead of after it.
+    vals = public_values(kind, witness, work)
+    require(0 < len(vals) <= 2048, "Invalid proof size.")
+    balance(c)
+    with ThreadPoolExecutor(1) as pool:
+        uploading = pool.submit(upload, c, vals, work)
+        proved, proof = prove(kind, witness, work)
+        signer = uploading.result()
+    require(proved == vals and len(proof) == 356, "Invalid proof size.")
     balance(c)
     check_custody(c)
     if on_pay:
         on_pay()
-    signer = upload(c, vals, work)
     buf = signer.pubkey()
     prior = checkpoint_pda(witness["prior_checkpoint_block_id"])
     result = checkpoint_pda(witness["block"]["header"]["block_hash"])
@@ -729,7 +737,48 @@ def compatible_prior(headers, states):
     raise ValueError("No compatible checkpoint precedes this burn.")
 
 
-def egress_witness(c, red, prior, h, work):
+class BlockReads:
+    """Read each finalized block once per payout. One read costs the node seconds."""
+
+    def __init__(self):
+        self.blocks = {}
+
+    def __call__(self, i, method, **params):
+        if method != "blocks":
+            return rpc(i, method, **params)
+        want = range(params["from_height"], params["from_height"] + params["limit"])
+        if not all(n in self.blocks for n in want):
+            for block in rpc(i, method, **params):
+                self.blocks[block["header"]["height"]] = block
+        return [self.blocks[n] for n in want if n in self.blocks]
+
+
+def prior_before(c, h, fetch):
+    """Find the nearest earlier checkpoint, walking back from the burn a page at a time."""
+    start = max(1, h - 65)
+    headers, low = [], h + 1
+    while low > start:
+        page_start = max(start, low - 8)
+        page = fetch(0, "blocks", from_height=page_start, limit=low - page_start)
+        headers, low = [b["header"] for b in page] + headers, page_start
+        require(
+            headers and headers[0]["height"] == low and headers[-1]["height"] == h,
+            "Missing historical headers.",
+        )
+        states = c.call(
+            "getMultipleAccounts",
+            [str(checkpoint_pda(v["block_hash"])) for v in headers[:-1]],
+            dict(c.level, encoding="base64"),
+        )["value"]
+        try:
+            return compatible_prior(headers, states)
+        except ValueError:
+            if low == start:
+                raise
+    raise ValueError("No compatible checkpoint precedes this burn.")
+
+
+def egress_witness(c, red, prior, h, work, fetch=None):
     """Assemble the withdrawal witness from replies that fit the node's 4 MB frame.
 
     The node sends nothing when a reply exceeds its frame limit, and one block of
@@ -737,7 +786,8 @@ def egress_witness(c, red, prior, h, work):
     rebuild the ancestry from the prior checkpoint in eight-block pages. The result
     equals the node's own single reply. The frozen guest runs on it before proving.
     """
-    target = rpc(0, "blocks", from_height=h, limit=1)[0]["header"]
+    fetch = fetch or BlockReads()
+    target = fetch(0, "blocks", from_height=h, limit=1)[0]["header"]
     require(target["height"] == h, "Unexpected burn height.")
     parent = target["parent_hash"]
     w = rpc(
@@ -754,19 +804,22 @@ def egress_witness(c, red, prior, h, work):
     )
     if prior == parent:
         return w
+    # Walk back from the burn and stop at the prior checkpoint, usually a few blocks away.
     start = max(1, h - 65)
-    blocks = []
-    for first in range(start, h, 8):
-        count = min(8, h - first)
-        page = rpc(0, "blocks", from_height=first, limit=count)
+    blocks, low, first = [], h, None
+    while first is None and low > start:
+        page_start = max(start, low - 8)
+        page = fetch(0, "blocks", from_height=page_start, limit=low - page_start)
         require(
-            len(page) == count and page[0]["header"]["height"] == first,
+            len(page) == low - page_start
+            and page[0]["header"]["height"] == page_start,
             "Incomplete ancestry page.",
         )
-        blocks.extend(page)
-    first = next(
-        (i for i, b in enumerate(blocks) if b["header"]["parent_hash"] == prior), None
-    )
+        blocks, low = page + blocks, page_start
+        first = next(
+            (i for i, b in enumerate(blocks) if b["header"]["parent_hash"] == prior),
+            None,
+        )
     require(first is not None, "Prior checkpoint outside the guest ancestry bound.")
     blocks = blocks[first:]
     last = blocks[-1]["header"]
@@ -781,7 +834,7 @@ def egress_witness(c, red, prior, h, work):
     if members is None:
         members = [dict(row, active=True) for row in rpc(0, "validators")["validators"]]
     segment = public_checkpoint(
-        rpc, blocks[0]["header"]["height"] - 1, prior, last, members, read(CONFIG)
+        fetch, blocks[0]["header"]["height"] - 1, prior, last, members, read(CONFIG)
     )
     steps = list(segment.get("finality_ancestry", []))
     steps.append(
@@ -836,22 +889,9 @@ def process(burn, work, update, *, attempt=None, before_send=None):
             )
     balance(c)
     latest, prior = light(c)
+    fetch = BlockReads()
     if latest >= h:
-        start = max(1, h - 65)
-        headers = []
-        for first in range(start, h + 1, 8):
-            page = rpc(0, "blocks", from_height=first, limit=min(8, h - first + 1))
-            headers.extend(b["header"] for b in page)
-        require(
-            headers and headers[0]["height"] == start and headers[-1]["height"] == h,
-            "Missing historical headers.",
-        )
-        states = c.call(
-            "getMultipleAccounts",
-            [str(checkpoint_pda(v["block_hash"])) for v in headers[:-1]],
-            dict(c.level, encoding="base64"),
-        )["value"]
-        prior = compatible_prior(headers, states)
+        prior = prior_before(c, h, fetch)
     update("proving")
     require(
         work.exists()
@@ -903,7 +943,7 @@ def process(burn, work, update, *, attempt=None, before_send=None):
         )
         prune_work(c, work)
         raise CheckpointAdvanced()
-    w = egress_witness(c, red, prior, h, work)
+    w = egress_witness(c, red, prior, h, work, fetch)
     require(
         w["receipt"]["tx_id"] == burn
         and w["receipt"]["accepted"]
@@ -911,7 +951,7 @@ def process(burn, work, update, *, attempt=None, before_send=None):
         and w["withdrawal_packet"]["source_bucket_id"] == BUCKET,
         "Witness does not match this burn.",
     )
-    target = rpc(0, "blocks", from_height=h, limit=1)[0]["header"]
+    target = fetch(0, "blocks", from_height=h, limit=1)[0]["header"]
     require(target["height"] == h, "Unexpected burn height.")
     verify_endpoints(c, w, prior, target)
     sig = signature(c, burn)

@@ -79,7 +79,8 @@ def remote_proof(kind, data):
     return [base64.b64decode(line, validate=True) for line in lines]
 
 
-def prove(kind, witness, directory):
+def check_witness(kind, witness, directory):
+    """Run the frozen verifier locally. Returns the work folder, the bytes sent and the public values."""
     if kind not in ("checkpoint", "withdrawal"):
         raise ValueError("unknown proof kind")
     verify_local_host()
@@ -101,7 +102,16 @@ def prove(kind, witness, directory):
         ],
         120,
     )
-    native = (work / "native-public-values.bin").read_bytes()
+    return work, data, (work / "native-public-values.bin").read_bytes()
+
+
+def public_values(kind, witness, directory):
+    """The proof's public values are known in a second, long before the proof."""
+    return check_witness(kind, witness, directory)[2]
+
+
+def prove(kind, witness, directory):
+    work, data, native = check_witness(kind, witness, directory)
     proof = work / "proof-calldata.bin"
     if (
         not proof.exists()
