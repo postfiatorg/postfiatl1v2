@@ -79,8 +79,9 @@ def retrying():
 
 
 ACTIVATED = "vault bridge route profile activated"
-# Blocks read per request while scanning for a successor revision.
-BLOCK_PAGE = 256
+# Blocks read per request while scanning for a successor revision. A withdrawal-era block can
+# be large, and a reply over the node's 4 MB frame limit cannot be sent: 256 blocks did not fit.
+BLOCK_PAGE = 8
 
 
 def accepted_activation(tx_id):

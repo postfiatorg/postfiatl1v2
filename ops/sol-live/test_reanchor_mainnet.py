@@ -752,6 +752,27 @@ class ReanchorTest(unittest.TestCase):
         self.assertEqual(self.governed, [])
         self.assertEqual(live.read(self.base / "activation.json")["tx_id"], "T6")
 
+    def test_the_chain_is_read_eight_blocks_at_a_time(self):
+        # 256 blocks per read no longer fit the node's 4 MB reply limit; the live checkout reads 8.
+        committed = route_profile(6, EPOCH + 1, NEXT + 1500, 1790)
+        for n in range(20):
+            self.blocks[1710 + n] = {"height": 1710 + n, "batch_kind": "transparent", "batch_id": f"B{n}"}
+        self.commit("T6", 1801, committed)
+        limits = []
+        chain_rpc = self.rm.rpc
+
+        def counting_rpc(i, method, **params):
+            if method == "blocks":
+                limits.append(params["limit"])
+            return chain_rpc(i, method, **params)
+
+        self.rm.rpc = counting_rpc
+        self.rm.main()
+        self.assertEqual(self.rm.BLOCK_PAGE, 8)
+        self.assertEqual(set(limits), {8})
+        self.assertEqual(len(limits), 3)  # 8 + 8 + 5 blocks: the activation is on the third page
+        self.assertEqual(live.read(self.base / "activation.json")["tx_id"], "T6")
+
     def test_gate_holds_while_a_deposit_is_retrying(self):
         # The relay is retrying D; the public RPC no longer lists it, so only its record shows it.
         live.save(self.base / "retrying" / "D.json", {"signature": "D", "slot": OLD_ANCHOR + 100, "error": "x"})
