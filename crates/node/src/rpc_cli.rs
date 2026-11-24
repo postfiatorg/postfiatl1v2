@@ -872,8 +872,28 @@ fn handle_rpc_serve_connection(
                 "rpc_read_error"
             };
             let response = rpc_serve_error_response(&id, error_code, &error);
-            let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
-            return rpc_serve_event(
+            let written = send_rpc_serve_reply(reader, &response);
+            return with_write_outcome(
+                rpc_serve_event(
+                    &context.node_id,
+                    request_index,
+                    &context.peer_addr,
+                    id,
+                    "invalid",
+                    None,
+                    None,
+                    &response,
+                ),
+                written,
+            );
+        }
+    };
+    if let Err(error) = validate_rpc_serve_request_line(&line) {
+        let id = format!("remote-{request_index}");
+        let response = rpc_serve_error_response(&id, "rpc_request_too_large", &error);
+        let written = send_rpc_serve_reply(reader, &response);
+        return with_write_outcome(
+            rpc_serve_event(
                 &context.node_id,
                 request_index,
                 &context.peer_addr,
@@ -882,22 +902,8 @@ fn handle_rpc_serve_connection(
                 None,
                 None,
                 &response,
-            );
-        }
-    };
-    if let Err(error) = validate_rpc_serve_request_line(&line) {
-        let id = format!("remote-{request_index}");
-        let response = rpc_serve_error_response(&id, "rpc_request_too_large", &error);
-        let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
-        return rpc_serve_event(
-            &context.node_id,
-            request_index,
-            &context.peer_addr,
-            id,
-            "invalid",
-            None,
-            None,
-            &response,
+            ),
+            written,
         );
     }
 
@@ -910,16 +916,19 @@ fn handle_rpc_serve_connection(
                 "rpc_parse_error",
                 &format!("rpc request parse failed: {error}"),
             );
-            let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
-            return rpc_serve_event(
-                &context.node_id,
-                request_index,
-                &context.peer_addr,
-                id,
-                "invalid",
-                None,
-                None,
-                &response,
+            let written = send_rpc_serve_reply(reader, &response);
+            return with_write_outcome(
+                rpc_serve_event(
+                    &context.node_id,
+                    request_index,
+                    &context.peer_addr,
+                    id,
+                    "invalid",
+                    None,
+                    None,
+                    &response,
+                ),
+                written,
             );
         }
     };
@@ -936,16 +945,19 @@ fn handle_rpc_serve_connection(
                 request.id.len()
             ),
         );
-        let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
-        return rpc_serve_event(
-            &context.node_id,
-            request_index,
-            &context.peer_addr,
-            id,
-            "invalid",
-            None,
-            None,
-            &response,
+        let written = send_rpc_serve_reply(reader, &response);
+        return with_write_outcome(
+            rpc_serve_event(
+                &context.node_id,
+                request_index,
+                &context.peer_addr,
+                id,
+                "invalid",
+                None,
+                None,
+                &response,
+            ),
+            written,
         );
     }
     let id = request.id.clone();
@@ -1918,7 +1930,14 @@ fn handle_rpc_serve_connection(
             merge_rpc_serve_runtime_metrics(result, context.runtime_metrics.snapshot());
         }
     }
-    let response = write_rpc_serve_response(reader.get_mut().tcp_stream_mut(), response);
+    let (response, written) =
+        write_rpc_serve_response(reader.get_mut().tcp_stream_mut(), response);
+    if !written {
+        let _ = reader
+            .get_mut()
+            .tcp_stream_mut()
+            .shutdown(std::net::Shutdown::Both);
+    }
     let mut event = rpc_serve_event(
         &context.node_id,
         request_index,
@@ -1939,20 +1958,62 @@ fn handle_rpc_serve_connection(
         "isolated_or_specialized".to_string()
     });
     event.handler_ms = Some(monotonic_elapsed_ms(handler_started));
+    with_write_outcome(event, written)
+}
+
+/// Writes one reply line in a single write. On failure the connection is shut
+/// in both directions, so no later reply can follow a partial line.
+fn send_rpc_serve_reply(
+    reader: &mut BufReader<RpcServeDeadlineStream>,
+    response: &RpcResponse,
+) -> bool {
+    let stream = reader.get_mut().tcp_stream_mut();
+    let written = write_rpc_serve_line(stream, response);
+    if !written {
+        let _ = stream.shutdown(std::net::Shutdown::Both);
+    }
+    written
+}
+
+fn write_rpc_serve_line<W: Write>(stream: &mut W, response: &RpcResponse) -> bool {
+    match serde_json::to_vec(response) {
+        Ok(mut line) if line.len() as u64 <= MAX_TRANSPORT_FRAME_BYTES => {
+            line.push(b'\n');
+            stream.write_all(&line).and_then(|_| stream.flush()).is_ok()
+        }
+        _ => false,
+    }
+}
+
+/// A reply that was not written whole is recorded as `rpc_write_error`, which
+/// ends the connection.
+fn with_write_outcome(mut event: RpcServeEventRecord, written: bool) -> RpcServeEventRecord {
+    if !written {
+        event.ok = false;
+        event.error_code = Some("rpc_write_error".to_string());
+    }
     event
+}
+
+/// After a failed read, a failed write or a handler panic the connection is
+/// closed rather than kept for the next request.
+fn rpc_serve_connection_must_close(event: &RpcServeEventRecord) -> bool {
+    matches!(
+        event.error_code.as_deref(),
+        Some("rpc_read_error" | "rpc_write_error" | "rpc_worker_panic")
+    )
 }
 
 /// Writes the reply. One larger than the frame limit is answered with
 /// `rpc_response_too_large` instead, naming the limit and the reply's size,
 /// so the caller reads an error rather than waiting for its idle timeout and
-/// the connection stays usable. Returns the response sent.
-fn write_rpc_serve_response(stream: &mut TcpStream, response: RpcResponse) -> RpcResponse {
+/// the connection stays usable. Returns the response and whether its whole
+/// line was written.
+fn write_rpc_serve_response<W: Write>(stream: &mut W, response: RpcResponse) -> (RpcResponse, bool) {
     let size = match serde_json::to_vec(&response) {
         Ok(json) if json.len() as u64 <= MAX_TRANSPORT_FRAME_BYTES => {
-            let _ = stream
-                .write_all(&json)
-                .and_then(|_| stream.write_all(b"\n"));
-            return response;
+            let written = write_rpc_serve_line(stream, &response);
+            return (response, written);
         }
         Ok(json) => json.len(),
         Err(error) => {
@@ -1961,8 +2022,8 @@ fn write_rpc_serve_response(stream: &mut TcpStream, response: RpcResponse) -> Rp
                 "rpc_internal",
                 &format!("rpc response serialization failed: {error}"),
             );
-            let _ = write_json_line(stream, &response);
-            return response;
+            let written = write_rpc_serve_line(stream, &response);
+            return (response, written);
         }
     };
     let response = rpc_serve_error_response(
@@ -1972,8 +2033,8 @@ fn write_rpc_serve_response(stream: &mut TcpStream, response: RpcResponse) -> Rp
             "rpc response of {size} bytes exceeds the {MAX_TRANSPORT_FRAME_BYTES}-byte frame limit; request less data"
         ),
     );
-    let _ = write_json_line(stream, &response);
-    response
+    let written = write_rpc_serve_line(stream, &response);
+    (response, written)
 }
 
 fn merge_rpc_serve_runtime_metrics(
@@ -5999,7 +6060,7 @@ mod oversized_reply_tests {
     /// id at the bound is answered under its own id.
     #[test]
     fn a_request_id_over_the_bound_is_answered_under_a_placeholder_id() {
-        let (mut client, server) = connected_pair();
+        let (client, server) = connected_pair();
         let long = "i".repeat(5_000_000);
         let at_bound = at_bound_for_writer();
         // Requests may be up to MAX_RPC_REQUEST_BYTES, larger than a reply frame,
@@ -6033,6 +6094,44 @@ mod oversized_reply_tests {
         assert_eq!(second.id, at_bound);
         assert!(second.ok, "{:?}", second.error);
         assert!(second_event.ok);
+    }
+
+    /// A writer that takes a few bytes and then fails, as a socket does when
+    /// the peer goes away half way through a reply.
+    struct FailsHalfWay(usize);
+
+    impl Write for FailsHalfWay {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if self.0 == 0 {
+                return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "peer gone"));
+            }
+            let taken = buf.len().min(self.0);
+            self.0 -= taken;
+            Ok(taken)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_write_that_fails_half_way_is_reported_and_closes_the_connection() {
+        let response = rpc_serve_error_response("half", "rpc_internal", "x");
+        let (_, written) = write_rpc_serve_response(&mut FailsHalfWay(10), response.clone());
+        assert!(!written);
+        let (_, written) = write_rpc_serve_response(&mut Vec::new(), response.clone());
+        assert!(written);
+        let event = |code: &str| {
+            let response = rpc_serve_error_response("e", code, "x");
+            rpc_serve_event("n", 1, "p", "e".to_string(), "status", None, None, &response)
+        };
+        for code in ["rpc_read_error", "rpc_worker_panic"] {
+            assert!(rpc_serve_connection_must_close(&event(code)), "{code}");
+        }
+        assert!(rpc_serve_connection_must_close(&with_write_outcome(event("rpc_internal"), false)));
+        assert!(!rpc_serve_connection_must_close(&with_write_outcome(event("rpc_internal"), true)));
+        assert!(!rpc_serve_connection_must_close(&event("rpc_response_too_large")));
     }
 
     fn at_bound_for_writer() -> String {
