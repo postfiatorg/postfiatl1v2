@@ -91,6 +91,25 @@ pub struct Light {
     pub paused: bool,
 }
 
+/// Preimage of a light's route: the exit descriptor (fields 6, 7), the family (23), the
+/// first release's source bucket (26), the chain tag (32) and the vault and token code
+/// hashes (34, 36). The vault and mint aliases (33, 35) are the light's own.
+#[derive(BorshSerialize, BorshDeserialize)]
+pub struct RouteFields {
+    pub exit_profile: [u8; 48],
+    pub exit_epoch: [u8; 8],
+    pub family: [u8; 48],
+    pub bucket: [u8; 48],
+    pub chain_tag: [u8; 8],
+    pub vault_code: [u8; 32],
+    pub token_code: [u8; 32],
+}
+
+/// The custody route that replaces a light's one-bucket route.
+pub fn migrated_route(_light: &Light, _fields: &RouteFields) -> Result<[u8; 32], ProgramError> {
+    Err(Error::Binding.into())
+}
+
 fn pda(id: &Pubkey, account: &AccountInfo, seeds: &[&[u8]]) -> Result<u8, ProgramError> {
     let (key, bump) = Pubkey::find_program_address(seeds, id);
     if account.key != &key {
@@ -433,5 +452,65 @@ pub fn process_instruction(id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -
             groth16::verify(&buffer.try_borrow_data()?, args)
         }
         _ => Err(Error::Encoding.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unhex<const N: usize>(text: &str) -> [u8; N] {
+        hex::decode(text).unwrap().try_into().unwrap()
+    }
+
+    /// The mainnet light (FQe34dCQg9m6yEW6NjbjoR8LfWwKGLX2hBvTdY2Lu6s1) as read at slot
+    /// 473290673: bound to the revision-8 bucket, checkpoint at Post Fiat block 1851.
+    fn mainnet_light() -> Light {
+        Light::try_from_slice(&hex::decode(include_str!("../tests/mainnet-light.hex").trim()).unwrap())
+            .unwrap()
+    }
+
+    fn mainnet_fields() -> RouteFields {
+        let vector = include_str!("../tests/route-vector.txt");
+        let value = |key: &str| {
+            vector
+                .lines()
+                .find_map(|l| l.strip_prefix(key).and_then(|v| v.strip_prefix('=')))
+                .unwrap()
+        };
+        RouteFields {
+            exit_profile: unhex(value("f6")),
+            exit_epoch: unhex(value("f7")),
+            family: unhex(value("f23")),
+            // The first release's revision-8 bucket (postfiat_types::solana_exit::BUCKET).
+            bucket: unhex("4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc"),
+            chain_tag: unhex(value("f32")),
+            vault_code: unhex(value("f34")),
+            token_code: unhex(value("f36")),
+        }
+    }
+
+    #[test]
+    fn mainnet_light_migrates_to_the_custody_route_and_keeps_everything_else() {
+        let light = mainnet_light();
+        assert_eq!(light.height, 1851);
+        let route = migrated_route(&light, &mainnet_fields()).unwrap();
+        // The same route a fresh initialisation of this branch writes (tests/route-vector.txt).
+        assert_eq!(hex::encode(route), "02b02d4b458283c0e351a34adf9e25c896cca0cd9f2094d00a50e7f92a4d558e");
+    }
+
+    #[test]
+    fn migration_runs_once_and_only_from_the_exact_old_route() {
+        let mut light = mainnet_light();
+        light.route = migrated_route(&light, &mainnet_fields()).unwrap();
+        // A second run finds the custody route, not the one-bucket route.
+        assert!(migrated_route(&light, &mainnet_fields()).is_err());
+        let light = mainnet_light();
+        let mut other = mainnet_fields();
+        other.bucket[0] ^= 1;
+        assert!(migrated_route(&light, &other).is_err());
+        let mut other = mainnet_fields();
+        other.vault_code[0] ^= 1;
+        assert!(migrated_route(&light, &other).is_err());
     }
 }
