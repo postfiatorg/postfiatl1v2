@@ -10,7 +10,8 @@ HERE = Path(__file__).parent
 SCRIPT = HERE / "install-exit-system.sh"
 FAKES = {
     # systemctl show -p ActiveState --value -- UNIT: the state named in $STATE_<unit with _>.
-    "systemctl": 'u=${@: -1}; v=STATE_${u//[-.]/_}; echo "${!v:-inactive}"',
+    "systemctl": 'echo "systemctl $* live=$(readlink "${APP:-/none}" 2>/dev/null)" >> "$SYSTEMCTL_LOG"; '
+                 'if [[ $1 == show ]]; then u=${@: -1}; v=STATE_${u//[-.]/_}; echo "${!v:-inactive}"; fi',
     "getent": 'case "$1:$2" in passwd:"$TAKEN_UID") echo "postgres:x:$2:$2::/:/bin/false";; '
               'group:pf-sol-exit) echo "pf-sol-exit:x:$OLD_GID:";; group:"$TAKEN_GID") echo "postgres:x:$2:";; esac; exit 0',
     "id": 'echo "$OLD_UID"',
@@ -39,6 +40,8 @@ class Installer:
             (self.bin / name).chmod(0o755)
         self.log = self.root / "log"
         self.log.touch()
+        self.systemctl_log = self.root / "systemctl.log"
+        self.systemctl_log.touch()
 
     def run(self, body, **env):
         """Source the installer with its paths under the root, then run `body`."""
@@ -51,6 +54,7 @@ class Installer:
                    'install() { local skip=0 a; for a; do if ((skip)); then skip=0; continue; fi; '
                    'case $a in -o|-g|-m) skip=1;; -*) ;; *) mkdir -p -- "$a";; esac; done; }\n')
         environment = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", LOG=str(self.log),
+                           SYSTEMCTL_LOG=str(self.systemctl_log), APP=str(self.root / "opt/sol-exit"),
                            **{"OLD_UID": "999", "OLD_GID": "999", **env})
         return subprocess.run(["bash", "-c", "set -euo pipefail\n" + prelude + body],
                               capture_output=True, text=True, env=environment)
@@ -117,7 +121,8 @@ class TreeTests(unittest.TestCase):
             installer.tree(REV_A)
             # The self-test sees the staged tree without a revision and the live tree still at A.
             result = installer.run(
-                'build_tree() { :; }; self_test_tree() { [[ ! -e $1/revision && $(cat "$app/revision") == '
+                f'build_tree() {{ cp -R {bundle(d)}/runtime/. "$2/"; }}; '
+                'self_test_tree() { [[ ! -e $1/revision && $(cat "$app/revision") == '
                 f'{REV_A} ]]; }}\ninstall_tree bundle {REV_B}; cat "$app/revision"')
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.strip().splitlines()[-1], REV_B)
@@ -185,26 +190,91 @@ class DowngradeTests(unittest.TestCase):
             self.assertIn("is an ancestor of the installed", refused.stderr)
 
 
+def unit_commands(text):
+    """The shell commands of the ExecStart* lines of a drop-in, as systemd runs them."""
+    return [line.split("-c '", 1)[1].rsplit("'", 1)[0].replace("$$", "$")
+            for line in text.splitlines() if line.startswith("ExecStart")]
+
+
 class SelfTestGateTests(unittest.TestCase):
-    def test_worker_starts_only_on_the_revision_the_self_test_passed(self):
+    def test_the_pass_names_the_tested_tree_and_the_worker_starts_only_on_it(self):
         with tempfile.TemporaryDirectory() as d:
             installer = Installer(d)
             result = installer.run(f'write_gates {d}/units')
             self.assertEqual(result.returncode, 0, result.stderr)
-            gate = Path(d, "units/pft-sol-mainnet-withdraw.service.d/self-test-gate.conf").read_text()
-            record = Path(d, "units/pft-sol-exit-self-test.service.d/record-pass.conf").read_text()
-            self.assertIn("ExecStartPre=+/bin/sh -c 'test -s ", gate)
-            self.assertIn('"$$(cat ', gate)
-            self.assertIn("/sol-exit/revision)\"'", gate)
-            self.assertIn("ExecStartPost=+/bin/sh -c '", record)
-            # The shell command systemd runs, with $$ unescaped: no pass, a pass on another revision, a pass here.
-            command = gate.split("-c '", 1)[1].rsplit("'", 1)[0].replace("$$", "$")
+            gate, = unit_commands(Path(d, "units/pft-sol-mainnet-withdraw.service.d/self-test-gate.conf").read_text())
+            before, after = unit_commands(
+                Path(d, "units/pft-sol-exit-self-test.service.d/record-pass.conf").read_text())
+            sh = lambda command: subprocess.run(["sh", "-c", command]).returncode
             installer.tree(REV_B)
-            self.assertNotEqual(subprocess.run(["sh", "-c", command]).returncode, 0)
-            Path(d, "passed").write_text(REV_A + "\n")
-            self.assertNotEqual(subprocess.run(["sh", "-c", command]).returncode, 0)
-            Path(d, "passed").write_text(REV_B + "\n")
-            self.assertEqual(subprocess.run(["sh", "-c", command]).returncode, 0)
+            tested = os.path.realpath(Path(d, "opt/sol-exit"))
+            self.assertNotEqual(sh(gate), 0, "no pass yet")
+            self.assertEqual((sh(before), sh(after)), (0, 0))
+            self.assertEqual(Path(d, "passed").read_text(), f"{tested} {REV_B}\n")
+            self.assertEqual(sh(gate), 0)
+            # Another tree with the same revision is not the tree that was tested.
+            installer.tree(REV_B)
+            self.assertNotEqual(sh(gate), 0)
+            # A self-test that saw the link move while it ran records nothing.
+            self.assertEqual(sh(before), 0)
+            installer.tree(REV_C)
+            self.assertNotEqual(sh(after), 0)
+            self.assertFalse(Path(d, "passed").exists())
+
+
+class InstallOrderTests(unittest.TestCase):
+    def test_units_and_gate_are_loaded_before_the_switch(self):
+        with tempfile.TemporaryDirectory() as d:
+            installer = Installer(d)
+            installer.tree(REV_A)
+            old = os.readlink(Path(d, "opt/sol-exit"))
+            Path(d, "svc").mkdir()
+            result = installer.run(f'install_tree {bundle(d)} {REV_B}')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("from the bundle", Path(d, "units/pft-sol-mainnet-withdraw.service").read_text())
+            self.assertTrue(Path(d, "units/pft-sol-mainnet-withdraw.service.d/self-test-gate.conf").exists())
+            reloads = [line for line in installer.systemctl_log.read_text().splitlines() if "daemon-reload" in line]
+            self.assertEqual(reloads, [f"systemctl daemon-reload live={old}"], "loaded while the old tree was live")
+            self.assertNotEqual(os.readlink(Path(d, "opt/sol-exit")), old)
+
+    def test_a_unit_started_after_the_build_stops_the_switch(self):
+        with tempfile.TemporaryDirectory() as d:
+            installer = Installer(d)
+            installer.tree(REV_A)
+            old = os.readlink(Path(d, "opt/sol-exit"))
+            Path(d, "svc").mkdir()
+            result = installer.run(f'install_tree {bundle(d)} {REV_B}',
+                                   STATE_pft_sol_mainnet_withdraw_service="activating")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Stop pft-sol-mainnet-withdraw.service", result.stderr)
+            self.assertEqual(os.readlink(Path(d, "opt/sol-exit")), old)
+
+
+class MaskTests(unittest.TestCase):
+    def test_both_units_are_masked_until_the_run_ends_whatever_the_outcome(self):
+        with tempfile.TemporaryDirectory() as d:
+            installer = Installer(d)
+            control = Path(d, "run-control")
+            for ending in ("true", "false"):
+                result = installer.run(f'trap cleanup EXIT; mask_units; ls "$mask_dir"; readlink "$mask_dir"/*; {ending}')
+                self.assertEqual(result.returncode, 0 if ending == "true" else 1, result.stderr)
+                self.assertEqual(result.stdout.split(), ["pft-sol-exit-self-test.service",
+                                                         "pft-sol-mainnet-withdraw.service", "/dev/null", "/dev/null"])
+                self.assertEqual(list(control.iterdir()), [], f"unmasked after {ending}")
+
+    def test_the_masks_cover_the_whole_install_and_the_stop_check_is_repeated(self):
+        body = SCRIPT.read_text().split("!= \"$0\" ]]; then return 0; fi", 1)[1]
+        masked = body.index("mask_units")
+        self.assertLess(body.index("trap cleanup EXIT"), masked)
+        for later in ("rollback_tree", "migrate_account_id", "install_tree", "create_account"):
+            self.assertLess(masked, body.index(later), later)
+        # Checked again after masking, right before the ID move, and in switch_in before the switch.
+        self.assertGreaterEqual(body.count('require_stopped "$unit" "$test_unit"'), 3)
+        move = body.index('if id "$account"')
+        self.assertEqual(body.rindex('require_stopped "$unit" "$test_unit"', 0, move),
+                         body.rindex("\n", 0, move - 1) + 1)
+        switch = SCRIPT.read_text().split("switch_in() {", 1)[1].split("}", 1)[0]
+        self.assertLess(switch.index("require_stopped"), switch.index("switch_tree"))
 
 
 class AccountTests(unittest.TestCase):
@@ -252,7 +322,7 @@ class AccountTests(unittest.TestCase):
 
     def test_migration_and_upgrade_wait_for_stopped_units(self):
         text = SCRIPT.read_text()
-        body = text.split("then return 0; fi", 1)[1]
+        body = text.split("!= \"$0\" ]]; then return 0; fi", 1)[1]
         stopped = body.index('require_stopped "$unit" "$test_unit"')
         for later in ("migrate_account_id \"$account\"", "install_tree \"$bundle\"", "rollback_tree \"$app\"",
                       "install -m644 /dev/null /var/log/pf-sol-exit/self-test.log"):

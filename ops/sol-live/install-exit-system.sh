@@ -26,6 +26,11 @@ unit=pft-sol-mainnet-withdraw.service
 test_unit=pft-sol-exit-self-test.service
 # The self-test unit records the revision it passed on; the worker starts only on that revision.
 passed=/var/lib/pf-sol-exit-install/self-test-passed
+unit_dir=/etc/systemd/system
+# Masks here override unit files in /etc/systemd/system; `systemctl mask --runtime` writes to
+# /run/systemd/system, which /etc overrides, so its mask would not hold for these units.
+mask_dir=/run/systemd/system.control
+masked=0
 
 # A unit counts as stopped only when inactive or failed: activating, deactivating or reloading
 # units still run code from the live tree.
@@ -107,24 +112,77 @@ record_revision() {
     return 0
 }
 
-# Copy the bundle into a staged tree beside the live one, check it, then switch. A failed copy or
-# check removes the staged tree and leaves the live tree and its recorded revision as they were.
+# Install the bundle: build and check a staged tree beside the live one, then put its unit files
+# and the self-test gate in place and load them, and only then switch the tree in. A failed build
+# or check removes the staged tree and leaves the live tree, its revision, the units and the
+# earlier self-test pass as they were. Both units stay masked throughout (mask_units).
 install_tree() {
-    local bundle=$1 rev=$2 stage ok=0
+    local bundle=$1 rev=$2 payer=${3:-$svc/fee-payer.json}
+    stage_tree "$bundle" "$rev" "$payer" || return 1
+    rm -f -- "$passed" || return 1
+    install_units "$staged" || return 1
+    switch_in "$staged" "$rev" || return 1
+}
+
+# Build and check a tree under $trees; its path is left in $staged.
+stage_tree() {
+    local bundle=$1 rev=$2 payer=$3 stage ok=0
+    staged=""
     install -d -m755 -o root -g root "$trees" || return 1
     stage=$(mktemp -d "$trees/$rev.XXXXXXXX") || return 1
-    # Each step is run on its own and its status kept; the switch needs all three to succeed.
+    # Each step is run on its own and its status kept; the switch needs all of them to succeed.
     chmod 0755 "$stage" && ok=1
     if (( ok )); then ok=0; build_tree "$bundle" "$stage" && ok=1; fi
-    if (( ok )); then ok=0; self_test_tree "$stage" && ok=1; fi
+    if (( ok )); then ok=0; self_test_tree "$stage" "$payer" && ok=1; fi
     if (( ! ok )); then
         rm -rf -- "$stage"
         echo "The new tree failed to build or its self-test failed; the installed tree is unchanged." >&2
         return 1
     fi
-    rm -f -- "$passed" || return 1
-    switch_tree "$app" "$previous" "$stage" || return 1
+    staged=$stage
+}
+
+# The unit files that belong to tree $1, and the gates, in place and loaded before $1 goes live,
+# so the worker never runs a tree without its gate.
+install_units() {
+    local tree=$1 name
+    install -d -m755 "$unit_dir" || return 1
+    for name in "$unit" "$test_unit"; do
+        cp -- "$tree/ops/sol-live/$name" "$unit_dir/$name.next" || return 1
+        chmod 0644 "$unit_dir/$name.next" || return 1
+        mv -T -- "$unit_dir/$name.next" "$unit_dir/$name" || return 1
+    done
+    write_gates "$unit_dir" || return 1
+    systemctl daemon-reload || return 1
+}
+
+# Switch the checked tree in, checking again that both units are stopped, then record its revision.
+switch_in() {
+    local tree=$1 rev=$2
+    require_stopped "$unit" "$test_unit" || return 1
+    switch_tree "$app" "$previous" "$tree" || return 1
     record_revision "$app" "$rev" "$history" || return 1
+}
+
+# Nothing can start either unit while masked: an install and an ID move run with both masked.
+mask_units() {
+    local name
+    install -d -m755 "$mask_dir" || return 1
+    for name in "$unit" "$test_unit"; do
+        ln -sfnT /dev/null "$mask_dir/$name" || return 1
+        masked=1
+    done
+    systemctl daemon-reload || return 1
+}
+
+unmask_units() {
+    local name status=0
+    for name in "$unit" "$test_unit"; do
+        rm -f -- "$mask_dir/$name" || status=1
+    done
+    systemctl daemon-reload || status=1
+    if (( status == 0 )); then masked=0; fi
+    return $status
 }
 
 build_tree() {
@@ -144,11 +202,11 @@ as_worker() {
 }
 
 self_test_tree() {
-    local tree=$1
+    local tree=$1 payer=${2:-$svc/fee-payer.json}
     as_worker "$tree" -c 'import exit_service; from exit_proof import verify_local_host; verify_local_host()' ||
         { echo "The local proof host check failed on $tree." >&2; return 1; }
-    if [[ -f $svc/fee-payer.json ]]; then
-        validate_payer "$tree" "$svc/fee-payer.json" || { echo "The installed payer check failed on $tree." >&2; return 1; }
+    if [[ -f $payer ]]; then
+        validate_payer "$tree" "$payer" || { echo "The payer check failed on $tree." >&2; return 1; }
     fi
     return 0
 }
@@ -215,16 +273,20 @@ create_account() {
     useradd --system --uid "$id" --gid "$id" --no-create-home --home-dir "$home" --shell /usr/sbin/nologin "$name" || return 1
 }
 
+# The pass names the tree the self-test ran on (its directory under $trees) and that tree's
+# revision; the worker starts only when the live tree is that same tree. A self-test that saw the
+# link move while it ran records nothing.
 write_gates() {
-    local dir=$1
+    local dir=$1 state=${passed%/*}
     install -d -m755 "$dir/$unit.d" "$dir/$test_unit.d" || return 1
     cat > "$dir/$unit.d/self-test-gate.conf" <<GATE || return 1
 [Service]
-ExecStartPre=+/bin/sh -c 'test -s $passed && test "\$\$(cat $passed)" = "\$\$(cat $app/revision)"'
+ExecStartPre=+/bin/sh -c 'tree=\$\$(readlink -e $app) && test -s $passed && test "\$\$(cat $passed)" = "\$\$tree \$\$(cat \$\$tree/revision)"'
 GATE
     cat > "$dir/$test_unit.d/record-pass.conf" <<PASS || return 1
 [Service]
-ExecStartPost=+/bin/sh -c 'install -d -m755 ${passed%/*} && cp $app/revision $passed'
+ExecStartPre=+/bin/sh -c 'install -d -m755 $state && rm -f $passed && readlink -e $app > $state/self-test-tree'
+ExecStartPost=+/bin/sh -c 'tree=\$\$(readlink -e $app) && test "\$\$tree" = "\$\$(cat $state/self-test-tree)" && echo "\$\$tree \$\$(cat \$\$tree/revision)" > $passed'
 PASS
     chmod 0644 "$dir/$unit.d/self-test-gate.conf" "$dir/$test_unit.d/record-pass.conf" || return 1
 }
@@ -233,6 +295,19 @@ check_port() {
     local listeners
     listeners=$(ss -H -ltn 'sport = :18089') || return 1
     [[ -z "$listeners" ]]
+}
+
+# The exit trap: removes the private staging directory and an unfinished sudoers file, and
+# unmasks both units, on success and on any failure.
+cleanup() {
+    local status=$?
+    if [[ -n ${tmp:-} ]]; then rm -rf -- "$tmp"; fi
+    if [[ -n ${sudoers:-} ]]; then rm -f -- "$sudoers"; fi
+    if (( masked )) && ! unmask_units; then
+        echo "Unmask by hand: rm $mask_dir/$unit $mask_dir/$test_unit; systemctl daemon-reload" >&2
+        status=1
+    fi
+    exit "$status"
 }
 
 # Tests source this file for the functions above.
@@ -270,6 +345,10 @@ if [[ -L $app ]]; then [[ $(readlink -- "$app") == "$trees"/* ]]; fi
 state=$(systemctl list-unit-files --type=service --no-legend --no-pager | awk -v unit="$unit" '$1 == unit {print $2}')
 [[ -z "$state" || $state == disabled ]]
 require_stopped "$unit" "$test_unit"
+# From here to the end both units are masked; the exit trap unmasks them on success and on any failure.
+trap cleanup EXIT
+mask_units
+require_stopped "$unit" "$test_unit"
 if (( rollback )); then
     rm -f -- "$passed"
     rollback_tree "$app" "$previous"
@@ -287,6 +366,7 @@ check_port
 # Installation begins here. A failed preflight preserves the existing proof.
 install -d -m755 -o root -g root /var/log/pf-sol-exit
 install -m644 /dev/null /var/log/pf-sol-exit/self-test.log
+require_stopped "$unit" "$test_unit"
 if id "$account" >/dev/null 2>&1; then
     migrate_account_id "$account" "$account_id" "$svc"
 else
@@ -313,7 +393,6 @@ fi
 # Credentials go through a private directory in $svc (root and the worker's group only), never
 # through a world-readable place, and end at mode 600 owned by the worker.
 tmp=$(mktemp -d "$svc/.install.XXXXXXXX")
-trap 'rm -rf -- "$tmp"; if [[ -n ${sudoers:-} ]]; then rm -f -- "$sudoers"; fi' EXIT
 chgrp "$account" "$tmp"
 chmod 0710 "$tmp"
 secrets=$operator_home/.config/postfiat/sol-bridge
@@ -333,14 +412,6 @@ else
     [[ ! -e "$svc/fee-payer.json" && ! -L "$svc/fee-payer.json" ]]
     stage_credential exit-fee-payer.json fee-payer.json
 fi
-# The new tree is built and checked beside the live one; only then is it switched in.
-install_tree "$bundle" "$rev"
-if [[ -f "$tmp/fee-payer.json" ]]; then
-    validate_payer "$app" "$tmp/fee-payer.json"
-    mv -T "$tmp/fee-payer.json" "$svc/fee-payer.json"
-fi
-install -m644 "$ops/$unit" "$ops/$test_unit" /etc/systemd/system/
-write_gates /etc/systemd/system
 sudoers=$(mktemp /etc/sudoers.d/.pf-sol-exit.XXXXXXXX)
 cat > "$sudoers" <<RULES
 $operator ALL=(root) NOPASSWD: /usr/bin/systemctl start pft-sol-exit-self-test.service, /usr/bin/systemctl start $unit, /usr/bin/systemctl stop $unit, /usr/bin/systemctl --no-pager status $unit
@@ -348,7 +419,15 @@ RULES
 chmod 0440 "$sudoers"
 visudo -cf "$sudoers"
 mv -T "$sudoers" /etc/sudoers.d/pf-sol-exit
-systemctl daemon-reload
+sudoers=""
+# The new tree is built and checked beside the live one, its units and gate are loaded, and only
+# then is it switched in.
+payer=$svc/fee-payer.json
+if [[ -f "$tmp/fee-payer.json" ]]; then payer=$tmp/fee-payer.json; fi
+install_tree "$bundle" "$rev" "$payer"
+if [[ -f "$tmp/fee-payer.json" ]]; then
+    mv -T "$tmp/fee-payer.json" "$svc/fee-payer.json"
+fi
 enabled=$(systemctl is-enabled "$unit" || true)
 [[ $enabled == disabled ]]
 echo "Installed disabled worker at $rev. Run the archive self-test; the worker starts only after it passed on $rev."
