@@ -33,9 +33,13 @@ BASE = "/solana/withdrawals"
 BURN = re.compile("[0-9a-f]{96}")
 COLUMNS = {"amount_atoms", "recipient", "burn_height", "solana_tx", "error", "detail"}
 # A node reply over its frame limit can fit later (a newer checkpoint shortens a witness), so
-# the burn waits 5 minutes, doubling up to 6 hours, and is filed as failed only after
-# TOO_LARGE_TRIES such replies. A read about the whole bridge is the read's fault, not the burn's.
-TOO_LARGE_FIRST, TOO_LARGE_CAP, TOO_LARGE_TRIES = 300, 6 * 3600, 12
+# the burn waits 5 minutes, doubling up to 1 hour, and is filed as failed after TOO_LARGE_TRIES
+# such replies: at most TOO_LARGE_BOUND seconds (3 h 15 min) of waiting. A read about the whole
+# bridge is the read's fault, not the burn's: withdrawals pause, the pause is kept in the journal
+# (it survives a restart), shows in readiness, and is alerted again every STATUS_ALERT_INTERVAL.
+TOO_LARGE_FIRST, TOO_LARGE_CAP, TOO_LARGE_TRIES = 300, 3600, 6
+TOO_LARGE_BOUND = sum(min(TOO_LARGE_CAP, TOO_LARGE_FIRST * 2**n) for n in range(TOO_LARGE_TRIES))
+STATUS_ALERT_INTERVAL = 3600
 TOO_LARGE_DETAIL = "Node reply too large; retry scheduled."
 STATUS_TOO_LARGE_DETAIL = "Status read too large; retry scheduled."
 SHARED_READS = {"vault_bridge_status"}
@@ -86,7 +90,13 @@ class Journal:
             db.execute("""CREATE TABLE IF NOT EXISTS attempts (
                 burn TEXT PRIMARY KEY, signature TEXT NOT NULL, expiry INTEGER NOT NULL)""")
             db.execute("CREATE TABLE IF NOT EXISTS recovery (expiry INTEGER NOT NULL)")
+            db.execute("""CREATE TABLE IF NOT EXISTS status_fault (
+                tries INTEGER NOT NULL, since INTEGER NOT NULL, until INTEGER NOT NULL,
+                alerted INTEGER NOT NULL)""")
             db.commit()
+            fault = db.execute("SELECT tries, since, until, alerted FROM status_fault").fetchone()
+            if fault:
+                self.status_fault = dict(fault)
 
     def probe(self):
         with closing(self.connect()) as db:
@@ -172,15 +182,37 @@ class Journal:
 
     def status_too_large(self, burn):
         """The shared status read is too large: no burn is tried until its wait ends, and the
-        waiting burn is neither counted nor filed. Returns True the first time."""
-        first = self.status_fault is None
-        tries = 0 if first else self.status_fault["tries"]
-        self.status_fault = {"tries": tries + 1,
-                             "until": time.time() + min(TOO_LARGE_CAP, TOO_LARGE_FIRST * 2**tries)}
+        waiting burn is neither counted nor filed. The pause is written to the journal. Returns
+        True when an alert is due: the first time, then every STATUS_ALERT_INTERVAL."""
+        now = int(time.time())
+        fault = self.status_fault or {"tries": 0, "since": now, "alerted": 0}
+        alert = now - fault["alerted"] >= STATUS_ALERT_INTERVAL
+        self.status_fault = {
+            "tries": fault["tries"] + 1,
+            "since": fault["since"],
+            "until": now + min(TOO_LARGE_CAP, TOO_LARGE_FIRST * 2 ** fault["tries"]),
+            "alerted": now if alert else fault["alerted"],
+        }
         with closing(self.connect()) as db, db:
+            db.execute("DELETE FROM status_fault")
+            db.execute("INSERT INTO status_fault(tries, since, until, alerted) VALUES(:tries, :since, :until, :alerted)",
+                       self.status_fault)
             db.execute("UPDATE jobs SET detail=? WHERE burn_tx_id=? AND stage!='paid'",
                        (STATUS_TOO_LARGE_DETAIL, burn))
-        return first
+        return alert
+
+    def clear_status_fault(self):
+        self.status_fault = None
+        with closing(self.connect()) as db, db:
+            db.execute("DELETE FROM status_fault")
+
+    def status_pause_message(self):
+        """The readiness message while withdrawals pause for a too-large status read, else None."""
+        fault = self.status_fault
+        if not fault:
+            return None
+        return (f"Withdrawals wait: the node's vault_bridge_status reply is too large since {utc(fault['since'])} "
+                f"({fault['tries']} tries); next try {utc(fault['until'])}.")
 
     def connect(self):
         db = sqlite3.connect(self.path, timeout=10)
@@ -238,6 +270,10 @@ class Journal:
             return row[0] if row else None
 
 
+def utc(seconds):
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(seconds))
+
+
 def public_row(row):
     value = {
         k: row[k]
@@ -264,6 +300,10 @@ def public_row(row):
         STATUS_TOO_LARGE_DETAIL,
     ):
         value["detail"] = None
+    # A burn that waits after too-large replies shows how many and when it is tried next.
+    waiting = value["stage"] == "queued" and value["detail"] in (TOO_LARGE_DETAIL, STATUS_TOO_LARGE_DETAIL)
+    value["too_large_tries"] = row["too_large"] if "too_large" in row.keys() else 0
+    value["retry_at"] = utc(row["due"]) if waiting and row["due"] else None
     return value
 
 
@@ -401,7 +441,7 @@ def process_next(journal, directory):
     except ReplyTooLarge as error:
         if error.method in SHARED_READS:
             if journal.status_too_large(burn):
-                print(f"ALERT status read too large, withdrawals wait: {error}", flush=True)
+                print(f"ALERT status read too large, withdrawals wait ({journal.status_pause_message()}): {error}", flush=True)
             return True
         tries = journal.defer_too_large(burn)
         if tries is None:
@@ -413,7 +453,7 @@ def process_next(journal, directory):
         journal.defer(burn)
         return True
     if journal.status_fault is not None:
-        journal.status_fault = None
+        journal.clear_status_fault()
         print("Status read fits again; withdrawals continue.", flush=True)
     with closing(journal.connect()) as db, db:
         db.execute("UPDATE jobs SET too_large=0 WHERE burn_tx_id=?", (burn,))
@@ -519,6 +559,9 @@ def service_readiness(server, *, fresh=False):
         return dict(
             ok=True, ready=False, payout_ready=False, message="Withdrawal queue full."
         )
+    paused = server.journal.status_pause_message()
+    if paused:
+        return dict(ok=True, ready=False, payout_ready=False, message=paused)
     with server.ready_lock:
         if fresh or time.monotonic() >= server.valid_until:
             server.ready = readiness()
