@@ -449,6 +449,46 @@ H (`SECOND_RELEASES` in `crates/types/src/solana_exit.rs`) is a source constant 
 
 A governed or interlocked activation would need validators to ratify H only from the second-release build, the code to read the stored activation instead of the constant, and ratification to be refused while any active validator reports another build.
 
+### Upgrade the initialised Solana verifier
+
+The deployed verifier (`0x3b16fc30…`, byte-identical to `solana/deploy/build.sh` of `main`) stores in its light account a route that also binds the revision-8 bucket. The new program computes the custody route without it, so the light's `route` (bytes 136–168 of 289) must change once. Instruction tag 9 does this. Its arguments must rebuild the stored route, so the new route is fixed by the account. It runs once and leaves the checkpoint, the pause state, the checkpoint accounts and every paid marker unchanged. `solana/pfusdc-egress-verifier/tests/upgrade_rehearsal.py` rehearses these steps on the dumped mainnet state.
+
+The L1 needs no close. The first release keeps running and revision-8 burns stay open. From the upgrade until the new service runs, the verifier or the old service refuses every payout, and burns wait unpaid. Stop the payout worker and disable public admission for that window. Revision-9 exits start only at the second release height.
+
+| Step | Signer | Check |
+| --- | --- | --- |
+| 1. Build the reviewed commit twice with `solana/deploy/build.sh` (platform-tools v1.58) | none | Both builds equal; record `pfusdc_egress_verifier.so` SHA-256. A second person rebuilds and compares. |
+| 2. Read the deployed state | none | Program code `0x3b16fc30…`; light `FQe34dCQ…` holds route `84b17839…c767`. |
+| 3. Stop the payout worker, disable admission | operator | The disable procedure in Recovery. |
+| 4. `solana program extend 8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF 10240` | upgrade authority `4JJEua…` (with `--payer`) | The loader refuses less than 10,240 bytes; about 0.052 SOL rent. |
+| 5. `solana program write-buffer pfusdc_egress_verifier.so --buffer-authority <upgrade authority>` | payer, upgrade authority | `solana program dump <buffer>` equals the build. |
+| 6. `solana program upgrade <buffer> 8Dxp8bfg…` | upgrade authority | The buffer's rent returns to the spill account. |
+| 7. Read back the program | none | The first bytes equal the build and the rest of ProgramData is zero. Note the SHA-256 of the whole ProgramData tail (`data[45:]`); `profile_code` hashes exactly that. |
+| 8. Send tag 9 (below) | upgrade authority | Only bytes 136–168 of the light differ from step 2. They now hold `02b02d4b…558e` (`tests/route-vector.txt`). |
+| 9. Set `VERIFIER_SHA256` in `exit_setup.py` to the step-7 hash, then install and self-test the service build | operator | The service refuses any other verifier code. |
+| 10. Start the worker, re-enable admission | operator | Pending revision-8 burns are paid. |
+
+```bash
+python3 solana/pfusdc-egress-verifier/bootstrap.py --migrate "$KIT/setup.json" "$KIT/evidence/migrate-args.bin"
+PYTHONPATH="$PWD/ops/sol-live" python3 - <<'PY'
+import os
+from pathlib import Path
+from exit_setup import DIRECTORY, ExitCluster, Instruction, LIGHT, LOADER, MAINNET_PAYER, VERIFIER, pda, ro, rw
+c = ExitCluster(MAINNET_PAYER)
+c.unlock(DIRECTORY / "mainnet-payer.json")
+data = Path(os.environ["KIT"], "evidence/migrate-args.bin").read_bytes()
+programdata = pda(LOADER, bytes(VERIFIER))
+print(c.send("exit.migrate", [Instruction(VERIFIER, b"\x09" + data, [ro(MAINNET_PAYER, True), rw(LIGHT), ro(programdata)])]))
+PY
+```
+
+`$KIT/setup.json` is the configuration of the 23 November initialisation. Its route equals the one built from `ops/sol-live/fixtures/exit-setup.json`. With any other configuration, tag 9 refuses with `Binding`. A second run also refuses with `Binding`, and a signer other than the upgrade authority is refused.
+
+If a step fails:
+- **Steps 4 to 6.** Nothing has changed. These steps are atomic; repeat them.
+- **Step 8.** The account keeps the old route, and every withdrawal refuses with `Binding`. Fix the arguments and repeat. To go back instead, upgrade to the `main` build (`0x3b16fc30…`), which works on the unmigrated account.
+- **After a successful migration.** The old program refuses every withdrawal with `Binding`, which is safe but stops payouts. To recover, upgrade to the new build again. No instruction restores the old route.
+
 ## Recovery
 
 On signer loss or a settlement backlog, disable public admission immediately by running `"$HOME/.local/bin/disable-sol-exit"` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Direct burns remain possible until a close is committed, because five validators can finalize them. Five can also close direct L1 admission with a separate decision, and the same five can re-open it after that close, so a lost sixth signer neither blocks nor locks holders' exit. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. Pay and settle all pending claims using their original packets, and reconcile custody before re-opening. Preserve evidence and wait for accepted receipts and closed descriptors on at least five agreeing validators; the wrapper names any validator that did not answer.
