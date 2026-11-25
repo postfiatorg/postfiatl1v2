@@ -18,7 +18,7 @@ The only running network is a controlled devnet run by six
 Foundation-administered validators
 ([Network Status](../status/network-status.md)). On 25 November 2026 all six
 were at height 1897 with one state root, on build `04600868`, which is cut
-from the release branch `release/sol-exit-r2` and is not on `main`
+from the release branch `release/sol-exit-r2`
 ([handoff of 25 November](../status/handoff-2026-11-25.md)).
 
 Since 23 November 2026 the devnet also carries USDC between Solana mainnet and
