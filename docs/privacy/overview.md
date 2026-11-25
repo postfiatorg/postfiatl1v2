@@ -54,6 +54,10 @@ Checked on 25 November 2026.
 - On `postfiat-wan-devnet-2`, a controlled devnet with six validators, public
   submission of shielded actions is off on every validator
   ([handoff of 23 November](../status/handoff-2026-11-23.md)).
+- `orchard_pool_report` on validator 0 at height 1900 reported pool
+  `asset-orchard-v1` with 177 outputs, 165 nullifiers and 41 accepted anchors,
+  all report checks passing. These counts come from earlier actions; the
+  report claims no active-user count.
 - The RPC server admits user-proven private actions (`private_action_submit`)
   only when it is started with `rpc-serve --allow-private-action-admission`;
   the switch is off unless set (`crates/node/src/private_action_rpc.rs`).
