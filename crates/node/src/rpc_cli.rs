@@ -1009,18 +1009,15 @@ fn handle_rpc_serve_connection(
         match rpc_serve_cached_status(&context.data_dir, &context.health_cache) {
             Ok((report, cache_hit)) => {
                 health_cache_hit = cache_hit;
-                success_response(
-                &id,
-                &report,
-                vec![RpcEvent::new("status", report.node_id.clone(), "status queried")],
-            )
-            .unwrap_or_else(|error| {
-                rpc_serve_error_response(
-                    &id,
-                    "rpc_internal",
-                    &format!("status serialization failed: {error}"),
-                )
-            })
+                let message = if cache_hit {
+                    format!("cached status at height {} block {}", report.block_height, report.block_tip_hash)
+                } else {
+                    "status queried".into()
+                };
+                success_response(&id, &report, vec![RpcEvent::new("status", report.node_id.clone(), message)])
+                    .unwrap_or_else(|error| {
+                        rpc_serve_error_response(&id, "rpc_internal", &format!("status serialization failed: {error}"))
+                    })
             }
             Err(error) => rpc_serve_error_response(&id, "rpc_status_failed", &error.to_string()),
         }
@@ -2202,7 +2199,7 @@ fn rpc_serve_cached_status(
             (Some(read_at), Some(report))
                 if read_at.elapsed() <= RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE =>
             {
-                Some(report.clone())
+                Some((read_at, report.clone()))
             }
             _ => None,
         }
@@ -2225,7 +2222,8 @@ fn rpc_serve_cached_status(
         // Only the busy database is answered from the earlier report; any other
         // failure is reported. The earlier report keeps its own read time, so it
         // is not made fresh and stops being used after the bound.
-        (Err(error), Some(report)) if rpc_serve_storage_writer_busy(&error) => {
+        (Err(error), Some((read_at, report))) if rpc_serve_storage_writer_busy(&error)
+            && read_at.elapsed() <= RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE => {
             return Ok((report, true));
         }
         (Err(error), _) => return Err(format!("rpc status read failed: {error}")),
