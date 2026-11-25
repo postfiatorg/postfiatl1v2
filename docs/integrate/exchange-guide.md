@@ -24,13 +24,13 @@ comparisons, see the
 | Account model | Account-based, XRP-style: balance plus strict sequence | [below](#withdrawals) |
 | Signatures | ML-DSA-65 only; 1,952-byte keys, 3,309-byte signatures | [Addresses, Keys And Signatures](addresses-keys-signatures.md) |
 | Address | `pf` + 40 lowercase hex characters; optional display checksum in source | [Addresses, Keys And Signatures](addresses-keys-signatures.md#address-format) |
-| Recipient check | Canonical address checks at admission in the new binary; execution checks require governance activation | [Addresses, Keys And Signatures](addresses-keys-signatures.md#recipient-validation) |
+| Recipient check | Canonical address checks at admission in the running build; execution checks require governance activation | [Addresses, Keys And Signatures](addresses-keys-signatures.md#recipient-validation) |
 | Unit | 1 PFT = 1,000,000 atoms; amounts are integer atoms | [Fees](#fees) |
 | Fee | At least 1 atom per started 512 bytes of transaction weight, plus 10 atoms when the transfer creates the recipient account; the whole fee burns | [Fees](#fees) |
 | Reserve | 10 atoms must remain in every account | [Fees](#fees) |
 | Confirmation | One committed block (commit quorum certificate) plus an accepted receipt | [Confirmation](#confirmation-finality) |
 | Memo / tag | Not in v1 transfers; up to 4 memos in `payment_v2` | [Deposits](#deposits) |
-| Account history | `account_tx`, transparent blocks only | [Reconciliation](#reconciliation) |
+| Account history | `account_tx`: transparent transactions and the transparent credits of shielded withdrawals | [Reconciliation](#reconciliation) |
 | Key rotation | Not available for accounts | [Addresses, Keys And Signatures](addresses-keys-signatures.md#key-binding-at-first-spend) |
 
 ## Running a node
@@ -146,13 +146,15 @@ deposit addresses. Then:
 3. Reconcile every balance change against the transactions you have credited
    (see [Reconciliation](#reconciliation)).
 
-**2. Shared address with memos (requires deployment and activation).**
+**2. Shared address with memos (the require-memo flag needs governance activation).**
 `payment_v2` and `issued_payment_v2` can carry up to four memos (512 bytes total).
 The source implementation returns signed memo contents through `tx` and
-`account_tx`, alongside their hash, count and byte length. After deployment,
-operators must rebuild the account history index to backfill v2 rows.
+`account_tx`, alongside their hash, count and byte length. This source is in
+the running build (`04600868`). Rows written before it need an account history
+index rebuild to carry v2 memos; whether the devnet's indexes were rebuilt is
+not recorded here.
 
-After governance enables `require_memo_activation_height`, an exchange can set
+After governance enables `require_memo_v2_activation_height`, an exchange can set
 its account's require-memo flag with `account_set`. Covered payments without a
 memo then fail. The flag does not cover shielded withdrawals, escrow, atomic
 swap, offer, NFT, bridge or FastPay credits: an exchange must handle those
@@ -274,12 +276,14 @@ atoms, and the last 10 atoms of an account cannot be withdrawn.
   order. `truncated: true` means rows may be missing; page with `from_height`
   and `to_height` or use `account_tx_history`
   ([Account History](../rpc/account-history.md)).
-- **What history misses.** The index is built only from blocks whose batch kind
-  is `transparent` (`append_account_tx_index_block` and
-  `build_account_tx_index` in `crates/node/src/block_finality.rs`). Value that
-  reaches a transparent account another way, such as a shielded (Orchard)
-  withdrawal, changes the balance but does not appear in `account_tx`. Balance
-  reconciliation must allow for this. FastPay and FastSwap objects have their
+- **What history misses.** Rows come only from transparent blocks and from the
+  transparent credits of shielded (Orchard) withdrawals
+  (`account_tx_indexes_batch_kind` and `account_tx_rows_for_block` in
+  `crates/node/src/block_finality.rs`; the disk index is rebuilt by
+  `rebuild_account_tx_index` in `crates/node/src/account_tx_disk_index.rs`).
+  Value that reaches a transparent account through another lane changes the
+  balance but does not appear in `account_tx`. Balance reconciliation must
+  allow for this. FastPay and FastSwap objects have their
   own read methods (`owned_objects`, `fastswap_objects`).
 - **Supply.** Native PFT has a fixed genesis supply, every fee burns, and there
   is no validator reward ([Whitepaper](../whitepaper.md)).
@@ -292,7 +296,7 @@ before real customer funds are involved.
 1. **No production network.** Only a controlled devnet exists, run by one
    organization's six validators. Gate Zero (Z1–Z3) is open
    ([Testnet Path](../status/testnet-path.md)).
-2. **No external audit.** 16 of 21 release gates are open, including validator
+2. **No external audit.** 16 of 21 release gates were open in the 2026-09-01 inventory, including validator
    key custody, specialist review and launch authority
    ([Security](../security/index.md),
    [Release Gate Inventory](../status/release-gate-inventory.md)).
@@ -301,15 +305,17 @@ before real customer funds are involved.
 4. **No published release artifacts.** No signed download, checksum, SBOM or
    second-builder reproduction exists for outsiders to verify (release gate
    rows 6 and 7).
-5. **Address-safety deployment and activation remain pending.** Source includes
-   recipient validation and an optional checksum; the execution rule is governed.
+5. **Address-safety activation remains pending.** The running build includes
+   recipient validation at admission and an optional checksum; the execution
+   rule waits for a governed activation height, which this guide does not
+   record as set.
 6. **No account key rotation**, no hardware-wallet or external-signer
    interface for ML-DSA, and no formal backup-encryption standard
    ([Wallet Exchange Custody Model](../specs/wallet-exchange-custody-model.md),
    "Remaining Production Work").
 7. **No watch-only address derivation**; every deposit address needs custody-side
    secret material.
-8. **History deployment and backfill remain pending.** Source indexes transparent
+8. **History backfill is not recorded.** The running build indexes transparent
    transactions and shielded withdrawals; other balance-changing lanes still
    need separate reconciliation.
 9. **Required-memo activation remains pending.** Source exposes signed memo

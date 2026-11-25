@@ -20,8 +20,7 @@ use postfiat_types::{
 };
 
 use crate::{
-    live_consensus_v2_context,
-    persist_consensus_v2_precommit_authorization_with,
+    live_consensus_v2_context, persist_consensus_v2_precommit_authorization_with,
     persist_consensus_v2_prepare_authorization_with, persist_consensus_v2_qc,
     read_consensus_v2_qc_graph_for_view, validator_signer_for, write_block_certificate_file,
     BlockCertificateFile, BlockProposalFile,

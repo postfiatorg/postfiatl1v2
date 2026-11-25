@@ -17,6 +17,8 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// The source revision this binary was built from, as the node reports it in `status`.
+    BuildInfo,
     PacketContext {
         #[arg(long)]
         snapshot: PathBuf,
@@ -83,6 +85,13 @@ fn main() -> Result<()> {
             result["snapshot_tip"] = snapshot["tip"].clone();
             save(output, &result)?;
         }
+        Command::BuildInfo => println!(
+            "{}",
+            serde_json::json!({
+                "build_git_revision": env!("POSTFIAT_BUILD_GIT_REV"),
+                "build_profile": env!("POSTFIAT_BUILD_PROFILE"),
+            })
+        ),
         Command::Export { data_dir, output } => {
             let store = NodeStore::try_new_read_only(data_dir)?;
             let tip = store.read_chain_tip()?;

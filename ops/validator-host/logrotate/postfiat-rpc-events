@@ -1,0 +1,8 @@
+/var/log/postfiat/validator-*/rpc-events.ndjson {
+    size 512M
+    rotate 3
+    compress
+    missingok
+    notifempty
+    copytruncate
+}

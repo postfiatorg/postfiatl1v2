@@ -93,7 +93,7 @@ from postfiat_rpc import (
 )
 
 wallet = create_wallet(
-    chain_id="postfiat-controlled-testnet",
+    chain_id="postfiat-local",
     wallet_dir="wallets",
 )
 
@@ -128,11 +128,11 @@ from postfiat_rpc import (
 
 client = PostFiatRpcClient("127.0.0.1:27650")
 issuer = create_wallet(
-    chain_id="postfiat-controlled-testnet",
+    chain_id="postfiat-local",
     wallet_dir="wallets/issuer",
 )
 holder = create_wallet(
-    chain_id="postfiat-controlled-testnet",
+    chain_id="postfiat-local",
     wallet_dir="wallets/holder",
 )
 
@@ -358,7 +358,7 @@ sent = send_pft(
 
 ```bash
 PYTHONPATH=python python -m unittest discover -s python/tests
-# HISTORICAL: the command below was archived outside the repository during the
-# open-source cleanup; see scripts/README.md.
-scripts/testnet-python-wallet-functions-smoke
 ```
+
+`scripts/testnet-python-wallet-functions-smoke` was archived outside the
+repository during the open-source cleanup (`scripts/README.md`).

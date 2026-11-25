@@ -39,12 +39,12 @@ class GovernanceTest(unittest.TestCase):
         self.mock(g, "ethereum")
         self.mock(g, "require_open_accounting")
         self.mock(g, "qualify").return_value = dict(
-            payout_ready=True, burns_open=False, bucket_id=g.BUCKET,
+            payout_ready=True, burns_open=False, source_domain=g.SOURCE_DOMAIN,
             qualified_parent=g.parent_of(self.head))
         clearance = self.mock(g, "rotation_clearance", side_effect=ValueError("stale clearance"))
         with self.assertRaisesRegex(ValueError, "stale clearance"):
             self.command("open")
-        clearance.assert_called_once_with(self.head)
+        clearance.assert_called_once_with(self.head, 6, rules=__import__("unittest.mock").mock.ANY)
         self.sign.assert_not_called()
 
     def test_close_and_paid_use_solana_parent_after_ethereum_changes(self):
@@ -82,6 +82,9 @@ class GovernanceTest(unittest.TestCase):
         names = [f"validator-{i}" for i in range(6)]
         parent = g.parent_of(self.head)
         approval = dict(kind="reviewed-paid", parent=parent)
+        # The first release's go-live path: six protected review files, read before signing.
+        # (The second release signs through each host's own reviewer: test_exit_independent_sign.)
+        rules = __import__("exit_rules").first_release()
         amendment = dict(kind=approval["kind"], value=1, quorum=6, validators=names,
                          activation_height=parent["block_height"] + 1)
         with tempfile.TemporaryDirectory() as tmp:
@@ -113,5 +116,6 @@ class GovernanceTest(unittest.TestCase):
                   patch("exit_canary.match_reference")):
                 with self.assertRaises(subprocess.CalledProcessError):
                     govern.govern("exit-paid", compatible="reviewed", qualified_parent=parent,
-                                  payout=dict(packet="p", slot=1, ordinal=0, signature_hex="00"))
+                                  payout=dict(packet="p", slot=1, ordinal=0, signature_hex="00"),
+                                  rules=rules)
             self.assertEqual(sorted(checked), list(range(6)))

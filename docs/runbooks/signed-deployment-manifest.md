@@ -182,6 +182,11 @@ signed validity window still covers the current time. A failed check deletes the
 record. A missing, stale or unreadable record reports `false` without failing
 `status`.
 
+On 2026-11-25 a read-only `status` read found `deployment_manifest_verified`
+true on all six devnet validators, with one manifest (`cd37a303d953…`); it had
+read false on the releases of 18 and 19 November
+([Current State](../status/chain-state-current.md)).
+
 StakeHub's scored profile sets `require_signed_deployment_manifest=true` and
 names the trusted publisher key plus the local unit, environment, topology,
 and circuit metadata files. Preflight performs all of these checks before any

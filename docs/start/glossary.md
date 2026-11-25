@@ -184,10 +184,23 @@ on Hyperliquid's `xyz:BMNR` perpetual, earning funding. It was created on
 ([NAVCoin Create And Swap Specification](../navcoins/navcoin-create-and-swap-spec.md),
 [Current State](../status/chain-state-current.md)).
 
+### B23 and B24
+
+Schwab-backed NAVCoins. A reading of the Schwab account's equity is taken in a
+Nitro enclave and proven with SP1 (B24's active proof profile has source class
+`b23-schwab-account-equity-nitro-sp1-v1`, read on 2026-11-25). B24 replaced the
+earlier B23 line (`ops/b24-replacement/`) and has been created and cashed in
+with real money on `postfiat-wan-devnet-2` since mid-November
+([17 November handoff](../handoffs/2026-11-17___dravlic__navcoin_checklist_first_pass_wallet_round_trip_and_one_code_line.md),
+[Current State](../status/chain-state-current.md)).
+
 ### pfUSDC
 
 A PFTL-side receipt for USDC locked in a source-chain vault under a named route,
-used as cash in NAVCoin settlement ([NAVCoins](../navcoins/index.md)).
+used as cash in NAVCoin settlement ([NAVCoins](../navcoins/index.md)). Ethereum
+and Solana deposits mint separate pfUSDC series with separate backing; Solana
+pfUSDC can be withdrawn to Solana since 2026-11-23
+([Network Status](../status/network-status.md#usdc-bridges)).
 
 ### pNOK
 

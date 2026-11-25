@@ -385,7 +385,8 @@ This mode is deliberately narrower than public shielded apply:
   before a child verifier starts.
 - `apply_shield_batch` is not admitted by `rpc-serve`.
 
-Current evidence:
+Evidence of 15 May 2026 (the smoke scripts and their reports were archived
+outside the repository; `scripts/README.md`, `reports/README.md`):
 `reports/testnet-orchard-rpc-batch-create/orchard-rpc-batch-create-v0-20260515T111516Z/testnet-orchard-rpc-batch-create.json`
 from `scripts/testnet-orchard-rpc-batch-create-smoke`.
 Concurrent malformed-edge evidence:
@@ -453,13 +454,24 @@ scripts/testnet-rpc-write-edge-load-smoke   # only for write-edge services
 ```
 
 The readiness gate requires the read-alias smoke and the P0 gate refuses a
-local readiness report that omits it.
+local readiness report that omits it. On `main` (2026-11-25) none of the three
+scripts above is in `scripts/`; they were archived outside the repository
+(`scripts/README.md`), so `scripts/testnet-readiness-gate`, which still calls
+`scripts/testnet-rpc-read-alias-smoke`, cannot pass as committed.
 
 ## Current Gaps
 
 - Production edge authentication, TLS automation, and external rate-limiter
   configuration remain deployment-infrastructure responsibilities and must be
   verified before a public endpoint is advertised.
+
+### 2026-11-25 deployment status
+
+The running build `04600868` contains PR192 and the two-user unit generation;
+they reached the validators with the releases since 21 November. A read-only
+`status` of validator 0 on 2026-11-25 listed deployment artifacts for the `rpc`
+and `transport` services only, with no signer service. A two-user signer
+deployment on the devnet is therefore not shown, and none is recorded.
 
 ### 2026-11-06 source and deployment status
 

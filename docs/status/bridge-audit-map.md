@@ -1,24 +1,43 @@
 # Bridge audit map
 
+!!! note "2026-11-25: what changed since this audit"
+
+    This page is the audit of 21 November 2026 (Post Fiat height 1739); its tables are unchanged.
+    Since then:
+
+    - The validators run build `04600868` (second Solana exit release, rules from block 1890), which
+      is on `main` since `26acd4639` (#234); see [Master State](master-state.md).
+    - The Solana egress verifier was initialised on 23 November and upgraded and migrated on
+      24 November. A read-only finalized read on 25 November (slot 473711314) found 127,168 bytes of
+      code with SHA-256 `3406becc6db7ba7c250f8db55dc43965656093bb4ceb3e330d2f452edd465fdf`, last
+      deployed at slot 473433318. Its first 123,152 bytes have SHA-256
+      `4091ee16db29154e7aae642b637320c0a0d0cdee110da88d07416ab7b1c15b21`, the build of the
+      verifier source now on `main` recorded in the
+      [24 November handoff](../handoffs/2026-11-24___dravlic__second_withdrawal_release_prepared_and_main_checks_green.md);
+      the rest is zero fill. This review did not rebuild it. Its `egress-light` account now exists.
+    - The vault and recorder code read at slot 473711310 is unchanged from the table below.
+    - Not every bridge service runs unmodified `main`; see
+      [Master State](master-state.md#where-the-bridges-run).
+
 On 21 November 2026, two clean builds from public `main` reproduced all three deployed Solana programs byte for byte. Public source also reproduced all four Ethereum contracts on the pfUSDC Groth16 call path. The five current Solana ingress guest sources and their verification keys are on `main`. Their release binaries are distributed separately.
 
 The public source baseline is `166c609e0c5bac8ac80541d0ef50c12213597d01`. The Post Fiat governance and anchor values below are the historical read at height **1739** on `postfiat-wan-devnet-2`. The Solana and Ethereum tables give their own finalized read points.
 
 ## Where the bridge services run
 
-Every bridge service listed in [Master State](master-state.md#where-the-bridges-run) runs from one checkout of `main` at `7e67fc292`. This covers Solana deposits, the Ethereum deposit bridge and wallet proxy, withdrawals and the faucet. The Solana relay, capture and proof host are in `tools/pfusdc-sol-relay`, `tools/pfusdc-sol-capture` and `tools/pfusdc-sol-ingress-host`. The observer and prover launch scripts are in `ops/sol-live`. The Agave observer patch is in `ops/sol-public-node/agave-4.4.1-observer.patch`. The Ethereum proxy release files are in `deployments/ethereum-usdc-proxy`. Withdrawal and faucet code is in `ops/withdraw`. The six validators run source `674dbb18a`, which is on `main`.
+At this audit, every bridge service listed in [Master State](master-state.md#where-the-bridges-run) ran from one checkout of `main` at `7e67fc292`. This covers Solana deposits, the Ethereum deposit bridge and wallet proxy, withdrawals and the faucet. The Solana relay, capture and proof host are in `tools/pfusdc-sol-relay`, `tools/pfusdc-sol-capture` and `tools/pfusdc-sol-ingress-host`. The observer and prover launch scripts are in `ops/sol-live`. The Agave observer patch is in `ops/sol-public-node/agave-4.4.1-observer.patch`. The Ethereum proxy release files are in `deployments/ethereum-usdc-proxy`. Withdrawal and faucet code is in `ops/withdraw`. At this audit the six validators ran source `674dbb18a`, which is on `main`.
 
 Two other processes used different checkouts during this audit. They were the loopback instant-advance pilot and a separate wallet proxy. Their role in these mainnet routes was not verified.
 
 ## Solana mainnet programs
 
-The first address is the executable program. Its loader account points to the ProgramData address below it. SHA-256 covers **every byte after the 45-byte ProgramData header**, including any allocation padding. All three accounts had an upgrade authority at the time of the read.
+The first address is the executable program. Its loader account points to the ProgramData address below it. SHA-256 covers **every byte after the 45-byte ProgramData header**, including any allocation padding. All three accounts had an upgrade authority at the time of the read, and still had one on 25 November.
 
 | Artifact and addresses | SHA-256 of deployed code | Bytes / last deploy slot / finalized read slot | Source and rebuild |
 | --- | --- | --- | --- |
 | Vault `GFkpeTibgdRAAAndgUMYsJnSTck91tUbrpuWBWan6z1G`<br>ProgramData `ETTLit4rUBtkYdjYfV9LNAz6GwT9yPHj32PRVpWZ7szB` | `75371e9a74f6ac2b5462f9e286f11396e3dee9f9f621cba1ec5cc55fee3a95aa` | 85,784 / 471290952 / 472294460 | Main, `solana/pfusdc-vault/src/lib.rs` and `solana/pfusdc-egress-verifier/src/vault.rs`. Exact match. |
 | Recorder `2fWk8a86FXqGAWCuypnEuQnhuKBUUaw4vxv7FX8Haem6`<br>ProgramData `73bHxuEQUjM9EsyG61YtbbT59CfRFoS1PE3SgAAZsuBi` | `d6400718d5e329052d72c0ee686f471427db346d32ca0124b7b35ec26d39577c` | 66,488 / 471291424 / 472294460 | Main, `solana/pfusdc-recorder/src/lib.rs`. Exact match. |
-| Egress verifier `8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF`<br>ProgramData `D7YLTGrEHo3aLeREBtX5ZBXwSaWKyndPXzuJYQ5HDFmN` | `3b16fc309501814e0bba718ecadb80f02993f6f355153a13f37ae9d47d29354c` | 116,928 / 471292217 / 472294460 | Main, `solana/pfusdc-egress-verifier/src/`. Exact match. The vault pins this verifier ID. |
+| Egress verifier `8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF`<br>ProgramData `D7YLTGrEHo3aLeREBtX5ZBXwSaWKyndPXzuJYQ5HDFmN` | `3b16fc309501814e0bba718ecadb80f02993f6f355153a13f37ae9d47d29354c` | 116,928 / 471292217 / 472294460 | Main, `solana/pfusdc-egress-verifier/src/`. Exact match. The vault pins this verifier ID. This image, replaced on 24 November (note above), bound one bucket in its route; exit setup and rehearsal refuse it (`VERIFIER_UNPINNED` in `ops/sol-live/exit_setup.py`) until the rebuilt custody-route verifier's hash is pinned. |
 
 To read an image, set `SOL_RPC` to a public Solana mainnet RPC and `PROGRAM` to the program address. This read uses Python and `solders`. It validates the loader, account types, and ELF magic. It prints the full ProgramData SHA-256 separately. For the vault, the full-account digest was `f7a1bf3de2960391cd73bd949204891ba248b6f38c1a09138f16c572008d6f47`.
 
@@ -67,7 +86,7 @@ cmp 2fWk8a86FXqGAWCuypnEuQnhuKBUUaw4vxv7FX8Haem6.so "$SOLANA_BRIDGE_IMAGES/pfusd
 cmp 8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF.so "$SOLANA_BRIDGE_IMAGES/pfusdc_egress_verifier.so"
 ```
 
-The vault config PDA `JByQZxACTnFXQDGLBUKAfTysSuqtpoLHoAWqUh4ri6WG` held mint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` and the same route binding as the Post Fiat ledger. Custody was `AhmUaCijypvcbYMDxeXVbUPqjPX1tiHfLH6NWkYnQTCi`. Derive them with seeds `config` and `custody` under the vault ID. The config stores the mint at bytes 0–31 and binding at 32–63. At finalized slot 472294460 the verifier's `egress-light` PDA `FQe34dCQg9m6yEW6NjbjoR8LfWwKGLX2hBvTdY2Lu6s1` did not exist. Deployment of the verifier alone therefore does not establish an initialized withdrawal route.
+The vault config PDA `JByQZxACTnFXQDGLBUKAfTysSuqtpoLHoAWqUh4ri6WG` held mint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` and the same route binding as the Post Fiat ledger. Custody was `AhmUaCijypvcbYMDxeXVbUPqjPX1tiHfLH6NWkYnQTCi`. Derive them with seeds `config` and `custody` under the vault ID. The config stores the mint at bytes 0–31 and binding at 32–63. At finalized slot 472294460 the verifier's `egress-light` PDA `FQe34dCQg9m6yEW6NjbjoR8LfWwKGLX2hBvTdY2Lu6s1` did not exist. Deployment of the verifier alone therefore does not establish an initialized withdrawal route. The PDA exists since the initialisation of 23 November (read at slot 473711317).
 
 ## Solana proof programs
 

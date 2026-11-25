@@ -1,6 +1,11 @@
-//! The frozen mainnet checker binds a single immutable descriptor and source bucket.
-//! Governance signs the descriptor through a route-profile activation. The registered exit record
-//! is excluded from ingress profile selection.
+//! The frozen mainnet checker binds a single immutable descriptor. From the first release
+//! (`RELEASES`) only the revision-8 bucket can exit, and every decision is unanimous. From the
+//! second release (`SECOND_RELEASES`) every Solana-source bucket of the family in the shared
+//! custody can exit (each burn still debits its own series and bucket), close, paid and a
+//! re-opening need the registry threshold, owners must be wallet keys and a governed minimum
+//! applies. Unset, the second release is off at every height. Governance signs the descriptor
+//! through a route-profile activation. The registered exit record is excluded from ingress
+//! profile selection.
 use super::*;
 
 pub const BUCKET: &str = "4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc";
@@ -22,16 +27,90 @@ pub fn release_height(chain: &str, genesis: &str) -> Option<u64> {
         .2
 }
 
+/// The second Solana exit release. Unset means off: the build then follows the first release
+/// at every height, byte for byte.
+const SECOND_RELEASES: &[(&str, &str, Option<u64>)] = &[(
+    "postfiat-wan-devnet-2",
+    "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    Some(1890), // Agreed WAN height of the second release.
+)];
+
+#[cfg(any(test, feature = "test-second-release"))]
+thread_local! {
+    /// `None`: `SECOND_RELEASES` decides. `Some(None)`: no chain schedules the second release,
+    /// as in a build without its entry. `Some(Some(h))`: every chain schedules it at `h`.
+    static SECOND_RELEASE_FOR_TESTS: std::cell::Cell<Option<Option<u64>>> = const { std::cell::Cell::new(None) };
+}
+
+/// Overrides the second release for every chain of this thread (tests only): `None` unsets it
+/// (a build without the entry), `Some(h)` sets it at `h`. The first release still applies
+/// where `RELEASES` sets it.
+#[cfg(any(test, feature = "test-second-release"))]
+pub fn set_second_release_for_tests(height: Option<u64>) {
+    SECOND_RELEASE_FOR_TESTS.with(|h| h.set(Some(height)));
+}
+
+/// Returns this thread to the `SECOND_RELEASES` table (tests only).
+#[cfg(any(test, feature = "test-second-release"))]
+pub fn use_second_release_table_for_tests() {
+    SECOND_RELEASE_FOR_TESTS.with(|h| h.set(None));
+}
+
+/// Whether this build schedules the second release on `chain`. While it does not, the
+/// second release's records on that chain are refused exactly as the first release refuses
+/// them. Records are created only from the release height on (`second_release_active`).
+pub fn second_release_scheduled_on(chain: &str) -> bool {
+    #[cfg(any(test, feature = "test-second-release"))]
+    if let Some(height) = SECOND_RELEASE_FOR_TESTS.with(|h| h.get()) {
+        return height.is_some();
+    }
+    SECOND_RELEASES
+        .iter()
+        .any(|(c, _, height)| *c == chain && height.is_some())
+}
+
+pub fn second_release_height(chain: &str, genesis: &str) -> Option<u64> {
+    SECOND_RELEASES
+        .iter()
+        .find(|(c, g, _)| *c == chain && *g == genesis)?
+        .2
+}
+
+/// Whether the second release's rules apply at `height`. It never applies before the first.
+pub fn second_release_active(chain: &str, genesis: &str, height: u64) -> bool {
+    let first = release_height(chain, genesis);
+    #[cfg(any(test, feature = "test-second-release"))]
+    if let Some(second) = SECOND_RELEASE_FOR_TESTS.with(|h| h.get()) {
+        return second.is_some_and(|second| height >= second && first.is_none_or(|f| height >= f));
+    }
+    first.is_some_and(|f| height >= f)
+        && second_release_height(chain, genesis).is_some_and(|second| height >= second)
+}
+
 pub fn descriptor() -> VaultBridgeRouteProfileV1 {
     serde_json::from_str(include_str!("solana_exit_profile.json"))
         .expect("checked release descriptor")
 }
 
-pub fn matches_bucket(bucket: &VaultBridgeBucketState) -> bool {
-    bucket.bucket_id == BUCKET
-        && bucket.policy_hash == POLICY
-        && bucket.asset_id == FAMILY
-        && vault_bridge_bucket_id(FAMILY, &bucket.source_domain, POLICY).as_deref() == Ok(BUCKET)
+/// Source domain of the shared Solana custody. Every ingress revision of the route keeps the
+/// genesis, vault program and mint, so all their buckets share it. `BUCKET` and `POLICY` remain
+/// the revision-8 values of the trusted checkpoint's ingress profile.
+pub const SOURCE_DOMAIN: &str = "spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:e2a6fbfcf1e65a0f3e08d400c97d913e3e4eca81f84c814efa0bbcada24aac8b:c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61";
+
+/// A bucket the exit covers. First release: the revision-8 bucket only. Second release: any
+/// bucket of the family in the shared custody, derived from its own ingress policy.
+pub fn matches_bucket(bucket: &VaultBridgeBucketState, second: bool) -> bool {
+    if !second {
+        return bucket.bucket_id == BUCKET
+            && bucket.policy_hash == POLICY
+            && bucket.asset_id == FAMILY
+            && vault_bridge_bucket_id(FAMILY, &bucket.source_domain, POLICY).as_deref()
+                == Ok(BUCKET);
+    }
+    bucket.asset_id == FAMILY
+        && bucket.source_domain == SOURCE_DOMAIN
+        && vault_bridge_bucket_id(FAMILY, SOURCE_DOMAIN, &bucket.policy_hash).as_deref()
+            == Ok(bucket.bucket_id.as_str())
 }
 
 pub fn registered(
@@ -77,14 +156,142 @@ pub const CLOSE: &str = "solana_exit_r8_close";
 /// The route profile's activation height is a different field.
 pub const TRUSTED_CHECKPOINT_HEIGHT: u64 = 1753;
 pub const PAID: &str = "solana_exit_r8_paid:";
+/// `solana_exit_refund:<withdrawal packet hash>:<finalized slot>:<cancel signature>` credits
+/// back a burn whose Solana marker reads cancelled (second release only).
+pub const REFUND: &str = "solana_exit_refund:";
+/// `solana_exit_min_withdrawal:<atoms>` sets the smallest Solana exit burn.
+pub const MIN_WITHDRAWAL: &str = "solana_exit_min_withdrawal:";
+/// 0.30 USDC. Each payout leaves the relayer about 4,162,080 lamports of permanent
+/// rent (burn marker 897,840, checkpoint PDA 1,224,960, recipient ATA 2,039,280),
+/// about 0.29 USDC at 70.54 USD/SOL; a smaller burn costs the relayer more than it moves.
+pub const DEFAULT_MIN_WITHDRAWAL_ATOMS: u64 = 300_000;
 
-pub fn is_decision(kind: &str) -> bool {
-    matches!(kind, OPEN | CLOSE | RETIRE) || kind.starts_with(PAID)
+/// Signatures a Solana exit decision needs from the declared full active set.
+/// Closing burns, settling a payout and setting the minimum withdrawal (and a
+/// future refund) use the registry threshold of every threshold amendment, so
+/// one lost validator cannot block them. Opening and retirement stay unanimous on purpose: opening starts
+/// irreversible burns and freezes the committee, and retirement gives up the
+/// protection of every holder whose burn the frozen checker must still prove.
+/// A re-opening after a close uses the close quorum (`required_quorum`).
+/// The first release needs every validator for every decision.
+pub fn decision_quorum(kind: &str, validator_count: usize, second: bool) -> usize {
+    if second
+        && (kind == CLOSE
+            || kind.starts_with(PAID)
+            || kind.starts_with(MIN_WITHDRAWAL)
+            || kind.starts_with(REFUND))
+    {
+        external_lane_amendment_threshold(validator_count)
+    } else {
+        validator_count
+    }
+}
+
+/// Signatures a decision needs in the current state. A re-opening after a close
+/// needs only the close quorum: the first opening was unanimous, and otherwise a
+/// close by five while one validator is lost could never be undone, freezing every
+/// holder (the committee cannot change while Solana pfUSDC is outstanding).
+pub fn required_quorum(kind: &str, reopening: bool, validator_count: usize, second: bool) -> usize {
+    if kind == OPEN && reopening {
+        decision_quorum(CLOSE, validator_count, second)
+    } else {
+        decision_quorum(kind, validator_count, second)
+    }
+}
+
+/// The lowest quorum any state admits, for the stateless domain check.
+pub fn signer_floor(kind: &str, validator_count: usize, second: bool) -> usize {
+    required_quorum(kind, kind == OPEN, validator_count, second)
+}
+
+/// Whether burns were closed since the descriptor's registration, so that an
+/// opening now is a re-opening.
+pub fn closed_since_registration(g: &GovernanceState) -> bool {
+    let Some((descriptor, _)) = registered(g) else {
+        return false;
+    };
+    g.amendment_activation_records.iter().any(|a| {
+        a.kind == CLOSE
+            && a.value == 1
+            && a.activated_height > descriptor.authorized_height
+            && a.activation_height == a.activated_height
+    })
+}
+
+/// The minimum-withdrawal kind exists from the second release only; before it the kind is
+/// handled exactly as the first release handles any other kind.
+pub fn is_decision(kind: &str, second: bool) -> bool {
+    matches!(kind, OPEN | CLOSE | RETIRE)
+        || kind.starts_with(PAID)
+        || (second && (kind.starts_with(MIN_WITHDRAWAL) || kind.starts_with(REFUND)))
+}
+
+/// The amount of a minimum-withdrawal decision: canonical decimal atoms, at least 1.
+pub fn minimum_withdrawal(kind: &str) -> Result<u64, String> {
+    let text = kind
+        .strip_prefix(MIN_WITHDRAWAL)
+        .ok_or("expected Solana minimum withdrawal amendment")?;
+    match text.parse::<u64>() {
+        Ok(atoms) if atoms > 0 && atoms.to_string() == text => Ok(atoms),
+        _ => Err("invalid Solana minimum withdrawal atoms".into()),
+    }
+}
+
+/// The latest governed minimum after the descriptor's registration, or the default.
+pub fn min_withdrawal_atoms(g: &GovernanceState) -> u64 {
+    let Some((descriptor, _)) = registered(g) else {
+        return DEFAULT_MIN_WITHDRAWAL_ATOMS;
+    };
+    g.amendment_activation_records
+        .iter()
+        .rev()
+        .filter(|a| {
+            a.value == 1
+                && a.activated_height > descriptor.authorized_height
+                && a.activation_height == a.activated_height
+        })
+        .find_map(|a| minimum_withdrawal(&a.kind).ok())
+        .unwrap_or(DEFAULT_MIN_WITHDRAWAL_ATOMS)
 }
 
 /// The packet hash commits to the burn, amount and source bucket. The burn ID
 /// commits to the signed operation, including the full 32-byte destination.
 /// Solana transaction signatures use their raw 64 bytes encoded as lowercase hex.
+/// The cancelled burn a refund decision names: its packet and the finalized cancel.
+#[derive(Debug, PartialEq, Eq)]
+pub struct CancelledBurn<'a> {
+    pub packet_hash: &'a str,
+    pub slot: u64,
+    pub signature_hex: &'a str,
+}
+
+pub fn refund_fields(kind: &str) -> Result<CancelledBurn<'_>, String> {
+    let mut fields = kind
+        .strip_prefix(REFUND)
+        .ok_or("expected Solana refund amendment")?
+        .split(':');
+    let packet = fields.next().ok_or("missing withdrawal packet hash")?;
+    let slot = fields.next().ok_or("missing finalized Solana slot")?;
+    let signature = fields.next().ok_or("missing Solana cancel signature")?;
+    validate_lower_hex_len("withdrawal packet hash", packet, 96)?;
+    validate_lower_hex_len("Solana cancel signature", signature, 128)?;
+    let number = slot
+        .parse::<u64>()
+        .map_err(|_| "invalid finalized Solana slot")?;
+    if fields.next().is_some()
+        || number == 0
+        || number.to_string() != slot
+        || signature.bytes().all(|b| b == b'0')
+    {
+        return Err("invalid finalized Solana cancel reference".into());
+    }
+    Ok(CancelledBurn {
+        packet_hash: packet,
+        slot: number,
+        signature_hex: signature,
+    })
+}
+
 pub struct FinalizedPayout<'a> {
     pub packet_hash: &'a str,
     pub slot: u64,

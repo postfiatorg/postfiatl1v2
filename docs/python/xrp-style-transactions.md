@@ -53,7 +53,7 @@ from postfiat_rpc import (
     unfreeze_trustline,
 )
 
-CHAIN_ID = "postfiat-controlled-testnet"
+CHAIN_ID = "postfiat-local"  # the default chain id of scripts/devnet-up
 RPC_ENDPOINT = "127.0.0.1:27650"
 
 client = PostFiatRpcClient(RPC_ENDPOINT)
@@ -126,8 +126,8 @@ form (`PaymentMemo::validate`), and the web wallet encodes memo text the same wa
 Useful readbacks:
 
 ```python
-print(client.account_state(alice.address))
-print(client.account_state(bob.address))
+print(client.account(alice.address))
+print(client.account(bob.address))
 
 if payment.tx_id:
     print(client.tx(payment.tx_id))
@@ -470,7 +470,7 @@ transaction locally.
 
 | XRP-style flow | Python helper | Primary readbacks |
 | --- | --- | --- |
-| `Payment` for native PFT | `send_payment()` | `account_state()`, `tx()`, `account_tx_history()` |
+| `Payment` for native PFT | `send_payment()` | `account()`, `tx()`, `account_tx_history()` |
 | Issued asset definition | `mint_token()` | `asset_info()`, `issuer_assets()` |
 | `TrustSet` | `set_trustline()` | `account_lines()`, `account_assets()` |
 | Trustline authorization | `authorize_trustline()` | `account_lines()` |

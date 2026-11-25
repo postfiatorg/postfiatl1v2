@@ -43,7 +43,17 @@ SERIES = "e90627502bea5857aefd003d80af518f0ccb44ad2be8098ec6db2025ccaf8390e8bef3
 POLICY = "5bb5a3d99616945cb7330c07a51c47c0453ff54f6c622f44f18c5b505cc9b13f179a6796a537119a482d788537bd96c7"
 EXIT = "37e3c05d8e353d93d56819bfdc3b10f314e5ae298cf43a34cefac477d06893953ceca391165ec3bc977c5e5b273b4046"
 LIGHT = pda(VERIFIER, b"egress-light")
-VERIFIER_SHA256 = "0x3b16fc309501814e0bba718ecadb80f02993f6f355153a13f37ae9d47d29354c"
+# The deployed 0x3b16fc30... program binds one bucket in its route and must not be
+# initialized with the custody route below. Set VERIFIER_SHA256 to the reviewed rebuild's
+# "0x<sha256>" after it is deployed; until then setup and rehearsal refuse.
+VERIFIER_UNPINNED = "the rebuilt verifier's hash is not pinned yet"
+VERIFIER_SHA256 = "0x3406becc6db7ba7c250f8db55dc43965656093bb4ceb3e330d2f452edd465fdf"
+
+
+def verifier_pin():
+    require(VERIFIER_SHA256 is not None, VERIFIER_UNPINNED)
+    return VERIFIER_SHA256
+
 PROFILE = ROOT / "crates/types/src/solana_exit_profile.json"
 ANCHOR_TX = "9da535ba12b9f8eb7e877e8dfb985503b0ecb8eda0fcee06f2e98a40d8627c62f55c517db4e407ca0f61603489b02f2e"
 
@@ -260,7 +270,7 @@ def check_reviewed_instruction(config, ix):
     require(
         config == read(CONFIG)
         and hashlib.sha256(ix.data).hexdigest()
-        == "bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4",
+        == "7d02bbfe0bc6b43a52746ed5d13cd506ea0b7d4b1628d00c279fc9ed38cf19b6",
         "Unreviewed bootstrap bytes.",
     )
 
@@ -379,7 +389,7 @@ def main():
     c = ExitCluster(MAINNET_PAYER)
     profile = read(PROFILE)
     require(
-        profile_code(c, VERIFIER) == VERIFIER_SHA256
+        profile_code(c, VERIFIER) == verifier_pin()
         and profile_code(c, VAULT) == profile["vault_runtime_code_hash"]
         and profile_code(c, TOKEN) == profile["token_runtime_code_hash"],
         "deployed program hash changed",

@@ -49,17 +49,32 @@ pub(super) fn execute_fastlane_primary_for_chain(
             && certificate.votes.first().is_some_and(|vote| {
                 vote.checkpoint.pending_fee_burn_totals.iter().any(|row| {
                     row.amount_atoms > 0
-                        && bytes_to_hex(&row.asset_id.0) == postfiat_types::solana_exit::SERIES
+                        && postfiat_execution::solana_exit_series_bucket_at(
+                            genesis,
+                            ledger,
+                            &bytes_to_hex(&row.asset_id.0),
+                            block_height,
+                        )
+                        .is_some()
                 })
             })
         {
+            let second = postfiat_types::solana_exit::second_release_active(
+                &genesis.chain_id,
+                &genesis_hash(genesis),
+                block_height,
+            );
             return Receipt::rejected(
                 transaction
                     .tx_id()
                     .map(|id| bytes_to_hex(&id.0))
                     .unwrap_or_else(|_| "fastlane-invalid-id".into()),
                 "solana_exit_unmatched_supply_change",
-                "FastLane checkpoint fees cannot burn revision-8 reserves",
+                if second {
+                    "FastLane checkpoint fees cannot burn Solana-source reserves"
+                } else {
+                    "FastLane checkpoint fees cannot burn revision-8 reserves"
+                },
             );
         }
     }
@@ -1330,7 +1345,12 @@ pub(super) fn execute_governance_batch_with_replay(
                 "governance amendment already applied",
             ));
         } else {
-            if postfiat_types::solana_exit::is_decision(&amendment.kind) {
+            if postfiat_types::solana_exit::is_decision(
+                &amendment.kind,
+                genesis.is_some_and(|g| {
+                    crate::solana_exit_governance::second_release(g, block_height)
+                }),
+            ) {
                 if let Err(message) = crate::solana_exit_governance::apply_decision(
                     genesis,
                     governance,
@@ -1893,16 +1913,22 @@ pub(super) fn execute_governance_batch_with_replay(
                     || postfiat_types::solana_exit::registered(governance).is_some()
                 {
                     return Err(
-                        "Solana exit requires its original bucket and a single authorization"
-                            .into(),
+                        if crate::solana_exit_governance::second_release(genesis, block_height) {
+                            "Solana exit registration requires a bucket of the shared custody, no beacon bootstrap and no earlier registration"
+                        } else {
+                            "Solana exit requires its original bucket and a single authorization"
+                        }
+                        .into(),
                     );
                 }
                 crate::solana_exit_governance::verify_checkpoint_history(genesis, governance)?;
                 crate::solana_exit_governance::require_reconciled_bucket(
+                    genesis,
                     ledger
                         .as_deref()
                         .ok_or("Solana exit registration requires the committed ledger")?,
                     orchard_balances,
+                    block_height,
                 )?;
                 return postfiat_types::VaultBridgeRouteProfileRecordV1::new(
                     activation,
@@ -1936,27 +1962,35 @@ pub(super) fn execute_governance_batch_with_replay(
             let ledger = ledger.as_deref().ok_or_else(|| {
                 "vault bridge route activation requires canonical ledger context".to_string()
             })?;
-            if activation.profile.solana.is_some() {
-                let height = governance.amendments.iter()
+            if let Some(new) = &activation.profile.solana {
+                let height = governance
+                    .amendments
+                    .iter()
                     .filter(|a| a.kind == postfiat_types::SOLANA_ACTIVATION_HEIGHT)
-                    .map(|a| u64::from(a.value)).min();
+                    .map(|a| u64::from(a.value))
+                    .min();
                 if height.is_none_or(|at| block_height < at) {
                     return Err("Solana bridge is not active".into());
                 }
                 if block_height >= activation.profile.expires_at_height {
                     return Err("Solana route already expired".into());
                 }
-                if let Some(previous) = ledger.solana_clients()
+                if let Some(previous) = ledger
+                    .solana_clients()
                     .filter(|r| r.profile.route_id == activation.profile.route_id)
                     .max_by_key(|r| r.profile.route_epoch)
                 {
-                    let old = previous.profile.solana.as_ref().ok_or("missing Solana predecessor pins")?;
-                    let new = activation.profile.solana.as_ref().unwrap();
+                    let old = previous
+                        .profile
+                        .solana
+                        .as_ref()
+                        .ok_or("missing Solana predecessor pins")?;
                     if previous.profile.asset_id != activation.profile.asset_id
                         || previous.profile.source_domain() != activation.profile.source_domain()
                         || new.route_binding != old.route_binding
                         || (!previous.rotates_deposit_key(&activation.profile)
-                            && (new.anchor_slot <= old.anchor_slot || new.anchor.epoch < previous.client.epoch))
+                            && (new.anchor_slot <= old.anchor_slot
+                                || new.anchor.epoch < previous.client.epoch))
                     {
                         return Err("Solana route revision must preserve custody and advance its governed anchor".into());
                     }
@@ -2012,13 +2046,19 @@ pub(super) fn execute_governance_batch_with_replay(
         })();
         match validated {
             Ok(record) => {
-                if let (Some(ledger), Some(pins)) = (ledger.as_deref_mut(), &activation.profile.solana) {
-                    let predecessor = ledger.solana_clients()
+                if let (Some(ledger), Some(pins)) =
+                    (ledger.as_deref_mut(), &activation.profile.solana)
+                {
+                    let predecessor = ledger
+                        .solana_clients()
                         .filter(|r| r.profile.route_id == activation.profile.route_id)
                         .max_by_key(|r| r.profile.route_epoch)
                         .filter(|r| r.rotates_deposit_key(&activation.profile));
-                    let client = predecessor.map_or_else(|| pins.anchor.clone(), |r| r.client.clone());
-                    let mut epoch_history = predecessor.map(|r| r.epoch_history.clone()).unwrap_or_default();
+                    let client =
+                        predecessor.map_or_else(|| pins.anchor.clone(), |r| r.client.clone());
+                    let mut epoch_history = predecessor
+                        .map(|r| r.epoch_history.clone())
+                        .unwrap_or_default();
                     if predecessor.is_some() {
                         epoch_history.insert(pins.anchor.epoch, pins.anchor.clone());
                     }
@@ -2030,7 +2070,9 @@ pub(super) fn execute_governance_batch_with_replay(
                     if ledger.solana_route.is_none() {
                         ledger.solana_route = Some(route);
                     } else {
-                        ledger.additional_solana_routes.insert(record.profile_hash.clone(), route);
+                        ledger
+                            .additional_solana_routes
+                            .insert(record.profile_hash.clone(), route);
                     }
                 }
                 if let Some(state) = activation.tier4_finality_bootstrap.clone() {
@@ -2087,8 +2129,13 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
     if route.solana.is_some() {
         // Solana is a second backing series of the same family. Its signed
         // route pins are independent of the Ethereum NAV verifier profile.
-        let asset = ledger.asset_definition(&route.asset_id).ok_or("missing Solana pfUSDC family")?;
-        if asset.issuer != nav_asset.issuer || asset.precision != 6 || !asset.asset_family_id.is_empty() {
+        let asset = ledger
+            .asset_definition(&route.asset_id)
+            .ok_or("missing Solana pfUSDC family")?;
+        if asset.issuer != nav_asset.issuer
+            || asset.precision != 6
+            || !asset.asset_family_id.is_empty()
+        {
             return Err("invalid Solana pfUSDC family".into());
         }
         return Ok(());

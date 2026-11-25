@@ -186,7 +186,7 @@ fn external_lane_export_shape_refusals_reach_mempool_admission() {
 /// In a certified transparent block the refused export follows the ordinary
 /// rejected-transaction fee rule, as the release does
 /// (`release_above_the_cap_in_a_block_burns_the_fee_only_after_fee_activation`):
-/// before `rejected_tx_fee_activation_height` nothing changes; from it the fee
+/// before `rejected_tx_fee_v2_activation_height` nothing changes; from it the fee
 /// is burned and the sequence consumed, and no lane or other state changes.
 #[test]
 fn external_lane_export_in_a_block_burns_the_fee_only_after_fee_activation() {
@@ -203,7 +203,7 @@ fn external_lane_export_in_a_block_burns_the_fee_only_after_fee_activation() {
     let template = activated.amendments[0].clone();
     activated.apply(GovernanceAmendment {
         amendment_id: "rejected-fee-activation".to_string(),
-        kind: GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT.to_string(),
+        kind: GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT.to_string(),
         value: u32::try_from(height).expect("height"),
         ..template
     });

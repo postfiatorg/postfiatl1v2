@@ -99,9 +99,13 @@ class PayoutReviewTest(unittest.TestCase):
             patch.object(p, "reclaim_completed"),
             patch.object(p, "check_work_capacity"),
             patch.object(p, "prove", return_value=(b"val", bytes(356))),
+            patch.object(p, "public_values", return_value=b"val"),
             patch.object(p, "balance"),
-            patch.object(p, "upload") as upload,
+            patch.object(p, "upload"),
+            patch.object(p, "funded_send") as send,
         ):
+            # The upload now runs beside the proof. It spends only the fee payer's
+            # buffer rent; the transaction that moves custody must still not be sent.
             with self.assertRaisesRegex(ValueError, "shortfall"):
                 p.submit(c, "checkpoint", {}, Path("unused"))
-            upload.assert_not_called()
+            send.assert_not_called()

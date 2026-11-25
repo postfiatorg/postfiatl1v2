@@ -60,14 +60,19 @@ action fields.
 The review must use the current pinned circuit and artifacts, not the older
 17-field description from the initial remediation report:
 
-- circuit ID: `postfiat.asset_orchard.swap_conservation.v1`;
+- circuit ID: `asset_orchard.swap.pricing_bound.v4` on `main` (checked on 25
+  November 2026, `crates/privacy_orchard/src/asset_orchard.rs`; this page
+  earlier named it `postfiat.asset_orchard.swap_conservation.v1`);
 - parameter `k`: 15;
 - public-instance layout hash:
   `4a97e6254fe6ce1416723ebc0908f6a2a617a8d223f902905a91d7f006a8d1e8cee4cb2ccd81decd29c85b4a2c0f7ed1`;
 - Poseidon parameter hash:
   `7249e21c01fa7cd5020c40cd2aacf08b3e22990aae202a1cf37ce6fc73ae448536a77c6f668fa23749981a69fd6fcdf3`;
-- VK attestation hash:
-  `edc14bbd5fabf855817dfd02c30bf616376dbda29362524def869b6e2ce615c2a1a141389aafdea5461f137d84ce358a`;
+- VK attestation hash (`ASSET_ORCHARD_SWAP_V1_VK_HASH` in
+  `crates/privacy_orchard/src/asset_orchard_circuit.rs` on `main`, checked on
+  25 November 2026; this page earlier gave
+  `edc14bbd5fabf855817dfd02c30bf616376dbda29362524def869b6e2ce615c2a1a141389aafdea5461f137d84ce358a`):
+  `640e83ff0edc500eae1499eebf8c658097088de0b0e44ed6dd10906f158bbf55b781772a43fff839095ed7431823b828`;
 - runtime pinned-VK fingerprint:
   `1b38a9d9906cbfce9addf9a500a1b4bec720a33118507946f427a628772fac48f1786bffa390a5254db215fadf7f3460`.
 

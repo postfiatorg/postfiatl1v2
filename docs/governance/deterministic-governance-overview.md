@@ -3,6 +3,12 @@
 Status: target-design overview of the DGA policy lane; current Cobalt state noted separately.
 Date: 2026-05-23; authority boundary corrected 2026-08-25
 
+!!! note "Unlinked page names (25 November 2026)"
+    Page names on this page written without a link, for example "Validator
+    Evidence Conflict Set" or "Qwen Cobalt Internal Validation Plan", name pages
+    that are not in this repository on 25 November 2026. Their schemas and
+    fixtures, where named, are under `docs/governance/agent/`.
+
 > **Current authority boundary:** the `2026-08-25T15:37:40Z`
 > controlled-devnet probe found Cobalt active for validator-registry and
 > trust-graph ratification from height
@@ -202,7 +208,8 @@ the initial allowed field set is tracked in
 first packet contract is tracked in
 [Validator Evidence Packet Schema](validator-evidence-packet-schema.md), and
 the first ruleset binding is tracked in
-Validator Evidence Ruleset Binding.
+Validator Evidence Ruleset Binding (that page is not in this repository on 25
+November 2026).
 The collector and Cobalt root-binding plan is tracked in
 Validator Evidence Collector And Cobalt Integration.
 The internal plan for proving repeated Qwen/evidence packet execution through
