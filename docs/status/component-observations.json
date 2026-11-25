@@ -1,0 +1,35 @@
+{
+  "fleet": {
+    "component": "Validator release",
+    "chain": "postfiat-wan-devnet-2",
+    "height": 1903,
+    "observed_at": "2026-11-25 20:15 UTC",
+    "observers": "Fleet operator report covering six validators",
+    "source_revision": "04600868326ed9704cd31149371ee6f493806c3a",
+    "artifact": "sha256:6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b",
+    "result": "Six validators reported on sol-exit-r2",
+    "evidence": "https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/ops/b24-live/known-releases.txt"
+  },
+  "authority": {
+    "component": "Validator-trust authority",
+    "chain": "postfiat-wan-devnet-2",
+    "height": 924,
+    "observed_at": "2026-08-26 06:35:50 UTC",
+    "observers": "E5 authenticated observation, six validators",
+    "source_revision": null,
+    "artifact": "node d5e5ef63\u2026c2696caf (abbreviated in evidence)",
+    "result": "Cobalt last verified active for validator trust",
+    "evidence": "https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state"
+  },
+  "identity": {
+    "component": "Lane-export proof identity",
+    "chain": "Source build",
+    "height": null,
+    "observed_at": "2026-11-25",
+    "observers": "GitHub Actions",
+    "source_revision": "003af00011c6af086f14f4d4017e450a11eaf45f",
+    "artifact": "pft-lane-export-program",
+    "conclusion": "failure",
+    "evidence": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/45684553972"
+  }
+}
