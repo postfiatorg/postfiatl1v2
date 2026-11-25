@@ -5184,7 +5184,7 @@
         let other = CobaltDomain { chain_id: "postfiat-local-devnet".into(), ..domain.clone() };
         let lifecycle = GovernanceAmendmentLifecycle { activation_height: 1900, ..GovernanceAmendmentLifecycle::immediate() };
         assert_eq!(
-            ratify_governance_amendment_with_lifecycle(&other, &config, &kind, 1, validators[..5].to_vec(), lifecycle)
+            ratify_governance_amendment_with_lifecycle(&other, &config, kind, 1, validators[..5].to_vec(), lifecycle)
                 .map(|_| ()),
             unknown
         );
