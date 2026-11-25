@@ -1727,6 +1727,88 @@ fn optional_hex96_field(value: &Value, path: &str) -> Result<(), RpcResponseVali
 /// epoch and whose activation height is the profile's), the route binding
 /// derived from (profile_hash, route_epoch), the NAV proof profile summary,
 /// and the trust class implied by the evidence tier.
+/// The first release reports only the revision-8 bucket and policy. A report that carries the
+/// second release's `covered_bucket_ids` may name any bucket of the shared custody derived from
+/// its own policy, and only one in that list.
+fn validate_solana_exit_backing_bucket(
+    result: &Value,
+    backing: &Value,
+) -> Result<(), RpcResponseValidationError> {
+    use postfiat_types::solana_exit;
+    let Some(covered) = result.get("covered_bucket_ids") else {
+        expect_string_eq(backing, "bucket_id", solana_exit::BUCKET)?;
+        return expect_string_eq(backing, "policy_hash", solana_exit::POLICY);
+    };
+    let policy = clean_string_field(backing, "policy_hash")?;
+    let bucket = postfiat_types::vault_bridge_bucket_id(
+        solana_exit::FAMILY,
+        solana_exit::SOURCE_DOMAIN,
+        policy,
+    )
+    .map_err(|_| invalid_result("source_backing.policy_hash", "expected a 48-byte policy hash"))?;
+    expect_string_eq(backing, "bucket_id", &bucket)?;
+    let listed = covered
+        .as_array()
+        .ok_or_else(|| invalid_result("covered_bucket_ids", "expected a list of bucket ids"))?;
+    if !listed.iter().any(|id| id.as_str() == Some(bucket.as_str())) {
+        return Err(invalid_result(
+            "source_backing.bucket_id",
+            "expected a bucket the second release covers",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod solana_exit_backing_bucket_tests {
+    use super::*;
+    use postfiat_types::solana_exit;
+
+    #[test]
+    fn redemption_rows_name_a_known_state_and_refunded_only_with_the_second_release() {
+        let row = |state: &str| {
+            serde_json::json!({
+                "redemption_id": "r", "owner": "o", "owner_sequence": 1, "issuer": "i",
+                "bucket_id": "b", "amount_atoms": 300000, "epoch": 1, "reserve_packet_hash": "",
+                "destination_ref": "", "settled_atoms": 0, "state": state, "created_at_height": 5,
+                "settlement_receipt_hash": "", "burn_tx_id": "", "withdrawal_recipient": "",
+                "withdrawal_evidence_root": "", "withdrawal_packet_hash": "",
+                "withdrawal_packet_evm_digest": "",
+            })
+        };
+        // A client built without the height still reads a status reply with a refunded row.
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        assert!(validate_vault_bridge_status_redemption_row(&row("pending"), "a").is_ok());
+        assert!(validate_vault_bridge_status_redemption_row(&row("refunded"), "a").is_ok());
+        assert!(validate_vault_bridge_status_redemption_row(&row("queued"), "a").is_ok());
+        // A refunded row that claims a settled amount is malformed.
+        let mut settled = row("refunded");
+        settled["settled_atoms"] = serde_json::json!(300000);
+        assert!(validate_vault_bridge_status_redemption_row(&settled, "a").is_err());
+    }
+
+    #[test]
+    fn solana_exit_backing_pins_revision_8_unless_the_report_lists_covered_buckets() {
+        let r8 = serde_json::json!({"bucket_id": solana_exit::BUCKET, "policy_hash": solana_exit::POLICY});
+        let policy = "09".repeat(48);
+        let r9_bucket = postfiat_types::vault_bridge_bucket_id(
+            solana_exit::FAMILY,
+            solana_exit::SOURCE_DOMAIN,
+            &policy,
+        )
+        .unwrap();
+        let r9 = serde_json::json!({"bucket_id": r9_bucket, "policy_hash": policy});
+        let first = serde_json::json!({});
+        assert!(validate_solana_exit_backing_bucket(&first, &r8).is_ok());
+        assert!(validate_solana_exit_backing_bucket(&first, &r9).is_err());
+        let second = serde_json::json!({"covered_bucket_ids": [solana_exit::BUCKET, r9_bucket]});
+        assert!(validate_solana_exit_backing_bucket(&second, &r8).is_ok());
+        assert!(validate_solana_exit_backing_bucket(&second, &r9).is_ok());
+        let only_r8 = serde_json::json!({"covered_bucket_ids": [solana_exit::BUCKET]});
+        assert!(validate_solana_exit_backing_bucket(&only_r8, &r9).is_err());
+    }
+}
+
 fn validate_vault_bridge_route_result(result: &Value) -> Result<(), RpcResponseValidationError> {
     expect_string_eq(result, "schema", VAULT_BRIDGE_ROUTE_REPORT_SCHEMA)?;
     clean_string_field(result, "chain_id")?;
@@ -1790,8 +1872,7 @@ fn validate_vault_bridge_route_result(result: &Value) -> Result<(), RpcResponseV
         }
         u64_field(backing, "series_supply_atoms")?;
         u64_field(backing, "outstanding_vault_bridge_atoms")?;
-        expect_string_eq(backing, "bucket_id", solana_exit::BUCKET)?;
-        expect_string_eq(backing, "policy_hash", solana_exit::POLICY)?;
+        validate_solana_exit_backing_bucket(result, backing)?;
         bool_field(result, "burns_open")?;
         let family = field(result, "family_nav_profile")?;
         clean_string_field(family, "id")?;
@@ -7097,7 +7178,13 @@ fn validate_vault_bridge_status_redemption_row(
     clean_string_field_allow_empty(row, "reserve_packet_hash")?;
     clean_string_field_allow_empty(row, "destination_ref")?;
     u64_field(row, "settled_atoms")?;
-    clean_string_field(row, "state")?;
+    // "refunded" is a known state (second release); a client built without the height still
+    // reads the reply. A refunded row never claims a settled amount.
+    if clean_string_field(row, "state")? == postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED
+        && row.get("settled_atoms").and_then(Value::as_u64) != Some(0)
+    {
+        return Err(invalid_result("state", "refunded redemption with a settled amount"));
+    }
     u64_field(row, "created_at_height")?;
     clean_string_field_allow_empty(row, "settlement_receipt_hash")?;
     clean_string_field_allow_empty(row, "burn_tx_id")?;

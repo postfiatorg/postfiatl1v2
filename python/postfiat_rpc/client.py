@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import socket
 import threading
 import unicodedata
@@ -3691,6 +3692,8 @@ class PostFiatRpcClient:
         if response.get("version") != RPC_VERSION:
             raise RpcProtocolError("response version mismatch")
         if response.get("id") != request_id:
+            if node_placeholder_error(response):
+                raise RpcError(method, response["error"])
             raise RpcProtocolError("response id mismatch")
         if response.get("ok") is not True:
             error = response.get("error", {})
@@ -3700,6 +3703,13 @@ class PostFiatRpcClient:
         if "result" not in response:
             raise RpcProtocolError("response missing result")
         return response["result"]
+
+
+def node_placeholder_error(response: dict[str, Any]) -> bool:
+    """rpc-serve answers a request it could not read whole (an id over its bound, a parse
+    error) under its placeholder id `remote-N`: that is the node's error for this request."""
+    return (response.get("ok") is False and isinstance(response.get("error"), dict)
+            and isinstance(response.get("id"), str) and re.fullmatch(r"remote-[0-9]+", response["id"]) is not None)
 
 
 class PostFiatWebSocketRpcClient(PostFiatRpcClient):

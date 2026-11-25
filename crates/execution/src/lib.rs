@@ -26,7 +26,6 @@ include!("owned_transfer.rs");
 include!("owned_transfer_recovery.rs");
 mod external_lane_release;
 pub use external_lane_release::dry_run_external_lane_export;
-mod solana_bridge;
 pub mod fastlane_primary;
 pub mod fastswap;
 pub mod fastswap_asset_control;
@@ -35,6 +34,7 @@ pub mod fastswap_checkpoint;
 pub mod fastswap_control;
 pub mod fastswap_decision;
 mod pftl_uniswap_ethereum_verification;
+mod solana_bridge;
 
 #[cfg(test)]
 mod tests {

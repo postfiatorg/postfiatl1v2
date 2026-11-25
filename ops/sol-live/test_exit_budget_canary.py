@@ -53,13 +53,18 @@ class BudgetCanaryTest(unittest.TestCase):
         capture = canary.read(Path(__file__).parent / "fixtures/agave-withdrawal.json")
         tx = capture["transaction"]
         owner = p.pk(capture["job"]["recipient"])
-        self.assertEqual(canary.token_deltas(tx, owner), {"custody": -20000, "recipient": 20000})
+        self.assertEqual(
+            canary.token_deltas(tx, 20000, owner), {"custody": -20000, "recipient": 20000}
+        )
+        # The planned (governed) amount must be the amount the payout moved.
+        with self.assertRaises(ValueError):
+            canary.token_deltas(tx, 300000, owner)
         custody = str(p.pda(p.VAULT, b"custody"))
         index = tx["transaction"]["message"]["accountKeys"].index(custody)
         row = next(r for r in tx["meta"]["postTokenBalances"] if r["accountIndex"] == index)
         row["uiTokenAmount"]["amount"] = "1"
         with self.assertRaises(ValueError):
-            canary.token_deltas(tx, owner)
+            canary.token_deltas(tx, 20000, owner)
 
     def test_budget_uses_selected_segments_and_peak_buffer_rent(self):
         from unittest.mock import patch
@@ -118,7 +123,7 @@ class BudgetCanaryTest(unittest.TestCase):
 
         c.call.side_effect = call
         from unittest.mock import patch
-        with patch.object(p, "check_custody"):
+        with patch.object(p, "check_custody"), patch.object(p, "check_verifier"):
             p.funded_send(c, "exit.checkpoint", [], rent=1200)
         c.confirm.assert_called_once()
 

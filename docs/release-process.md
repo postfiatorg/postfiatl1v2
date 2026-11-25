@@ -3,6 +3,14 @@
 PostFiat L1 is currently controlled pre-testnet software. A tagged release is
 an immutable engineering artifact, not a mainnet-readiness claim.
 
+Since 21 November 2026 a release is built from a commit on `main` only
+([Master State](status/master-state.md)). A short-lived release branch cut from
+`main` may set an activation height (for example `release/sol-exit-r2`); until
+it is merged back, the running build is not on `main`. Validators are rolled
+one at a time with the release kit, and after each host an accepted transfer
+and six-way agreement on height, tip and state root are checked (working rules
+of the [23 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-23.md)).
+
 1. Start from a clean, reviewed commit with no open P0/P1 publication blocker.
 2. Run formatting, locked workspace check/test/Clippy, wallet/proxy tests,
    offline and explicitly configured fork contract suites, strict docs build,

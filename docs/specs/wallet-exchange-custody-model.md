@@ -93,7 +93,10 @@ private key material.
 
 Controlled-testnet v0 supports address balance polling, tx/finality
 verification and account history: `account_tx` reads a disk-backed per-account
-index ([account history](../rpc/account-history.md)).
+index ([account history](../rpc/account-history.md)). On 25 November 2026 that
+index was not usable on any of the six validators (an old v3 index, not rebuilt
+for v4), so their `account_tx` answers came from the bounded archive scan
+([Account Tx Index](../runbooks/account-tx-index.md#live-state-25-november-2026)).
 
 Minimum viable attribution flow:
 
@@ -112,9 +115,12 @@ rows expose signed `memos`, their hash, count and byte length; `tx` exposes the
 same rows. After deployment, serving nodes must run `account-tx-index-build`
 to replace the old index and backfill retained history.
 
-Code: `append_account_tx_index_block`, `build_account_tx_index` and
-`account_tx_rows_for_archived_block` in
-[`crates/node/src/block_finality.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/block_finality.rs).
+Code (checked on `main`, 25 November 2026): `account_tx_rows_for_archived_block`
+in
+[`crates/node/src/block_finality.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/block_finality.rs);
+the index build `rebuild_account_tx_index` and the per-block append
+`append_account_tx_index_after_commit` in
+[`crates/node/src/account_tx_disk_index.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/account_tx_disk_index.rs).
 Transparent shielded-pool deposits, FastLane primary effects and FastPay
 certificates still need separate reconciliation. See [account history](../rpc/account-history.md).
 
@@ -190,7 +196,7 @@ For the first controlled testnet, the exchange/custody model is credible when:
 
 ## Remaining Production Work
 
-- Deploy the expanded account history and backfill its v2 index; reconcile
+- Deploy the expanded account history and backfill its index (v4 on `main`); reconcile
   balance-changing lanes that remain outside `account_tx`.
 - Hardware-wallet or external signer interface for ML-DSA.
 - Formal backup encryption and recovery standard.

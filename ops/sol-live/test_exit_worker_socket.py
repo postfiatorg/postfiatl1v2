@@ -39,6 +39,7 @@ class QualificationSocketTest(unittest.TestCase):
               patch.object(g, "fleet", return_value=dict(build_git_revision="rev", block_height=8,
                                                         block_tip_hash="tip", state_root="root")),
               patch.object(g, "ethereum"), patch.object(g, "six"), patch.object(g, "require_closed"),
+              patch.object(g, "chain_rules", return_value=__import__("exit_rules").first_release()), patch.object(g, "routes"),
               patch("requests.get", side_effect=AssertionError("Open attempted HTTP")),
               patch.object(g, "qualify", create=True, side_effect=PermissionError("wrong worker UID")),
               patch.object(g, "govern") as sign):

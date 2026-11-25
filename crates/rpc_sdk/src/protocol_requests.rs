@@ -213,6 +213,10 @@ pub const HISTORY_ARCHIVE_HANDOFF_SCHEMA: &str = "postfiat-history-archive-hando
 pub const MAX_RPC_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_RPC_PARAM_NAME_BYTES: usize = 64;
 pub const MAX_RPC_PARAM_STRING_BYTES: usize = 4096;
+/// A request id is echoed in its reply, so it stays small: the error reply to
+/// any request then fits the frame. Every client in the repository uses ids
+/// far below this (`py-00000001`, `local-1`, 32-hex ids, `proxy-…` ids).
+pub const MAX_RPC_ID_BYTES: usize = 256;
 pub const MAX_RPC_SIGNED_TRANSFER_JSON_BYTES: usize = 64 * 1024;
 /// FastLane primary control transactions carry ML-DSA-65 signatures and keys
 /// as JSON number arrays. Measured: the five-vote epoch-1 AnchorCheckpoint of
@@ -2555,7 +2559,12 @@ fn validate_common_fields(version: &str, id: &str) -> Result<(), RpcProtocolErro
     if id.trim().is_empty() {
         return Err(RpcProtocolError::EmptyId);
     }
-    validate_protocol_string_len("id", id)?;
+    if id.len() > MAX_RPC_ID_BYTES {
+        return Err(RpcProtocolError::FieldTooLong {
+            field: "id",
+            max_bytes: MAX_RPC_ID_BYTES,
+        });
+    }
     Ok(())
 }
 

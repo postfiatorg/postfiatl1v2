@@ -1,0 +1,27 @@
+[Unit]
+Description=Review this validator's pending Solana exit settlements and its rotation clearance
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Check only, as its own user, which alone can read the verdict key: reads this host's own node and
+# the Solana endpoint in /etc/postfiat/sol-exit-review.json, writes verdicts to
+# /var/lib/postfiat-exit-review. It never signs; the signing step on this host (exit_review.py sign,
+# run as the node user) checks a verdict with the public key and signs only that decision.
+User=pf-sol-exit-review
+Group=pf-sol-exit-review
+ExecStart=/opt/postfiat/sol-exit-review/venv/bin/python -I /opt/postfiat/sol-exit-review/exit_review.py scan
+# A named refusal (2) is a verdict; an RPC error (3) or an access error (4) fails the unit.
+SuccessExitStatus=2
+TimeoutStartSec=10min
+StandardOutput=append:/var/log/pf-sol-exit-review/review.log
+StandardError=append:/var/log/pf-sol-exit-review/review.log
+ReadWritePaths=/var/lib/postfiat-exit-review /var/log/pf-sol-exit-review
+ReadOnlyPaths=/etc/postfiat
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=

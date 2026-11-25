@@ -929,7 +929,27 @@ fn vault_bridge_wraps_counted_source_erc20_receipt_on_pftl() {
                 .to_string(),
         }),
     );
+    // An open Solana exit over the whole Solana custody leaves this Ethereum burn,
+    // its redemption and its packet bytes exactly as they are without it.
+    let mut with_solana_exit = ledger.clone();
+    let mut exit_compatibility = AssetExecutionCompatibility::strict()
+        .with_external_lane_export_root_activation_height(
+            genesis.external_lane_export_root_activation_height,
+        );
+    exit_compatibility.solana_exit_heights = Some((0, u64::MAX));
+    exit_compatibility.solana_exit_open_height = Some(0);
+    assert!(
+        execute_asset_transaction_with_compatibility(
+            &genesis,
+            &mut with_solana_exit,
+            &burn_to_redeem,
+            15,
+            exit_compatibility,
+        )
+        .accepted
+    );
     assert!(execute_asset_transaction(&genesis, &mut ledger, &burn_to_redeem, 15).accepted);
+    assert_eq!(with_solana_exit, ledger);
     assert_eq!(
         ledger
             .trustline_for_account_asset(&holder, &asset_id)

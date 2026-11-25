@@ -7,7 +7,7 @@ import socket
 from threading import Lock
 from typing import Any
 
-from postfiat_rpc.client import RPC_VERSION, PostFiatRpcClient, RpcProtocolError
+from postfiat_rpc.client import RPC_VERSION, PostFiatRpcClient, RpcProtocolError, node_placeholder_error
 
 
 class PersistentPostFiatRpcClient(PostFiatRpcClient):
@@ -99,7 +99,13 @@ class PersistentPostFiatRpcClient(PostFiatRpcClient):
                 if response.get("version") != RPC_VERSION:
                     raise RpcProtocolError("response version mismatch")
                 if json.dumps(response.get("id")) != wire_id:
-                    raise RpcProtocolError("response id mismatch")
+                    if not node_placeholder_error(response):
+                        raise RpcProtocolError("response id mismatch")
+                    # The node's error for this request, reported under its id. The node may send
+                    # more than one such reply for a line it could not read whole, so the
+                    # session is closed: no later reply can be paired one request behind.
+                    response = {**response, "id": json.loads(wire_id)}
+                    self._close_unlocked()
             except BaseException:
                 self._close_unlocked()
                 raise

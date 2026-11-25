@@ -12,10 +12,10 @@ then.
 
 ## What the node has today
 
-- `view_digest` (`crates/node/src/lifecycle_queries.rs:3237-3258`) identifies
+- `view_digest` (`owned_objects_view_digest` in `crates/node/src/lifecycle_queries.rs`) identifies
   an owner's object view. It shows that a view is different, not which view
   is newer.
-- `height` and `state_root` (`lifecycle_queries.rs:3460-3461`) are the
+- `height` and `state_root` (the `owned_objects` answer in `lifecycle_queries.rs`) are the
   finalized tip. They do not change when a FastPay effect does.
 - A per-node FastPay apply position exists, but only internally. The view
   `owned_objects` reads is the finalized ledger plus the certified effects in
@@ -34,9 +34,9 @@ No field available today orders two answers, so the wallet does not rank them.
 ## What the node would have to expose
 
 1. **Node.** Add `inventory_revision` `{finalized_height, fastpay_sequence}`
-   to `OwnedObjectsReport` (`crates/node/src/node_types.rs:3276`). Compute it
+   to `OwnedObjectsReport` (`crates/node/src/node_types.rs`). Compute it
    in `owned_objects` under the ordered-commit lock that already covers the
-   ledger and tip reads (`lifecycle_queries.rs:3393-3398`). Add the
+   ledger and tip reads (`lock_ordered_commit` in `lifecycle_queries.rs`). Add the
    answering node's id beside it. This is a read-side change only: no
    consensus rule, state format or signed payload changes. Before shipping,
    prove three properties in node tests: the revision only grows at one
@@ -45,14 +45,14 @@ No field available today orders two answers, so the wallet does not rank them.
    (`fastpay_recovery_node.rs:186-196`) or forces a new node id. The
    non-transactional storage path (`:38-40`) needs the same proof.
 2. **SDK.** Teach the response validators to accept the two fields
-   (`crates/rpc_sdk/src/response_validation.rs:6136` and the Python client).
+   (`validate_owned_objects_result` in `crates/rpc_sdk/src/response_validation.rs` and the Python client).
 3. **Gateway.** The live feed is a fleet-majority answer. Validators are
-   grouped by their canonical result (`wallet-proxy/rpc-routing.js:1574-1597`,
-   `readFleetRpcMajority` at `:1606`), and the answer names a set of
+   grouped by their canonical result (`canonicalReadResult` in `wallet-proxy/rpc-routing.js`,
+   `readFleetRpcMajority` in the same file), and the answer names a set of
    validators, not one node. The gateway would have to leave the revision out
    of the grouping key and return each agreeing validator's revision, plus a
    subscription epoch. The wallet's own pages are forwarded
-   (`wallet-proxy/server.js:396`) to an upstream that the answer does not
+   (`wallet-proxy/server.js:398`) to an upstream that the answer does not
    name. They would have to be pinned to a named node.
 4. **Wallet.** Compare answers only by (node, revision). A lower revision
    from the same node never replaces a higher one. An answer from another

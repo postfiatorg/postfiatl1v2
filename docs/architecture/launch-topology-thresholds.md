@@ -12,6 +12,8 @@ operator's confirmation; the operator may adopt, tighten, or replace any of
 them. Fork rules are cited from the read-only clones `dynamic-unl-scoring`
 and `validator-scoring-sidecar`.
 
+**Review note (25 November 2026):** statements about the fork or "today" are as of 1 September 2026 and come from read-only clones of external repositories; they were not re-checked.
+
 ## 1. Shared arithmetic
 
 All thresholds are stated at the genesis specification's minimum registry

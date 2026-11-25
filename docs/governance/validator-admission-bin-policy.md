@@ -56,7 +56,11 @@ Current fixture roots:
 | Statement | `8133e640794fe9885a7bb77d727c61659d343e175e1732eede81ca3900db89aeca4d53e145448e174b0f77482efc1b21` |
 | Policy root | `a9421b3d49e06d95c6a4ebef23cb6d8830d20efe2f1b375896e2e80d25d6bde16fd7fa63b8c22bcbe166d09078b82d81` |
 
-The verifier also binds the packet to existing admission evidence:
+The verifier also binds the packet to admission evidence of May 2026. On 25
+November 2026 none of these three files is in the repository: the `reports/`
+files are archived outside it (see `reports/README.md`), and
+`docs/governance/validator_admission_benchmark/packets.json` is absent from
+`main`:
 
 | Evidence artifact | SHA3-384 |
 | --- | --- |

@@ -57,7 +57,12 @@ pub struct Block {
 }
 
 fn join(left: &[u8], right: &[u8]) -> [u8; 32] {
-    Sha256::new().chain_update(NODE_PREFIX).chain_update(&left[..NODE]).chain_update(&right[..NODE]).finalize().into()
+    Sha256::new()
+        .chain_update(NODE_PREFIX)
+        .chain_update(&left[..NODE])
+        .chain_update(&right[..NODE])
+        .finalize()
+        .into()
 }
 
 /// Root of a tree built the way Agave's `MerkleTree::try_new_with_len` builds it: an odd
@@ -65,73 +70,146 @@ fn join(left: &[u8], right: &[u8]) -> [u8; 32] {
 fn tree_root(mut level: Vec<[u8; 32]>) -> [u8; 32] {
     while level.len() > 1 {
         let size = level.len();
-        level = (0..size).step_by(2).map(|i| join(&level[i], &level[(i + 1).min(size - 1)])).collect();
+        level = (0..size)
+            .step_by(2)
+            .map(|i| join(&level[i], &level[(i + 1).min(size - 1)]))
+            .collect();
     }
     level[0]
 }
 
 pub fn parent_leaf(parent_slot: u64, parent_block_id: &[u8; 32], erasure_sets: u32) -> [u8; 32] {
-    Sha256::new().chain_update(parent_slot.to_le_bytes()).chain_update(parent_block_id).chain_update(erasure_sets.to_le_bytes()).finalize().into()
+    Sha256::new()
+        .chain_update(parent_slot.to_le_bytes())
+        .chain_update(parent_block_id)
+        .chain_update(erasure_sets.to_le_bytes())
+        .finalize()
+        .into()
 }
 
 /// The erasure-set root one data shred commits to, with its data section and shred version.
-fn check_shred<'a>(payload: &'a [u8], slot: u64, index: usize, last: bool) -> Result<([u8; 32], &'a [u8], u16, bool), ShredError> {
-    if payload.len() != SHRED_PAYLOAD { return Err(ShredError::WrongPayloadSize); }
+fn check_shred<'a>(
+    payload: &'a [u8],
+    slot: u64,
+    index: usize,
+    last: bool,
+) -> Result<([u8; 32], &'a [u8], u16, bool), ShredError> {
+    if payload.len() != SHRED_PAYLOAD {
+        return Err(ShredError::WrongPayloadSize);
+    }
     let variant = payload[SIGNATURE];
-    let resigned = match variant & 0xF0 { 0x90 => false, 0xB0 => true, _ => return Err(ShredError::UnsupportedVariant) };
-    if usize::from(variant & 0x0F) != PROOF_ENTRIES { return Err(ShredError::UnsupportedVariant); }
-    if u64::from_le_bytes(payload[65..73].try_into().expect("fixed")) != slot { return Err(ShredError::WrongSlot); }
-    if u32::from_le_bytes(payload[73..77].try_into().expect("fixed")) as usize != index { return Err(ShredError::WrongIndex); }
+    let resigned = match variant & 0xF0 {
+        0x90 => false,
+        0xB0 => true,
+        _ => return Err(ShredError::UnsupportedVariant),
+    };
+    if usize::from(variant & 0x0F) != PROOF_ENTRIES {
+        return Err(ShredError::UnsupportedVariant);
+    }
+    if u64::from_le_bytes(payload[65..73].try_into().expect("fixed")) != slot {
+        return Err(ShredError::WrongSlot);
+    }
+    if u32::from_le_bytes(payload[73..77].try_into().expect("fixed")) as usize != index {
+        return Err(ShredError::WrongIndex);
+    }
     let version = u16::from_le_bytes(payload[77..79].try_into().expect("fixed"));
     let set_start = index / DATA_SHREDS_PER_SET * DATA_SHREDS_PER_SET;
-    if u32::from_le_bytes(payload[79..83].try_into().expect("fixed")) as usize != set_start { return Err(ShredError::WrongErasureSet); }
-    if (payload[85] & LAST_IN_SLOT == LAST_IN_SLOT) != last { return Err(ShredError::LastInSlotFlag); }
+    if u32::from_le_bytes(payload[79..83].try_into().expect("fixed")) as usize != set_start {
+        return Err(ShredError::WrongErasureSet);
+    }
+    if (payload[85] & LAST_IN_SLOT == LAST_IN_SLOT) != last {
+        return Err(ShredError::LastInSlotFlag);
+    }
 
     let proof_at = SHRED_PAYLOAD - PROOF_ENTRIES * NODE - if resigned { SIGNATURE } else { 0 };
     let data_end = proof_at - 32; // the chained root sits between the data and the proof
-    let size = usize::from(u16::from_le_bytes(payload[86..88].try_into().expect("fixed")));
-    if size < HEADERS || size > data_end { return Err(ShredError::BadDataSize); }
+    let size = usize::from(u16::from_le_bytes(
+        payload[86..88].try_into().expect("fixed"),
+    ));
+    if size < HEADERS || size > data_end {
+        return Err(ShredError::BadDataSize);
+    }
 
-    let mut node: [u8; 32] = Sha256::new().chain_update(LEAF_PREFIX).chain_update(&payload[SIGNATURE..proof_at]).finalize().into();
+    let mut node: [u8; 32] = Sha256::new()
+        .chain_update(LEAF_PREFIX)
+        .chain_update(&payload[SIGNATURE..proof_at])
+        .finalize()
+        .into();
     let mut position = index - set_start;
     for entry in payload[proof_at..proof_at + PROOF_ENTRIES * NODE].chunks_exact(NODE) {
-        node = if position % 2 == 0 { join(&node, entry) } else { join(entry, &node) };
+        node = if position % 2 == 0 {
+            join(&node, entry)
+        } else {
+            join(entry, &node)
+        };
         position >>= 1;
     }
-    Ok((node, &payload[HEADERS..size], version, payload[85] & DATA_COMPLETE != 0))
+    Ok((
+        node,
+        &payload[HEADERS..size],
+        version,
+        payload[85] & DATA_COMPLETE != 0,
+    ))
 }
 
 /// The erasure-set root a single data shred commits to. Exposed so each shred can be compared
 /// with Agave's own reading of it.
 pub fn erasure_set_root(slot: u64, index: usize, payload: &[u8]) -> Result<[u8; 32], ShredError> {
-    if payload.len() != SHRED_PAYLOAD { return Err(ShredError::WrongPayloadSize); }
+    if payload.len() != SHRED_PAYLOAD {
+        return Err(ShredError::WrongPayloadSize);
+    }
     let last = payload[85] & LAST_IN_SLOT == LAST_IN_SLOT;
     check_shred(payload, slot, index, last).map(|(root, _, _, _)| root)
 }
 
 /// `shreds` are the block's data shred payloads in index order, starting at index 0.
-pub fn block_from_shreds(slot: u64, parent_slot: u64, parent_block_id: &[u8; 32], shreds: &[&[u8]]) -> Result<Block, ShredError> {
-    if shreds.is_empty() { return Err(ShredError::Empty); }
-    if shreds.len() % DATA_SHREDS_PER_SET != 0 { return Err(ShredError::IncompleteErasureSet); }
+pub fn block_from_shreds(
+    slot: u64,
+    parent_slot: u64,
+    parent_block_id: &[u8; 32],
+    shreds: &[&[u8]],
+) -> Result<Block, ShredError> {
+    if shreds.is_empty() {
+        return Err(ShredError::Empty);
+    }
+    if shreds.len() % DATA_SHREDS_PER_SET != 0 {
+        return Err(ShredError::IncompleteErasureSet);
+    }
     let mut roots: Vec<[u8; 32]> = Vec::with_capacity(shreds.len() / DATA_SHREDS_PER_SET + 1);
     let mut stream = Vec::new();
     let mut component_ends: Vec<usize> = Vec::new();
     let mut shred_version = None;
     for (index, payload) in shreds.iter().enumerate() {
-        let (root, data, version, complete) = check_shred(payload, slot, index, index == shreds.len() - 1)?;
-        if *shred_version.get_or_insert(version) != version { return Err(ShredError::MixedShredVersion); }
-        if index % DATA_SHREDS_PER_SET == 0 { roots.push(root); }
-        else if roots.last() != Some(&root) { return Err(ShredError::ErasureSetRootMismatch); }
+        let (root, data, version, complete) =
+            check_shred(payload, slot, index, index == shreds.len() - 1)?;
+        if *shred_version.get_or_insert(version) != version {
+            return Err(ShredError::MixedShredVersion);
+        }
+        if index % DATA_SHREDS_PER_SET == 0 {
+            roots.push(root);
+        } else if roots.last() != Some(&root) {
+            return Err(ShredError::ErasureSetRootMismatch);
+        }
         stream.extend_from_slice(data);
         if complete {
-            if component_ends.last().copied().unwrap_or(0) == stream.len() { return Err(ShredError::EmptyComponent); }
+            if component_ends.last().copied().unwrap_or(0) == stream.len() {
+                return Err(ShredError::EmptyComponent);
+            }
             component_ends.push(stream.len());
         }
     }
-    if component_ends.last() != Some(&stream.len()) { return Err(ShredError::UnterminatedComponent); }
+    if component_ends.last() != Some(&stream.len()) {
+        return Err(ShredError::UnterminatedComponent);
+    }
     let erasure_sets = roots.len() as u32;
     roots.push(parent_leaf(parent_slot, parent_block_id, erasure_sets));
-    Ok(Block { block_id: tree_root(roots), shred_version: shred_version.expect("non-empty"), erasure_sets, stream, component_ends })
+    Ok(Block {
+        block_id: tree_root(roots),
+        shred_version: shred_version.expect("non-empty"),
+        erasure_sets,
+        stream,
+        component_ends,
+    })
 }
 
 const MARKER_VERSION_V1: u16 = 1;
@@ -151,18 +229,34 @@ pub fn footer_bank_hash(block: &Block) -> Result<[u8; 32], ShredError> {
     for &end in &block.component_ends {
         let component = &block.stream[start..end];
         start = end;
-        if component.len() < 8 || component[..8] != [0u8; 8] { continue; }
+        if component.len() < 8 || component[..8] != [0u8; 8] {
+            continue;
+        }
         // marker version u16 | tag u8 | body length u16 | body
-        if component.len() < 13 { return Err(ShredError::MalformedMarker); }
-        if u16::from_le_bytes([component[8], component[9]]) != MARKER_VERSION_V1 { return Err(ShredError::MalformedMarker); }
+        if component.len() < 13 {
+            return Err(ShredError::MalformedMarker);
+        }
+        if u16::from_le_bytes([component[8], component[9]]) != MARKER_VERSION_V1 {
+            return Err(ShredError::MalformedMarker);
+        }
         let tag = component[10];
         let length = usize::from(u16::from_le_bytes([component[11], component[12]]));
-        if component.len() != 13 + length { return Err(ShredError::MalformedMarker); }
-        if tag != MARKER_TAG_FOOTER { continue; }
+        if component.len() != 13 + length {
+            return Err(ShredError::MalformedMarker);
+        }
+        if tag != MARKER_TAG_FOOTER {
+            continue;
+        }
         let body = &component[13..];
-        if body.len() < 33 { return Err(ShredError::MalformedMarker); }
-        if body[0] != FOOTER_VERSION_V1 { return Err(ShredError::UnsupportedFooterVersion); }
-        if found.is_some() { return Err(ShredError::MultipleFooters); }
+        if body.len() < 33 {
+            return Err(ShredError::MalformedMarker);
+        }
+        if body[0] != FOOTER_VERSION_V1 {
+            return Err(ShredError::UnsupportedFooterVersion);
+        }
+        if found.is_some() {
+            return Err(ShredError::MultipleFooters);
+        }
         found = Some(body[1..33].try_into().expect("length checked"));
     }
     found.ok_or(ShredError::NoFooter)

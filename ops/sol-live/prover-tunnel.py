@@ -15,7 +15,7 @@ instances = json.loads(
     )
 )
 instance = next(
-    (i for i in instances if i["id"] == number and i["label"] == "solbridge-live"), None
+    (i for i in instances if i["id"] == number and i["label"] == "solbridge-live-b"), None
 )
 if instance is None:
     if datetime.now(timezone.utc) >= datetime(2026, 11, 19, 12, tzinfo=timezone.utc):
@@ -47,7 +47,6 @@ os.execvp(
         str(port),
         "root@" + host,
         "cd /workspace/sol-ingress/speed-i2 || exit 1; "
-        "while :; do if flock -n prover.lock true; then "
-        "nohup ./prover-start.sh >> supervised.log 2>&1 </dev/null & fi; sleep 10; done",
+        "while :; do ./prover-boot.sh; sleep 10; done",
     ],
 )

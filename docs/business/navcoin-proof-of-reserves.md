@@ -6,7 +6,8 @@
 > limitations are summarized in
 > [A666 current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
 > Nothing in this page should be read as a claim that the current A666 service
-> has passed production GA.
+> has passed production GA. The state of each NAVCoin on 2026-11-25, with its
+> newest reading, is on [NAVCoins](../navcoins/index.md#today).
 
 > **Current architecture boundary (2026-08-01):** StakeHub is an internal
 > operator product, not a public protocol component or trust anchor. New proof
