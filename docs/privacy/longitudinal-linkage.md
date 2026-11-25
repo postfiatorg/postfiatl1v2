@@ -12,6 +12,8 @@ does not transfer authority.
 
 ## Model
 
+The count-based score assumes each remaining candidate is equally likely after conditioning on the observer’s information. With unequal probabilities the best single guess has probability `max(p_i)`. The historical fixture field `posterior_bps` stores the rounded equal-weight estimate. No field measurement here validates equal weights.
+
 The verifier does not multiply per-window probabilities. If a public observer
 can link several windows, the remaining candidate set is the actual
 intersection across those linked windows:
@@ -21,7 +23,7 @@ k_long = |C_1 intersect C_2 intersect ... intersect C_n|
 posterior_bps = ceil(10000 / k_long)
 ```
 
-For multi-target search, the verifier uses a union bound:
+Under the same equal-weight assumption, the multi-target calculation uses a union bound:
 
 ```text
 multi_target_bps = ceil(10000 * target_count / candidate_count)
@@ -38,7 +40,7 @@ flowchart LR
   Withdraw[Withdraw window<br/>recipient envelope and timing]
   Linker[Observer linkage attempt<br/>intersect candidate sets across windows]
   KLong[k_long candidate set<br/>C1 intersect C2 intersect C3]
-  Bound[Posterior bound<br/>ceil(10000 / k_long)]
+  Bound[Equal-weight estimate<br/>ceil(10000 / k_long)]
   Route[Route decision<br/>baseline, hold for batching,<br/>downgrade, or disclosure]
 
   Deposit --> Linker

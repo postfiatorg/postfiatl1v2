@@ -2,7 +2,9 @@
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -28,6 +30,45 @@ def remote(i, args, data=None):
         check=True,
         timeout=150,
     ).stdout
+
+
+# The settlement loop's restricted path: its own key, the reviewer's user, a forced command that
+# accepts only "review" and "result" (exit_review_door.py). No root login and no command.
+DOOR_USER = "pf-sol-exit-review"
+DOOR_KEY = Path(os.environ.get("PFT_SETTLER_SSH_KEY", str(Path.home() / ".ssh/pft-sol-exit-settler")))
+DOOR_POLLS = 40
+DOOR_PAUSE = 3
+
+
+def door(i, request):
+    """One request through host i's restricted door; a named refusal raises ReviewRefused."""
+    out = subprocess.run(
+        ["ssh", "-T", "-oBatchMode=yes", "-oConnectTimeout=8", "-oIdentitiesOnly=yes",
+         "-i", str(DOOR_KEY), f"{DOOR_USER}@{HOSTS[i]}"],
+        input=json.dumps(request), text=True, capture_output=True, timeout=60,
+    )
+    if out.returncode == 2:
+        raise ReviewRefused(((out.stderr or "").strip().splitlines() or ["refused"])[-1])
+    if out.returncode != 0:
+        raise RuntimeError(f"validator-{i} door: exit {out.returncode}: {(out.stderr or '').strip()[-200:]}")
+    return json.loads(out.stdout)
+
+
+def door_sign(i, amend, h):
+    """Hand the drafted decision to host i's own reviewer and wait for its result: the host's
+    signature for this slot, or its refusal with the reason."""
+    sha = hashlib.sha256(amend["kind"].encode()).hexdigest()
+    door(i, dict(request="review", amendment=amend, proposal_slot=h, expires_at_height=h + 30))
+    for _ in range(DOOR_POLLS):
+        result = door(i, dict(request="result", decision_sha256=sha))
+        if result.get("proposal_slot") == h and result.get("expires_at_height") == h + 30:
+            if "refused" in result:
+                raise ReviewRefused(result["refused"])
+            if "error" in result:
+                raise RuntimeError(f"validator-{i}: {result['error']}")
+            return json.loads(result["authorization"])
+        time.sleep(DOOR_PAUSE)
+    raise RuntimeError(f"validator-{i}: no review result for this decision in time")
 
 
 REVIEW_READER = """import os, stat, sys
@@ -188,13 +229,32 @@ def independent_review(kind, rules):
 EXIT_DECISIONS = ("exit-open", "exit-close", "exit-paid", "exit-refund")
 
 
+# A re-draft for the signers may change only these: its supporters, their votes and the
+# certificate and amendment ids derived from them.
+REDRAFT_FIELDS = {"support", "votes", "certificate_id", "amendment_id"}
+
+
+def check_redraft(first, again, signers):
+    """The re-drafted decision names exactly the signers and otherwise is the signed draft."""
+    if again.get("support") != signers:
+        raise ValueError(
+            f"The re-drafted decision's supporters {again.get('support')} are not its signers {signers}; "
+            "the drafting node must know ratify-solana-exit --support."
+        )
+    changed = sorted(k for k in set(first) | set(again) if first.get(k) != again.get(k))
+    if not set(changed) <= REDRAFT_FIELDS:
+        raise ValueError(f"The re-drafted decision differs from the signed draft in {changed}.")
+
+
 def read_quorum(kind, n=6, *, rules=None):
     """Validators whose agreeing reads suffice: the signatures the chain requires."""
     return required_signatures(kind, n, rules=rules)
 
 
 def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout=None,
-           rules=None, refund=None):
+           rules=None, refund=None, restricted=False):
+    """`restricted`: the hosts' signatures come only through their restricted doors (`door_sign`),
+    never through a root login to the signing step."""
     need = read_quorum(kind, rules=rules)
     head = fleet(need)
     if head["build_git_revision"] != (compatible or R6):
@@ -297,19 +357,26 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
                 "--signature-hex",
                 refund["signature_hex"],
             ]
-        tool(
-            lead,
-            "ratify-solana-" + kind,
-            *extra,
-            "--data-dir",
-            dirs[lead],
-            "--validators",
-            ",".join(names),
-            "--height",
-            h,
-            "--amendment-file",
-            work[lead] + "/amend",
-        )
+
+        def draft_exit(name, support=None):
+            # `support`: the validators whose authorizations the decision carries; by default
+            # the node lists all six, as before.
+            tool(
+                lead,
+                "ratify-solana-" + kind,
+                *extra,
+                "--data-dir",
+                dirs[lead],
+                "--validators",
+                ",".join(names),
+                *(["--support", ",".join(support)] if support else []),
+                "--height",
+                h,
+                "--amendment-file",
+                work[lead] + "/" + name,
+            )
+
+        draft_exit("amend")
     elif kind == "activation":
         tool(
             lead,
@@ -377,7 +444,12 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
                 raise reviews[i]
         reviewed = set(reviews)
 
+    if restricted and not independent:
+        raise ValueError("The restricted path signs only paid and refund under the second release.")
+
     def sign(i):
+        if restricted:
+            return door_sign(i, amend, h)
         if i != lead:
             put(i, "amend", amend)
         if independent:
@@ -426,6 +498,20 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         + ", ".join(names[i] for i in signers),
         flush=True,
     )
+    signed_by = [names[i] for i in signers]
+    final = "amend"
+    if kind in EXIT_DECISIONS and len(signers) < len(names):
+        # The node assembles one authorization per supporter, and the draft names all six. A
+        # signature does not cover the supporters, so the signers' authorizations stay valid
+        # for a re-draft that names exactly them (node test
+        # solana_exit_paid_and_refund_assemble_with_any_five_of_six).
+        draft_exit("amend-signers", signed_by)
+        again = get(lead, "amend-signers")
+        check_redraft(amend, again, signed_by)
+        save(local / "amendment-signers.json", again)
+        final = "amend-signers"
+    elif amend.get("support", signed_by) != signed_by:
+        raise ValueError(f"Signed by {signed_by}, but the decision's supporters are {amend['support']}.")
     for i, a in auth.items():
         put(lead, f"auth-{i}", a)
     tool(
@@ -434,7 +520,7 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         "--data-dir",
         dirs[lead],
         "--amendment-file",
-        work[lead] + "/amend",
+        work[lead] + "/" + final,
         "--authorization-files",
         ",".join(f"{work[lead]}/auth-{i}" for i in signers),
         "--proposal-slot",

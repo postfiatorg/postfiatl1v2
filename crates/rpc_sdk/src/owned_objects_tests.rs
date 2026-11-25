@@ -88,12 +88,14 @@ mod owned_objects {
                 limit: None,
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         );
         assert_eq!(request.method, METHOD_OWNED_OBJECTS);
         assert_eq!(request.params["owner_public_key_hex"], json!(owner()));
         assert!(request.params.get("asset").is_none());
         assert!(request.params.get("limit").is_none());
+        assert!(request.params.get("include_inventory_revision").is_none());
         validate_request(
             &request,
             Some("owned-objects-1"),
@@ -112,6 +114,7 @@ mod owned_objects {
                 limit: Some(2048),
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         );
         assert_eq!(request.params["asset"], json!("USDX"));
@@ -122,6 +125,26 @@ mod owned_objects {
             Some(RpcRequestKind::OwnedObjects),
         )
         .expect("owned objects request with uppercase key, asset, and limit");
+    }
+
+    #[test]
+    fn asks_for_the_inventory_revision_only_when_told() {
+        let mut request = owned_objects_request(
+            "owned-objects-revision",
+            OwnedObjectsParams {
+                owner_public_key_hex: owner(),
+                asset: None,
+                limit: None,
+                cursor: None,
+                omit_owner_keys: false,
+                include_inventory_revision: true,
+            },
+        );
+        assert_eq!(request.params["include_inventory_revision"], json!(true));
+        validate_request(&request, None, Some(RpcRequestKind::OwnedObjects))
+            .expect("owned objects request asking for the revision");
+        request.params["include_inventory_revision"] = json!("yes");
+        assert!(validate_request(&request, None, Some(RpcRequestKind::OwnedObjects)).is_err());
     }
 
     #[test]
@@ -159,6 +182,7 @@ mod owned_objects {
                 limit: Some(128),
                 cursor: Some(cursor.clone()),
                 omit_owner_keys: true,
+                include_inventory_revision: false,
             },
         );
         assert_eq!(request.params["cursor"], json!(cursor));
@@ -172,6 +196,7 @@ mod owned_objects {
                 limit: None,
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         );
         assert!(first.params.get("cursor").is_none());
@@ -215,6 +240,7 @@ mod owned_objects {
                 limit: None,
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         ));
         rejects(owned_objects_request(
@@ -225,6 +251,7 @@ mod owned_objects {
                 limit: Some(0),
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         ));
         rejects(owned_objects_request(
@@ -235,6 +262,7 @@ mod owned_objects {
                 limit: Some(2049),
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         ));
         rejects(
@@ -246,6 +274,7 @@ mod owned_objects {
                     limit: None,
                     cursor: None,
                     omit_owner_keys: false,
+                    include_inventory_revision: false,
                 },
             )
             .with_param_value("state", string_value("open")),
@@ -374,6 +403,7 @@ mod owned_objects {
                 limit,
                 cursor: None,
                 omit_owner_keys: false,
+                include_inventory_revision: false,
             },
         )
     }
@@ -390,6 +420,7 @@ mod owned_objects {
                     limit: Some(5),
                     cursor: cursor.map(str::to_string),
                     omit_owner_keys: omit,
+                    include_inventory_revision: false,
                 },
             )
         };
@@ -555,5 +586,91 @@ mod owned_objects {
         map.insert("state_root".into(), json!("bb".repeat(48)));
         map.insert("view_digest".into(), json!("cc".repeat(32)));
         report
+    }
+
+    /// A revision-era page: `inventory_revision` and `node_id` beside the
+    /// cursor fields. Older nodes omit both and stay valid.
+    fn revision_fixture() -> Value {
+        let mut report = paged_fixture();
+        let map = report.as_object_mut().unwrap();
+        map.insert(
+            "inventory_revision".into(),
+            json!({
+                "finalized_height": 40,
+                "fastpay_sequence": 3,
+                "incarnation": "0f".repeat(16),
+            }),
+        );
+        map.insert("node_id".into(), json!("validator-0"));
+        report
+    }
+
+    #[test]
+    fn accepts_and_checks_the_inventory_revision_and_node_id() {
+        assert!(validate(&revision_fixture()).is_ok());
+        assert!(validate(&paged_fixture()).is_ok(), "older nodes omit both");
+        let mut no_id = revision_fixture();
+        no_id.as_object_mut().unwrap().remove("node_id");
+        assert!(validate(&no_id).is_ok());
+        assert_eq!(
+            rejected_field(with(
+                revision_fixture(),
+                "/inventory_revision/finalized_height",
+                json!(41)
+            )),
+            "inventory_revision.finalized_height"
+        );
+        assert_eq!(
+            rejected_field(with(
+                revision_fixture(),
+                "/inventory_revision/fastpay_sequence",
+                json!(-1)
+            )),
+            "inventory_revision.fastpay_sequence"
+        );
+        assert_eq!(
+            rejected_field(with(revision_fixture(), "/inventory_revision", json!(7))),
+            "inventory_revision"
+        );
+        assert_eq!(
+            rejected_field(with(revision_fixture(), "/node_id", json!(" v0"))),
+            "node_id"
+        );
+    }
+
+    /// The incarnation is optional, lowercase hex of 16 bytes; a page
+    /// without a revision may say why, and never both.
+    #[test]
+    fn accepts_and_checks_the_incarnation_and_the_unavailable_reason() {
+        let mut no_incarnation = revision_fixture();
+        no_incarnation["inventory_revision"]
+            .as_object_mut()
+            .unwrap()
+            .remove("incarnation");
+        assert!(validate(&no_incarnation).is_ok());
+        for bad in [json!("0F".repeat(16)), json!("0f".repeat(15)), json!(7)] {
+            assert_eq!(
+                rejected_field(with(revision_fixture(), "/inventory_revision/incarnation", bad)),
+                "inventory_revision.incarnation"
+            );
+        }
+        let mut unavailable = revision_fixture();
+        let map = unavailable.as_object_mut().unwrap();
+        map.remove("inventory_revision");
+        map.insert(
+            "inventory_revision_unavailable".into(),
+            json!("legacy_owned_applies_enabled"),
+        );
+        assert!(validate(&unavailable).is_ok());
+        assert_eq!(
+            rejected_field(with(unavailable.clone(), "/inventory_revision_unavailable", json!(""))),
+            "inventory_revision_unavailable"
+        );
+        let mut both = revision_fixture();
+        both.as_object_mut().unwrap().insert(
+            "inventory_revision_unavailable".into(),
+            json!("legacy_owned_applies_enabled"),
+        );
+        assert_eq!(rejected_field(both), "inventory_revision_unavailable");
     }
 }

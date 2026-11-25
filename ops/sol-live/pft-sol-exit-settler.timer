@@ -1,0 +1,11 @@
+[Unit]
+Description=Propose pending Solana exit settlements every 90 seconds
+
+[Timer]
+# A timer never starts the pass while the previous one runs; exit_settler.py also holds a lock.
+OnBootSec=2min
+OnUnitInactiveSec=90s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

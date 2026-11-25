@@ -41,6 +41,7 @@ from exit_payout import (
     marker,
     pda,
     signature,
+    validate_burn,
 )
 
 OWNER = "pf5c266a1bdb18320e140961411a8c4d8383eaafb2"
@@ -439,9 +440,15 @@ def check(out):
     raise TimeoutError("Payout pending. Run check again with the same directory.")
 
 
-def finalized_reference(paid, tx):
+def finalized_reference(paid, tx, recipient=None):
+    """Check one finalized payout transaction and return its paid reference: the exact
+    finalized signature, one top-level payout to the pinned verifier and none inside, the
+    burn's marker, the custody debit and the credit of `recipient`'s USDC account by
+    `amount_atoms`. `recipient` defaults to the canary's wallet."""
     from exit_payout import LIGHT, SYSTEM, VERIFIER
+    from exit_setup import MAINNET_PAYER
 
+    recipient = PHANTOM if recipient is None else recipient
     sig = paid["solana_tx"]
     packet = paid["withdrawal_packet_hash"]
     require(
@@ -454,7 +461,7 @@ def finalized_reference(paid, tx):
     )
     raw = base58.b58decode(sig)
     require(len(raw) == 64 and any(raw), "Invalid transaction signature.")
-    token_deltas(tx, amount=paid.get("amount_atoms", 20000))
+    token_deltas(tx, amount=paid.get("amount_atoms", 20000), owner=recipient)
     msg = tx["transaction"]["message"]
     keys = msg["accountKeys"]
     require(not msg.get("addressTableLookups"), "Unexpected lookup-table payout.")
@@ -477,7 +484,7 @@ def finalized_reference(paid, tx):
     require(len(withdrawals) == 1, "Unexpected payout ordinal or multiplicity.")
     ix = withdrawals[0]
     keys_used = [keys[i] for i in ix["accounts"]]
-    ata = pda(ATA, bytes(PHANTOM), bytes(TOKEN), bytes(MINT))
+    ata = pda(ATA, bytes(recipient), bytes(TOKEN), bytes(MINT))
     tail = [
         SYSTEM,
         marker(paid["burn_tx_id"]),
@@ -486,14 +493,16 @@ def finalized_reference(paid, tx):
         pda(VAULT, b"config"),
         pda(VAULT, b"custody"),
         ata,
-        PHANTOM,
+        recipient,
         MINT,
         TOKEN,
     ]
+    # The service's fee payer pays every payout; the setup payer paid the first ones.
     require(
         len(base58.b58decode(ix["data"])) == 357
         and len(keys_used) == 15
-        and keys_used[:2] == [str(FEE_PAYER), str(LIGHT)]
+        and keys_used[0] in (str(FEE_PAYER), str(MAINNET_PAYER))
+        and keys_used[1] == str(LIGHT)
         and keys_used[5:] == list(map(str, tail)),
         "Payout instruction names different accounts or route.",
     )
@@ -512,43 +521,96 @@ def match_reference(amendment, ref):
     )
 
 
-def review_paid(paid, need=6):
+# The redemption fields a settlement is decided on; the agreeing validators must report them equal.
+RECORD = ("burn_tx_id", "bucket_id", "amount_atoms", "destination_ref", "owner",
+          "withdrawal_packet_hash", "created_at_height", "state", "settled_atoms",
+          "settlement_receipt_hash")
+
+
+def redemption_view(status, burn, covered_ids):
+    """One validator's view of a burn: its redemption record, its bucket's series and,
+    when the chain covers that bucket, the accounting `check_settlement` compares."""
+    rows = [r for r in status["redemptions"] if r["burn_tx_id"] == burn]
+    require(len(rows) == 1, "Burn not found.")
+    record = {k: rows[0].get(k) for k in RECORD}
+    bucket = covered_buckets(status["buckets"], covered_ids).get(record["bucket_id"])
+    return dict(
+        record=record,
+        series=bucket and bucket.get("source_series_id"),
+        state=bucket and settlement_state(status, record, covered_ids),
+    )
+
+
+def agreed_redemption(burn, need, covered_ids):
+    """The view of `burn` that the largest group of at least `need` validators reports."""
     from live import agreeing, survey
 
+    rows = survey(
+        lambda i: redemption_view(rpc(i, "vault_bridge_status", asset_id=ASSET), burn, covered_ids),
+        need,
+    )
+    (first, *_) = agreeing(rows, lambda r: json.dumps(r, sort_keys=True), need, "Validator records differ.")
+    return rows[first]
+
+
+def reviewed_payout(paid, need=6, *, rules, expect_owner=None, expect_destination=None, settled_by=None):
+    """Review one withdrawal's finalized Solana payout; return its paid reference and the
+    agreed accounting before settlement. Owner, destination, amount, packet and bucket come
+    from the redemption record `need` agreeing validators report; `paid` names the burn and
+    may pin the payout signature, slot, packet and amount, and the canary pins its owner and
+    destination. Only a pending, unsettled redemption of a bucket the chain covers, with a
+    canonical wallet destination, passes; with `settled_by`, only one that decision settled
+    (the canary's check after its settlement)."""
+    burn = paid["burn_tx_id"]
+    view = agreed_redemption(burn, need, rules["covered"])
+    red = view["record"]
+    require(view["state"] is not None, "Not a covered bucket: the chain does not cover this burn's bucket.")
+    if settled_by is None:
+        require(red["state"] == "pending" and red["settled_atoms"] == 0 and not red["settlement_receipt_hash"],
+                "Only a pending, unsettled redemption can be settled.")
+    else:
+        require(red["state"] == "settled" and red["settled_atoms"] == red["amount_atoms"]
+                and red["settlement_receipt_hash"] == settled_by, "Not settled by this decision.")
+    owner = validate_burn(red, burn, {red["bucket_id"]})
+    for key in ("withdrawal_packet_hash", "amount_atoms"):
+        require(key not in paid or paid[key] == red[key], f"The payout record names another {key}.")
+    require((expect_owner is None or red["owner"] == expect_owner)
+            and (expect_destination is None or red["destination_ref"] == expect_destination),
+            "Wrong burn owner or destination.")
     c = cluster()
-    tx = c.call(
-        "getTransaction",
-        paid["solana_tx"],
-        dict(c.level, encoding="json", maxSupportedTransactionVersion=0),
+    sig = signature(c, burn, paid.get("solana_tx"))
+    require(isinstance(sig, str) and sig == paid.get("solana_tx", sig), "Finalized marker differs from payout.")
+    tx = c.call("getTransaction", sig, dict(c.level, encoding="json", maxSupportedTransactionVersion=0))
+    ref = finalized_reference(
+        dict(burn_tx_id=burn, solana_tx=sig, withdrawal_packet_hash=red["withdrawal_packet_hash"],
+             amount_atoms=red["amount_atoms"],
+             finalized_slot=paid.get("finalized_slot", tx["slot"] if tx else None)),
+        tx,
+        recipient=owner,
     )
-    ref = finalized_reference(paid, tx)
-    require(
-        signature(c, paid["burn_tx_id"], paid["solana_tx"]) == paid["solana_tx"],
-        "Finalized marker differs from payout.",
-    )
-
-    def verify(i):
-        status = rpc(i, "vault_bridge_status", asset_id=ASSET)
-        (red,) = [
-            r for r in status["redemptions"] if r["burn_tx_id"] == paid["burn_tx_id"]
-        ]
-        require(
-            red["owner"] == OWNER and red["destination_ref"] == DEST,
-            "Wrong burn owner or destination.",
-        )
-        return settlement_state(status, paid)
-
-    # Settlement is decided by five of six: that many must agree on the record.
-    rows = survey(verify, need)
-    agreeing(rows, lambda r: json.dumps(r, sort_keys=True), need, "Validator records differ.")
-    return ref
+    return ref, view["state"]
 
 
-def settlement_state(status, paid):
+def review_paid(paid, need=6, *, rules=None, **expect):
+    """The paid reference of `reviewed_payout`; the rules default to the chain's."""
+    if rules is None:
+        from exit_govern import chain_rules
+
+        rules = chain_rules()
+    return reviewed_payout(paid, need, rules=rules, **expect)[0]
+
+
+def review_canary(paid, need=6, rules=None, settled_by=None):
+    """The canary's payout: its owner and wallet are pinned as well."""
+    return review_paid(paid, need, rules=rules, expect_owner=OWNER, expect_destination=DEST,
+                       settled_by=settled_by)
+
+
+def settlement_state(status, paid, covered_ids=None):
     (row,) = [r for r in status["redemptions"] if r["burn_tx_id"] == paid["burn_tx_id"]]
     bucket_id = row["bucket_id"]
     require(
-        bucket_id in covered_buckets(status["buckets"])
+        bucket_id in covered_buckets(status["buckets"], covered_ids)
         and row["amount_atoms"] == paid.get("amount_atoms", 20000)
         and row["withdrawal_packet_hash"] == paid["withdrawal_packet_hash"],
         "Settlement does not identify the original withdrawal packet.",
@@ -637,7 +699,7 @@ def settlement(out, amendment=None, height=None):
         re.fullmatch("[0-9a-f]{96}", amendment) and height,
         "Settlement ID and height required.",
     )
-    ref = review_paid(paid)
+    ref = review_canary(paid, settled_by=amendment)
 
     def verify_archive(i):
         h = rpc(i, "tx", tx_id=amendment)["block"]["header"]
@@ -695,7 +757,7 @@ def main():
             from exit_precheck import parent_of
 
             parent = parent_of(fleet())
-            ref = review_paid(read(out / "paid.json"))
+            ref = review_canary(read(out / "paid.json"))
             require(parent_of(fleet()) == parent, "Tip changed during payout review.")
             print(json.dumps(dict(kind=ref["kind"], parent=parent)))
         elif args.action == "settlement-before":

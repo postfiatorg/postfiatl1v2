@@ -31,7 +31,7 @@ class GovernanceTest(unittest.TestCase):
         args = ["gov", action, "--revision", "reviewed", "--release-height", "1760",
                 "--output", "unused"]
         if action == "paid":
-            args.extend(["--paid", str(g.PROFILE)])
+            args.extend(["--burn", "ab" * 48])
         with patch.object(sys, "argv", args):
             g.main()
 
@@ -50,7 +50,10 @@ class GovernanceTest(unittest.TestCase):
     def test_close_and_paid_use_solana_parent_after_ethereum_changes(self):
         import exit_canary
         self.mock(g, "ethereum", side_effect=ValueError("new Ethereum epoch"))
-        self.mock(exit_canary, "review_paid", return_value={"packet": "p"})
+        self.mock(exit_canary, "reviewed_payout", return_value=({"packet": "p"}, {}))
+        self.mock(exit_canary, "agreed_redemption", return_value=dict(record=dict(state="settled"), state={}))
+        self.mock(exit_canary, "check_settlement")
+        self.sign.return_value = dict(tx_id="t")
         for action in ("close", "paid"):
             self.command(action)
             self.assertEqual(self.sign.call_args.kwargs["qualified_parent"], g.parent_of(self.head))

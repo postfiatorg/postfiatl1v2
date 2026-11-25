@@ -4073,6 +4073,24 @@ fn refunded_redemption_state_is_refused_while_the_second_release_is_unset() {
     crate::solana_exit::set_second_release_for_tests(None);
 }
 
+/// Scheduling matches the chain id alone (see `second_release_scheduled_on`); activation also
+/// needs the WAN genesis, so a chain with the same id and another genesis never activates it.
+#[test]
+fn a_chain_with_the_wan_id_and_another_genesis_never_activates_the_second_release() {
+    use crate::solana_exit::{second_release_active, second_release_height, second_release_scheduled_on};
+    let chain = "postfiat-wan-devnet-2";
+    let wan = "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9";
+    let other = "00".repeat(48);
+    crate::solana_exit::use_second_release_table_for_tests();
+    assert!(second_release_scheduled_on(chain));
+    assert_eq!(second_release_height(chain, wan), Some(1890));
+    assert!(second_release_active(chain, wan, 1890));
+    assert_eq!(second_release_height(chain, &other), None);
+    assert!(!second_release_active(chain, &other, 1890));
+    assert!(!second_release_active(chain, &other, u64::MAX));
+    crate::solana_exit::set_second_release_for_tests(None);
+}
+
 #[test]
 fn solana_exit_reopening_after_a_close_needs_only_the_close_quorum() {
     use crate::solana_exit::{required_quorum, signer_floor, CLOSE, OPEN, RETIRE};

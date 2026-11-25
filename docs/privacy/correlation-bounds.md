@@ -1,6 +1,6 @@
 # Privacy Correlation Bounds
 
-The deanonymization-bound packet sets posterior floors. The correlation-bound
+The deanonymization-bound packet sets candidate-count floors. The correlation-bound
 packet adds the missing adversarial condition: metadata channels are not
 treated as independent. Baseline privacy requires measured pairwise
 intersections, measured full joint metadata tuples, temporal-link cohorts,
@@ -14,6 +14,8 @@ This is controlled-testnet evidence only. It does not mutate registry state and
 does not transfer authority.
 
 ## Model
+
+The count-based score assumes each remaining candidate is equally likely after conditioning on the observer’s information. With unequal probabilities the best single guess has probability `max(p_i)`. The historical fixture field `posterior_bps` stores the rounded equal-weight estimate. No field measurement here validates equal weights.
 
 The model uses integer basis points and observed partitions:
 

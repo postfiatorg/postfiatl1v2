@@ -27,7 +27,7 @@ class SettlementTest(unittest.TestCase):
             row, = status["redemptions"]
             with (patch.object(c, "cluster", return_value=bank), patch.object(c, "rpc", return_value=status),
                   patch.object(c, "OWNER", row["owner"]), patch.object(c, "DEST", row["destination_ref"])):
-                self.assertEqual(c.review_paid(paid), ref)
+                self.assertEqual(c.review_canary(paid, rules=c.exit_rules.first_release()), ref)
             self.assertEqual(ref["ordinal"], 0)
             self.assertEqual(ref["slot"], tx["slot"])
             self.assertEqual(ref["signature_hex"], base58.b58decode(paid["solana_tx"]).hex())
