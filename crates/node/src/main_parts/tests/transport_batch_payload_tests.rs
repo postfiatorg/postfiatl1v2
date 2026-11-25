@@ -5963,13 +5963,11 @@ mod transport_batch_payload_tests {
 
     #[test]
     fn rpc_fastpay_is_enabled_by_default_and_only_exactly_disabled() {
-        assert!(rpc_owned_lane_enabled(&[]));
-        assert!(rpc_owned_lane_enabled(&[
-            "--disable-owned-lane=false".to_string()
-        ]));
-        assert!(!rpc_owned_lane_enabled(&[
-            "--disable-owned-lane".to_string()
-        ]));
+        assert_eq!(rpc_owned_lane_enabled(&[]), Ok(true));
+        assert_eq!(rpc_owned_lane_enabled(&["--allow-owned-lane".into()]), Ok(true));
+        assert_eq!(rpc_owned_lane_enabled(&["--disable-owned-lane=false".into()]), Ok(true));
+        assert_eq!(rpc_owned_lane_enabled(&["--disable-owned-lane".into()]), Ok(false));
+        assert!(rpc_owned_lane_enabled(&["--allow-owned-lane".into(), "--disable-owned-lane".into()]).is_err());
     }
 
     #[test]
