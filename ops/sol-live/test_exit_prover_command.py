@@ -116,22 +116,34 @@ BWRAP = shutil.which("bwrap") and subprocess.run(
 
 
 def servers(root, *specs):
-    """Shell that starts fake servers: ("orphan", dev) leaves one with no parent, ("owned", dev)
-    one whose parent stays alive; then runs "$@" and prints which servers are still alive."""
-    server = root / "bin" / "sp1-gpu-server"
-    server.parent.mkdir(exist_ok=True)
-    # A script keeps its own name as the process name, which `pgrep -x` matches.
+    """Shell that starts fake servers: ("orphan", dev) leaves one with no parent; ("owned", dev) one
+    whose live parent is a withdrawal proof host (`proof-host`), ("deposit", dev) one whose live parent
+    is a deposit prover (`host-live`), ("foreign", dev) one whose live parent is another process;
+    then runs "$@" and prints which servers are still alive."""
+    bin = root / "bin"
+    bin.mkdir(exist_ok=True)
+    server = bin / "sp1-gpu-server"
+    # A script keeps its own name as the process name, which `pgrep -x` and /proc/PID/comm show.
     server.write_text("#!/bin/bash\nwhile :; do sleep 1; done\n")
     server.chmod(0o755)
+    for name in ("proof-host", "host-live", "tini"):
+        parent = bin / name
+        parent.write_text('#!/bin/bash\n"$@" & echo $! > "$PIDFILE"; wait\n')
+        parent.chmod(0o755)
+    parents = {"owned": "proof-host", "deposit": "host-live", "foreign": "tini"}
     lines = []
     for i, (kind, dev) in enumerate(specs):
         if kind == "orphan":
             lines.append(f'(CUDA_VISIBLE_DEVICES={dev} setsid {server} & echo $! > {root}/pid{i}) ; sleep 0.2')
         else:
-            lines.append(f'(CUDA_VISIBLE_DEVICES={dev} {server} & echo $! > {root}/pid{i}; wait) & sleep 0.2')
+            lines.append(f'(PIDFILE={root}/pid{i} CUDA_VISIBLE_DEVICES={dev} {bin / parents[kind]} {server} &) ; sleep 0.3')
     report = "; ".join(f'kill -0 $(cat {root}/pid{i}) 2>/dev/null && echo alive{i} >> {root}/alive'
                        for i in range(len(specs)))
     return "\n".join(lines) + f'\n"$@"; status=$?; sleep 0.2; {report}; exit $status'
+
+
+def alive(root):
+    return (root / "alive").read_text().split() if (root / "alive").exists() else []
 
 
 @unittest.skipUnless(BWRAP, "needs bwrap with a PID namespace")
@@ -154,6 +166,46 @@ class StaleServerTest(unittest.TestCase):
             self.assertIn(b"device 3 is used by GPU server", result.stderr)
             self.assertFalse((work / "args").exists())
             self.assertEqual((root / "alive").read_text().split(), ["alive0"])
+
+
+@unittest.skipUnless(BWRAP, "needs bwrap with a PID namespace")
+class LeftoverServerTest(unittest.TestCase):
+    def test_a_server_whose_live_parent_is_not_a_prover_is_a_leftover_and_stopped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = servers(root, ("foreign", 3))
+            result, work = ExitProverCommandTest.run_command(
+                ExitProverCommandTest(), root, "EXIT_CUDA_DEVICE=3\n", prefix=(*namespace(), script, "_"))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(alive(root), [])
+
+    def test_a_deposit_prover_on_the_withdrawal_device_is_refused_not_stopped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = servers(root, ("deposit", 3))
+            result, work = ExitProverCommandTest.run_command(
+                ExitProverCommandTest(), root, "EXIT_CUDA_DEVICE=3\n", prefix=(*namespace(), script, "_"))
+            self.assertEqual(result.returncode, 75, result.stderr)
+            self.assertIn(b"host-live", result.stderr)
+            self.assertEqual(alive(root), ["alive0"])
+
+
+class CanonicalDeviceTest(unittest.TestCase):
+    def test_a_device_with_a_leading_zero_is_refused_by_both_scripts(self):
+        text = "EXIT_CUDA_DEVICE=03\nDEPOSIT_CUDA_DEVICES=0,1,2,3\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            result, work = ExitProverCommandTest.run_command(ExitProverCommandTest(), Path(tmp), text)
+            self.assertEqual(result.returncode, 78, result.stderr)
+            self.assertFalse((work / "args").exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            result, count = ProverStartTest.start(ProverStartTest(), Path(tmp), text)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b"EXIT_CUDA_DEVICE", result.stderr)
+            self.assertIsNone(count)
+        for bad in ("EXIT_CUDA_DEVICE=3\nDEPOSIT_CUDA_DEVICES=00,1\n", "EXIT_CUDA_DEVICE=3\nDEPOSIT_CUDA_DEVICES=0,01\n"):
+            with self.subTest(bad), tempfile.TemporaryDirectory() as tmp:
+                result, work = ExitProverCommandTest.run_command(ExitProverCommandTest(), Path(tmp), bad)
+                self.assertEqual(result.returncode, 78, result.stderr)
 
 
 class ProverStartTest(unittest.TestCase):
@@ -213,6 +265,32 @@ class ProverStartTest(unittest.TestCase):
                                        prefix=(*namespace(), script, "_"))
             self.assertEqual((result.returncode, count), (0, "3"), result.stderr)
             self.assertEqual((root / "alive").read_text().split(), ["alive1"])
+
+    @unittest.skipUnless(BWRAP, "needs bwrap with a PID namespace")
+    def test_without_the_file_a_live_withdrawal_server_is_never_stopped_and_the_start_refuses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = servers(root, ("owned", 3))
+            result, count = self.start(root, prefix=(*namespace(), script, "_"))
+            self.assertNotEqual(result.returncode, 0, result.stderr)
+            self.assertIn(b"device 3", result.stderr)
+            self.assertIn(b"proof-host", result.stderr)
+            self.assertIsNone(count)
+            self.assertEqual(alive(root), ["alive0"])
+
+    @unittest.skipUnless(BWRAP, "needs bwrap with a PID namespace")
+    def test_a_leftover_server_with_a_foreign_live_parent_is_stopped_by_the_deposit_start(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = servers(root, ("foreign", 3), ("owned", 3))
+            result, count = self.start(root, "EXIT_CUDA_DEVICE=3\nDEPOSIT_CUDA_DEVICES=0,1,2\n",
+                                       prefix=(*namespace(), script, "_"))
+            self.assertEqual((result.returncode, count), (0, "3"), result.stderr)
+            self.assertEqual(alive(root), ["alive1"])
+
+    def test_an_unreadable_server_environment_prints_no_error(self):
+        source = START.read_text()
+        self.assertIn('/proc/$pid/environ" 2>/dev/null', source)
 
 
 if __name__ == "__main__":
