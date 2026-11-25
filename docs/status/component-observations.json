@@ -25,11 +25,13 @@
     "component": "Lane-export proof identity",
     "chain": "Source build",
     "height": null,
-    "observed_at": "2026-11-25",
+    "observed_at": "2026-11-25T19:30:09Z",
     "observers": "GitHub Actions",
     "source_revision": "003af00011c6af086f14f4d4017e450a11eaf45f",
     "artifact": "pft-lane-export-program",
     "conclusion": "failure",
-    "evidence": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/45684553972"
+    "evidence": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/45684553972",
+    "comparison": "skipped",
+    "run_number": 211
   }
 }

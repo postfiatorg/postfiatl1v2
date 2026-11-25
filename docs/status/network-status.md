@@ -36,7 +36,7 @@ position.
 | --- | --- | --- | --- |
 | [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/ops/b24-live/known-releases.txt) | postfiat-wan-devnet-2 / 1903 | 2026-11-25 20:15 UTC | Six validators reported on sol-exit-r2 |
 | [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
-| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45684553972) | Source build / n/a | 2026-11-25 | Unverified (hosted comparison: failure) |
+| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45684553972) | Source build / n/a | 2026-11-25T19:30:09Z | Unverified (hosted comparison: failure) |
 
 <!-- /component-observations -->
 

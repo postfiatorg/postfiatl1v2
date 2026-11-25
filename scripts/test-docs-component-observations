@@ -21,3 +21,20 @@ assert [row["best_guess"] for row in examples] == [625, 4000]
 for row in examples:
     assert len(row["weights"]) == 16 and sum(row["weights"]) == 10000
     assert max(row["weights"]) == row["best_guess"]
+
+observe = runpy.run_path(str(root / "scripts/docs-component-observations"))["identity_observation"]
+run = dict(name="pft-lane-export-identity", head_repository={"full_name": "postfiatorg/postfiatl1v2"},
+           head_branch="main", event="push", status="completed", conclusion="success", run_number=1000000,
+           head_sha="a" * 40, updated_at="2099-01-01T00:00:00Z", html_url="https://example.invalid/run")
+job = {"name": "build-lane-export-identity", "conclusion": "success", "steps": [{"name": "Compare with the committed identity",
+                                                        "conclusion": "skipped"}]}
+assert observe(run, [job], original["identity"])["conclusion"] == "skipped"
+job["steps"][0]["conclusion"] = "success"
+assert observe(run, [job], original["identity"])["conclusion"] == "success"
+assert observe(run, [], original["identity"])["conclusion"] == "missing"
+try:
+    observe(dict(run, event="pull_request"), [job], original["identity"])
+except ValueError:
+    pass
+else:
+    raise AssertionError("PR run accepted as the identity of main")
