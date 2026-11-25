@@ -13,6 +13,12 @@ enough that public edge behavior must be explicit.
 - Direct shielded apply is rejected at the public edge.
 - Concurrency and rate limits exist for remote verifier work.
 - Child-process isolation exists for selected RPC operations.
+- User-proven private actions (`private_action_submit`) are admitted only by
+  an RPC server started with `rpc-serve --allow-private-action-admission`; the
+  switch is off unless set (`crates/node/src/private_action_rpc.rs`). On the
+  live devnet, public submission of shielded actions is off on every validator
+  (checked on 25 November 2026; see the
+  [handoff of 23 November](../status/handoff-2026-11-23.md)).
 
 ## RPC Resource Gates
 
@@ -47,7 +53,8 @@ flowchart TD
 - RPC child isolation;
 - repeated live target-hardware malformed load.
 
-Evidence anchors:
+Evidence anchors (May 2026 runs; the reports are archived outside this
+repository, see `reports/README.md`):
 
 - `reports/testnet-orchard-rpc-concurrency-limit/orchard-rpc-concurrency-limit-v0-20260515T171128Z/testnet-orchard-rpc-concurrency-limit.json`
 - `reports/testnet-orchard-rpc-child-isolation/orchard-rpc-child-isolation-v0-20260515T174034Z/testnet-orchard-rpc-child-isolation.json`

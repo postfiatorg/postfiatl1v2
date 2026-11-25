@@ -1,5 +1,11 @@
 # Public History Publication Gate
 
+!!! note "Dated page"
+    Recorded on 17 July 2026. The public repository `postfiatorg/postfiatl1v2`
+    has existed since then. This page does not record whether its history was
+    produced through the gate below; read it as the gate's definition, not as
+    today's state of the private history.
+
 The current private Git history must not be made public. A historical provider
 capture contains a Jupyter bearer token in three versions of one evidence
 bundle. The value is intentionally absent from this document and from scanner

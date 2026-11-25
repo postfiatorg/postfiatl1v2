@@ -99,7 +99,8 @@ The canonical valid fixture is:
 docs/governance/agent/fixtures/privacy_metadata_anonymity_bound/valid_metadata_bound.json
 ```
 
-Current roots:
+Current roots (computed by the archived verifier; not recomputed in the review
+of 25 November 2026):
 
 | Root | Value |
 | --- | --- |

@@ -4,6 +4,11 @@ The source repository is public. The current network posture remains a
 controlled-testnet implementation; publication does not promote the software to
 mainnet or authorize real-value custody.
 
+Since 23 November 2026 the devnet's Solana route holds real USDC in a capped
+vault on Solana mainnet, and pfUSDC can be withdrawn back to Solana. This is a
+controlled devnet with small caps; there is no public announcement of Solana
+withdrawals ([handoff of 25 November](../status/handoff-2026-11-25.md)).
+
 ## Controlled-Testnet Facts
 
 - project-controlled validators are acceptable for protocol validation;
@@ -25,8 +30,9 @@ Public launch adds:
 - public benchmark packets for throughput claims.
 
 Transactional indexed storage is implemented and active on the controlled
-devnet; its G5 offline packet is bound to the October 21 binary, while G6
-remains open ([State And Storage](../architecture/state-and-storage.md)).
+devnet; its G5 offline packet is bound to the October 21 binary, and G6 was
+then open ([State And Storage](../architecture/state-and-storage.md)). Whether
+either was repeated for the releases of 21 to 24 November is not recorded here.
 A separate software signer process with a durable double-sign guard is
 implemented on main; its deployment under two users is still open, and HSM
 custody is not implemented ([Signer Policy](../runbooks/public-rpc-operator-policy.md#validator-signer-process)).

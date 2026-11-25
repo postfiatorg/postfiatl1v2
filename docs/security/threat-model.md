@@ -1,7 +1,11 @@
 # Threat Model
 
 PostFiat's current controlled-testnet threat model focuses on protocol
-correctness and operator reliability before public launch.
+correctness and operator reliability before public launch. The list below was
+last changed on 17 July 2026. It does not yet cover the Solana USDC bridge that
+runs on the devnet since 23 November 2026; the
+[Bridge Audit Map](../status/bridge-audit-map.md) records what public source
+reproduces for it and what remains unverified.
 
 ## Covered Adversaries
 

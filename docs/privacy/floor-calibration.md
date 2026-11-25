@@ -86,7 +86,8 @@ The canonical valid fixture is:
 docs/governance/agent/fixtures/privacy_floor_calibration/valid_floor_calibration.json
 ```
 
-Current roots:
+Current roots (computed by the archived verifier; not recomputed in the review
+of 25 November 2026):
 
 | Root | Value |
 | --- | --- |

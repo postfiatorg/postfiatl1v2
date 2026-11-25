@@ -166,7 +166,8 @@ scripts/shielded-asset-predicate-registry-verify --write-report
 scripts/shielded-asset-predicate-registry-verify --verify-report
 ```
 
-Latest report:
+Latest report (29 May 2026; archived outside this repository, see
+`reports/README.md`):
 
 ```text
 reports/shielded-asset-predicate-registry/20260529T000926Z/shielded-asset-predicate-registry-report.json

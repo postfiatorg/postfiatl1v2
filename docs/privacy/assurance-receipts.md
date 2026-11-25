@@ -83,7 +83,9 @@ The verifier checks:
 
 ## Current Evidence
 
-The first assurance receipt fixture is bound to the existing Orchard evidence:
+The first assurance receipt fixture is bound to the Orchard evidence below. The
+report files are from May 2026 and are archived outside this repository (see
+`reports/README.md`), so the hash check runs only against that archive:
 
 | Evidence | Claim |
 | --- | --- |

@@ -16,7 +16,20 @@ means independently audited" ([Whitepaper](../whitepaper.md)).
 
 The only running network is a controlled devnet run by six
 Foundation-administered validators
-([Network Status](../status/network-status.md)).
+([Network Status](../status/network-status.md)). On 25 November 2026 all six
+were at height 1897 with one state root, on build `04600868`, which is cut
+from the release branch `release/sol-exit-r2` and is not on `main`
+([handoff of 25 November](../status/handoff-2026-11-25.md)).
+
+Since 23 November 2026 the devnet also carries USDC between Solana mainnet and
+pfUSDC in both directions, under small caps: one withdrawal spends one deposit
+batch, withdrawals below 0.30 USDC are refused, and on 24 November the vault
+accepted 25 USDC more (same handoff). A cancel and refund of a Solana withdrawal has not
+been run on the live chain. No external audit of the Solana vault, deposit
+programs or exit verifier is recorded in this repository; the
+[Bridge Audit Map](../status/bridge-audit-map.md) records what public source
+reproduces. Public submission of shielded actions is off on every validator
+([handoff of 23 November](../status/handoff-2026-11-23.md)).
 
 ## Planned and requested reviews
 
@@ -71,8 +84,9 @@ From the [security policy](https://github.com/postfiatorg/postfiatl1v2/blob/main
   and RPC services on JSON/JSONL or not-yet-activated storage need
   `--unsafe-devnet-json-storage`; that flag does not select the storage backend.
   The devnet uses transactional `redb`. G5 offline qualification passed for
-  the October 21 binary on October 23; G6 remains open
-  ([State And Storage](../architecture/state-and-storage.md)).
+  the October 21 binary on October 23, and G6 was then open
+  ([State And Storage](../architecture/state-and-storage.md)); whether either
+  was repeated for the releases of 21 to 24 November is not recorded here.
 - Public RPC requires an authenticated TLS edge; the node rejects public and
   wildcard plaintext binds.
 - The policy "is not an external audit report or a mainnet-readiness claim."

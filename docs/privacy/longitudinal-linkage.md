@@ -83,7 +83,8 @@ The canonical valid fixture is:
 docs/governance/agent/fixtures/privacy_longitudinal_linkage/valid_longitudinal_linkage.json
 ```
 
-Current roots:
+Current roots (computed by the archived verifier; not recomputed in the review
+of 25 November 2026):
 
 | Root | Value |
 | --- | --- |

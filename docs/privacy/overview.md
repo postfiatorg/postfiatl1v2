@@ -42,7 +42,22 @@ and position changes.
 - Bounded RPC batch creation for Orchard actions and direct deposits.
 - Malformed proof, rate-limit, child-isolation, and concurrency-limit evidence.
 - Live five-validator deposit, spend, withdraw, outage, restart, snapshot, soak,
-  and audit-packet evidence.
+  and audit-packet evidence from May 2026 (history: the network then had five
+  validators; the reports are archived outside this repository, see
+  `reports/README.md`).
+
+## Status On The Live Devnet
+
+Checked on 25 November 2026.
+
+- The code listed above is on `main`.
+- On `postfiat-wan-devnet-2`, a controlled devnet with six validators, public
+  submission of shielded actions is off on every validator
+  ([handoff of 23 November](../status/handoff-2026-11-23.md)).
+- The RPC server admits user-proven private actions (`private_action_submit`)
+  only when it is started with `rpc-serve --allow-private-action-admission`;
+  the switch is off unless set (`crates/node/src/private_action_rpc.rs`).
+- Post-quantum private payments are not on `main`.
 
 ## System Diagram
 
