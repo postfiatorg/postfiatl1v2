@@ -96,7 +96,9 @@ caps.
 - **Deposit.** A holder deposits USDC into the vault program on Solana
   (`solana/pfusdc-vault`). A proof of the finalized deposit is submitted to
   Post Fiat as `solana_bridge_proof_v1`; execution verifies it and credits
-  pfUSDC of that deposit batch's own series and backing bucket
+  pfUSDC in the series and backing bucket of the ingress route revision that
+  verified it (each revision has its own bucket and series; the handoffs call
+  one such bucket a deposit batch)
   (`apply_proof` and `credit_verified` in `crates/execution/src/solana_bridge.rs`).
 - **Withdrawal.** The holder burns pfUSDC with `vault_bridge_burn_to_redeem` and
   a `solana-spl:` destination; the burn opens a pending redemption
@@ -112,12 +114,12 @@ caps.
   ([design note](../specs/solana-exit-refund-design-20261124.md)). A cancel
   and refund has not been run on the live chain.
 - **Releases.** The first withdrawal rules are active from block 1841 and the
-  second from block 1890 (every deposit batch can exit, refund path). The
+  second from block 1890 (every bucket of the shared custody can exit, refund path). The
   second release's height is the `SECOND_RELEASES` entry in
   `crates/types/src/solana_exit.rs`; the live build `04600868` is cut from the
   release branch `release/sol-exit-r2`, which sets it.
 - **Limits on 24 November** ([handoff of 25 November](../status/handoff-2026-11-25.md)):
-  one withdrawal spends one deposit batch; withdrawals below 0.30 USDC are
+  one withdrawal burns from one bucket and its series; withdrawals below 0.30 USDC are
   refused; the vault accepted 25 USDC more; a withdrawal takes about four
   minutes; cancel is refused while the route is paused.
 

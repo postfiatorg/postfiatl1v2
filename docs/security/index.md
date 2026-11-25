@@ -22,8 +22,8 @@ from the release branch `release/sol-exit-r2`
 ([handoff of 25 November](../status/handoff-2026-11-25.md)).
 
 Since 23 November 2026 the devnet also carries USDC between Solana mainnet and
-pfUSDC in both directions, under small caps: one withdrawal spends one deposit
-batch, withdrawals below 0.30 USDC are refused, and on 24 November the vault
+pfUSDC in both directions, under small caps: one withdrawal burns from one backing
+bucket (one pfUSDC series), withdrawals below 0.30 USDC are refused, and on 24 November the vault
 accepted 25 USDC more (same handoff). A cancel and refund of a Solana withdrawal has not
 been run on the live chain. No external audit of the Solana vault, deposit
 programs or exit verifier is recorded in this repository; the
