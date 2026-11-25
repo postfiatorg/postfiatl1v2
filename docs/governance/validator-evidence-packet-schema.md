@@ -3,6 +3,12 @@
 Status: first draft packet contract for DGA validator evidence.
 Date: 2026-05-23
 
+!!! note "Unlinked page names (25 November 2026)"
+    Page names on this page written without a link, for example "Validator
+    Evidence Conflict Set" or "Validator Evidence Qwen Replay Preflight", name pages
+    that are not in this repository on 25 November 2026. Their schemas and
+    fixtures, where named, are under `docs/governance/agent/`.
+
 This page explains the first validator evidence packet schema. The schema is a
 design artifact, not live validator authority.
 
@@ -301,4 +307,5 @@ queue acceptance, Cobalt submission, registry mutation, or authority transfer
 appears without a future explicit lane.
 
 The DGA ruleset binding slice is now documented in
-Validator Evidence Ruleset Binding.
+Validator Evidence Ruleset Binding (that page is not in this repository on 25
+November 2026).
