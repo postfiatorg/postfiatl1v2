@@ -2321,7 +2321,7 @@ fn five_of_six_kinds() -> [String; 2] {
 }
 
 /// Draft `kind` as `ratify-solana-exit-*` does, sign it with every validator but `missing`,
-/// and assemble the five authorizations.
+/// re-draft with the five signers as supporters and assemble their five authorizations.
 fn five_of_six_assemble(kind: &str, missing: usize) -> io::Result<GovernanceAmendment> {
     let dir = unique_test_dir("solana-exit-five-of-six");
     init(InitOptions {
@@ -2370,9 +2370,30 @@ fn five_of_six_assemble(kind: &str, missing: usize) -> io::Result<GovernanceAmen
             file
         })
         .collect();
+    // The signers are known only now: re-draft with them as the supporters. The five
+    // signatures were made over the six-supporter draft.
+    let redraft = dir.join("redraft.json");
+    ratify_solana_exit_decision(RatifyGovernanceOptions {
+        data_dir: dir.clone(),
+        validators: validators.clone(),
+        support: signers.clone(),
+        kind: kind.into(),
+        value: 1,
+        activation_height: FIVE_OF_SIX_HEIGHT,
+        veto_until_height: 0,
+        paused: false,
+        amendment_file: redraft.clone(),
+    })
+    .unwrap();
+    let fields = |path: &Path| -> serde_json::Map<String, serde_json::Value> {
+        serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+    };
+    let (first, second) = (fields(&draft), fields(&redraft));
+    let changed: Vec<&String> = first.keys().filter(|k| first[*k] != second[*k]).collect();
+    assert_eq!(changed, ["amendment_id", "certificate_id", "support", "votes"], "{kind}");
     let assembled = assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
         data_dir: dir.clone(),
-        amendment_file: draft,
+        amendment_file: redraft,
         authorization_files: authorizations,
         proposal_slot: FIVE_OF_SIX_HEIGHT,
         output_file: dir.join("signed.json"),
@@ -2397,6 +2418,63 @@ fn solana_exit_paid_and_refund_assemble_with_any_five_of_six() {
             assert!(!assembled.support.contains(&format!("validator-{missing}")));
         }
     }
+    solana_exit::set_second_release_for_tests(None);
+    solana_exit::set_first_release_for_tests(None);
+}
+
+/// `--support` is a drafting option: listed validators only, each once, at least the quorum.
+#[test]
+fn solana_exit_draft_support_is_checked() {
+    solana_exit::set_first_release_for_tests(Some(FIVE_OF_SIX_RELEASE));
+    solana_exit::set_second_release_for_tests(Some(FIVE_OF_SIX_RELEASE));
+    let dir = unique_test_dir("solana-exit-draft-support");
+    init(InitOptions {
+        data_dir: dir.clone(),
+        chain_id: "postfiat-local".into(),
+        node_id: "validator-0".into(),
+        validator_count: 6,
+    })
+    .unwrap();
+    register_descriptor_for_tests(&dir);
+    let validators = local_validator_ids(6).unwrap();
+    let [paid, refund] = five_of_six_kinds();
+    let draft = |kind: &str, support: Vec<String>| {
+        ratify_solana_exit_decision(RatifyGovernanceOptions {
+            data_dir: dir.clone(),
+            validators: validators.clone(),
+            support,
+            kind: kind.into(),
+            value: 1,
+            activation_height: FIVE_OF_SIX_HEIGHT,
+            veto_until_height: 0,
+            paused: false,
+            amendment_file: dir.join("draft.json"),
+        })
+        .map_err(|e| e.to_string())
+    };
+    let named = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+    for kind in [paid.as_str(), refund.as_str(), solana_exit::CLOSE] {
+        let five = draft(kind, validators[1..].to_vec()).unwrap();
+        assert_eq!((five.quorum, five.support.len(), five.votes.len()), (5, 5, 5));
+        assert_eq!(draft(kind, validators.clone()).unwrap().support, validators);
+        let outsider = named(&["validator-1", "validator-2", "validator-3", "validator-4", "validator-9"]);
+        assert_eq!(
+            draft(kind, outsider).unwrap_err(),
+            "supporter validator-9 is not one of the declared validators"
+        );
+        let twice = named(&["validator-1", "validator-2", "validator-3", "validator-4", "validator-4"]);
+        assert_eq!(draft(kind, twice).unwrap_err(), "supporter validator-4 is listed twice");
+        assert_eq!(
+            draft(kind, validators[2..].to_vec()).unwrap_err(),
+            "4 supporters are fewer than this decision's quorum of 5"
+        );
+    }
+    // The first opening stays unanimous.
+    assert_eq!(
+        draft(solana_exit::OPEN, validators[1..].to_vec()).unwrap_err(),
+        "5 supporters are fewer than this decision's quorum of 6"
+    );
+    fs::remove_dir_all(&dir).unwrap();
     solana_exit::set_second_release_for_tests(None);
     solana_exit::set_first_release_for_tests(None);
 }
