@@ -357,6 +357,13 @@ const RPC_ORCHARD_ACTION_SPOOL_MAX_REQUEST_BYTES: u64 = MAX_RPC_REQUEST_BYTES as
 const RPC_ORCHARD_ACTION_SPOOL_MAX_TOTAL_BYTES: u64 = 64 * 1024 * 1024;
 const RPC_SERVE_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60);
 const RPC_SERVE_HEALTH_STAMP_MAX_AGE: Duration = Duration::from_secs(1);
+/// While the validator process holds the database to commit a block, `status`
+/// answers with the report read before that commit began, for at most this
+/// long. To a caller it looks like a validator that has not committed the
+/// block yet, which every caller already has to tolerate.
+const RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE: Duration = Duration::from_secs(30);
+/// How long a `status` refresh waits for the database when such a report exists.
+const RPC_SERVE_STATUS_REFRESH_WAIT: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, serde::Serialize)]
 struct RpcServeReadinessReport {
@@ -2175,15 +2182,51 @@ fn rpc_serve_cached_status(
     // Start the age before the read, and publish it only on success: a slow
     // or failed refresh must not extend the lifetime of an old report.
     let checked_at = Instant::now();
-    let report = status(NodeOptions {
-        data_dir: data_dir.to_path_buf(),
-    })
-    .map_err(|error| format!("rpc status read failed: {error}"))?;
+    // The report of the last successful refresh, if it is recent enough to be
+    // the answer while the sibling process holds the database for a commit.
+    let before_commit = health_cache.lock().ok().and_then(|cache| {
+        match (cache.status_checked_at, cache.status.as_ref()) {
+            (Some(read_at), Some(report))
+                if read_at.elapsed() <= RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE =>
+            {
+                Some(report.clone())
+            }
+            _ => None,
+        }
+    });
+    let read = || {
+        status(NodeOptions {
+            data_dir: data_dir.to_path_buf(),
+        })
+    };
+    let refreshed = if before_commit.is_some() {
+        postfiat_storage::transactional::with_writer_lease_deadline(
+            RPC_SERVE_STATUS_REFRESH_WAIT,
+            read,
+        )
+    } else {
+        read()
+    };
+    let report = match (refreshed, before_commit) {
+        (Ok(report), _) => report,
+        // Only the busy database is answered from the earlier report; any other
+        // failure is reported. The earlier report keeps its own read time, so it
+        // is not made fresh and stops being used after the bound.
+        (Err(error), Some(report)) if rpc_serve_storage_writer_busy(&error) => {
+            return Ok((report, true));
+        }
+        (Err(error), _) => return Err(format!("rpc status read failed: {error}")),
+    };
     if let Ok(mut cache) = health_cache.lock() {
         cache.status = Some(report.clone());
         cache.status_checked_at = Some(checked_at);
     }
     Ok((report, false))
+}
+
+fn rpc_serve_storage_writer_busy(error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::WouldBlock
+        && error.to_string().contains("storage_writer_busy")
 }
 
 /// The cached status with the validator-registry update count read in the
