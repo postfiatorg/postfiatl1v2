@@ -63,6 +63,12 @@ state is otherwise valid.
 
 ## Active Runtime Identities
 
+!!! note "Dated table"
+    On 25 November 2026 all six validators reported build `04600868` at height
+    1897 with one state root (read-only `status`). The table below is the
+    observation of 25 and 26 August 2026; the governance auditor and the
+    advisory shadow identities were not re-read.
+
 The most recent authenticated read-only validator/RPC probe ran from
 `2026-08-26T01:40:51Z` through `01:41:04Z`. The authority-auditor and shadow rows
 retain the older `2026-08-25T15:37:40Z` observation:

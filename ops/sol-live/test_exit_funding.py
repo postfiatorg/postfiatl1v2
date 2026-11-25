@@ -76,8 +76,15 @@ class FundingTest(unittest.TestCase):
             issuer="issuer",
             epoch=8,
             reserve_packet_hash="hash",
-            bucket_id=canary.BUCKET,
-            series_asset_id=canary.SERIES,
+            source_domain=canary.SOURCE_DOMAIN,
+            min_withdrawal_atoms="20000",
+            series=[
+                dict(
+                    bucket_id=canary.BUCKET,
+                    series_asset_id=canary.SERIES,
+                    redeemable_atoms="20000",
+                )
+            ],
         )
         head = dict(chain_id="chain", genesis_hash="genesis")
 
@@ -95,6 +102,7 @@ class FundingTest(unittest.TestCase):
         with (
             patch.object(canary.requests, "get") as get,
             patch.object(canary, "cluster"),
+            patch.object(canary, "require_wallet_destination"),
             patch.object(canary, "balances", return_value=dict(pfusdc_atoms=20000)),
             patch.object(canary, "rpc", quote),
             patch.object(canary, "fleet", return_value=head),

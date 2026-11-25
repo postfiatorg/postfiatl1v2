@@ -7,6 +7,13 @@
 **Derived from:** [Storage Scaling and Bounded Finality Research Specification](storage-scaling-research-spec.md)
 **Tracked by:** [Storage Scaling: Time-Budgeted Qualification and Release Gates](../plans/completed/storage-scaling-milestone.md)
 
+> **Status note (25 November 2026):** the tracking milestone was retired to the
+> completed plans on 23 October 2026 as `OFFLINE QUALIFIED` for
+> `store-handle-20261021`; G6 was then open. The devnet runs the transactional
+> `redb` store ([State And Storage](state-and-storage.md)). This specification
+> is kept as the record of that work; its "Active" status line is from 26
+> August 2026.
+
 > **Execution-profile amendment (2026-08-27):** The active milestone selects
 > transactional `redb` and replaces the exhaustive three-lane/five-height
 > comparison with selected-store heights 50 and 5,000 plus a same-binary

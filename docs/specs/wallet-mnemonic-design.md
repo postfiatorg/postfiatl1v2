@@ -3,6 +3,9 @@
 Status: design v0
 Date: 2026-05-21
 
+On `main` (checked on 25 November 2026) this design is not implemented: no
+BIP-39 mnemonic code exists in `crates/` or `python/`.
+
 This document defines the mnemonic support PostFiat should add on top of the
 current transparent ML-DSA wallet flow. It is a wallet UX and key-derivation
 design, not a protocol transaction change.

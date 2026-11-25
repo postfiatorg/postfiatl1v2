@@ -7,6 +7,8 @@
 > venue. See
 > [A666 current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
 > Prototype statements below remain historical implementation context.
+> The state of each NAVCoin on 2026-11-25 is on
+> [NAVCoins](../navcoins/index.md#today).
 
 Status: historical native NAV smoke
 Script: `scripts/navcoin-current-infra-smoke` *(archived outside this repository; see `scripts/README.md`)*

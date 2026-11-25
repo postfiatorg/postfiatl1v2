@@ -38,8 +38,7 @@ flowchart LR
 
 - `scripts/testnet-wallet-test-vectors-smoke` *(archived outside this repository; see `scripts/README.md`)*
 - `scripts/testnet-wallet-minimum-smoke`
-- `scripts/testnet-live-wallet-finality` *(archived outside this repository; see `scripts/README.md`)*
-- `reports/testnet-live-wallet-finality/`
+- `scripts/testnet-live-wallet-finality` and its reports *(archived outside this repository; see `scripts/README.md` and `reports/README.md`)*
 
 ## Source
 

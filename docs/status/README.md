@@ -14,6 +14,7 @@
 | [Current State](chain-state-current.md) | The full, dated operating log: releases, rollouts, fleet observations, drills |
 | [Testnet Path](testnet-path.md) | Generated status of the public-testnet path milestone (Gate Zero and phases) |
 | [Release Gate Inventory](release-gate-inventory.md) | Non-storage gates that must pass before a public testnet |
+| [Handoff of 25 November 2026](handoff-2026-11-25.md) | The latest dated handoff in this directory: the second Solana exit release, its limits and open work (earlier: [23 November](handoff-2026-11-23.md), [24 November](handoff-2026-11-24.md)) |
 
 ## Everything else
 

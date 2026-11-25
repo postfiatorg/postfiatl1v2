@@ -49,14 +49,39 @@ The fields and values are the same as before, with four exceptions:
   same refresh as the status;
 - a failed status read returns `rpc_status_failed`.
 
-Main answers it in-process since `9f76e2e5e`. The
-deployed release still runs the child-process path, which recomputes the status
-and reads the whole stored history. That took 6.6–14.1 s on the devnet
-validators on 2026-11-09. Until the next release carries `9f76e2e5e` (see the
-[release plan](../plans/active/next-validator-release-plan-20261115.md)),
-callers should allow 30 s; the Python client does
-(`SERVER_INFO_TIMEOUT_SECONDS`). The local `rpc --method server_info` command
-still computes the full metrics.
+Main answers it in-process since `9f76e2e5e`, and every release since
+`main-r64-20261121` carries it, including the running build `04600868`. Before
+that, the child-process path took 6.6–14.1 s on the devnet validators
+(2026-11-09). Other reads still start a child process per request; on 23
+November they took 7 to 10 s each on the devnet validators
+([24 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-24.md)).
+The Python client allows 30 s (`SERVER_INFO_TIMEOUT_SECONDS`). The local
+`rpc --method server_info` command still computes the full metrics.
+
+`blocks`, `receipts` and `tx` are answered by key instead of decoding the whole
+stored history since #227 (`crates/node/src/block_finality.rs`,
+`crates/storage/src/transactional.rs`; design note
+`docs/specs/fast-validator-reads-20261124.md`).
+
+A reply larger than the node's 4 MB frame limit is not sent: the caller reads
+an empty line after the idle timeout. A withdrawal witness is about 200 KB per
+block of ancestry, so the Solana payout service reads it in eight-block pages
+([24 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-24.md)).
+An error code for this case (`rpc_response_too_large`) is not on `main`;
+`ops/sol-live/live.py` already accepts it.
+
+## Bridge, Reserve, Archive And Private Pool Reads
+
+`vault_bridge_status`, `vault_bridge_route`, `pfusdc_ingress_preflight`,
+`pfusdc_egress_witness`, `nav_reserve_proof_status`, `market_ops_status`,
+`external_lane_info`, the `fx_fix_*` reads, `batch_archive`, `archive_window`,
+the `verify_*` reads and the `private_*` and `asset_orchard_*` reads are
+public reads; each is described in [Method Coverage](method-coverage.md).
+Public submission of shielded actions is off on every validator.
+
+There is no separate method for Solana withdrawals. A withdrawal is the asset
+operation `vault_bridge_burn_to_redeem`, submitted through the signed asset
+path; its redemption rows are in `vault_bridge_status`.
 
 ## Ledger Object Reads
 
@@ -130,6 +155,8 @@ three fields.
 | `mempool_submit_signed_atomic_swap_transaction_finality` | Submit and return certificate/receipt finality for a signed W6 atomic swap. Success still requires an accepted receipt code. |
 | `mempool_submit_fastlane_primary` | Submit a source-signed, sequence-bound FastLane deposit or an ordered FastPay recovery action when the controlled signed-submit surface is enabled. |
 | `mempool_submit_fastlane_primary_finality` | Submit the same FastLane primary transaction through the finality-returning path. |
+| `mempool_submit_signed_transfer_finality`, `mempool_submit_signed_payment_v2_finality`, `mempool_submit_signed_asset_transaction_finality`, `mempool_submit_signed_escrow_transaction_finality`, `mempool_submit_signed_offer_transaction_finality` | Finality-returning forms of the submit methods above; enabled by `--allow-mempool-submit-finality`. |
+| `consensus_v2_timeout_vote`, `shield_batch_finality` | Share the finality gate and its rate limit (`is_mempool_submit_signed_transfer_finality_method` in `crates/node/src/rpc_cli.rs`). |
 
 Signed submit methods reject a destination address that is not a canonical
 `pf` + 40 lowercase hex address before admission. The error `code` is
@@ -290,4 +317,4 @@ inventory rather than duplicated here.
 - [RPC Method Inventory](../runbooks/rpc-method-inventory.md)
 - `crates/rpc_sdk/src/lib.rs`
 - `crates/node/src/rpc_cli.rs`
-- `reports/testnet-rpc-method-inventory/`
+- `scripts/testnet-rpc-method-inventory` and its report `docs/runbooks/rpc-method-inventory.json`

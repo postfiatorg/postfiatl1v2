@@ -5,6 +5,10 @@ private smart-contract chain. The v0 design is deliberately narrow:
 transparent per-asset supply, private transfers, and a closed library of
 owner-scoped Halo2 predicates admitted by Cobalt governance.
 
+> **Status on `main` (25 November 2026):** this registry exists as a schema and
+> fixtures under `docs/governance/agent/`. Its verifier script is archived
+> outside this repository, and no code in `crates/` or `python/` implements it.
+
 This is the useful institutional lane. Stablecoins, tokenized cash balances,
 fund shares, vesting schedules, scoped assurance, and issuer-controlled mint or
 burn rules mostly need typed asset behavior, not an AMM hidden inside the
@@ -24,6 +28,10 @@ The v0 registry does not admit arbitrary private programs. It also does not
 admit bilateral DvP, private supply, AMM pools, order books, global counters,
 or recipient-identity transfer policies. Those are different hardness classes,
 not missing flags.
+
+The Asset-Orchard private swap ([Settlement Lanes](../architecture/settlement-lanes.md))
+is a separate circuit in `crates/privacy_orchard`, not a predicate of this
+registry.
 
 ```mermaid
 flowchart TD
@@ -166,7 +174,8 @@ scripts/shielded-asset-predicate-registry-verify --write-report
 scripts/shielded-asset-predicate-registry-verify --verify-report
 ```
 
-Latest report:
+Latest report (29 May 2026; archived outside this repository, see
+`reports/README.md`):
 
 ```text
 reports/shielded-asset-predicate-registry/20260529T000926Z/shielded-asset-predicate-registry-report.json
