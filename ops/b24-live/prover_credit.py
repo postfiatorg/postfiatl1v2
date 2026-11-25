@@ -86,7 +86,9 @@ def message(kind,credit=0,spend=0,count=0,hours=0,warn=24,urgent=6,error='',stor
     if kind=='unreadable':return f'Proving hosts: Vast credit could not be read ({error}); the reading is not usable and the low-credit alert is blind until it can ({utc_now()})'
     head='URGENT: proving hosts stop' if kind=='urgent' else 'Proving hosts stop'
     limit=urgent if kind=='urgent' else warn
-    return f'{head} in about {hours:.1f} h: Vast credit {credit:.2f} USD at {spend:.2f} USD/h for {count} running instance(s){f' and {stored} stopped instance(s) billed for storage' if stored else ''}, under the {limit:g} h limit. Top up the Vast account ({utc_now()})'
+    # Built outside the f-string: a nested f-string with the same quote needs Python 3.12.
+    storage=' and %d stopped instance(s) billed for storage'%stored if stored else ''
+    return f'{head} in about {hours:.1f} h: Vast credit {credit:.2f} USD at {spend:.2f} USD/h for {count} running instance(s){storage}, under the {limit:g} h limit. Top up the Vast account ({utc_now()})'
 
 def load(path):
     try:state=json.loads(path.read_text())
