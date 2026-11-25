@@ -1,6 +1,13 @@
 # Non-Storage Release Gate Inventory
 
 **Date:** 2026-09-01
+
+!!! note "2026-11-25: historical inventory"
+
+    The states below are those of 2026-09-01 and were not recomputed for this
+    review. The generated [Testnet Path](testnet-path.md) shows D2 (public
+    operator runbook) and D3 (topology thresholds) done since then. Current
+    deployment facts are on [Network Status](network-status.md).
 **Purpose:** D1 of the [testnet-path milestone](../plans/active/l1v2-public-testnet-path-milestone.md) — an inventory of every non-storage gate that must pass before a public testnet, so D2–D4 work against a fixed list.
 **Scope boundary:** storage gates (G0–G7) are tracked separately in the [storage scaling milestone](../plans/completed/storage-scaling-milestone.md) and are deliberately absent here.
 

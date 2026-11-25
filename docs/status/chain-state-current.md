@@ -1,13 +1,90 @@
 # PostFiat L1 Current State
 
-Documentation reviewed: `2026-11-19`. Latest fleet observation: the read-only
-all-six read of 2026-11-19 (`status` 05:56:01–05:56:16Z), height 1513, on
-release 6.1 (build revision `6123e64f`). Latest deployment receipt:
-`2026-10-30T11:21:09Z`, release `vote-records-20261030`, tip 1168; none is
-recorded yet for the running deployment. The dated rollout records below retain
-their original observations.
+Updated: `2026-11-25T10:23:22Z`. Documentation reviewed: `2026-11-25`. Latest
+fleet observation: the read-only all-six read of 2026-11-25 (`status`
+10:16:21–10:16:36Z and 10:23:09–10:23:22Z), height 1897, on the second Solana
+exit release (build revision `04600868`). Latest deployment receipt on this
+page: `2026-10-30T11:21:09Z`, release `vote-records-20261030`, tip 1168; none is
+recorded here for the releases of 19 to 24 November. The dated rollout records
+below retain their original observations.
 
 Status: **canonical operational-state reference**
+
+!!! note "2026-11-25: fleet read at height 1897, second Solana exit release"
+
+    A read-only `status` read of all six validators on 2026-11-25 at
+    10:16:21–10:16:36Z found all six at height 1897 with one state root
+    `532659928b3f3aaac796ca53265e83ffccab0297cbb5efb20f2a731b4696ac0a68cf36f7c4378050da0186f7c4b3b44d`,
+    one tip
+    `7b9f4e85134d9722d2df4da9dba707476e214b731469a52fa7e7fd8a213aec9fd6f158341cefc424e8e463dbfd4516ed`
+    and build revision `04600868`. A second read at 10:23:09–10:23:22Z found
+    `deployment_manifest_verified` true on all six, one manifest
+    (`cd37a303d953…`), one node binary
+    (`6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b`) and
+    empty mempools.
+
+    `04600868` is the head of the release branch `release/sol-exit-r2`: `main`
+    at `e5c4f6ceb` plus the release height, a reviewer-installer fix and a
+    rehearsal-test fix (no other code change). It is not
+    on `main` at `ce3659b22`; the pull request that brings it there (#228) was
+    not merged at the [25 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-25.md).
+
+    B24 reading, read-only `nav_reserve_proof_status` at height 1897: the newest
+    packet is epoch 9, NAV per unit 1.006419, submitted at height 1842 and
+    finalized. No later reading is on the chain, so none landed on 24 or 25
+    November up to height 1897.
+
+    Solana exit verifier, read-only public Solana read (finalized slot
+    473711314): 127,168 bytes of program data with SHA-256
+    `3406becc6db7ba7c250f8db55dc43965656093bb4ceb3e330d2f452edd465fdf`, last
+    deployed at slot 473433318; its light account exists. The vault and
+    recorder programs are unchanged from the [Bridge Audit Map](bridge-audit-map.md).
+
+    Limits that hold today (25 November handoff): one withdrawal spends one
+    deposit batch; withdrawals below 0.30 USDC are refused; the vault accepts 25
+    USDC more; a withdrawal takes about four minutes; cancel is refused while the
+    route is paused. Not yet run on the live chain: a cancel and refund, and a
+    settlement with one validator down. The Solana reads of the bridge services
+    use free public endpoints. Public submission of shielded actions stays off
+    on every validator.
+
+!!! note "2026-11-24: second Solana exit release (rules from block 1890)"
+
+    The second Solana exit release (#223, merged to `main` as `e5c4f6ceb`; the
+    release branch `release/sol-exit-r2` sets the height; build revision
+    `04600868`) was rolled onto the six validators one at a time. Its rules are
+    active from block 1890: every Solana deposit batch can be withdrawn, a burn
+    that cannot be paid has a refund path, a governed minimum of 0.30 USDC
+    applies, and each validator reviews a settlement itself, with its own key and
+    its own Solana endpoint, before it signs. Before the roll, a replay of the
+    archive on the new binary matched the old one at the tip.
+
+    The Solana exit verifier was upgraded and migrated on Solana mainnet
+    (program data extended to 127,168 bytes). Real withdrawals of 0.30, 0.30 and
+    4.00 USDC were paid and settled (burns at 1891, 1894 and 1896; the second
+    took 4 min 18 s from start to confirmed). Deposits of 3.00 and 0.35 USDC
+    were credited at 1855 and 1859. At 22:30 UTC the chain was at height 1897,
+    nine Solana deposit batches were covered and 5.78 pfUSDC was outstanding.
+    Sources: the [25 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-25.md)
+    and the [24 November engineering handoff](../handoffs/2026-11-24___dravlic__second_withdrawal_release_prepared_and_main_checks_green.md).
+
+!!! note "2026-11-23: first Solana exit release (rules from block 1841)"
+
+    The Solana withdrawal release `sol-exit-r1` (build revision `71dbc9b3`;
+    #212, #217, #218) ran on all six validators by 10:21Z, read-only read at
+    height 1765. Its rules are active from block 1841: the Solana exit route was
+    registered at 1841 and burns opened at 1845. The exit verifier on Solana
+    mainnet was initialised, with its light checkpoint at block 1851. The Solana
+    deposit route was re-anchored to Solana epoch 1095 at block 1847 (route
+    revision 9).
+
+    The first real withdrawals were 0.02, 0.5 and 0.15 pfUSDC (burns at 1846,
+    1848 and 1851, settled at 1849, 1850 and 1852); a 0.05 USDC deposit was
+    credited at 1853. Under this release only the revision-8 deposit batch
+    could be withdrawn; the release of 24 November lifted that. The B24 reading
+    of epoch 9 was submitted at 1842. Sources: the
+    [24 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-24.md)
+    and the [23 November engineering handoff](../handoffs/2026-11-23___dravlic__weekend_builds_checked_solana_withdrawals_and_main_checks.md).
 
 !!! note "2026-11-21: the validators and `main` are one line again"
 
@@ -780,12 +857,12 @@ binary to the running services.
 
 | Plane | Recorded state | Exact identifier | Observed or updated at | Evidence and freshness |
 | --- | --- | --- | --- | --- |
-| Running devnet, latest reported state | All six validators agree at height 1513 with one tip and one state root, on release 6.1 (build revision `6123e64f`, rolled out 2026-11-19 from a private branch, not from `main`). A new deposit route activated at 1461 and was revised at 1470 (revision 2). | Chain `postfiat-wan-devnet-2`; root `133f1e28…`; tip `98649e08…`; build revision `6123e64f`. | 2026-11-19, `status` 05:56:01–05:56:16Z, read-only | November 19 entry above. No deployment receipt is recorded yet. |
-| Deployed runtime | Release 6.1 on all six validators, rolled out by the operators one host at a time on 2026-11-19 and complete at height 1469. It followed release 6 (`cdc98a49`, 02:45–03:08Z, validator-1, 0, 2, 3, 4, 5; rollback units kept). Both come from private branches, not `main`; `deployment_manifest_verified` reads false and no deployment receipt is recorded. Neither carries `d9260e937` (account history) or `569f5f73b` (redelivered certified block). The last release with a receipt is `vote-records-20261030` (source `ae70d66d`, executable `87cfe797…`, manifest `ee1df5b3…`). | Build revision `6123e64f`; release 6 `cdc98a49`. | Rolled out and observed 2026-11-19 | 2026-11-19 entry above; 2026-10-30 entry for the last receipted release. |
-| Storage | Transactional `redb` storage has been the live store since height 930 (2026-08-31). This release carries the STO-07 store-handle fix (`8644f0af`); every batch the new executable accepted reports `storage_work.database_opens=0`. Storage is `OFFLINE QUALIFIED` (2026-10-23, packet-r3 `357f06ee…`); that is neither `CLONE QUALIFIED` nor a deployment decision. | Activation height 930; G5-qualified binary `eea96ba6…`; current deployed binary `87cfe797…` | October 21/23 qualification; October 30 deployment | [Storage-scaling implementation boundary](#storage-scaling-implementation-boundary) and the [storage milestone](../plans/completed/storage-scaling-milestone.md). The August `10dd9f20` canary and its rollback are in the [canary rollback report](../postmortems/devnet-storage-live-canary-rollback-2026-08-30.md). |
+| Running devnet, latest reported state | All six validators agree at height 1897 with one tip and one state root, on the second Solana exit release (build revision `04600868`, rules from block 1890). `deployment_manifest_verified` reads true on all six. | Chain `postfiat-wan-devnet-2`; root `53265992…`; tip `7b9f4e85…`; build revision `04600868`; binary `6dd2ee56…`. | 2026-11-25, `status` 10:16:21–10:16:36Z and 10:23:09–10:23:22Z, read-only | November 25 entry above. No deployment receipt is recorded on this page. |
+| Deployed runtime | The second Solana exit release on all six validators, rolled one host at a time on 2026-11-24, rules active from block 1890. It followed `sol-exit-r1` (`71dbc9b3`, 2026-11-23, rules from 1841) and `main-r64-20261121` (`674dbb18`, 2026-11-21). Both earlier builds are on `main`; `04600868` is the head of `release/sol-exit-r2` and is not on `main` yet. The running build carries `d9260e937` (account history) and `569f5f73b` (redelivered certified block). The last release with a receipt on this page is `vote-records-20261030` (source `ae70d66d`, executable `87cfe797…`, manifest `ee1df5b3…`). | Build revision `04600868`; manifest `cd37a303…`. | Rolled out 2026-11-24; observed 2026-11-25 | 2026-11-21, 23, 24 and 25 entries above; [Master State](master-state.md). |
+| Storage | Transactional `redb` storage has been the live store since height 930 (2026-08-31). The running build carries the STO-07 store-handle fix (`8644f0af`). Storage is `OFFLINE QUALIFIED` (2026-10-23, packet-r3 `357f06ee…`) for binary `eea96ba6…`; that is neither `CLONE QUALIFIED` nor a deployment decision, and it does not qualify the running binary. | Activation height 930; G5-qualified binary `eea96ba6…`; running binary `6dd2ee56…` (2026-11-25 read) | October 21/23 qualification; November 25 read | [Storage-scaling implementation boundary](#storage-scaling-implementation-boundary) and the [storage milestone](../plans/completed/storage-scaling-milestone.md). The August `10dd9f20` canary and its rollback are in the [canary rollback report](../postmortems/devnet-storage-live-canary-rollback-2026-08-30.md). |
 | Swap and bridge committees | FastSwap committee epoch 2 on all six (`enabled: true`), migrated 2026-10-21. Bridge committee epoch 2 activated at height 1131 on 2026-10-15. The A666 and BMNRC routes stay on `authority_epoch` 1, so validators 0–4 still sign Ethereum checkpoints; neither issuer route update has been submitted. FastPay committee epoch 2 was installed at height 1123 for orders 10001–19990. | Epoch-2 committee root `72836827…`; route authority root `a2eebcba…` | 2026-10-21 | 2026-10-21, 2026-10-15 and 2026-10-12 entries above. |
 | Validator-trust authority | Cobalt remains active for validator-registry and trust-graph ratification. The final signed drill rollback committed at 922, return to Cobalt at 923, and legitimate validator-5 rotation at 924. Consensus v2 remains block finality. | Registry root `08a451e0…2b9b1d`; trust root `89f18aef…08f0307`; ratification anchor sequence 2, ID `5eada38d…c21153c8`. | Accepted history through height 924; fleet-audited through `2026-08-30T23:00:39Z`. | The recovery probe found authority mode 1 and identical registry/trust roots on all six. |
-| Repository | The running source (release 6.1, revision `6123e64f`) is on a private branch, not `main`, and no deployment receipt binds it. `main` carries changes the live build lacks, such as the account history fix `d9260e937` and the redelivery fix `569f5f73b`. The last receipted source is `ae70d66d` on `release/vote-records-20261030`. A `main` commit is not deployed until a fleet receipt binds its source and binary to the running services. | Running revision `6123e64f`; last receipted source `ae70d66d`; use `git rev-parse HEAD` for the checkout. | 2026-11-19 | 2026-11-19 entry and release records above. |
+| Repository | `main` is the only long-lived branch, and releases are cut from it ([Master State](master-state.md)). The running source `04600868` is `main` at `e5c4f6ceb` plus the release height and two small fixes, on `release/sol-exit-r2`; its merge into `main` (#228) was still open at the 25 November handoff. A `main` commit is not deployed until the validators report a build that contains it. | Running revision `04600868`; `main` `ce3659b22` at this review; use `git rev-parse HEAD` for the checkout. | 2026-11-25 | November 24 and 25 entries above. |
 | Adversarial campaign | E1–E6 passed their locked gates. The consolidated decision is `KEEP_ACTIVE` for Cobalt's bounded controlled-devnet validator-trust role. | E1 `495a59a2…4dfcd90`; E2 `8742d960…d7cba3`; E3 `9302b355…40b600`; E4 `93ba3db0…c14508`; E5 `0695284a…f3b3db`; E6 `ee6848f5…121be0b`. | Completed 2026-08-26 | [Completed milestone](../plans/completed/cobalt-adversarial-verification-milestone.md) and [results](../governance/cobalt-adversarial-verification-results.md). |
 | Operator boundary | The campaign proves protocol capability, not operator decentralization. Current proposals and authorizations originate from Foundation-administered validators. | E6 decision: independent-operator proposal path remains a mandatory follow-on milestone. | 2026-08-26 | No independent operators were recruited and no mainnet authority was granted. |
 

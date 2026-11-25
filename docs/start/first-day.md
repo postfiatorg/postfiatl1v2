@@ -18,6 +18,8 @@ system lives, what to run first, and which documents are current.
 | `crates/rpc_sdk` | Rust RPC SDK and TCP wallet example. |
 | `python/postfiat_rpc` | Python RPC client. |
 | `scripts/` | Devnet, testnet, launch, evidence, doctor, and smoke scripts. |
+| `ops/` | Operator scripts and service units for the live bridges, the payout service and the NAV reading jobs. |
+| `solana/` | The Solana vault, recorder and egress-verifier programs. |
 | `docs/` | Canonical docs tree; MkDocs publishes the curated subset configured in `mkdocs.yml`. |
 | `reports/` | Redaction-safe evidence plus internal generated artifacts. |
 
@@ -42,12 +44,13 @@ scripts/docs-site-serve --host 127.0.0.1 --port 8088
 Start with the existing scripts instead of inventing a new harness:
 
 ```bash
-# HISTORICAL: devnet-sdk-rpc-smoke was archived outside the repository during
-# the open-source cleanup; see scripts/README.md. The other commands remain.
 scripts/devnet-up
-scripts/devnet-sdk-rpc-smoke
 scripts/devnet-submit-transfer
+scripts/devnet-status
 ```
+
+`scripts/devnet-sdk-rpc-smoke` was archived outside the repository during the
+open-source cleanup; `scripts/README.md` lists the retained scripts.
 
 If you are touching consensus, storage, RPC, privacy, validator transport, or
 cryptography, run the focused smoke that matches the change and update the
@@ -58,7 +61,7 @@ relevant evidence or status page.
 | Topic | Current Source |
 | --- | --- |
 | Unified thesis | [Whitepaper](../whitepaper.md) (`docs/whitepaper.md`) |
-| Running network | [Network Status](../status/network-status.md), then the full log in [Current State](../status/chain-state-current.md) |
+| Running network | [Network Status](../status/network-status.md), [Master State](../status/master-state.md) (what runs and which branch), then the full log in [Current State](../status/chain-state-current.md) |
 | Path to public testnet | [Testnet Path](../status/testnet-path.md) and [Release Gate Inventory](../status/release-gate-inventory.md) |
 | Security position | [Security](../security/index.md) |
 | Integration | [Exchange Integration Guide](../integrate/exchange-guide.md) and [Addresses, Keys And Signatures](../integrate/addresses-keys-signatures.md) |
