@@ -18,7 +18,7 @@ VKEY=0x00d8cbf06d5640adde0fef863b3c689c4ab3442b0dc91d28ac4cc5f9c9b2ccbb
 P=$(cat $O/P.txt)
 HOSTS=(64.176.220.75 95.179.184.122 66.42.48.39 149.28.63.106 95.179.179.206 45.32.110.170)
 pf() { ssh -o BatchMode=yes -o ConnectTimeout=10 root@$1 "runuser -u postfiat -- bash -c '$2'"; }
-tip() { python3 -c "import sys;sys.path.insert(0,'/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit');import pftl;print(pftl.rpc('server_info',{},'t')['ledger']['height'])"; }
+tip() { python3 -c "import sys;sys.path.insert(0,'/home/postfiat/repos/postfiatl1v2-live/.scratch-deposit');import pftl;print(pftl.rpc('server_info',{},'t')['ledger']['height'])"; }
 
 echo "== D. nav_profile_register (route policy $P)"
 python3 - "$O" "$P" "$VKEY" <<'PY'
@@ -65,7 +65,7 @@ pf $PH "$NODE transport-peer-certified-batch-round --data-dir /var/lib/postfiat/
 echo "== G. receipt + route read-back"
 python3 - "$O" "$H" <<'PY'
 import json,sys
-sys.path.insert(0,'/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit'); import pftl
+sys.path.insert(0,'/home/postfiat/repos/postfiatl1v2-live/.scratch-deposit'); import pftl
 O,H=sys.argv[1],int(sys.argv[2])
 amend=json.load(open(f"{O}/amendment-signed.json")); aid=amend.get("amendment_id") or amend.get("amendment",{}).get("amendment_id")
 out={}; keys=set()

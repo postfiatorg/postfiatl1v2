@@ -69,3 +69,4 @@ wallet-web/node_modules/
 crates/wallet_wasm/target/
 crates/wallet_wasm/pkg/
 crates/node/data/
+.venv-ops/

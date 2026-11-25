@@ -15,8 +15,8 @@ def main():
     for name in ('capture','collector_repo','native_cli','root_der','output'):
         ap.add_argument('--'+name.replace('_','-'),type=Path,required=True)
     args=ap.parse_args();sys.path.insert(0,str(args.collector_repo))
-    from navstrategies.yolo_indices.nav_reading import verify_reading
-    from navstrategies.yolo_indices.canonical import canonical_json_bytes
+    from pftl_schwab_tee.nav_reading import verify_reading
+    from pftl_schwab_tee.canonical import canonical_json_bytes
     args.output.mkdir(parents=True,mode=0o700,exist_ok=False)
     load=lambda name:json.loads((args.capture/name).read_bytes())
     m,e,p=load('manifest.json'),load('result.json'),load('pcrs.json')
