@@ -1,0 +1,12 @@
+# stdout and stderr of the validator and RPC services (systemd append: files).
+/var/log/postfiat/validator-*/stdout.log
+/var/log/postfiat/validator-*/stderr.log
+/var/log/postfiat/validator-*/rpc-stdout.log
+/var/log/postfiat/validator-*/rpc-stderr.log {
+    size 100M
+    rotate 3
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
