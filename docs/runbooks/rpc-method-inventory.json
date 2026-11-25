@@ -2,29 +2,31 @@
   "checks": {
     "all_mempool_submit_methods_are_gated": true,
     "all_observed_methods_classified": true,
+    "always_remote_methods_explicitly_partitioned": true,
     "default_remote_categories_disjoint": true,
-    "default_remote_methods_explicitly_partitioned": true,
     "fastswap_prepare_is_not_read_only": true,
-    "gated_categories_disjoint": true
+    "finality_methods_have_mempool_policy": true,
+    "method_families_disjoint": true
   },
   "counts": {
     "authorized_protocol_mutation_public": 12,
-    "controlled_write_gated": 16,
-    "operator_or_local_only": 42,
+    "controlled_write_gated": 17,
+    "operator_or_local_only": 40,
     "owned_lane_gated": 8,
     "privacy_alpha_gated": 4,
+    "private_action_gated": 2,
     "read_only_public": 88,
     "sdk_only_or_unknown": 0,
-    "total_methods": 170
+    "total_methods": 171
   },
   "gaps": [
     {
-      "description": "account_tx index is an operator cache with incremental append and disk-backed shards, built by account-tx-index-build; ordered commit does not refresh it, so serving nodes must run the build (and once after an index schema upgrade).",
+      "description": "account_tx index is an operator cache with incremental append and disk-backed shards, built by account-tx-index-build; ordered commit appends to a current index; rebuild after a gap or schema upgrade.",
       "id": "account_tx_index_incremental_store",
       "severity": "scale_follow_up"
     },
     {
-      "description": "All signed-mempool, Orchard batch-create, and owned-lane methods are disabled unless their exact operator flag enables them.",
+      "description": "Signed-mempool, Orchard batch creation and private action admission each require their matching server switch.",
       "id": "public_write_edge_not_default",
       "severity": "intentional_gate"
     },
@@ -34,10 +36,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-11-18T23:23:01Z",
+  "generated_utc": "2026-11-25T20:31:31Z",
   "git": {
     "dirty": true,
-    "revision": "cfe4eb5bab966176b63cac39b99814920a6630a9"
+    "revision": "003af00011c6af086f14f4d4017e450a11eaf45f"
   },
   "methods": [
     {
@@ -53,6 +55,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -68,6 +71,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -83,6 +87,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -98,6 +103,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -113,6 +119,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -128,6 +135,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -143,6 +151,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -158,6 +167,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -173,6 +183,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -188,6 +199,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -203,6 +215,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -218,6 +231,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -233,6 +247,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -248,6 +263,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -263,6 +279,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -278,6 +295,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -293,6 +311,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -308,6 +327,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -323,6 +343,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -338,6 +359,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -353,6 +375,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -368,6 +391,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -383,6 +407,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -398,6 +423,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -413,6 +439,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -428,6 +455,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -443,6 +471,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -458,6 +487,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -473,6 +503,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -488,6 +519,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -503,6 +535,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -518,6 +551,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -533,6 +567,23 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
+      "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": true,
+      "method": "consensus_v2_timeout_vote",
+      "node_dispatch": false,
+      "notes": "",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "controlled_write_gated",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": false,
+      "remote_enabled_by_default": false,
+      "remote_read_allowed": false,
+      "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": true,
       "sdk_constant": false
     },
     {
@@ -548,6 +599,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -563,6 +615,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -578,6 +631,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -593,6 +647,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -608,6 +663,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -623,6 +679,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -638,6 +695,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -653,6 +711,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -668,6 +727,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -683,6 +743,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -698,6 +759,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -713,6 +775,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -728,6 +791,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -743,6 +807,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -758,6 +823,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -773,6 +839,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -788,6 +855,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -803,6 +871,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -818,6 +887,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -833,6 +903,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -848,6 +919,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -863,6 +935,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -878,6 +951,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -893,6 +967,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -908,6 +983,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -923,6 +999,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -938,6 +1015,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -953,6 +1031,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -968,6 +1047,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -983,6 +1063,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -998,6 +1079,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1013,6 +1095,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1028,6 +1111,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1043,6 +1127,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1058,6 +1143,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1073,6 +1159,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1088,6 +1175,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1103,6 +1191,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1118,6 +1207,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1133,6 +1223,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1148,6 +1239,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": true,
       "sdk_constant": true
     },
     {
@@ -1163,6 +1255,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1178,6 +1271,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": true,
       "sdk_constant": false
     },
     {
@@ -1193,6 +1287,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1208,6 +1303,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": true,
       "sdk_constant": true
     },
     {
@@ -1223,6 +1319,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1238,6 +1335,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": true,
       "sdk_constant": false
     },
     {
@@ -1253,6 +1351,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1268,6 +1367,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1283,6 +1383,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": true,
       "sdk_constant": false
     },
     {
@@ -1298,6 +1399,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1313,6 +1415,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": true,
       "sdk_constant": false
     },
     {
@@ -1328,6 +1431,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1343,6 +1447,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": true,
       "sdk_constant": false
     },
     {
@@ -1358,6 +1463,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1373,6 +1479,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1388,6 +1495,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1403,6 +1511,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1418,6 +1527,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1433,6 +1543,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1448,6 +1559,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1463,6 +1575,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1478,6 +1591,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1493,6 +1607,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1508,6 +1623,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1523,6 +1639,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1538,6 +1655,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1553,6 +1671,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1568,6 +1687,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1583,6 +1703,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1598,6 +1719,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1613,6 +1735,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1628,6 +1751,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1643,6 +1767,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1658,6 +1783,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1673,6 +1799,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1688,6 +1815,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1703,6 +1831,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1718,6 +1847,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1733,6 +1863,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1748,6 +1879,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1760,9 +1892,10 @@
       "posture": "owned_lane_gated",
       "privacy_alpha_allowed_when_enabled": false,
       "python_client": true,
-      "remote_enabled_by_default": false,
+      "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1775,9 +1908,10 @@
       "posture": "owned_lane_gated",
       "privacy_alpha_allowed_when_enabled": false,
       "python_client": true,
-      "remote_enabled_by_default": false,
+      "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1793,6 +1927,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1808,6 +1943,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1823,6 +1959,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1838,6 +1975,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1853,6 +1991,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1865,9 +2004,10 @@
       "posture": "owned_lane_gated",
       "privacy_alpha_allowed_when_enabled": false,
       "python_client": true,
-      "remote_enabled_by_default": false,
+      "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1880,9 +2020,10 @@
       "posture": "owned_lane_gated",
       "privacy_alpha_allowed_when_enabled": false,
       "python_client": true,
-      "remote_enabled_by_default": false,
+      "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1895,9 +2036,10 @@
       "posture": "owned_lane_gated",
       "privacy_alpha_allowed_when_enabled": false,
       "python_client": true,
-      "remote_enabled_by_default": false,
+      "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1910,9 +2052,10 @@
       "posture": "owned_lane_gated",
       "privacy_alpha_allowed_when_enabled": false,
       "python_client": true,
-      "remote_enabled_by_default": false,
+      "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1925,9 +2068,10 @@
       "posture": "owned_lane_gated",
       "privacy_alpha_allowed_when_enabled": false,
       "python_client": true,
-      "remote_enabled_by_default": false,
+      "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -1940,9 +2084,10 @@
       "posture": "owned_lane_gated",
       "privacy_alpha_allowed_when_enabled": false,
       "python_client": true,
-      "remote_enabled_by_default": false,
+      "remote_enabled_by_default": true,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1958,6 +2103,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1973,6 +2119,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -1988,6 +2135,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2003,6 +2151,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2018,6 +2167,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2033,6 +2183,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2042,12 +2193,13 @@
       "node_dispatch": true,
       "notes": "",
       "owned_lane_allowed_when_enabled": false,
-      "posture": "operator_or_local_only",
+      "posture": "private_action_gated",
       "privacy_alpha_allowed_when_enabled": false,
       "python_client": true,
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
-      "remote_rpc_implemented": false,
+      "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2057,12 +2209,13 @@
       "node_dispatch": true,
       "notes": "",
       "owned_lane_allowed_when_enabled": false,
-      "posture": "operator_or_local_only",
+      "posture": "private_action_gated",
       "privacy_alpha_allowed_when_enabled": false,
       "python_client": true,
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
-      "remote_rpc_implemented": false,
+      "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2078,6 +2231,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2093,6 +2247,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2108,6 +2263,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2123,6 +2279,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2138,6 +2295,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2153,6 +2311,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2168,6 +2327,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2183,6 +2343,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2198,6 +2359,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": true,
       "sdk_constant": false
     },
     {
@@ -2213,6 +2375,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2228,6 +2391,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2243,6 +2407,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2258,6 +2423,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2273,6 +2439,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2288,6 +2455,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2303,6 +2471,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2318,6 +2487,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2333,6 +2503,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2348,6 +2519,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2363,6 +2535,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2378,6 +2551,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2393,6 +2567,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2408,6 +2583,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     },
     {
@@ -2423,6 +2599,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2438,6 +2615,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2453,6 +2631,7 @@
       "remote_enabled_by_default": false,
       "remote_read_allowed": false,
       "remote_rpc_implemented": false,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2468,6 +2647,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2483,6 +2663,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2498,6 +2679,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2513,6 +2695,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2528,6 +2711,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2543,6 +2727,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2558,6 +2743,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2573,6 +2759,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": true
     },
     {
@@ -2588,6 +2775,7 @@
       "remote_enabled_by_default": true,
       "remote_read_allowed": true,
       "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
       "sdk_constant": false
     }
   ],

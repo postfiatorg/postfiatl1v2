@@ -4443,18 +4443,21 @@ fn rpc_serve_method_allowed_with_owned_lane(
         || (allow_mempool_submit_finality
             && is_mempool_submit_signed_transfer_finality_method(method))
         || (allow_orchard_batch_create && is_orchard_batch_create_method(method))
-        || (owned_lane_enabled
-            && matches!(
-                method,
-                "owned_sign"
-                    | "owned_apply"
-                    | "owned_unwrap_sign"
-                    | "owned_unwrap_apply"
-                    | "owned_sign_v3"
-                    | "owned_apply_v3"
-                    | "owned_unwrap_sign_v3"
-                    | "owned_unwrap_apply_v3"
-            ))
+        || (owned_lane_enabled && is_owned_lane_write_method(method))
+}
+
+fn is_owned_lane_write_method(method: &str) -> bool {
+    matches!(
+        method,
+        "owned_sign"
+            | "owned_apply"
+            | "owned_unwrap_sign"
+            | "owned_unwrap_apply"
+            | "owned_sign_v3"
+            | "owned_apply_v3"
+            | "owned_unwrap_sign_v3"
+            | "owned_unwrap_apply_v3"
+    )
 }
 
 #[cfg(test)]

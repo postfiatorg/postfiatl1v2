@@ -1,5 +1,15 @@
-fn rpc_owned_lane_enabled(flags: &[String]) -> bool {
-    !flag_present(flags, "--disable-owned-lane")
+const RPC_OWNED_LANE_DEFAULT: bool = true;
+
+fn rpc_owned_lane_enabled(flags: &[String]) -> Result<bool, String> {
+    match (
+        flag_present(flags, "--allow-owned-lane"),
+        flag_present(flags, "--disable-owned-lane"),
+    ) {
+        (true, true) => Err("--allow-owned-lane conflicts with --disable-owned-lane".into()),
+        (true, false) => Ok(true),
+        (false, true) => Ok(false),
+        (false, false) => Ok(RPC_OWNED_LANE_DEFAULT),
+    }
 }
 
 fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
@@ -344,7 +354,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             // FastPay is a normal signed payment capability. Operators may
             // disable it explicitly during an incident, but ordinary startup
             // must not silently remove the lane.
-            let owned_lane_enabled = rpc_owned_lane_enabled(flags);
+            let owned_lane_enabled = rpc_owned_lane_enabled(flags)?;
             let finality_topology_file = flag_value(flags, "--finality-topology")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("remote-topology.json"));

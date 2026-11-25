@@ -1,7 +1,7 @@
 # RPC Method Inventory
 
 Status: code-derived inventory
-Date: 2026-11-18
+Date: 2026-11-25
 Report: `docs/runbooks/rpc-method-inventory.json`
 
 This inventory is generated from Rust SDK method constants, node RPC dispatch,
@@ -14,13 +14,14 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 170
+- Total methods observed: 171
 - Read-only public methods: 88
 - Public cryptographically authorized protocol mutations: 12
-- Controlled write gated methods: 16
+- Controlled write gated methods: 17
 - Privacy-alpha gated methods: 4
-- Owned-lane gated methods: 8
-- Operator/local-only methods: 42
+- Private action admission methods: 2
+- Owned-lane methods (switchable): 8
+- Operator/local-only methods: 40
 - Unclassified methods: 0
 - Classification checks: PASS
 
@@ -41,8 +42,8 @@ method lacks an explicit posture.
 
 | Gap | Severity | Description |
 | --- | --- | --- |
-| account_tx_index_incremental_store | scale_follow_up | account_tx index is an operator cache with incremental append and disk-backed shards, built by account-tx-index-build; ordered commit does not refresh it, so serving nodes must run the build (and once after an index schema upgrade). |
-| public_write_edge_not_default | intentional_gate | All signed-mempool, Orchard batch-create, and owned-lane methods are disabled unless their exact operator flag enables them. |
+| account_tx_index_incremental_store | scale_follow_up | account_tx index is an operator cache with incremental append and disk-backed shards, built by account-tx-index-build; ordered commit appends to a current index; rebuild after a gap or schema upgrade. |
+| public_write_edge_not_default | intentional_gate | Signed-mempool, Orchard batch creation and private action admission each require their matching server switch. |
 | fastswap_public_protocol_mutations | authenticated_protocol_surface | FastSwap lock/vote/apply and FastLane control methods are remotely enabled protocol mutations, not reads; request signatures and quorum certificates are their authorization boundary. |
 
 ## Methods
@@ -82,6 +83,7 @@ method lacks an explicit posture.
 | bridge_resume | operator_or_local_only | no | no | yes | no | no |  |
 | bridge_status | read_only_public | yes | no | yes | yes | yes | bridge simulation state read |
 | bridge_transfer | operator_or_local_only | no | no | yes | no | no |  |
+| consensus_v2_timeout_vote | controlled_write_gated | no | yes | no | no | no |  |
 | escrow_fee_quote | read_only_public | yes | no | yes | yes | yes |  |
 | escrow_info | read_only_public | yes | no | yes | yes | yes |  |
 | external_lane_info | read_only_public | yes | no | yes | no | yes | public genesis external lane config, committed record, release_count, pruned_release_count, release_history_root and one page of stored release records; sequences below pruned_release_count are pruned and no page returns them |
@@ -163,27 +165,27 @@ method lacks an explicit posture.
 | owned-sign | operator_or_local_only | no | no | yes | no | no |  |
 | owned-unwrap-apply | operator_or_local_only | no | no | yes | no | no |  |
 | owned-unwrap-sign | operator_or_local_only | no | no | yes | no | no |  |
-| owned_apply | owned_lane_gated | no | yes | no | no | yes |  |
-| owned_apply_v3 | owned_lane_gated | no | yes | no | no | yes |  |
+| owned_apply | owned_lane_gated | yes | no | no | no | yes |  |
+| owned_apply_v3 | owned_lane_gated | yes | no | no | no | yes |  |
 | owned_certificate | read_only_public | yes | no | no | yes | yes |  |
 | owned_fence_status | read_only_public | yes | no | yes | no | yes | this validator's ML-DSA-signed FastPay fence status for a lock, from certified blocks only; typed refusal in signer-socket mode |
 | owned_objects | read_only_public | yes | no | yes | yes | yes |  |
 | owned_recovery_capabilities | read_only_public | yes | no | no | yes | yes |  |
 | owned_recovery_status | read_only_public | yes | no | no | yes | yes |  |
-| owned_sign | owned_lane_gated | no | yes | yes | yes | yes |  |
-| owned_sign_v3 | owned_lane_gated | no | yes | no | no | yes |  |
-| owned_unwrap_apply | owned_lane_gated | no | yes | yes | no | yes |  |
-| owned_unwrap_apply_v3 | owned_lane_gated | no | yes | no | no | yes |  |
-| owned_unwrap_sign | owned_lane_gated | no | yes | yes | yes | yes |  |
-| owned_unwrap_sign_v3 | owned_lane_gated | no | yes | no | no | yes |  |
+| owned_sign | owned_lane_gated | yes | no | yes | yes | yes |  |
+| owned_sign_v3 | owned_lane_gated | yes | no | no | no | yes |  |
+| owned_unwrap_apply | owned_lane_gated | yes | no | yes | no | yes |  |
+| owned_unwrap_apply_v3 | owned_lane_gated | yes | no | no | no | yes |  |
+| owned_unwrap_sign | owned_lane_gated | yes | no | yes | yes | yes |  |
+| owned_unwrap_sign_v3 | owned_lane_gated | yes | no | no | no | yes |  |
 | pftl_uniswap_receipt | read_only_public | yes | no | yes | no | no |  |
 | pftl_uniswap_receipt_witness | operator_or_local_only | no | no | yes | no | no |  |
 | pfusdc_checkpoint_witness | operator_or_local_only | no | no | yes | no | no |  |
 | pfusdc_egress_witness | read_only_public | yes | no | yes | no | yes |  |
 | pfusdc_ingress_preflight | read_only_public | yes | no | yes | no | yes | read-only exact pfUSDC ingress transition simulation |
 | private_account_lines | read_only_public | yes | no | yes | no | yes | token-pinned account lines bound to asset_info |
-| private_action_receipt | operator_or_local_only | no | no | yes | no | yes |  |
-| private_action_submit | operator_or_local_only | no | no | yes | no | yes |  |
+| private_action_receipt | private_action_gated | no | yes | yes | no | yes |  |
+| private_action_submit | private_action_gated | no | yes | yes | no | yes |  |
 | private_pool_market | read_only_public | yes | no | yes | no | yes | token-pinned pricing, route, NAV epoch, enforcement and egress binding for a pair |
 | private_pool_page | read_only_public | yes | no | yes | no | yes | token-pinned bounded page of a private pool section |
 | private_pool_receipts | read_only_public | yes | no | yes | no | yes | token-pinned page of this node's final private action admission records |

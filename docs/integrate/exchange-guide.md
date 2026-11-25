@@ -72,9 +72,6 @@ What you can do today:
   WebSocket client exists for wallet-facing proxies.
 - **Port.** Validator RPC listens on `27650 + validator index` on loopback by
   default ([Public RPC Operator Policy](../runbooks/public-rpc-operator-policy.md)).
-- **Writes are opt-in.** Submission methods are disabled unless the operator
-  starts `rpc-serve` with the matching flag
-  ([Write Policy](../rpc/write-policy.md)).
 - **Clients.** Use the Python client (`python/postfiat_rpc`) or the Rust SDK
   (`crates/rpc_sdk`) rather than hand-building signatures.
 
@@ -92,10 +89,28 @@ Methods an exchange needs ([RPC Methods](../rpc/methods.md)):
 | `mempool_submit_signed_payment_v2` | Submit a signed payment with memos (when enabled) |
 | `mempool_status` | Pending transaction count |
 
-The release generator's RPC service unit starts `rpc-serve` with
-`--allow-mempool-submit-finality`, the finality-returning submit path
-(`crates/node/src/batch_snapshot.rs`). The full code-derived authorization
-list is the [RPC Method Inventory](../runbooks/rpc-method-inventory.md).
+A remote method is reachable by anyone who can connect to the listener. The
+release service binds it to loopback. The following defaults apply when
+`rpc-serve` starts without method flags.
+
+<!-- rpc-family-table -->
+| Method family | Transport | Default (bare server) | Authorization | Effect |
+| --- | --- | --- | --- | --- |
+| Reads | RPC TCP | Enabled | Public queries | Read node or chain data |
+| FastSwap and FastLane<br>`fastlane_asset_control_apply`, `fastlane_asset_control_catch_up`, `fastlane_asset_control_prepare`, `fastlane_exit`, `fastswap_apply`, `fastswap_cancel_apply`, `fastswap_catch_up`, `fastswap_commit`, `fastswap_commit_round`, `fastswap_new_round_vote`, `fastswap_precommit`, `fastswap_prepare` | RPC TCP | Enabled | Protocol signatures, policy authorizations or quorum certificates, as required by the operation | Prepare, vote, catch up or apply protocol transitions |
+| Owned payments and unwraps<br>`owned_apply`, `owned_apply_v3`, `owned_sign`, `owned_sign_v3`, `owned_unwrap_apply`, `owned_unwrap_apply_v3`, `owned_unwrap_sign`, `owned_unwrap_sign_v3` | RPC TCP | Enabled (`--allow-owned-lane` / `--disable-owned-lane`) | Signed owner intents or certified operations | Sign or apply owned-lane transitions |
+| Mempool submission | RPC TCP | Disabled (`--allow-mempool-submit`) | Signed transaction or protocol payload | Submit to the mempool |
+| Finality submission and voting | RPC TCP | Disabled (`--allow-mempool-submit-finality`) | Signed transaction, batch or consensus evidence as required by the method | Coordinate certification, voting or finality |
+| Orchard batch creation | RPC TCP | Disabled (`--allow-orchard-batch-create`) | Method-specific proof and parameter checks | Construct private batches |
+| Private action admission | RPC TCP | Disabled (`--allow-private-action-admission`) | Domain, intent and action validation for admission | Queue an action or read its admission receipt |
+| Operator methods | Local CLI | Local only | Local process and storage permissions | Local reads or mutations |
+<!-- /rpc-family-table -->
+
+The generated validator RPC service explicitly enables the owned lane and
+finality submission. Mempool and finality submissions share per-peer and
+global rate limits. Those counters do **not** cover owned-lane applies.
+The [RPC Method Inventory](../runbooks/rpc-method-inventory.md) lists the
+transport policy for each method.
 
 ## Confirmation (finality)
 

@@ -192,17 +192,6 @@ AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS = {
     "fastlane_asset_control_catch_up",
 }
 
-OWNED_LANE_GATED_METHODS = {
-    "owned_sign",
-    "owned_apply",
-    "owned_unwrap_sign",
-    "owned_unwrap_apply",
-    "owned_sign_v3",
-    "owned_apply_v3",
-    "owned_unwrap_sign_v3",
-    "owned_unwrap_apply_v3",
-}
-
 XRP_LIKE_REQUIREMENTS = [
     {
         "capability": "server_info",
@@ -322,9 +311,14 @@ def extract_default_remote_methods(source: str) -> set[str]:
     return set(re.findall(r'"([^"]+)"', first_matches))
 
 
-def extract_mempool_gated_methods(source: str) -> set[str]:
-    body = extract_function_body(source, "is_mempool_submit_signed_method")
-    return set(re.findall(r'"([^"]+)"', body))
+def extract_mempool_methods(source: str, predicate: str) -> set[str]:
+    body = extract_function_body(source, predicate)
+    methods = set(re.findall(r'"([^"]+)"', body))
+    for constant in re.findall(r'\bRPC_[A-Z0-9_]+_METHOD\b', body):
+        definitions = (NODE_RPC.parent / "finality_view_recovery.rs").read_text()
+        (value,) = re.findall(rf'const {constant}: &str = "([^"]+)";', definitions)
+        methods.add(value)
+    return methods
 
 
 def extract_orchard_gated_methods(source: str) -> set[str]:
@@ -429,6 +423,8 @@ def method_posture(
     mempool_gated: set[str],
     orchard_gated: set[str],
     node_dispatch: set[str],
+    owned_lane: set[str],
+    private_action: set[str],
 ) -> str:
     if method in READ_ONLY_PUBLIC_METHODS:
         return "read_only_public"
@@ -438,7 +434,9 @@ def method_posture(
         return "controlled_write_gated"
     if method in orchard_gated:
         return "privacy_alpha_gated"
-    if method in OWNED_LANE_GATED_METHODS:
+    if method in private_action:
+        return "private_action_gated"
+    if method in owned_lane:
         return "owned_lane_gated"
     if method in node_dispatch:
         return "operator_or_local_only"
@@ -449,13 +447,20 @@ def build_inventory() -> dict[str, Any]:
     node_source = NODE_RPC.read_text(encoding="utf-8")
     dispatch_source = NODE_DISPATCH.read_text(encoding="utf-8")
     sdk_methods = extract_sdk_methods()
-    default_remote = extract_default_remote_methods(node_source)
+    always_remote = extract_default_remote_methods(node_source)
+    owned_lane = set(re.findall(r'"([^"]+)"', extract_function_body(node_source, "is_owned_lane_write_method")))
+    cli_policy = (NODE_RPC.parent / "main_parts/cli_dispatch_parts/group_03.rs").read_text()
+    (owned_default,) = re.findall(r"const RPC_OWNED_LANE_DEFAULT: bool = (true|false);", cli_policy)
+    default_remote = always_remote | (owned_lane if owned_default == "true" else set())
+    private_source = (NODE_RPC.parent / "private_action_rpc.rs").read_text()
+    private_action = set(re.findall(r'"([^"]+)"', extract_function_body(private_source, "is_private_action_method")))
     orchard_gated = extract_orchard_gated_methods(node_source)
-    mempool_gated = extract_mempool_gated_methods(node_source)
+    mempool_gated = extract_mempool_methods(node_source, "is_mempool_submit_signed_method")
+    finality_gated = extract_mempool_methods(node_source, "is_mempool_submit_signed_transfer_finality_method")
     node_dispatch = extract_node_dispatch_methods(dispatch_source)
     python_methods = extract_python_client_methods()
     remotely_implemented = (
-        default_remote | orchard_gated | mempool_gated | OWNED_LANE_GATED_METHODS
+        always_remote | orchard_gated | mempool_gated | owned_lane | private_action
     )
     all_methods = sorted(
         sdk_methods | remotely_implemented | node_dispatch | python_methods
@@ -468,6 +473,8 @@ def build_inventory() -> dict[str, Any]:
                 mempool_gated=mempool_gated,
                 orchard_gated=orchard_gated,
                 node_dispatch=node_dispatch,
+                owned_lane=owned_lane,
+                private_action=private_action,
             ),
             "sdk_constant": method in sdk_methods,
             "node_dispatch": method in node_dispatch,
@@ -476,9 +483,10 @@ def build_inventory() -> dict[str, Any]:
             "remote_read_allowed": method in READ_ONLY_PUBLIC_METHODS,
             "authorized_protocol_mutation_public": method
             in AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS,
+            "requires_finality_submit_switch": method in finality_gated,
             "controlled_write_allowed_when_enabled": method in mempool_gated,
             "privacy_alpha_allowed_when_enabled": method in orchard_gated,
-            "owned_lane_allowed_when_enabled": method in OWNED_LANE_GATED_METHODS,
+            "owned_lane_allowed_when_enabled": method in owned_lane,
             "python_client": method in python_methods,
             "notes": POSTURE_NOTES.get(method, ""),
         }
@@ -486,14 +494,14 @@ def build_inventory() -> dict[str, Any]:
     ]
     postures = {item["method"]: item["posture"] for item in methods}
     checks = {
-        "default_remote_methods_explicitly_partitioned": default_remote
+        "always_remote_methods_explicitly_partitioned": always_remote
         == READ_ONLY_PUBLIC_METHODS | AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS,
         "default_remote_categories_disjoint": READ_ONLY_PUBLIC_METHODS.isdisjoint(
             AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS
         ),
-        "gated_categories_disjoint": mempool_gated.isdisjoint(orchard_gated)
-        and mempool_gated.isdisjoint(OWNED_LANE_GATED_METHODS)
-        and orchard_gated.isdisjoint(OWNED_LANE_GATED_METHODS),
+        "method_families_disjoint": len(remotely_implemented)
+        == sum(map(len, (always_remote, mempool_gated, orchard_gated, owned_lane, private_action))),
+        "finality_methods_have_mempool_policy": finality_gated <= mempool_gated,
         "all_observed_methods_classified": all(
             item["posture"] != "sdk_only_or_unknown" for item in methods
         ),
@@ -508,12 +516,12 @@ def build_inventory() -> dict[str, Any]:
         {
             "id": "account_tx_index_incremental_store",
             "severity": "scale_follow_up",
-            "description": "account_tx index is an operator cache with incremental append and disk-backed shards, built by account-tx-index-build; ordered commit does not refresh it, so serving nodes must run the build (and once after an index schema upgrade).",
+            "description": "account_tx index is an operator cache with incremental append and disk-backed shards, built by account-tx-index-build; ordered commit appends to a current index; rebuild after a gap or schema upgrade.",
         },
         {
             "id": "public_write_edge_not_default",
             "severity": "intentional_gate",
-            "description": "All signed-mempool, Orchard batch-create, and owned-lane methods are disabled unless their exact operator flag enables them.",
+            "description": "Signed-mempool, Orchard batch creation and private action admission each require their matching server switch.",
         },
         {
             "id": "fastswap_public_protocol_mutations",
@@ -540,6 +548,7 @@ def build_inventory() -> dict[str, Any]:
                 if item["posture"] == "authorized_protocol_mutation_public"
             ),
             "controlled_write_gated": sum(1 for item in methods if item["posture"] == "controlled_write_gated"),
+            "private_action_gated": len(private_action),
             "privacy_alpha_gated": sum(1 for item in methods if item["posture"] == "privacy_alpha_gated"),
             "owned_lane_gated": sum(
                 1 for item in methods if item["posture"] == "owned_lane_gated"
@@ -612,7 +621,8 @@ method lacks an explicit posture.
 - Public cryptographically authorized protocol mutations: {inventory['counts']['authorized_protocol_mutation_public']}
 - Controlled write gated methods: {inventory['counts']['controlled_write_gated']}
 - Privacy-alpha gated methods: {inventory['counts']['privacy_alpha_gated']}
-- Owned-lane gated methods: {inventory['counts']['owned_lane_gated']}
+- Private action admission methods: {inventory['counts']['private_action_gated']}
+- Owned-lane methods (switchable): {inventory['counts']['owned_lane_gated']}
 - Operator/local-only methods: {inventory['counts']['operator_or_local_only']}
 - Unclassified methods: {inventory['counts']['sdk_only_or_unknown']}
 - Classification checks: {'PASS' if inventory['verified'] else 'FAIL'}
@@ -631,6 +641,41 @@ method lacks an explicit posture.
 """
 
 
+def exchange_guide_table(inventory: dict[str, Any]) -> str:
+    rows = [
+        ("Reads", "read_only_public", "Public queries", "Read node or chain data"),
+        ("FastSwap and FastLane", "authorized_protocol_mutation_public", "Protocol signatures, policy authorizations or quorum certificates, as required by the operation", "Prepare, vote, catch up or apply protocol transitions"),
+        ("Owned payments and unwraps", "owned_lane_gated", "Signed owner intents or certified operations", "Sign or apply owned-lane transitions"),
+        ("Mempool submission", "controlled_write_gated", "Signed transaction or protocol payload", "Submit to the mempool"),
+        ("Finality submission and voting", "finality_submit", "Signed transaction, batch or consensus evidence as required by the method", "Coordinate certification, voting or finality"),
+        ("Orchard batch creation", "privacy_alpha_gated", "Method-specific proof and parameter checks", "Construct private batches"),
+        ("Private action admission", "private_action_gated", "Domain, intent and action validation for admission", "Queue an action or read its admission receipt"),
+        ("Operator methods", "operator_or_local_only", "Local process and storage permissions", "Local reads or mutations"),
+    ]
+    switches = {
+        "owned_lane_gated": "`--allow-owned-lane` / `--disable-owned-lane`",
+        "controlled_write_gated": "`--allow-mempool-submit`",
+        "finality_submit": "`--allow-mempool-submit-finality`",
+        "privacy_alpha_gated": "`--allow-orchard-batch-create`",
+        "private_action_gated": "`--allow-private-action-admission`",
+    }
+    lines = ["| Method family | Transport | Default (bare server) | Authorization | Effect |",
+             "| --- | --- | --- | --- | --- |"]
+    for family, posture, authorization, effect in rows:
+        items = [item for item in inventory["methods"]
+                 if ("finality_submit" if item["requires_finality_submit_switch"] else item["posture"]) == posture]
+        (remote,) = {item["remote_rpc_implemented"] for item in items}
+        (enabled,) = {item["remote_enabled_by_default"] for item in items}
+        transport = "RPC TCP" if remote else "Local CLI"
+        default = "Enabled" if enabled else "Disabled" if remote else "Local only"
+        if posture in switches:
+            default += f" ({switches[posture]})"
+        if posture in {"authorized_protocol_mutation_public", "owned_lane_gated"}:
+            family += "<br>" + ", ".join(f"`{item['method']}`" for item in items)
+        lines.append(f"| {family} | {transport} | {default} | {authorization} | {effect} |")
+    return "\n".join(lines) + "\n"
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -639,6 +684,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=ROOT / f"reports/testnet-rpc-method-inventory/testnet-rpc-method-inventory-{utc_stamp()}.json",
     )
     parser.add_argument("--markdown", type=Path)
+    parser.add_argument("--exchange-guide-table", type=Path)
     return parser.parse_args(argv)
 
 
@@ -650,6 +696,8 @@ def main(argv: list[str]) -> int:
     if args.markdown is not None:
         args.markdown.parent.mkdir(parents=True, exist_ok=True)
         args.markdown.write_text(render_markdown(inventory, args.output), encoding="utf-8")
+    if args.exchange_guide_table:
+        args.exchange_guide_table.write_text(exchange_guide_table(inventory), encoding="utf-8")
     print(
         f"testnet_rpc_method_inventory={'ok' if inventory['verified'] else 'failed'} "
         f"methods={inventory['counts']['total_methods']} "
