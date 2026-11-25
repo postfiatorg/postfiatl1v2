@@ -21,7 +21,7 @@ system lives, what to run first, and which documents are current.
 | `ops/` | Operator scripts and service units for the live bridges, the payout service and the NAV reading jobs. |
 | `solana/` | The Solana vault, recorder and egress-verifier programs. |
 | `docs/` | Canonical docs tree; MkDocs publishes the curated subset configured in `mkdocs.yml`. |
-| `reports/` | Redaction-safe evidence plus internal generated artifacts. |
+| `reports/` | Generated evidence; only its README is in Git, and earlier reports were archived outside the repository (`reports/README.md`). |
 
 ## Build
 
