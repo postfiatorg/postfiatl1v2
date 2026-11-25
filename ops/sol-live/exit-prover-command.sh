@@ -56,15 +56,17 @@ timeout 30 head -c 25165825 > "$job/witness.json"
 test "$(wc -c < "$job/witness.json")" -le 25165824
 exec 9>"$lock"
 flock -E 75 -n 9
-# Holding the lock, no other proof of this prover runs. A GPU server on this device whose parent
-# is gone (adopted by init: its proof host was killed by the timeout or for memory) is stale and
-# stopped. One whose parent still lives belongs to a running prover: refuse, never share.
+# Holding the lock, no other proof of this prover runs. A GPU server on this device whose proof
+# host is gone (its parent is init, or a subreaper such as tini or a user systemd: any process
+# other than proof-host, this prover's host, or host-live, a deposit prover's) is stale and stopped.
+# One whose parent is a live proof host belongs to a running prover: refuse, never share.
 for pid in $(pgrep -x sp1-gpu-server || true); do
     dev=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^CUDA_VISIBLE_DEVICES=//p') || continue
     [[ $dev == "${device:-0}" ]] || continue
     parent=$(awk '{print $4}' "/proc/$pid/stat" 2>/dev/null) || continue
-    if [[ $parent != 1 ]]; then
-        echo "pf-sol-exit-prove: device ${device:-0} is used by GPU server $pid of live process $parent" >&2
+    owner=$(cat "/proc/$parent/comm" 2>/dev/null || echo unknown)
+    if [[ $parent != 1 && ( $owner == proof-host || $owner == host-live ) ]]; then
+        echo "pf-sol-exit-prove: device ${device:-0} is used by GPU server $pid of live process $parent ($owner)" >&2
         exit 75
     fi
     kill -9 "$pid" 2>/dev/null || true

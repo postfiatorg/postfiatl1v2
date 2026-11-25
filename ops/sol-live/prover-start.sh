@@ -44,7 +44,8 @@ export SP1_GROTH16_CIRCUIT_PATH="$PWD/circuit-install"
 # Clear what a dead prover leaves behind, but only while no running prover holds prover.lock:
 # its socket, which serve.py refuses to start over, and its proving processes, which outlive
 # serve.py and keep the GPU memory, so the next prover runs out of memory on its first proof.
-# A GPU server whose parent is gone (adopted by init) is stopped on any device, such as one left
+# A GPU server whose proof host is gone (its parent is init or any process other than proof-host
+# or host-live) is stopped on any device, such as one left
 # on device 3 when the count went from four to three. A server with a live parent is never
 # stopped: on one of this prover's devices it refuses, naming the device and the process (the
 # withdrawal prover's, when the settings file is missing); elsewhere it is left alone.
@@ -55,9 +56,12 @@ flock -n -E 75 prover.lock bash -c 'pkill -9 -f "^$PWD/host-live serve "
         dev=$(tr "\0" "\n" < "/proc/$pid/environ" | sed -n "s/^CUDA_VISIBLE_DEVICES=//p")
         [[ $dev =~ ^[0-9]+$ ]] || continue
         parent=$(awk "{print \$4}" "/proc/$pid/stat" 2>/dev/null) || continue
-        if [[ $parent == 1 ]]; then kill -9 "$pid"; continue; fi
+        owner=$(cat "/proc/$parent/comm" 2>/dev/null || echo unknown)
+        # Only a proof host keeps a server: proof-host (the withdrawal prover, started by the forced
+        # command) or host-live (a deposit prover, started by serve.py). Any other parent, init or a
+        # subreaper such as tini or a user systemd, means its proof host is gone: a leftover.
+        if [[ $parent == 1 || ( $owner != proof-host && $owner != host-live ) ]]; then kill -9 "$pid"; continue; fi
         if (( dev < $1 )); then
-            owner=$(cat "/proc/$parent/comm" 2>/dev/null || echo unknown)
             echo "prover-start: device $dev is used by GPU server $pid of live process $parent ($owner); not stopped" >&2
             exit 78
         fi
