@@ -54,6 +54,34 @@ def call(method, *params):
                 raise
 
 
+# The highest finalized slot this watcher has seen; the tip it uses never goes below it.
+HIGHEST = [0]
+
+
+def finalized_tip():
+    """The public finalized slot, from both providers. A fallback can only make the watcher
+    stricter: when the first provider fails, a second answer below the highest slot seen is no
+    answer, and two answers further apart than LIMIT close deposits. Raises ValueError."""
+    answers = {}
+    for url in (URL, FALLBACK_URL):
+        body = dict(jsonrpc="2.0", id=1, method="getSlot", params=[{"commitment": "finalized"}])
+        try:
+            slot = requests.post(url, json=body, timeout=8).json()["result"]
+        except (requests.RequestException, KeyError, ValueError, TypeError):
+            continue
+        if type(slot) is int:
+            answers[url] = slot
+    if not answers:
+        raise ValueError("no Solana provider answered the finalized slot")
+    if len(answers) == 2 and abs(answers[URL] - answers[FALLBACK_URL]) > LIMIT:
+        raise ValueError(f"the Solana providers disagree by {abs(answers[URL] - answers[FALLBACK_URL])} slots")
+    if URL not in answers and answers[FALLBACK_URL] < HIGHEST[0]:
+        raise ValueError(f"the fallback provider is {HIGHEST[0] - answers[FALLBACK_URL]} slots behind "
+                         "the highest finalized slot seen")
+    HIGHEST[0] = max(HIGHEST[0], *answers.values())
+    return HIGHEST[0]
+
+
 def epoch_bounds(slot):
     """The epoch containing slot and the first slot of the next epoch, from the cached schedule."""
     global SCHEDULE
@@ -69,7 +97,7 @@ def epoch_bounds(slot):
 def check(capture):
     # Fail closed: without a public finalized slot nothing shows the epoch or the observer's lag.
     try:
-        tip = call("getSlot", {"commitment": "finalized"})
+        tip = finalized_tip()
         epoch, boundary = epoch_bounds(tip)
         anchored = read(BASE / "activation.json")["profile"]["solana"]["anchor"]["epoch"]
     except (requests.RequestException, KeyError, ValueError, TypeError) as error:

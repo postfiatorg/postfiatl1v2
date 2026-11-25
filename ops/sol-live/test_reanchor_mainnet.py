@@ -169,6 +169,60 @@ class HealthTest(unittest.TestCase):
 
 
 
+class TwoProviderHealthTest(unittest.TestCase):
+    """A fallback provider never makes the watcher less strict (F5): the tip never goes below the
+    highest seen, a fallback that is behind is no answer, and providers that disagree close."""
+
+    check = HealthTest.check
+
+    def setUp(self):
+        HealthTest.setUp(self)
+        self.second = FakeSolana(self.sol.tip)
+        h = self.health
+
+        def post(url, json=None, timeout=None):
+            return (self.sol if url == h.URL else self.second).post(url, json=json, timeout=timeout)
+
+        patcher = mock.patch.object(h.requests, "post", post)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.assertTrue(self.check()["ok"])  # the watcher has seen the current tip
+
+    def test_first_down_and_second_current_stays_open(self):
+        self.sol.fail["getSlot"] = "down"
+        self.second.tip += 50
+        state = self.check()
+        self.assertTrue(state["ok"], state)
+        self.assertEqual(state["tip"], self.second.tip)
+
+    def test_first_down_and_second_lagging_is_no_answer(self):
+        self.sol.fail["getSlot"] = "down"
+        self.second.tip -= 100
+        state = self.check()
+        self.assertFalse(state["ok"])
+        self.assertIn("unavailable", state["message"])
+
+    def test_both_down_closes(self):
+        self.sol.fail["getSlot"] = self.second.fail["getSlot"] = "down"
+        self.assertFalse(self.check()["ok"])
+
+    def test_providers_that_disagree_beyond_the_limit_close(self):
+        self.second.tip = self.sol.tip - self.health.LIMIT - 1
+        state = self.check()
+        self.assertFalse(state["ok"])
+        self.assertIn("disagree", state["message"])
+        self.second.tip = self.sol.tip - self.health.LIMIT
+        self.assertTrue(self.check()["ok"])
+
+    def test_the_tip_never_goes_below_the_highest_seen(self):
+        seen = self.sol.tip
+        self.sol.tip = self.second.tip = seen - 100  # both lag behind what was already seen
+        self.capture["observer_slot"] = lambda: seen - 200
+        state = self.check()
+        # Measured against the highest tip seen, the observer is 200 slots behind, not 100.
+        self.assertFalse(state["ok"])
+        self.assertIn("200 slots behind", state["message"])
+
 class Stop(Exception):
     """Ends a service loop after one pass."""
 
