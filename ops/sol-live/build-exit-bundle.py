@@ -15,7 +15,7 @@ RUNTIME = """
 ops/sol-live/exit_setup.py ops/sol-live/exit_payout.py ops/sol-live/exit_precheck.py
 ops/sol-live/exit_proof.py ops/sol-live/exit_segments.py ops/sol-live/exit_service.py ops/sol-live/exit_qualification_socket.py
 ops/sol-live/exit_worker_policy.py ops/sol-live/exit_sandbox_check.py ops/sol-live/exit_keys.py ops/sol-live/exit_rebuild.py
-ops/sol-live/live.py ops/sol-live/profile.py ops/sol-live/check-prover-host.sh
+ops/sol-live/live.py ops/sol-live/exit_rules.py ops/sol-live/profile.py ops/sol-live/check-prover-host.sh
 ops/sol-live/check-prover-identity.sh ops/sol-live/exit-prover.fingerprint
 ops/sol-live/fixtures/exit-setup.json ops/sol-live/fixtures/exit-checkpoint.json
 ops/sol-live/pft-sol-mainnet-withdraw.service ops/sol-live/pft-sol-exit-self-test.service

@@ -39,7 +39,7 @@ is the only long-lived branch and releases are cut from it
 
 | Item | Value |
 | --- | --- |
-| Running deployment | Second Solana exit release: build revision `04600868` on all six validators, rolled one host at a time on 2026-11-24, rules active from block 1890. `04600868` is `main` at `e5c4f6ceb` plus the release height and two small fixes, on the branch `release/sol-exit-r2`; it is not on `main` yet. `deployment_manifest_verified` reads true |
+| Running deployment | Second Solana exit release: build revision `04600868` on all six validators, rolled one host at a time on 2026-11-24, rules active from block 1890. `04600868` is `main` at `e5c4f6ceb` plus the release height and two small fixes, on the branch `release/sol-exit-r2`; it is on `main` since `26acd4639` (#234, 25 November 2026). `deployment_manifest_verified` reads true |
 | Its node binary SHA-256 | `6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b` (all six, 2026-11-25 read) |
 | Earlier releases this week | `sol-exit-r1` (`71dbc9b3`, 2026-11-23, rules from block 1841) and `main-r64-20261121` (`674dbb18a`, 2026-11-21); both are on `main` |
 | Last deployment receipt | `vote-records-20261030` (source `ae70d66d`), 2026-10-30, with `scripts/postfiat-safe-rollout apply-next` |
@@ -79,7 +79,7 @@ small caps, and its withdrawals have not been announced publicly.
   one checkout of `main` ([Master State](master-state.md#where-the-bridges-run)).
   At the 25 November handoff (state of 24 November, 22:30 UTC) the relay host
   ran local edits recorded on the branch `ops/relay-host-live-edits-20261125`
-  and in #229 and #230 (not merged), and the payout service ran a bundle of
+  and in #229 (not merged) and #230 (on `main` since #234), and the payout service ran a bundle of
   the second release plus a speed-up (`c033278b`, on `ops/sol-exit-r2-speed`).
   Moving both back to unmodified `main` is open.
 
