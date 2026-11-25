@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -105,6 +105,37 @@ class FaucetPftResult:
 
 
 @dataclass(frozen=True)
+class FinalityTrust:
+    """A custodian-owned immutable archive and independently provisioned pins."""
+
+    data_dir: Path
+    chain_id: str
+    genesis_hash: str
+    genesis_registry_root: str
+
+    def __post_init__(self) -> None:
+        if not self.chain_id:
+            raise ValueError("a trusted chain ID is required")
+        for digest in (self.genesis_hash, self.genesis_registry_root):
+            if len(digest) != 96 or any(c not in "0123456789abcdef" for c in digest):
+                raise ValueError("finality pins must be 96 lowercase hex characters")
+
+
+def _local_payment_evidence(trust: FinalityTrust, selector: str, value: str) -> dict[str, Any]:
+    return _run_json([
+        *_node_bin(), "verify-payment-finality",
+        "--data-dir", str(trust.data_dir), "--chain-id", trust.chain_id,
+        "--genesis-hash", trust.genesis_hash, "--genesis-registry-root", trust.genesis_registry_root,
+        selector, value,
+    ])
+
+
+def verify_payment_finality(trust: FinalityTrust, tx_id: str) -> dict[str, Any]:
+    """Verify a native payment by ID. Retain the returned evidence with any credit."""
+    return _local_payment_evidence(trust, "--tx-id", tx_id)
+
+
+@dataclass(frozen=True)
 class SendPftResult:
     tx_id: str | None
     quote_response: dict[str, Any]
@@ -117,6 +148,8 @@ class SendPftResult:
     finalized: bool = False
     finality_receipt: dict[str, Any] | None = None
     finality_timeout: bool = False
+    confirmation: str = "pending"
+    finality_evidence: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -683,6 +716,7 @@ def send_pft(
     validator_data_dirs: Sequence[str | Path] | None = None,
     use_finality_submit: bool = False,
     max_fee_atoms: int | None = None,
+    finality_trust: FinalityTrust | None = None,
 ) -> SendPftResult:
     """Quote, sign, and submit a transparent PFT transfer.
 
@@ -719,6 +753,14 @@ def send_pft(
         memo_data=memo_data,
         request_id=quote_request_id,
     )
+    if finality_trust is not None:
+        if finalize_data_dir is not None:
+            raise ValueError("local apply cannot be used with verified finality")
+        if wallet.chain_id != finality_trust.chain_id:
+            raise ValueError("wallet chain does not match finality trust")
+        quote = quote_response.get("result")
+        if not isinstance(quote, dict) or quote.get("genesis_hash") != finality_trust.genesis_hash:
+            raise ValueError("quoted genesis does not match finality trust")
     uses_payment_v2 = any(value for value in (memo_type, memo_format, memo_data))
     check_signing_quote(
         quote_response,
@@ -804,6 +846,12 @@ def send_pft(
             json_output=False,
         )
     signed_transfer = _read_json(signed_file)
+    # Resolve the signed envelope's protocol ID locally before sending. A
+    # submission server cannot substitute another accepted payment's ID.
+    local_evidence = (
+        _local_payment_evidence(finality_trust, "--signed-payment", str(signed_file))
+        if finality_trust is not None else None
+    )
     if uses_payment_v2 and use_finality_submit:
         submit_result = client.mempool_submit_signed_payment_v2_finality(
             signed_transfer,
@@ -825,6 +873,8 @@ def send_pft(
             request_id=f"py-wallet-submit-{secrets.token_hex(4)}",
         )
     tx_id = submit_result.get("tx_id") if isinstance(submit_result.get("tx_id"), str) else None
+    if local_evidence is not None:
+        tx_id = local_evidence["tx_id"]
     finalized_batch_file = None
     receipts: list[Any] = []
     if finalize_data_dir is not None:
@@ -846,7 +896,7 @@ def send_pft(
             validator_data_dirs=validator_data_dirs or [finalize_data_dir],
         )
     submit_mode = "local_apply" if finalize_data_dir is not None else "submit_only"
-    return SendPftResult(
+    result = SendPftResult(
         tx_id=tx_id,
         quote_response=quote_response,
         signed_transfer=signed_transfer,
@@ -856,6 +906,26 @@ def send_pft(
         submit_mode=submit_mode,
         pending=submit_mode == "submit_only" and tx_id is not None,
         finalized=submit_mode == "local_apply",
+        confirmation="local_apply" if submit_mode == "local_apply" else "pending",
+    )
+    if finality_trust is not None and local_evidence is not None:
+        if local_evidence["confirmation"] == "pending":
+            local_evidence = verify_payment_finality(finality_trust, local_evidence["tx_id"])
+        return _with_payment_evidence(result, local_evidence)
+    return result
+
+
+def _with_payment_evidence(result: SendPftResult, evidence: dict[str, Any]) -> SendPftResult:
+    status = evidence["confirmation"]
+    if evidence["tx_id"] != result.tx_id or status not in ("pending", "rejected", "independently_verified"):
+        raise WalletCommandError("unexpected response from local payment verifier")
+    return replace(
+        result,
+        confirmation=status,
+        pending=status == "pending",
+        finalized=status == "independently_verified",
+        finality_receipt=evidence["report"]["receipt"] if evidence["report"] else None,
+        finality_evidence=evidence,
     )
 
 
@@ -874,13 +944,13 @@ def send_pft_and_poll_finality(
     poll_interval_seconds: float = 2.0,
     use_finality_submit: bool = True,
     max_fee_atoms: int | None = None,
+    finality_trust: FinalityTrust | None = None,
 ) -> SendPftResult:
     """Sign, submit a PFT transfer to RPC, then poll for finality.
 
-    This is the WAN/testnet wallet path. It does not use local validator
-    data directories or ``apply-batch``. The transaction is submitted to
-    the RPC mempool and the helper polls ``tx``/``receipts`` until the
-    transaction appears in a certified block or the timeout expires.
+    By default confirmation trusts the submission or query RPC. Supply
+    ``finality_trust`` to require replay from a custodian-controlled local
+    archive, using the signed payment ID for both submission paths.
 
     When ``use_finality_submit`` is True (default), the helper submits via
     ``mempool_submit_signed_transfer_finality`` which runs a peer-certified
@@ -903,7 +973,22 @@ def send_pft_and_poll_finality(
         memo_data=memo_data,
         use_finality_submit=use_finality_submit,
         max_fee_atoms=max_fee_atoms,
+        finality_trust=finality_trust,
     )
+    if finality_trust is not None:
+        if result.tx_id is None:
+            raise WalletCommandError("local verifier did not return a signed payment ID")
+        result = replace(result, submit_mode="submit_and_poll")
+        deadline = time.monotonic() + poll_timeout_seconds
+        while result.pending:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return replace(result, finality_timeout=True)
+            time.sleep(min(poll_interval_seconds, remaining))
+            evidence = verify_payment_finality(finality_trust, result.tx_id)
+            result = _with_payment_evidence(result, evidence)
+        return result
+
     # When using finality submit, the round itself returns finality evidence.
     # The submit_result contains the finality block and hot finality receipts.
     if use_finality_submit and result.submit_result:
@@ -936,6 +1021,7 @@ def send_pft_and_poll_finality(
                         submit_mode="submit_and_poll",
                         pending=False,
                         finalized=True,
+                        confirmation="rpc_confirmed",
                         finality_receipt=receipt,
                         finality_timeout=False,
                     )
@@ -982,6 +1068,7 @@ def send_pft_and_poll_finality(
         pending=not finalized,
         finalized=finalized,
         finality_receipt=finality_receipt,
+        confirmation="rpc_confirmed" if finalized else "pending",
         finality_timeout=timed_out,
     )
 

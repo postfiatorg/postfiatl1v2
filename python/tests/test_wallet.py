@@ -2590,6 +2590,56 @@ class WalletHelperTests(unittest.TestCase):
                 self.assertTrue(result.finality_timeout)
                 receipts.assert_not_called()
 
+    def test_verified_finality_uses_signed_payment_for_both_submit_modes(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        wallet = TransparentWallet("test", 0, "pf-from", "00", Path("key"), Path("backup"), {})
+        trust = wallet_module.FinalityTrust(Path("archive"), "test", "01" * 48, "02" * 48)
+        signed_id, rpc_id = "ab" * 48, "cd" * 48
+        quote = {"ok": True, "result": {
+            "transaction_kind": "transparent_transfer", "from": "pf-from", "to": "pf-to",
+            "amount": 25, "chain_id": "test", "genesis_hash": trust.genesis_hash,
+            "protocol_version": 1, "sequence": 1, "minimum_fee": 1,
+        }}
+        rpc_result = {"tx_id": rpc_id, "finality": {
+            "block": {"header": {"height": 2}},
+            "local_hot_finality": [{"receipt": {"tx_id": rpc_id, "accepted": True}}],
+        }}
+        pending = {"confirmation": "pending", "tx_id": signed_id, "report": None}
+        def sign(command, **kwargs):
+            Path(command[command.index("--output") + 1]).write_text('{"unsigned": {}}')
+
+        def preflight(actual_trust, selector, path):
+            self.assertEqual(actual_trust, trust)
+            self.assertEqual(selector, "--signed-payment")
+            self.assertEqual(json.loads(Path(path).read_text()), {"unsigned": {}})
+            return pending
+
+        for inline in (True, False):
+            for status in ("pending", "rejected", "independently_verified"):
+                with self.subTest(inline=inline, status=status), tempfile.TemporaryDirectory() as tmp:
+                    report = {"receipt": {"tx_id": signed_id, "accepted": status == "independently_verified"}}
+                    outcome = {**pending, "confirmation": status, "report": report if status != "pending" else None}
+                    with (
+                        mock.patch.object(client, "transfer_fee_quote_response", return_value=quote),
+                        mock.patch.object(client, "mempool_submit_signed_transfer_finality", return_value=rpc_result),
+                        mock.patch.object(client, "mempool_submit_signed_transfer", return_value=rpc_result),
+                        mock.patch.object(client, "tx") as rpc_tx,
+                        mock.patch.object(wallet_module, "_run", side_effect=sign),
+                        mock.patch.object(wallet_module, "_local_payment_evidence", side_effect=preflight),
+                        mock.patch.object(wallet_module, "verify_payment_finality", return_value=outcome) as replay,
+                    ):
+                        result = send_pft_and_poll_finality(
+                            client, wallet=wallet, to_address="pf-to", amount=25, work_dir=tmp,
+                            use_finality_submit=inline, finality_trust=trust, poll_timeout_seconds=0,
+                        )
+                    replay.assert_called_once_with(trust, signed_id)
+                    rpc_tx.assert_not_called()
+                    self.assertEqual(result.confirmation, status)
+                    self.assertEqual(result.tx_id, signed_id)
+                    self.assertEqual(result.finality_evidence, outcome)
+                    self.assertEqual(result.finalized, status == "independently_verified")
+                    self.assertEqual(result.finality_timeout, status == "pending")
+
     def test_account_history_rejects_missing_or_mismatched_scan_metadata(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")
         complete = {
@@ -2685,6 +2735,8 @@ class WalletHelperTests(unittest.TestCase):
                     use_finality_submit=False,
                 )
         self.assertEqual(result.submit_mode, "submit_and_poll")
+        self.assertEqual(result.confirmation, "rpc_confirmed")
+        self.assertIsNone(result.finality_evidence)
         self.assertTrue(result.finalized)
         self.assertFalse(result.pending)
         self.assertFalse(result.finality_timeout)
@@ -2762,6 +2814,8 @@ class WalletHelperTests(unittest.TestCase):
                     use_finality_submit=True,
                 )
         self.assertEqual(result.submit_mode, "submit_and_poll")
+        self.assertEqual(result.confirmation, "rpc_confirmed")
+        self.assertIsNone(result.finality_evidence)
         self.assertTrue(result.finalized)
         self.assertFalse(result.pending)
         self.assertFalse(result.finality_timeout)

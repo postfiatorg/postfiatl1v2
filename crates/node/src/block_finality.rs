@@ -31,10 +31,27 @@ pub fn tx_finality_error_is_transaction_not_found(error: &io::Error) -> bool {
 
 pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityReport> {
     validate_finality_tx_id(&options.tx_id)?;
-    let tx_id = options.tx_id;
     let store = NodeStore::new(&options.data_dir);
+    tx_finality_from_store(
+        &store,
+        options.tx_id,
+        options.audit_block_log.then_some(|| {
+            verify_blocks(NodeOptions {
+                data_dir: options.data_dir,
+            })
+        }),
+    )
+}
+
+// Use the same history and receipt selection for RPC and local verification.
+// The latter operates entirely on one offline, read-only archive.
+fn tx_finality_from_store(
+    store: &NodeStore,
+    tx_id: String,
+    audit: Option<impl FnOnce() -> io::Result<BlockVerificationReport>>,
+) -> io::Result<TxFinalityReport> {
     let genesis = store.read_genesis()?;
-    let history = match options.audit_block_log {
+    let history = match audit.is_some() {
         false => keyed_finality_history(&store, &tx_id)?,
         true => None,
     };
@@ -92,13 +109,7 @@ pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityRepo
         (receipt, block, receipt_index)
     };
 
-    let verification = if options.audit_block_log {
-        Some(verify_blocks(NodeOptions {
-            data_dir: options.data_dir.clone(),
-        })?)
-    } else {
-        None
-    };
+    let verification = audit.map(|verify| verify()).transpose()?;
     let (verification_mode, block_log_verified, block_count, tip_hash, tip_state_root) =
         if let Some(verification) = verification {
             (
@@ -139,6 +150,98 @@ pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityRepo
         tip_hash,
         tip_state_root,
         transaction_rows,
+    })
+}
+
+/// Verify a native payment using an immutable operator-owned archive and
+/// trust anchors supplied independently of the payment RPC.
+pub fn verify_payment_finality(
+    data_dir: &Path,
+    chain_id: &str,
+    expected_genesis: &str,
+    genesis_registry_root: &str,
+    tx_id: String,
+) -> io::Result<PaymentFinalityEvidence> {
+    validate_finality_tx_id(&tx_id)?;
+    // A custodian may atomically point a symlink at a newer immutable
+    // archive. Keep every read in this invocation on the chosen version.
+    let store = NodeStore::try_new_read_only(data_dir.canonicalize()?)?;
+    let genesis = store.read_genesis()?;
+    if genesis.chain_id != chain_id || genesis_hash(&genesis) != expected_genesis {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "archive does not match pinned chain identity",
+        ));
+    }
+    if store.read_ordered_commit_journal_raw()?.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "archive contains an incomplete ordered commit",
+        ));
+    }
+    if read_history_checkpoint_state_optional(&store)?.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "payment verification requires complete history from genesis",
+        ));
+    }
+    let validators = active_validator_ids(&GovernanceState::new(genesis.validator_count))?;
+    let registry = read_validator_registry_replay_base(&store)?;
+    if registry.validators.len() != validators.len()
+        || validator_registry_root(&registry, &validators)? != genesis_registry_root
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "genesis validator registry does not match pinned committee",
+        ));
+    }
+    // On a transactional archive, absence is cheap. A positive lookup
+    // still goes through the complete log, signatures and execution replay.
+    let absent = store
+        .read_receipts_for_tx_id(&tx_id)?
+        .is_some_and(|receipts| receipts.is_empty());
+    let report = if absent {
+        None
+    } else {
+        match tx_finality_from_store(
+            &store,
+            tx_id.clone(),
+            Some(|| block_replay_wallet::verify_blocks_from_store(&store, true)),
+        ) {
+            Err(error) if tx_finality_error_is_transaction_not_found(&error) => None,
+            other => Some(other?),
+        }
+    };
+    let confirmation = if let Some(report) = &report {
+        match report.transaction_rows.as_slice() {
+            [row]
+                if matches!(
+                    row.transaction_kind.as_str(),
+                    TRANSFER_TRANSACTION_KIND | PAYMENT_V2_TRANSACTION_KIND
+                ) => {}
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "verified receipt does not identify a native payment",
+                ));
+            }
+        }
+        if report.receipt.accepted && report.receipt.code == "accepted" {
+            PaymentConfirmation::IndependentlyVerified
+        } else {
+            PaymentConfirmation::Rejected
+        }
+    } else {
+        PaymentConfirmation::Pending
+    };
+    Ok(PaymentFinalityEvidence {
+        schema: "postfiat-verified-payment-v1".into(),
+        confirmation,
+        tx_id,
+        chain_id: chain_id.into(),
+        genesis_hash: expected_genesis.into(),
+        genesis_registry_root: genesis_registry_root.into(),
+        report,
     })
 }
 

@@ -33,6 +33,126 @@ pub(super) fn dummy_block_record(height: u64) -> BlockRecord {
 }
 
 #[test]
+fn payment_finality_requires_pinned_history_and_replayed_receipt() {
+    let data_dir = unique_test_dir("postfiat-independent-payment-finality");
+    let chain = "postfiat-local";
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: chain.into(),
+        node_id: "validator-0".into(),
+        validator_count: 4,
+    })
+    .expect("init");
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis().expect("genesis");
+    let genesis_id = genesis_hash(&genesis);
+    let registry = read_validator_registry_replay_base(&store).expect("genesis registry");
+    let validators = active_validator_ids(&GovernanceState::new(genesis.validator_count)).unwrap();
+    let root = validator_registry_root(&registry, &validators).unwrap();
+    let verify =
+        |id: &str| verify_payment_finality(&data_dir, chain, &genesis_id, &root, id.into());
+    assert_eq!(
+        verify(&"00".repeat(48)).unwrap().confirmation,
+        PaymentConfirmation::Pending
+    );
+
+    let payee = "pfrecipient000000000000000000000000000001";
+    let batch_file = data_dir.join("batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: payee.into(),
+        amount: 25,
+        batch_file: batch_file.clone(),
+    })
+    .expect("make signed payment");
+    let receipts = apply_batch(ApplyBatchOptions {
+        data_dir: data_dir.clone(),
+        batch_file,
+        certificate_file: None,
+    })
+    .expect("apply payment");
+    let id = &receipts[0].tx_id;
+    let evidence = verify(id).expect("verify native payment");
+    assert_eq!(
+        evidence.confirmation,
+        PaymentConfirmation::IndependentlyVerified
+    );
+    assert_eq!(evidence.genesis_registry_root, root);
+    let report = evidence.report.expect("retain replay evidence");
+    assert!(report.block_log_verified);
+    assert_eq!(report.receipt, receipts[0]);
+    assert_eq!(report.transaction_rows[0].to_address, payee);
+    assert_eq!(report.transaction_rows[0].amount, 25);
+    assert!(
+        verify_payment_finality(&data_dir, "different-chain", &genesis_id, &root, id.clone())
+            .is_err()
+    );
+    assert!(
+        verify_payment_finality(&data_dir, chain, &"00".repeat(48), &root, id.clone()).is_err()
+    );
+    assert!(
+        verify_payment_finality(&data_dir, chain, &genesis_id, &"00".repeat(48), id.clone())
+            .is_err()
+    );
+
+    let mut changed = receipts.clone();
+    changed[0].code = "other".into();
+    store.write_receipts(&changed).unwrap();
+    assert!(verify(id).is_err(), "receipt contents must match execution");
+    store.write_receipts(&receipts).unwrap();
+    let original_blocks = store.read_blocks().unwrap();
+    let mut blocks = original_blocks.clone();
+    blocks.blocks[0].header.certificate.votes.clear();
+    store.write_blocks(&blocks).unwrap();
+    assert!(verify(id).is_err(), "missing quorum evidence");
+    store.write_blocks(&original_blocks).unwrap();
+
+    let batch_file = data_dir.join("insufficient-funds.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: payee.into(),
+        amount: u64::MAX,
+        batch_file: batch_file.clone(),
+    })
+    .expect("make payment exceeding funds");
+    let rejected = apply_batch(ApplyBatchOptions {
+        data_dir: data_dir.clone(),
+        batch_file,
+        certificate_file: None,
+    })
+    .expect("commit rejected payment");
+    let rejection = verify(&rejected[0].tx_id).unwrap();
+    assert_eq!(rejection.confirmation, PaymentConfirmation::Rejected);
+    assert_eq!(rejection.report.unwrap().receipt, rejected[0]);
+
+    let handoff_file = data_dir.join("archive-handoff.json");
+    create_history_archive_handoff(HistoryArchiveHandoffCreateOptions {
+        data_dir: data_dir.clone(),
+        from_height: 1,
+        to_height: 1,
+        archive_uri: Some("archive://unit/pinned-finality".into()),
+        output_file: handoff_file.clone(),
+        overwrite: false,
+    })
+    .unwrap();
+    let mut options = HistoryOptions::with_defaults(data_dir.clone());
+    options.prune_up_to_height = Some(1);
+    options.retain_recent_blocks = 0;
+    options.minimum_replay_window_blocks = 0;
+    options.archive_handoff_file = Some(handoff_file);
+    assert!(history_prune(options).unwrap().pruned);
+    assert!(
+        verify(&rejected[0].tx_id)
+            .unwrap_err()
+            .to_string()
+            .contains("complete history")
+    );
+    fs::remove_dir_all(data_dir).unwrap();
+}
+
+#[test]
 fn tx_finality_hot_path_rejects_duplicate_receipts_and_block_links() {
     let data_dir = unique_test_dir("postfiat-finality-duplicates");
     init(InitOptions {
@@ -3779,9 +3899,9 @@ fn verify_blocks_replays_historical_registry_after_live_key_rotation() {
         .position(|record| record.node_id == "validator-1")
         .expect("validator-1 index");
     new_registry.validators[rotation_index] = ValidatorRegistryRecord {
-        node_id: new_key.node_id,
-        algorithm_id: new_key.algorithm_id,
-        public_key_hex: new_key.public_key_hex,
+        node_id: new_key.node_id.clone(),
+        algorithm_id: new_key.algorithm_id.clone(),
+        public_key_hex: new_key.public_key_hex.clone(),
     };
     let new_root = validator_registry_root(&new_registry, &validators).expect("new root");
     assert_ne!(previous_root, new_root);
@@ -3912,8 +4032,57 @@ fn verify_blocks_replays_historical_registry_after_live_key_rotation() {
     .expect("verify blocks after live key rotation");
     assert_eq!(verified.block_count, 3);
     assert!(verified.verified);
+    // The activation block installs the new registry. Its successor uses
+    // the rotated signer, while the custodian retains its original pin.
+    let mut rotated_keys = old_validator_keys;
+    let signer = rotated_keys
+        .validators
+        .iter_mut()
+        .find(|key| key.node_id == new_key.node_id)
+        .unwrap();
+    *signer = new_key;
+    write_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE), &rotated_keys).unwrap();
+    let batch_file = data_dir.join("post-rotation-payment.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: "pfregistryhistory0000000000000000000002".into(),
+        amount: 25,
+        batch_file: batch_file.clone(),
+    })
+    .unwrap();
+    let receipts = apply_batch(ApplyBatchOptions {
+        data_dir: data_dir.clone(),
+        batch_file,
+        certificate_file: None,
+    })
+    .unwrap();
+    let genesis = NodeStore::new(&data_dir).read_genesis().expect("genesis");
+    let evidence = verify_payment_finality(
+        &data_dir,
+        &genesis.chain_id,
+        &genesis_hash(&genesis),
+        &previous_root,
+        receipts[0].tx_id.clone(),
+    )
+    .expect("verify post-rotation payment using original committee pin");
+    assert_eq!(
+        evidence.confirmation,
+        PaymentConfirmation::IndependentlyVerified
+    );
+    assert_eq!(
+        evidence
+            .report
+            .unwrap()
+            .block
+            .header
+            .certificate
+            .registry_root,
+        new_root
+    );
 
     std::fs::remove_dir_all(data_dir).expect("cleanup registry replay test");
+
 }
 
 #[test]

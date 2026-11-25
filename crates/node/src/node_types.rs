@@ -3865,6 +3865,25 @@ pub struct BlockVerificationReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PaymentConfirmation {
+    Pending,
+    Rejected,
+    IndependentlyVerified,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PaymentFinalityEvidence {
+    pub schema: String,
+    pub confirmation: PaymentConfirmation,
+    pub tx_id: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub genesis_registry_root: String,
+    pub report: Option<TxFinalityReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TxFinalityReport {
     pub schema: String,
     pub proof_id: String,

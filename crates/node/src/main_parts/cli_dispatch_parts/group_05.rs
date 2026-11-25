@@ -1101,6 +1101,54 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "verify-payment-finality" => {
+            let dir = flag_value(flags, "--data-dir").ok_or("missing --data-dir")?;
+            let chain = flag_value(flags, "--chain-id").ok_or("missing --chain-id")?;
+            let genesis = flag_value(flags, "--genesis-hash").ok_or("missing --genesis-hash")?;
+            let root = flag_value(flags, "--genesis-registry-root")
+                .ok_or("missing --genesis-registry-root")?;
+            let tx_id = match (
+                flag_value(flags, "--tx-id"),
+                flag_value(flags, "--signed-payment"),
+            ) {
+                (Some(id), None) => id.to_owned(),
+                (None, Some(file)) => {
+                    let raw = std::fs::read(file).map_err(|e| e.to_string())?;
+                    let envelope: serde_json::Value =
+                        serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
+                    match envelope
+                        .pointer("/unsigned/transaction_kind")
+                        .and_then(|v| v.as_str())
+                    {
+                        Some(postfiat_types::TRANSFER_TRANSACTION_KIND) => {
+                            let signed =
+                                serde_json::from_value(envelope).map_err(|e| e.to_string())?;
+                            postfiat_execution::transfer_tx_id(&signed)
+                        }
+                        Some(postfiat_types::PAYMENT_V2_TRANSACTION_KIND) => {
+                            let signed =
+                                serde_json::from_value(envelope).map_err(|e| e.to_string())?;
+                            postfiat_execution::payment_v2_tx_id(&signed)
+                        }
+                        _ => return Err("unsupported signed payment kind".into()),
+                    }
+                }
+                _ => return Err("pass exactly one of --tx-id or --signed-payment".into()),
+            };
+            let evidence = postfiat_node::verify_payment_finality(
+                std::path::Path::new(dir),
+                chain,
+                genesis,
+                root,
+                tx_id,
+            )
+            .map_err(|error| format!("payment finality verification failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string(&evidence).map_err(|e| e.to_string())?
+            );
+            Ok(())
+        }
         "verify-blocks" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let report = verify_blocks(NodeOptions {

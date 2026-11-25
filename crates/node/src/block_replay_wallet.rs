@@ -3,14 +3,17 @@ use super::*;
 pub fn verify_blocks(options: NodeOptions) -> io::Result<BlockVerificationReport> {
     let store = NodeStore::try_new(&options.data_dir)?;
     recover_ordered_commit_journal(&store)?;
-    verify_blocks_from_store(&store)
+    verify_blocks_from_store(&store, false)
 }
 
 pub(super) fn verify_blocks_read_only(store: &NodeStore) -> io::Result<BlockVerificationReport> {
-    verify_blocks_from_store(store)
+    verify_blocks_from_store(store, false)
 }
 
-fn verify_blocks_from_store(store: &NodeStore) -> io::Result<BlockVerificationReport> {
+pub(super) fn verify_blocks_from_store(
+    store: &NodeStore,
+    require_ordered_registry_keys: bool,
+) -> io::Result<BlockVerificationReport> {
     let genesis = store.read_genesis()?;
     let blocks = store.read_blocks()?;
     let ordered_batches = store.read_ordered_batches()?;
@@ -198,12 +201,17 @@ fn verify_blocks_from_store(store: &NodeStore) -> io::Result<BlockVerificationRe
             &block.header.certificate.registry_root,
         )?;
         let certificate_validators = active_validator_ids(&certificate_governance)?;
-        backfill_legacy_validator_registry_records(
-            &mut certificate_validator_registry,
-            &live_validator_registry,
-            &certificate_validators,
-            &format!("block {} certificate replay", block.header.height),
-        )?;
+        // Independent verification only admits keys from the pinned genesis
+        // committee or ordered registry updates. Legacy replay can recover
+        // missing historic keys from the node's current registry.
+        if !require_ordered_registry_keys {
+            backfill_legacy_validator_registry_records(
+                &mut certificate_validator_registry,
+                &live_validator_registry,
+                &certificate_validators,
+                &format!("block {} certificate replay", block.header.height),
+            )?;
+        }
         verify_block_certificate_evidence(
             &genesis,
             block,

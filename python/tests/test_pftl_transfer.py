@@ -32,6 +32,16 @@ class PftlTransferCliTests(unittest.TestCase):
                 self.assertEqual(report["amount_pft"], expected)
                 self.assertEqual(cli.pft_to_atoms(report["amount_pft"]), atoms)
 
+    def test_verified_send_refuses_incomplete_trust_before_submission(self) -> None:
+        args = cli.build_parser().parse_args([
+            "send", "--endpoint", "127.0.0.1:1234", "--wallet-dir", "wallet",
+            "--to", RECIPIENT, "--amount-atoms", "1", "--poll-finality",
+            "--verification-archive", "archive", "--trusted-genesis-hash", "ab" * 48,
+        ])
+        with mock.patch.object(cli, "load_wallet") as load, self.assertRaises(ValueError):
+            cli.run_send(args)
+        load.assert_not_called()
+
     def test_pft_to_atoms_is_exact_at_six_decimals(self) -> None:
         self.assertEqual(cli.pft_to_atoms("20"), 20_000_000)
         self.assertEqual(cli.pft_to_atoms("0.000001"), 1)
