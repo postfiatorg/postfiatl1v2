@@ -146,7 +146,7 @@ def remote_copy(tool,digest):
     """validator-0 runs the read-only export with its own copy of the rehearsal tool."""
     remote='/tmp/b23-tee-nav-canary-'+digest[:16]
     result=subprocess.run(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10',snapshot.VALIDATOR0,'sha256sum '+shlex.quote(remote)],capture_output=True,text=True,timeout=30)
-    if result.returncode or result.stdout.split()[:1]!=[digest]:raise Refusal(f'validator-0 has no copy of the rehearsal tool at {remote}; copy it with: scp -p {tool} {snapshot.VALIDATOR0}:{remote}')
+    if result.returncode or result.stdout.split()[:1]!=[digest]:raise Refusal(f'scp -p {tool} {snapshot.VALIDATOR0}:{remote}: validator-0 has no copy of the rehearsal tool')
     return remote
 def use_tool(tool):
     """Every module of the job rehearses with the chosen tool."""
@@ -158,7 +158,7 @@ def release_check():
     with ThreadPoolExecutor(max_workers=6) as pool:
         versions=dict(pool.map(lambda peer: runtime(peer, chosen['node_sha256']),PEERS))
     bad=[n for n in release_pin.VALIDATORS if not versions.get(n,{}).get('matches')]
-    if bad:raise Refusal(f"The running processes on {', '.join(bad)} are not the binary {chosen['node_sha256'][:16]} named by their manifest; restart both units on the installed release, then run: {release_pin.CHECK}")
+    if bad:raise Refusal(f"{release_pin.CHECK} after restarting both units on {', '.join(bad)} on the installed release: their running processes are not the binary {chosen['node_sha256'][:16]} their manifest names")
     chosen['validator0_copy']=remote_copy(chosen['tool'],chosen['tool_sha256'])
     use_tool(Path(chosen['tool']))
     return dict(release=chosen,processes=versions)
