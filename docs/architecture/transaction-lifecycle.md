@@ -35,7 +35,9 @@ sequenceDiagram
 6. The node commits the block, advances the state root, burns fees, and writes
    receipts.
 7. Clients use read RPC to query `tx`, account state, receipts, and account
-   history.
+   history. On `main`, `blocks`, `receipts` and `tx` can also be served by key
+   without a full state load; on 25 November 2026 that code is not yet on the
+   validators ([Fast Validator Reads](../specs/fast-validator-reads-20261124.md)).
 
 Receipt semantics are mandatory: a committed block may contain a rejected
 transaction. Wallets report success only when the finality proof verifies and
