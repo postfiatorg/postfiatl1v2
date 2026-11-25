@@ -59,6 +59,14 @@ def reviewed_plan(value):
         "maxRunSeconds": 7200, "cleanupTimer": value["runId"] + "-cleanup.timer"}
 
 
+def reader_tree(revision):
+    """The reader's tracked files at a revision: every path under its folder with its blob id."""
+    listing = subprocess.check_output(["git", "-C", str(REPO), "ls-tree", "-r", revision, "--", TEE_DIR])
+    if not listing:
+        raise ValueError("no reader files at " + revision)
+    return hashlib.sha256(listing).hexdigest()
+
+
 def check_inputs(plan, manifest, *, execution=False):
     validate_manifest(manifest)
     infra.resource_profile(plan)
@@ -77,10 +85,12 @@ def check_inputs(plan, manifest, *, execution=False):
     if execution:
         if missing:
             raise ValueError("pinned dependencies missing")
-        if subprocess.check_output(["git", "-C", str(REPO), "rev-parse", "HEAD"]).decode().strip() != plan["sourceRevision"]:
-            raise ValueError("run script checkout must equal reviewed revision")
-        if subprocess.check_output(["git", "-C", str(REPO), "status", "--porcelain", "--untracked-files=no"]).strip():
-            raise ValueError("reviewed checkout has tracked changes")
+        # The reviewed revision fixes the reader's files, not the whole repository: a commit
+        # that leaves these folders alone may be checked out without a new review or profile.
+        if reader_tree("HEAD") != reader_tree(plan["sourceRevision"]):
+            raise ValueError("the checkout's reader files differ from the reviewed revision")
+        if subprocess.check_output(["git", "-C", str(REPO), "status", "--porcelain", "--untracked-files=no", "--", TEE_DIR]).strip():
+            raise ValueError("the reader's folder has tracked changes")
         for path in (AWS_CREDENTIALS,):
             if not path.is_file() or path.stat().st_mode & 0o077:
                 raise ValueError("credential path is missing or not owner-only")

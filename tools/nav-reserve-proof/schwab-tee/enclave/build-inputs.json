@@ -12,5 +12,6 @@
   "nitroCliSourceRevision": "2950b3699d81ad304df2458915688a552734833d",
   "nitroRootDerSha256": "641a0321a3e244efe456463195d606317ed7cdcc3c1756e09893f3c68f79bb5b",
   "nitroRootZipSha256": "8cf60e2b2efca96c6a9e71e851d00c1b6991cc09eadbe64a6a1d1b1eb9faff7c",
-  "nsmBuildFlags": "--remap-path-prefix=<nsm source>=/nsm --remap-path-prefix=<cargo home>=/cargo"
+  "nsmBuildFlags": "--remap-path-prefix=<nsm source>=/nsm --remap-path-prefix=<cargo home>=/cargo",
+  "sourceDateEpoch": 1795466173
 }

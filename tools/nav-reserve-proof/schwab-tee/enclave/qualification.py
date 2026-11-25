@@ -13,6 +13,8 @@ from pathlib import Path
 import shutil
 import subprocess
 
+SOURCE_ROOT = 'tools/nav-reserve-proof/schwab-tee/'
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -31,8 +33,9 @@ def main():
     installed = json.loads(subprocess.check_output(['docker', 'run', '--rm', '--network', 'none',
         '--entrypoint', binary, args.image_id, '-I', '-B', '-c',
         'from pathlib import Path; print(Path("/app/build-inputs.json").read_text())']))
-    if installed['navSourceRevision'] != revision:
-        raise ValueError('fixture source revision differs from the measured source manifest')
+    for path, digest in installed['modules'].items():
+        if hashlib.sha256(source(SOURCE_ROOT + path)).hexdigest() != digest:
+            raise ValueError('fixture source revision differs from the measured source manifest: ' + path)
     out = args.output_directory.resolve(); out.mkdir(parents=True, exist_ok=False)
     dependencies = {}
     for name in ('pytest', '_pytest', 'pluggy', 'packaging', 'pygments', 'iniconfig'):

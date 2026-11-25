@@ -34,10 +34,14 @@ def main(argv=None):
     parser.add_argument("--prepare-only", action="store_true", help="Write pinned build context without invoking Docker")
     args = parser.parse_args(argv)
     revision = git(args.repository, "rev-parse", "--verify", args.revision + "^{commit}").decode().strip()
-    source_epoch = int(git(args.repository, "show", "-s", "--format=%ct", revision))
     def source(path): return git(args.repository, "show", revision + ":" + path)
     recipe = SOURCE_ROOT + "enclave/"
     pins = json.loads(source(recipe + ("nav-build-inputs.json" if args.nav_manifest else "build-inputs.json")))
+    # The measured image holds the reader's files and these pins only. It holds neither the
+    # commit nor the commit's time, so a commit elsewhere in the repository leaves the PCRs as they are.
+    source_epoch = pins["sourceDateEpoch"]
+    if type(source_epoch) is not int or source_epoch <= 0:
+        raise ValueError("build pin sourceDateEpoch must be a positive integer")
     binary = args.nsm_library.read_bytes()
     root_der = args.root_der.read_bytes()
     if hashlib.sha256(binary).hexdigest() != pins["nsmLibrarySha256"]:
@@ -78,7 +82,7 @@ def main(argv=None):
     (context / "libnsm.so").write_bytes(binary)
     (context / "aws-nitro-root.der").write_bytes(root_der)
     (context / "aws-nitro-root.sha256").write_text(pins["nitroRootDerSha256"] + "\n")
-    manifest = {**pins, "navSourceRevision": revision, "sourceDateEpoch": source_epoch, "modules": hashes,
+    manifest = {**pins, "modules": hashes,
                 "requirementsLockSha256": hashlib.sha256((context / "requirements.lock").read_bytes()).hexdigest()}
     (context / "build-inputs.json").write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
     command = ["docker", "build", "--no-cache", "--progress=plain", "--build-arg",

@@ -37,12 +37,19 @@ def _read_key_value_file(path: Path) -> dict[str, str]:
 
 
 def _atomic_private_json(path: Path, payload: dict[str, Any]) -> None:
+    """Replace the file in one step. The new file is owner-only from its first byte."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(f"{path.suffix}.tmp")
-    temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    os.chmod(temporary, 0o600)
-    temporary.replace(path)
-    os.chmod(path, 0o600)
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, indent=2))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def _obtained(token: dict[str, Any]) -> datetime | None:
@@ -77,9 +84,13 @@ class SchwabClient:
         )
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             refreshed = json.loads(response.read())
-        refreshed["obtained_at_utc"] = datetime.now(timezone.utc).isoformat()
-        _atomic_private_json(self.token_path, refreshed)
-        return str(refreshed["access_token"])
+        if not isinstance(refreshed, dict) or not refreshed.get("access_token"):
+            raise RuntimeError("Schwab token refresh returned no access token; the stored token file is unchanged")
+        # Other readers share this file. Keep every field the response does not carry
+        # (the refresh token when it is not rotated, and fields other clients store).
+        merged = {**token, **refreshed, "obtained_at_utc": datetime.now(timezone.utc).isoformat()}
+        _atomic_private_json(self.token_path, merged)
+        return str(merged["access_token"])
 
     def request(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
         query = ("?" + urllib.parse.urlencode(params)) if params else ""
