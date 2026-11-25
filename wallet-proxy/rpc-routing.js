@@ -2133,6 +2133,15 @@ wss } = runtime;
         return { accepted: false, idempotent: false };
     }
 
+    function fastpayCertificateLockId(record) {
+        try {
+            const lockId = JSON.parse(record.request.params.cert_json)?.order?.recovery?.lock_id;
+            return typeof lockId === 'string' && lockId.length > 0 ? lockId : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
     function launchFastpayCertificateReplication(record, majority, quorum) {
         const existing = fastpayCertificateReplicationInFlight.get(record.certificate_id);
         if (existing) return existing;
@@ -2215,6 +2224,32 @@ wss } = runtime;
                 const signedAcknowledgement = structured?.schema === 'postfiat-fastpay-apply-ack-v1'
                     && structured.validator_id === entry.endpoint.validatorId
                     ? structured : null;
+                // A registered validator that is not a signer of this FastPay
+                // committee (its key was rotated after the committee was recorded)
+                // verifies and journals the certificate and answers with an unsigned
+                // held-effect receipt. That is its final answer: the delivery to it
+                // is done. It never counts toward the signed quorum.
+                const heldEffect = !signedAcknowledgement
+                    && structured?.schema === 'postfiat-fastpay-held-effect-v1'
+                    && structured.signed === false
+                    && structured.validator_id === entry.endpoint.validatorId
+                    && typeof structured.lock_id === 'string'
+                    && structured.lock_id === fastpayCertificateLockId(record);
+                if (requiresSignedQuorum && response?.ok === true && heldEffect) {
+                    fastpayCertificateOutbox.markApplied(
+                        record.certificate_id,
+                        entry.endpoint.validatorId,
+                        null,
+                    );
+                    return {
+                        validator_id: entry.endpoint.validatorId,
+                        ok: true,
+                        held: true,
+                        signed: false,
+                        duration_ms: Date.now() - started,
+                        result: structured,
+                    };
+                }
                 if (requiresSignedQuorum && response?.ok === true && !signedAcknowledgement) {
                     return {
                         validator_id: entry.endpoint.validatorId,
