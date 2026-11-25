@@ -1634,16 +1634,25 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 })
                 .transpose()?;
             let target = tx_id.clone().unwrap_or_else(|| "latest".to_string());
-            let receipt_log = receipts(ReceiptQueryOptions {
+            let options = ReceiptQueryOptions {
                 data_dir,
                 tx_id,
                 limit,
-            })
-            .map_err(|error| format!("rpc receipts failed: {error}"))?;
+            };
+            #[cfg(target_os = "linux")]
+            let read = postfiat_node::validator_receipt_reader::read(options);
+            #[cfg(not(target_os = "linux"))]
+            let read = receipts(options).map(|rows| (rows, None));
+            let (receipt_log, snapshot) =
+                read.map_err(|error| format!("rpc receipts failed: {error}"))?;
             print_rpc_success(
                 id,
                 &receipt_log,
-                vec![RpcEvent::new("receipts", target, "receipts queried")],
+                vec![RpcEvent::new(
+                    "receipts",
+                    target,
+                    snapshot.unwrap_or_else(|| "receipts queried".into()),
+                )],
             )
         }
         "yolo_target_receipt" => {

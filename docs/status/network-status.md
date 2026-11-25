@@ -24,11 +24,23 @@ position.
 | Validators | 6, all Foundation-administered; the devnet accepts no outside validators | [Cobalt](../governance/cobalt.md), [Public Operator Runbook](../runbooks/public-operator-runbook.md) |
 | Block finality | Consensus v2 (prepare/precommit with a commit quorum certificate) | [Finality](../architecture/finality.md) |
 | Quorum | 5 of 6 (`q = floor(2n/3) + 1`; tolerates `f = 1` faulty validator) | [Finality](../architecture/finality.md) |
-| Validator-trust governance | Cobalt, active since height 916; it ratifies validator-registry and trust-graph changes only and does not order or finalize blocks | [Cobalt](../governance/cobalt.md) |
+| Validator-trust governance | Cobalt last verified at height 924; it ratifies validator-registry and trust-graph changes only and does not order or finalize blocks | [Cobalt](../governance/cobalt.md) |
 | Signatures | ML-DSA-65 (FIPS 204) for accounts and validators | [Addresses, Keys And Signatures](../integrate/addresses-keys-signatures.md) |
 | Native asset | PFT; 1 PFT = 1,000,000 atoms; fees burn | [Exchange Integration Guide](../integrate/exchange-guide.md#fees) |
 
 ## Last recorded release and height
+
+<!-- component-observations -->
+
+| Component and evidence | Chain / height | Last observed | Result |
+| --- | --- | --- | --- |
+| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/ops/b24-live/known-releases.txt) | postfiat-wan-devnet-2 / 1903 | 2026-11-25 20:15 UTC | Six validators reported on sol-exit-r2 |
+| [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
+| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45684553972) | Source build / n/a | 2026-11-25 | Unverified (hosted comparison: failure) |
+
+<!-- /component-observations -->
+
+
 
 On 2026-11-25 a read-only `status` read of all six validators found the second
 Solana exit release running, with one tip and one state root
@@ -43,8 +55,8 @@ is the only long-lived branch and releases are cut from it
 | Its node binary SHA-256 | `6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b` (all six, 2026-11-25 read) |
 | Earlier releases this week | `sol-exit-r1` (`71dbc9b3`, 2026-11-23, rules from block 1841) and `main-r64-20261121` (`674dbb18a`, 2026-11-21); both are on `main` |
 | Last deployment receipt | `vote-records-20261030` (source `ae70d66d`), 2026-10-30, with `scripts/postfiat-safe-rollout apply-next` |
-| Height | 1897 on all six validators (state root `53265992…`) |
-| Latest fleet observation | 2026-11-25 10:16:21–10:16:36 UTC, read-only `status` on all six: one tip, one state root, empty mempools |
+| Earlier verified height | 1897 on all six validators (state root `53265992…`) |
+| Earlier fleet observation | 2026-11-25 10:16:21–10:16:36 UTC, read-only `status` on all six: one tip, one state root, empty mempools |
 
 Changes merged to `main` after `e5c4f6ceb` are not evidence of deployment. A
 `main` commit runs on the devnet only once the validators report a build that

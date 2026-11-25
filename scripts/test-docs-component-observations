@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Regress evidence independence and the privacy example published alongside it."""
+import copy
+import json
+import runpy
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+render = runpy.run_path(str(root / "scripts/docs-component-observations"))["render"]
+original = json.loads((root / "docs/status/component-observations.json").read_text())
+changed = copy.deepcopy(original)
+changed["fleet"].update(height=2_000_000, observed_at="future")
+authority = lambda records: next(row for row in render(records).splitlines() if "Validator-trust authority" in row)
+assert authority(changed) == authority(original)
+for outcome in ("failure", "skipped", "cancelled", "success"):
+    changed["identity"]["conclusion"] = outcome
+    expected = "Verified" if outcome == "success" else "Unverified"
+    assert f"{expected} (hosted comparison: {outcome})" in render(changed)
+examples = json.loads((root / "docs/fixtures/privacy/candidate-weights.json").read_text())["examples"]
+assert [row["best_guess"] for row in examples] == [625, 4000]
+for row in examples:
+    assert len(row["weights"]) == 16 and sum(row["weights"]) == 10000
+    assert max(row["weights"]) == row["best_guess"]
