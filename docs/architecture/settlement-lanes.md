@@ -108,9 +108,11 @@ caps.
   A validator decision then settles the redemption on Post Fiat
   (`crates/node/src/solana_exit_governance.rs`).
 - **Refund.** A burn that cannot be paid can be cancelled on Solana by its
-  destination owner or the verifier's pause authority; a cancel writes the same
-  marker as cancelled, so a burn is paid or cancelled, never both. A validator
-  decision then credits the burner back
+  destination owner or the verifier's pause authority. Payout and cancel create
+  the same marker account, as paid or as cancelled, and both refuse a marker
+  that exists (`release_burn` and `cancel_burn` in
+  `solana/pfusdc-egress-verifier/src/lib.rs`). A validator decision then
+  credits the burner back
   ([design note](../specs/solana-exit-refund-design-20261124.md)). A cancel
   and refund has not been run on the live chain.
 - **Releases.** The first withdrawal rules are active from block 1841 and the
