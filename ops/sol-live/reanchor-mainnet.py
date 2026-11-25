@@ -80,7 +80,7 @@ def retrying():
 
 ACTIVATED = "vault bridge route profile activated"
 # Blocks read per request while scanning for a successor revision.
-BLOCK_PAGE = 256
+BLOCK_PAGE = 8
 
 
 def accepted_activation(tx_id):
