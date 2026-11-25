@@ -90,6 +90,34 @@ class PayoutReviewTest(unittest.TestCase):
                     p.upload(c, values, work)
                 send.assert_not_called()
 
+    def test_the_upload_runs_under_the_attempts_deadline_and_its_failure_is_logged(self):
+        import contextlib
+        import io
+        c, seen = Mock(), []
+
+        def upload(*args):
+            seen.append(getattr(p._attempt, "deadline", None))
+            raise ConnectionError("buffer upload refused")
+
+        err = io.StringIO()
+        with (
+            patch.object(p, "check_custody"),
+            patch.object(p, "reclaim_completed"),
+            patch.object(p, "check_work_capacity"),
+            patch.object(p, "prove", side_effect=TimeoutError("GPU busy")),
+            patch.object(p, "public_values", return_value=b"val"),
+            patch.object(p, "balance"),
+            patch.object(p, "upload", side_effect=upload),
+            patch.object(p, "funded_send") as send,
+            contextlib.redirect_stderr(err),
+            p.attempt_deadline(12345.0),
+        ):
+            with self.assertRaisesRegex(TimeoutError, "GPU busy"):
+                p.submit(c, "checkpoint", {}, Path("unused"))
+            send.assert_not_called()
+        self.assertEqual(seen, [12345.0])
+        self.assertIn("ConnectionError: buffer upload refused", err.getvalue())
+
     def test_coverage_is_refreshed_if_it_changes_during_proving(self):
         c = Mock()
         with (

@@ -9,6 +9,16 @@ permissions:
   contents: read
 
 jobs:
+  release-node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Build the production node with its release features
+        run: cargo build --locked --release -p postfiat-node --bin postfiat-node
+
   check:
     runs-on: ubuntu-latest
     env:

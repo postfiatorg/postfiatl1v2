@@ -13,6 +13,8 @@ does not transfer authority.
 
 ## Model
 
+The count-based score assumes each remaining candidate is equally likely after conditioning on the observer’s information. With unequal probabilities the best single guess has probability `max(p_i)`. The historical fixture field `posterior_bps` stores the rounded equal-weight estimate. No field measurement here validates equal weights.
+
 The verifier takes the observer's declared view:
 
 | Channel |

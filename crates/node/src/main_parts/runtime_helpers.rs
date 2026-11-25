@@ -733,12 +733,12 @@ fn print_usage() {
   postfiat-node ratify-require-memo-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-orchard-aware-bridge-claim-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-pfusdc-source-series-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
-  postfiat-node ratify-solana-exit-open [--data-dir PATH] --validators CSV --height H --amendment-file PATH
-  postfiat-node ratify-solana-exit-retire [--data-dir PATH] --validators CSV --height H --amendment-file PATH
-  postfiat-node ratify-solana-exit-close [--data-dir PATH] --validators CSV --height H --amendment-file PATH
-  postfiat-node ratify-solana-exit-paid [--data-dir PATH] --validators CSV --height H --packet-hash HEX --solana-slot SLOT --payout-index N --signature-hex HEX --amendment-file PATH
-  postfiat-node ratify-solana-exit-min-withdrawal [--data-dir PATH] --validators CSV --height H --atoms N --amendment-file PATH
-  postfiat-node ratify-solana-exit-refund [--data-dir PATH] --validators CSV --height H --packet-hash HEX --solana-slot SLOT --signature-hex HEX --amendment-file PATH
+  postfiat-node ratify-solana-exit-open [--data-dir PATH] --validators CSV [--support CSV] --height H --amendment-file PATH
+  postfiat-node ratify-solana-exit-retire [--data-dir PATH] --validators CSV [--support CSV] --height H --amendment-file PATH
+  postfiat-node ratify-solana-exit-close [--data-dir PATH] --validators CSV [--support CSV] --height H --amendment-file PATH
+  postfiat-node ratify-solana-exit-paid [--data-dir PATH] --validators CSV [--support CSV] --height H --packet-hash HEX --solana-slot SLOT --payout-index N --signature-hex HEX --amendment-file PATH
+  postfiat-node ratify-solana-exit-min-withdrawal [--data-dir PATH] --validators CSV [--support CSV] --height H --atoms N --amendment-file PATH
+  postfiat-node ratify-solana-exit-refund [--data-dir PATH] --validators CSV [--support CSV] --height H --packet-hash HEX --solana-slot SLOT --signature-hex HEX --amendment-file PATH
   postfiat-node ratify-solana-bridge-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-shielded-atomic-batch-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-asset-orchard-pricing-enforcement-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
@@ -838,7 +838,7 @@ fn print_usage() {
   postfiat-node account-tx [--data-dir PATH] --address ADDRESS [--from-height HEIGHT] [--to-height HEIGHT] [--limit N]
   postfiat-node account-tx-index-build [--data-dir PATH]
   postfiat-node account-tx-index-status [--data-dir PATH]
-  postfiat-node owned-objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys]
+  postfiat-node owned-objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys] [--include-inventory-revision]
   postfiat-node receipts [--data-dir PATH] [--tx-id ID] [--limit N]
   postfiat-node rpc --method server_info [--data-dir PATH]
   postfiat-node rpc --method ledger [--data-dir PATH] [--limit N]
@@ -867,7 +867,7 @@ fn print_usage() {
   postfiat-node rpc --method private_readiness [--data-dir PATH] [--pool-id ID]
   postfiat-node rpc --method account_lines [--data-dir PATH] --account ADDRESS [--issuer ADDRESS] [--asset-id ID] [--limit N]
   postfiat-node rpc --method account_assets [--data-dir PATH] --account ADDRESS [--asset-id ID] [--limit N]
-  postfiat-node rpc --method owned_objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys]
+  postfiat-node rpc --method owned_objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys] [--include-inventory-revision]
   postfiat-node rpc --method issuer_assets [--data-dir PATH] --issuer ADDRESS [--limit N]
   postfiat-node rpc --method escrow_info [--data-dir PATH] --escrow-id ID
   postfiat-node rpc --method account_escrows [--data-dir PATH] --account ADDRESS [--role owner|recipient] [--state open|finished|canceled] [--limit N]

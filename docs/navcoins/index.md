@@ -3,7 +3,7 @@
 > **Current product status (2026-11-25):** NAVCoins run on the controlled
 > devnet `postfiat-wan-devnet-2`; none is generally available. B24, the
 > Schwab-backed NAVCoin, has been created and cashed in with real money since
-> mid-November; its newest reading on the chain is epoch 9. A666 v2 and BMNRC
+> mid-November; the 25 November report records epoch 10. A666 v2 and BMNRC
 > are on the chain with older readings. pfUSDC comes from Ethereum and, since
 > November, Solana. Details and dates are in [Today](#today) below. The
 > 2026-07-30 status of A666 is in
@@ -41,7 +41,7 @@ in the proof profile and replayable from the packet.
 | Name | Meaning | Current status |
 |---|---|---|
 | NAVCoin | The asset class and protocol pattern: proof profile, reserve packet, supply discipline, mint/redeem controls, and market-operation limits. | Implemented on PFTL; A666 v2, BMNRC and B24 are on the controlled devnet, with release hardening still open. |
-| B24 | The Schwab-backed NAVCoin: a proven reading of a Schwab account's equity. | On the devnet with real money since mid-November; newest reading epoch 9 (height 1842). See [Today](#today). |
+| B24 | The Schwab-backed NAVCoin: a proven reading of a Schwab account's equity. | On the devnet with real money since mid-November; epoch 10 finalized at height 1902. See [Today](#today). |
 | B23 | The earlier Schwab NAVCoin line that B24 replaced. | Replaced; its name remains in the proof profile and code (`b23-*`). |
 | BMNRC | The BMNR carry NAVCoin (stock long, perpetual short). | Created on the devnet on 2026-10-02; one reading (epoch 1, height 1099). |
 | a651 | The first named NAVCoin instance for the proven six-leg reserve portfolio. | Legacy/deprecated product lineage. Its historical Ethereum pool had zero pool-specific liquidity at the last a651 inspection; a651 remains migration and research history. |
@@ -67,21 +67,16 @@ the newest reading's finalize height (`ensure_nav_asset_live_for_epoch` in
 `crates/execution/src/nav_vault_asset_execution.rs`). The chain counts blocks,
 not time, so on an idle chain an old reading stays usable longer.
 
-- **B24.** The B24 reading of the Schwab account's equity is taken in a Nitro
-  enclave and proven with SP1. The daily job (`ops/b24-live/daily.py`, timer
-  `ops/b24-live/b24-tee-nav-daily.timer`, 17:55 UTC) has a $9-per-run and
-  $250 cap, does not retry, and counts a reading only once it is read back
-  finalized. Readings landed at heights 1323 to 1842 (epochs 1 to 9); none
-  landed on 24 or 25 November up to height 1900. The job pins a node binary
-  (`DAILY_NODE_SHA`, `69de5ce0…`) that is not the fleet's (`6dd2ee56…` on
-  25 November), so its runtime check stops it until the pin moves
-  ([25 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-25.md)).
-  The 24 November handoff puts the end of create and cash-in on the epoch-9
-  reading at block 1943. B24 replaced the earlier B23 line
-  (`ops/b24-replacement/`).
-- **A666 and BMNRC.** Their readings are older than the 128-block gap at
-  height 1900. A new reading is needed before NAV-priced create and cash-in can
-  run on them.
+The later fleet report at 20:15 UTC recorded B24 epoch 10 finalized at height 1902 and the fleet at 1903. The table above records an earlier observation. Source calendar age is measured from the packet's observation cutoff. The report does not give the exact cutoff, so the calendar age at 20:15 is unknown.
+
+| Asset and evidence | NAV-priced mint | NAV-priced redeem | Export | Secondary trading |
+| --- | --- | --- | --- | --- |
+| B24, epoch 10, height 1902 | Freshness gate passes at 1903 | Freshness gate passes at 1903 | Unknown | Unknown |
+| A666, validator-0 at 1900 | Unavailable, stale | Unavailable, stale | Unknown | Unknown |
+| BMNRC, validator-0 at 1900 | Unavailable, stale | Unavailable, stale | Unknown | Unknown |
+
+With the B24 128-block profile and no subsequent finalization, height 2030 is the last height inside the freshness window, and 2031 is the first stale height. Other checks, including halt and supply policy, still apply. No completed mint or redemption was observed in the 20:15 report. The B24 job selects its release from the fleet. See the [reading runbook](../runbooks/b24-schwab-nav-reading.md).
+
 - **pfUSDC.** Ethereum and Solana deposits mint separate pfUSDC series. Solana
   pfUSDC can be withdrawn to Solana since 23 November, within small caps; see
   [Network Status](../status/network-status.md#usdc-bridges).

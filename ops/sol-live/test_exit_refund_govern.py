@@ -28,16 +28,14 @@ class RefundFleet(Fleet):
 
     def remote(self, i, args, data=None):
         args = [str(a) for a in args]
-        if i != LOST and args[-1] == "/etc/postfiat/sol-exit-refund-review.json":
+        if i not in self.lost() and args[-1] == "/etc/postfiat/sol-exit-refund-review.json":
             return json.dumps(dict(kind=self.kind, parent=parent_of(self.head)))
-        if i != LOST and len(args) > 5 and args[5] == "ratify-solana-exit-refund":
+        if i not in self.lost() and len(args) > 5 and args[5] == "ratify-solana-exit-refund":
             flags = args[6:]
             value = {flags[k]: flags[k + 1] for k in range(len(flags) - 1) if flags[k].startswith("--")}
             self.kind = "solana_exit_refund:{}:{}:{}".format(
                 value["--packet-hash"], value["--solana-slot"], value["--signature-hex"])
-            amend = dict(kind=self.kind, activation_height=int(value["--height"]), value=1,
-                         paused=False, quorum=5, validators=value["--validators"].split(","))
-            self.files[(i, value["--amendment-file"])] = json.dumps(amend)
+            self.draft(i, value, self.kind, 5)
             return ""
         return super().remote(i, args, data)
 

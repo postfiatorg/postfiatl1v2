@@ -26,7 +26,7 @@ and position changes.
 - Privacy metadata/anonymity-bound fixture for low-volume, bursty, thin-asset,
   unique-disclosure, direct-RPC, and forbidden-public-field routes.
 - Privacy deanonymization-bound fixture that converts metadata floor counts
-  into integer basis-point posterior bounds and joint-candidate routes.
+  into equal-weight estimates in integer basis points and joint-candidate routes.
 - Privacy correlation-bound fixture that requires observed joint partitions,
   pairwise intersections, temporal-link cohorts, and RPC cohorts.
 - Privacy observer-inference fixture that derives candidate count `k` by
