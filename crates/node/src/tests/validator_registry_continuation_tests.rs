@@ -775,7 +775,34 @@ fn superseded_unapplied_rotation_history_replays_for_checkpoint_export() {
         &original_entry,
         &final_entry,
     );
-    commit_governance_registry_update(&data_dir, "final-rotation", final_update_file);
+    let mut authorization_files = Vec::new();
+    for (validator, validator_key_file) in
+        super::consensus_history::write_split_validator_key_files(&data_dir, &original_keys)
+    {
+        let authorization_file =
+            data_dir.join(format!("{validator}.final-rotation-authorization.json"));
+        sign_validator_registry_update_authorization(ValidatorRegistryAuthorizationSignOptions {
+            data_dir: data_dir.clone(),
+            update_file: final_update_file.clone(),
+            validator,
+            validator_key_file,
+            proposal_slot: 2,
+            expires_at_height: 8,
+            authorization_file: authorization_file.clone(),
+        })
+        .expect("sign real successor with the retained committee");
+        authorization_files.push(authorization_file);
+    }
+    let signed_file = data_dir.join("final-rotation.signed.json");
+    assemble_signed_validator_registry_update(ValidatorRegistryUpdateAssembleOptions {
+        data_dir: data_dir.clone(),
+        update_file: final_update_file,
+        authorization_files,
+        proposal_slot: 2,
+        output_file: signed_file.clone(),
+    })
+    .expect("assemble old-committee successor authorizations");
+    commit_governance_registry_update(&data_dir, "final-rotation", signed_file);
     assert_eq!(
         validator_registry_root(
             &read_validator_registry_file(&registry_path).expect("registry after final rotation"),
@@ -793,11 +820,11 @@ fn superseded_unapplied_rotation_history_replays_for_checkpoint_export() {
         data_dir: data_dir.clone(),
         key_file: None,
         to: format!("pf{:0<38}", "supersededexportcontinuation"),
-        amount: 5,
+        amount: 25,
         batch_file: transfer_batch_file.clone(),
     })
     .expect("create export continuation transfer batch");
-    apply_batch(ApplyBatchOptions {
+    let payments = apply_batch(ApplyBatchOptions {
         data_dir: data_dir.clone(),
         batch_file: transfer_batch_file,
         certificate_file: None,
@@ -814,12 +841,99 @@ fn superseded_unapplied_rotation_history_replays_for_checkpoint_export() {
     assert!(report.verified);
     assert_eq!(report.block_count, 3);
 
+    // These are genuine certificates from the compatibility history. The
+    // custodian has only the genesis pin and ordered updates. A
+    // subject-scoped drill cannot replace its full active committee.
+    let genesis = NodeStore::new(&data_dir).read_genesis().unwrap();
+    let error = verify_payment_finality(
+        &data_dir,
+        &genesis.chain_id,
+        &genesis_hash(&genesis),
+        &original_root,
+        payments[0].tx_id.clone(),
+    )
+    .expect_err("a skipped committee transition requires independent operator evidence");
+    assert!(
+        error
+            .to_string()
+            .contains("predecessor differs from the pinned active committee"),
+        "{error}"
+    );
+
+    let blocks = NodeStore::new(&data_dir).read_blocks().unwrap();
+    let pin = PaymentCommitteePin {
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        height: 2,
+        block_hash: blocks.blocks[1].header.block_hash.clone(),
+        ordered_registry_root: validator_registry_root(&drill_registry, &validators).unwrap(),
+        signing_registry_root: original_root.clone(),
+    };
+    let verify = |pins: &[PaymentCommitteePin]| {
+        verify_payment_finality_with_pins(
+            &data_dir,
+            &genesis.chain_id,
+            &genesis_hash(&genesis),
+            &original_root,
+            payments[0].tx_id.clone(),
+            pins,
+        )
+    };
+    let evidence =
+        verify(std::slice::from_ref(&pin)).expect("independently pinned drill exception");
+    assert_eq!(
+        evidence.confirmation,
+        PaymentConfirmation::IndependentlyVerified
+    );
+    assert_eq!(evidence.historical_committee_pins, vec![pin.clone()]);
+    assert_eq!(evidence.report.unwrap().receipt, payments[0]);
+    for wrong_pin in [
+        PaymentCommitteePin {
+            block_hash: "ab".repeat(48),
+            ..pin.clone()
+        },
+        PaymentCommitteePin {
+            signing_registry_root: final_root.clone(),
+            ..pin.clone()
+        },
+        PaymentCommitteePin {
+            ordered_registry_root: original_root.clone(),
+            ..pin.clone()
+        },
+        PaymentCommitteePin {
+            height: 1,
+            ..pin.clone()
+        },
+        PaymentCommitteePin {
+            chain_id: "other-chain".into(),
+            ..pin.clone()
+        },
+        PaymentCommitteePin {
+            genesis_hash: "ab".repeat(48),
+            ..pin.clone()
+        },
+    ] {
+        assert!(verify(&[wrong_pin]).is_err());
+    }
+    assert!(verify(&[pin.clone(), pin.clone()]).is_err());
+
     let snapshot_dir = data_dir.join("superseded-history-snapshot");
     export_snapshot(SnapshotExportOptions {
         data_dir: data_dir.clone(),
         snapshot_dir,
     })
     .expect("snapshot export over superseded unapplied rotation history");
+
+    let mut invalid_signature = blocks;
+    let vote = &mut invalid_signature.blocks[1].header.certificate.votes[0];
+    vote.signature_hex = "00".repeat(vote.signature_hex.len() / 2);
+    NodeStore::new(&data_dir)
+        .write_blocks(&invalid_signature)
+        .unwrap();
+    assert!(
+        verify(std::slice::from_ref(&pin)).is_err(),
+        "the pin must still require valid signatures"
+    );
 
     fs::remove_dir_all(data_dir).expect("cleanup superseded unapplied rotation export data");
 }
@@ -897,11 +1011,11 @@ fn recorded_offchain_rollback_history_replays_for_checkpoint_export() {
         data_dir: data_dir.clone(),
         key_file: None,
         to: format!("pf{:0<38}", "rollbackexportcontinuation"),
-        amount: 3,
+        amount: 25,
         batch_file: transfer_batch_file.clone(),
     })
     .expect("create rollback continuation transfer batch");
-    apply_batch(ApplyBatchOptions {
+    let payments = apply_batch(ApplyBatchOptions {
         data_dir: data_dir.clone(),
         batch_file: transfer_batch_file,
         certificate_file: None,
@@ -915,6 +1029,35 @@ fn recorded_offchain_rollback_history_replays_for_checkpoint_export() {
     .expect("certificate replay over recorded off-chain rollback history");
     assert!(report.verified);
     assert_eq!(report.block_count, 2);
+
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis().unwrap();
+    let pin = PaymentCommitteePin {
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        height: 2,
+        block_hash: store.read_blocks().unwrap().blocks[1]
+            .header
+            .block_hash
+            .clone(),
+        ordered_registry_root: original_root.clone(),
+        signing_registry_root: original_root.clone(),
+    };
+    let verify = |pins: &[PaymentCommitteePin]| {
+        verify_payment_finality_with_pins(
+            &data_dir,
+            &genesis.chain_id,
+            &genesis_hash(&genesis),
+            &original_root,
+            payments[0].tx_id.clone(),
+            pins,
+        )
+    };
+    assert!(verify(&[]).is_err());
+    assert_eq!(
+        verify(&[pin]).unwrap().confirmation,
+        PaymentConfirmation::IndependentlyVerified
+    );
 
     let snapshot_dir = data_dir.join("recorded-rollback-snapshot");
     export_snapshot(SnapshotExportOptions {

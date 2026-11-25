@@ -816,6 +816,7 @@ fn certified_fork(output: Option<&Path>) {
             &g,
             &block,
             &entry,
+            crate::block_replay_wallet::RegistryReplayPolicy::Historical,
             crate::block_replay_wallet::ArchivedReplayState {
                 parent_numbered_count: crate::solana_exit_governance::numbered_parent_count(&gov),
                 governance: &mut gov,
@@ -1177,6 +1178,7 @@ fn exit_review_close_drain_rotate_and_reopen() {
             &g,
             &block,
             &entry,
+            crate::block_replay_wallet::RegistryReplayPolicy::Historical,
             crate::block_replay_wallet::ArchivedReplayState {
                 parent_numbered_count: crate::solana_exit_governance::numbered_parent_count(gov),
                 governance: &mut rotated,

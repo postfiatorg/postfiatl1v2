@@ -292,6 +292,7 @@ fn replay_export_block(
         blocks,
         &archive,
         receipts,
+        crate::block_replay_wallet::RegistryReplayPolicy::Historical,
         &mut |_, packets| {
             if found.is_none() {
                 if let Some(packet) = packets.iter().find(|packet| matches(packet)).cloned() {
