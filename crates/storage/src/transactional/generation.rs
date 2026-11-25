@@ -248,6 +248,23 @@ impl NodeStore {
         }
     }
 
+    /// Snapshot the already validated handle held by this process for an
+    /// operation. A sibling reader must never open or retain a writer lease
+    /// on an idle validator. Before activation, the legacy store is authoritative.
+    pub fn held_transactional_read_snapshot(
+        &self,
+    ) -> StorageResult<Option<TransactionalReadSnapshot>> {
+        let Some(store) = self.live_transactional_store() else {
+            return Ok(None);
+        };
+        let snapshot = store.read_snapshot()?;
+        let meta = snapshot.meta();
+        Ok(meta
+            .scheduled_activation_height
+            .is_some_and(|height| meta.finalized_height >= height)
+            .then_some(snapshot))
+    }
+
     fn live_transactional_store(&self) -> Option<Arc<TransactionalStore>> {
         (!self.read_only)
             .then(|| validated_handle(&self.data_dir))
