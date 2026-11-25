@@ -28,6 +28,11 @@ def predecessors(environ=None):
     return tuple(names)
 
 
+def predecessor_kit(environ=None):
+    """The live release's kit, ~/var/<EXIT_OLD_RELEASE>."""
+    return KIT_ROOT / predecessors(environ)[0]
+
+
 def next_env(text, old, older, new):
     """The predecessor's env with the live release renamed to `new` and the replaced one to the
     live one. Both names must occur in it; a replace that finds nothing is refused."""
