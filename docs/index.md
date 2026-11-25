@@ -27,7 +27,7 @@ machine-checkable reserve packets. The design is in the
 - **21 November.** All six validators moved to `main-r64-20261121`; `main` became the only long-lived branch ([Master State](status/master-state.md)).
 - **23 November.** The first Solana withdrawal release (rules from block 1841); first real withdrawals; the deposit route re-anchored at block 1847.
 - **24 November.** The second Solana exit release (rules from block 1890): every Solana deposit batch can be withdrawn, a refund path for a burn that cannot be paid, each validator reviews a settlement itself. Real withdrawals of 0.30, 0.30 and 4.00 USDC were paid and settled.
-- **25 November.** Read-only read: all six validators at height 1897, one state root, build `04600868`, which is not on `main` yet. No B24 reading since epoch 9 (height 1842).
+- **25 November.** Read-only read: all six validators at height 1897, one state root, build `04600868` (the second Solana exit release). No B24 reading since epoch 9 (height 1842).
 - **Limits.** A controlled devnet with small caps, not announced: one withdrawal spends one deposit batch, the minimum is 0.30 USDC, the vault accepts 25 USDC more, a withdrawal takes about four minutes ([Network Status](status/network-status.md#usdc-bridges)).
 
 ## Start here
