@@ -7,8 +7,9 @@ PostFiat's current shielded flow has three production-shaped operations:
 3. Orchard-to-transparent withdraw.
 
 They are on `main`. On the live devnet, public submission of shielded actions
-is off on every validator (checked on 25 November 2026; see the
-[handoff of 23 November](../status/handoff-2026-11-23.md)).
+is off on every validator, as recorded in the
+[handoff of 23 November 2026](../status/handoff-2026-11-23.md); the switch is
+not reported over RPC.
 
 ## Shielded Action Structure
 
