@@ -112,10 +112,10 @@ caps.
   ([design note](../specs/solana-exit-refund-design-20261124.md)). A cancel
   and refund has not been run on the live chain.
 - **Releases.** The first withdrawal rules are active from block 1841 and the
-  second from block 1890 (every deposit batch can exit, refund path). On `main`
-  the second release's height is not set (`SECOND_RELEASES` in
-  `crates/types/src/solana_exit.rs`); the live build `04600868` sets it on the
-  release branch `release/sol-exit-r2`.
+  second from block 1890 (every deposit batch can exit, refund path). The
+  second release's height is the `SECOND_RELEASES` entry in
+  `crates/types/src/solana_exit.rs`; the live build `04600868` is cut from the
+  release branch `release/sol-exit-r2`, which sets it.
 - **Limits on 24 November** ([handoff of 25 November](../status/handoff-2026-11-25.md)):
   one withdrawal spends one deposit batch; withdrawals below 0.30 USDC are
   refused; the vault accepted 25 USDC more; a withdrawal takes about four
