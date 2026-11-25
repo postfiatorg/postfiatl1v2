@@ -2284,3 +2284,119 @@ fn solana_exit_minimum_kind_needs_the_second_release_at_the_including_block() {
     assert!(refused(2000).is_ok());
     solana_exit::set_second_release_for_tests(None);
 }
+
+/// Decision height of the five-of-six tests, after the reviewed descriptor's height (1754).
+const FIVE_OF_SIX_HEIGHT: u64 = 1800;
+const FIVE_OF_SIX_RELEASE: u64 = 1754;
+
+/// Record the reviewed Solana descriptor in `dir`'s governance as registered on this chain.
+fn register_descriptor_for_tests(dir: &Path) {
+    let store = NodeStore::new(dir);
+    let g = store.read_genesis().unwrap();
+    let mut gov = store.read_governance().unwrap();
+    let act = descriptor_batch().vault_bridge_route_profile_activations.remove(0);
+    let record = postfiat_types::VaultBridgeRouteProfileRecordV1::new_for_replay(
+        &act,
+        act.profile.activation_height,
+    )
+    .unwrap();
+    let mut registration = act.amendment.clone();
+    registration.chain_id = g.chain_id.clone();
+    registration.genesis_hash = genesis_hash(&g);
+    gov.vault_bridge_route_profiles.push(record);
+    gov.amendments.push(registration);
+    store.write_governance(&gov).unwrap();
+    assert!(solana_exit::registered(&store.read_governance().unwrap()).is_some());
+    // The decision is signed for the next block.
+    let mut tip = store.read_chain_tip().unwrap();
+    tip.height = FIVE_OF_SIX_HEIGHT - 1;
+    store.write_chain_tip(&tip).unwrap();
+}
+
+fn five_of_six_kinds() -> [String; 2] {
+    [
+        format!("{}{}:12345:0:{}", solana_exit::PAID, "11".repeat(48), "ab".repeat(64)),
+        format!("{}{}:473300000:{}", solana_exit::REFUND, "ab".repeat(48), "cd".repeat(64)),
+    ]
+}
+
+/// Draft `kind` as `ratify-solana-exit-*` does, sign it with every validator but `missing`,
+/// and assemble the five authorizations.
+fn five_of_six_assemble(kind: &str, missing: usize) -> io::Result<GovernanceAmendment> {
+    let dir = unique_test_dir("solana-exit-five-of-six");
+    init(InitOptions {
+        data_dir: dir.clone(),
+        chain_id: "postfiat-local".into(),
+        node_id: "validator-0".into(),
+        validator_count: 6,
+    })
+    .unwrap();
+    register_descriptor_for_tests(&dir);
+    let validators = local_validator_ids(6).unwrap();
+    let signers: Vec<String> = validators
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != missing)
+        .map(|(_, v)| v.clone())
+        .collect();
+    let draft = dir.join("draft.json");
+    ratify_governance(RatifyGovernanceOptions {
+        data_dir: dir.clone(),
+        validators: validators.clone(),
+        support: validators.clone(),
+        kind: kind.into(),
+        value: 1,
+        activation_height: FIVE_OF_SIX_HEIGHT,
+        veto_until_height: 0,
+        paused: false,
+        amendment_file: draft.clone(),
+    })
+    .unwrap();
+    let key_file = dir.join(VALIDATOR_KEYS_FILE);
+    let authorizations = signers
+        .iter()
+        .map(|validator| {
+            let file = dir.join(format!("{validator}.authorization.json"));
+            sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                data_dir: dir.clone(),
+                amendment_file: draft.clone(),
+                validator: validator.clone(),
+                validator_key_file: key_file.clone(),
+                proposal_slot: FIVE_OF_SIX_HEIGHT,
+                expires_at_height: FIVE_OF_SIX_HEIGHT + 30,
+                authorization_file: file.clone(),
+            })
+            .unwrap();
+            file
+        })
+        .collect();
+    let assembled = assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
+        data_dir: dir.clone(),
+        amendment_file: draft,
+        authorization_files: authorizations,
+        proposal_slot: FIVE_OF_SIX_HEIGHT,
+        output_file: dir.join("signed.json"),
+    });
+    fs::remove_dir_all(&dir).unwrap();
+    assembled
+}
+
+/// Under the second release a paid or refund decision settles with any five of the six
+/// validators: one host down or one reviewer refusing must not stop it.
+#[test]
+fn solana_exit_paid_and_refund_assemble_with_any_five_of_six() {
+    solana_exit::set_first_release_for_tests(Some(FIVE_OF_SIX_RELEASE));
+    solana_exit::set_second_release_for_tests(Some(FIVE_OF_SIX_RELEASE));
+    for kind in five_of_six_kinds() {
+        for missing in 0..6 {
+            let assembled = five_of_six_assemble(&kind, missing)
+                .unwrap_or_else(|e| panic!("{kind} without validator-{missing}: {e}"));
+            assert_eq!(assembled.quorum, 5);
+            assert_eq!(assembled.validators.len(), 6);
+            assert_eq!(assembled.signed_authorizations.len(), 5);
+            assert!(!assembled.support.contains(&format!("validator-{missing}")));
+        }
+    }
+    solana_exit::set_second_release_for_tests(None);
+    solana_exit::set_first_release_for_tests(None);
+}

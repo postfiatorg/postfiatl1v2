@@ -21,10 +21,27 @@ const RELEASES: &[(&str, &str, Option<u64>)] = &[(
 )];
 
 pub fn release_height(chain: &str, genesis: &str) -> Option<u64> {
+    #[cfg(any(test, feature = "test-second-release"))]
+    if let Some(height) = FIRST_RELEASE_FOR_TESTS.with(|h| h.get()) {
+        return Some(height);
+    }
     RELEASES
         .iter()
         .find(|(c, g, _)| *c == chain && *g == genesis)?
         .2
+}
+
+#[cfg(any(test, feature = "test-second-release"))]
+thread_local! {
+    /// `Some(h)`: every chain of this thread has the first release at `h` (tests only).
+    static FIRST_RELEASE_FOR_TESTS: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Schedules the first release at `height` on every chain of this thread (tests only); `None`
+/// returns to `RELEASES`.
+#[cfg(any(test, feature = "test-second-release"))]
+pub fn set_first_release_for_tests(height: Option<u64>) {
+    FIRST_RELEASE_FOR_TESTS.with(|h| h.set(height));
 }
 
 /// The second Solana exit release. Unset means off: the build then follows the first release
