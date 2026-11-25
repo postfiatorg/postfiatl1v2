@@ -205,6 +205,34 @@ class RecoveryTest(unittest.TestCase):
                 svc.process_next(j, Path(d))
             self.assertIsNone(j.status_fault)
 
+    def test_every_queued_burn_shows_the_end_of_the_status_pause(self):
+        import io
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as d:
+            j = svc.Journal(Path(d) / "db")
+            others = ["0%d" % n * 48 for n in (1, 2, 3)]
+            for burn in [BURN, *others]:
+                j.enqueue(burn)
+            # One other burn already waits on its own too-large reply, one on a rotation.
+            with patch.object(svc, "process", side_effect=self.too_large("pfusdc_egress_witness")), \
+                    redirect_stdout(io.StringIO()):
+                j.defer_too_large(others[0])
+            j.defer(others[1], detail=svc.WAITING_ROTATION)
+            self.make_due(j)
+            with patch.object(svc, "process", side_effect=self.too_large("vault_bridge_status")), \
+                    redirect_stdout(io.StringIO()):
+                self.assertTrue(svc.process_next(j, Path(d)))
+            until = j.status_fault["until"]
+            for burn in [BURN, *others]:
+                row = self.row(j, burn)
+                self.assertEqual(row["stage"], "queued")
+                self.assertGreaterEqual(row["due"], until, burn)
+            # Every burn whose row shows a next try shows the end of the pause, never a past time.
+            for burn in [BURN, others[0], others[2]]:
+                self.assertEqual(j.get(burn)["retry_at"], svc.utc(until), burn)
+            # A named wait keeps its reason.
+            self.assertEqual(j.get(others[1])["detail"], svc.WAITING_ROTATION)
+
     def test_a_waiting_burn_shows_its_reason_tries_and_next_retry_and_fails_within_the_bound(self):
         import io
         from contextlib import redirect_stdout
