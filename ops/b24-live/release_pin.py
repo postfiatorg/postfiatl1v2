@@ -28,6 +28,7 @@ def fleet(statuses):
         artifacts=s.get('deployment_runtime_artifacts')
         missing=[k for k in ('build_git_revision','deployment_manifest_verified') if k not in s]+([] if isinstance(artifacts,dict) and artifacts.get('binary_sha256') else ['deployment_runtime_artifacts.binary_sha256'])
         if missing:raise Refusal(f'{name} status has no {", ".join(missing)}, so it does not run a manifest-checked node; finish installing the release on it, then run: {CHECK}')
+        if not isinstance(s['build_git_revision'],str) or not s['build_git_revision']:raise Refusal(f'{CHECK} after finishing the release install on {name}: its status reports build_git_revision={short(json.dumps(s["build_git_revision"]),40)}')
         if s['deployment_manifest_verified'] is not True:raise Refusal(f'{name} reports deployment_manifest_verified={json.dumps(s["deployment_manifest_verified"])}; reinstall its signed deployment manifest and restart it, then run: {CHECK}')
         rows[name]=(s['build_git_revision'],artifacts['binary_sha256'])
     if len(set(rows.values()))!=1:
