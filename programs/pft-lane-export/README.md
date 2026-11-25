@@ -8,10 +8,12 @@ It has its own key. The pfUSDC egress program (`programs/pfusdc-egress`) binds a
 
 `elf/pft-lane-export-program` and `program-info.json` are the program's identity:
 
-- ELF sha256: `cdaf391297e05a1547334505dcf388545ab148ddacbc7a136eeef3ba0fbbfd58`
-- Verifying key: `0x005a9f57832e55110036d86cebd66e1c6714b3dddca916580efae1913ae07829`
+- ELF sha256: `d9354039fbab503e4b404ab2f0f223365804c19881337d140a4e2ec3dd9c8abd`
+- Verifying key: `0x008e3070879d6dc1f4a49f97b300767ea0f847abc33f2aa338e56225549e7416`
 
 `releases.json` records how they were produced, the latest release last:
+
+- **25 November:** The synchronized dependency tree and refreshed guest/prover lockfiles produced this identity. Each hosted run built two byte-identical ELFs in clean source trees and derived the key from the ELF. All four builds agreed. The release record lists the exact checkout and authenticated artifact digest for each run. [Branch build](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45697413500) · [Pull request merge build](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45697995032)
 
 - **Joined line, 19 November:** `pft-lane-export-identity` runs 44420993427 at `8016e9cdc` and 44427701299 at `489e11707`. The guest source did not change; the B24 merge changed crates it links, so the ELF and key moved. No proof has been generated and no verifier constructed with any of these keys.
 
