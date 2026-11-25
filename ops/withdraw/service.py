@@ -21,7 +21,7 @@ from live import read_six,points
 import archive as arch
 import exit_profile
 PY=sys.executable
-COORD=Path('/home/postfiat/repos/b23-coord');E=COORD/'evidence/withdraw';JOBS=E/'jobs';JOBS.mkdir(parents=True,exist_ok=True)
+COORD=Path('/home/postfiat/repos/b23-coord');E=COORD/'evidence/withdraw';JOBS=E/'jobs'
 HOST_BIN=E/'bin/proof-host';ELF=E/'historical/egress.elf'
 FAMILY='02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b'
 SERIES='541e451e6ae96b6680988655571a0feec59c7f1d073c9b5d29547254cab38a3be540f8767446d25baebc7081ce97aef7'
@@ -87,10 +87,31 @@ def prove(kind,witness,directory,name):
     for f in ('proof-report.json','public-values.bin','proof-calldata.bin'):run(['scp','-q','-P','20628',f'root@ssh8.vast.ai:{REMOTE}/jobs/{name}-proof/{f}',directory/f])
     assert (directory/'public-values.bin').read_bytes()==(directory/'native/native-public-values.bin').read_bytes()
     return directory
-def eth_send(mode,proof_dir,out):
-    r=subprocess.run([PY,str(HERE/'eth_send.py'),mode,str(proof_dir),str(out)],capture_output=True,text=True,env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1'))
-    if r.returncode:raise RuntimeError('Ethereum transaction failed: '+(r.stderr.strip().splitlines() or ['unknown'])[-1][-300:])
-    return load(out)
+def read_eth_result(mode, out):
+    """Only a mined, successful receipt for the requested action confirms the job."""
+    try:
+        receipt = load(out)
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f'Cannot read Ethereum {mode} receipt in {out.name}; reconcile before retry.') from error
+    if (not isinstance(receipt, dict) or receipt.get('mode') != mode
+            or type(receipt.get('status')) is not int or receipt['status'] != 1
+            or not isinstance(receipt.get('tx'), str)
+            or not re.fullmatch(r'(?:0x)?[a-fA-F0-9]{64}', receipt['tx'])
+            or type(receipt.get('block')) is not int or receipt['block'] < 0):
+        raise RuntimeError(f'No successful Ethereum {mode} receipt in {out.name}; reconcile before retry.')
+    return receipt
+
+
+def eth_send(mode, proof_dir, out):
+    result = subprocess.run(
+        [PY, str(HERE / 'eth_send.py'), mode, str(proof_dir), str(out)],
+        capture_output=True, text=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'),
+    )
+    if result.returncode:
+        detail = (result.stderr.strip().splitlines() or ['unknown'])[-1][-300:]
+        raise RuntimeError('Ethereum transaction failed: ' + detail)
+    return read_eth_result(mode, out)
+
 
 def process(job):
     burn=job['burn_tx_id'];d=JOBS/burn
@@ -105,8 +126,12 @@ def process(job):
     receipt=[r for r in six[0]['receipts'] if r['tx_id']==burn];assert len(receipt)==1 and receipt[0]['accepted'],'burn receipt is not accepted'
     if len(blocks[h]['receipt_ids'])!=1:raise RuntimeError('Burn shares its block with other transactions; this service handles single-burn blocks only for now.')
     a=audit(d/'audit');v=a['contracts']['PFTLFinalityVerifierV1']['reads'];L=v['latestFinalizedHeight']
-    if (d/'eth-withdrawal.json').exists():
-        done=load(d/'eth-withdrawal.json');job.update(ethereum_tx='0x'+done['tx'].removeprefix('0x'));stage(job,'paid','USDC paid on Ethereum.');return
+    withdrawal_result = d / 'eth-withdrawal.json'
+    if withdrawal_result.exists():
+        done = read_eth_result('withdraw', withdrawal_result)
+        job.update(ethereum_tx='0x' + done['tx'].removeprefix('0x'), ethereum_block=done['block'])
+        stage(job, 'paid', 'USDC paid on Ethereum.')
+        return
     c=[dict(r,active=r.get('active',True)) for r in A['validator_registry']['validators']]
     step=lambda b:dict(block=b,committee_epoch=b['header']['consensus_v2_commit']['proposal']['domain']['committee_epoch'],committee=c)
     if L>=h:raise RuntimeError('Ethereum checker is already past this burn; it needs manual handling.')
@@ -115,8 +140,12 @@ def process(job):
         n+=1;end=min(L+65,h-1);stage(job,'catching_up',f'Bringing the Ethereum checker up to date, step {n} of {total}.')
         w=dict(schema='postfiat.pfusdc.checkpoint_proof_witness.v1',chain_id=A['tip']['chain_id'],genesis_hash=A['tip']['genesis_hash'],protocol_version=A['tip']['protocol_version'],prior_checkpoint_block_id=blocks[L]['header']['block_hash'],finality_ancestry=[step(blocks[x]) for x in range(L+1,end)],**step(blocks[end]))
         cd=d/f'checkpoint-{L}-{end}';cd.mkdir(exist_ok=True);save(cd/'witness.json',w)
-        if not (cd/'eth-result.json').exists():
-            prove('checkpoint',cd/'witness.json',cd,f'{burn[:16]}-cp-{end}');eth_send('checkpoint',cd,cd/'eth-result.json')
+        checkpoint_result = cd / 'eth-result.json'
+        if checkpoint_result.exists():
+            read_eth_result('checkpoint', checkpoint_result)
+        else:
+            prove('checkpoint',cd/'witness.json',cd,f'{burn[:16]}-cp-{end}')
+            eth_send('checkpoint', cd, checkpoint_result)
         L=end
     stage(job,'proving','Building the withdrawal proof on the GPU.')
     bucket=[b for b in A['ledger']['vault_bridge_bucket_states'] if b['bucket_id']==red['bucket_id']][0]
@@ -128,7 +157,7 @@ def process(job):
     save(d/'exit-witness.json',w);bundle.unlink(missing_ok=True)
     prove('withdrawal',d/'exit-witness.json',d/'proof',f'{burn[:16]}-wd')
     stage(job,'paying','Sending the payout transaction on Ethereum.')
-    done=eth_send('withdraw',d/'proof',d/'eth-withdrawal.json')
+    done=eth_send('withdraw',d/'proof',withdrawal_result)
     job.update(ethereum_tx='0x'+done['tx'].removeprefix('0x'),ethereum_block=done['block']);stage(job,'paid','USDC paid on Ethereum.')
 
 def worker():
@@ -166,5 +195,6 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as error:self.reply(503,dict(ok=False,code='withdrawal_service_error',message=str(error)[:200]))
 
 if __name__=='__main__':
+    JOBS.mkdir(parents=True,exist_ok=True)
     threading.Thread(target=worker,daemon=True).start()
     print(now(),'withdrawal service on 127.0.0.1:%d'%PORT,flush=True);ThreadingHTTPServer(('127.0.0.1',PORT),Handler).serve_forever()

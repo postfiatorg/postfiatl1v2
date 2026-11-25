@@ -34,7 +34,7 @@ exact minimum before signing.
 
 ### Rejected transactions pay their fee
 
-From the governed `rejected_tx_fee_activation_height`, a transaction included
+From the governed `rejected_tx_fee_v2_activation_height`, a transaction included
 in a certified block that is validly signed, uses the account's next sequence
 and can pay its fee while keeping the reserve, but whose effect fails, is
 charged like XRPL `tec` results:
@@ -101,12 +101,42 @@ blocks replay identically.
 
 | Governance kind | Enables | Ratify command |
 | --- | --- | --- |
-| `rejected_tx_fee_activation_height` | fee claim on rejected transactions | `postfiat-node ratify-rejected-tx-fee-activation-height` |
-| `require_memo_activation_height` | `account_set`, `issued_payment_v2`, memo enforcement | `postfiat-node ratify-require-memo-activation-height` |
+| `rejected_tx_fee_v2_activation_height` | fee claim on rejected transactions | `postfiat-node ratify-rejected-tx-fee-v2-activation-height` |
+| `require_memo_v2_activation_height` | `account_set`, `issued_payment_v2`, memo enforcement | `postfiat-node ratify-require-memo-v2-activation-height` |
+
+Execution reads only these v2 kinds (`crates/node/src/execution_actions.rs`).
+The original kinds without `_v2` are still accepted and stored but gate
+nothing; on the devnet they were set to 1153 in October and never applied
+([Addresses And Checksums](address-format.md#activation)). Whether a v2 height
+is set on the devnet is not recorded here.
 
 Each height must be strictly after the block that commits its amendment. The
 latest committed amendment of each kind sets the height, so governance can
 postpone a height that has not been reached.
+
+## pfUSDC From Ethereum And Solana
+
+USDC locked in the Ethereum or the Solana vault is credited as pfUSDC on
+`postfiat-wan-devnet-2`; each source mints its own pfUSDC series with its own
+backing ([Glossary](../start/glossary.md#pfusdc)). Both routes are part of the
+controlled devnet. Solana deposits and withdrawals run with small caps and
+have not been announced publicly; the limits are on
+[Network Status](../status/network-status.md#usdc-bridges).
+
+- **Solana deposit.** A proof of the Solana vault deposit is applied with the
+  `solana_bridge_proof_v1` operation and credits the Solana series
+  (`crates/execution/src/solana_bridge.rs`).
+- **Ethereum deposit.** A proven Ethereum deposit goes through
+  `vault_bridge_deposit_propose`, `vault_bridge_deposit_finalize` and
+  `vault_bridge_deposit_claim`
+  (`crates/execution/src/nav_vault_asset_execution.rs`).
+- **Withdrawal.** The holder signs `vault_bridge_burn_to_redeem` (owner, asset,
+  bucket, amount, destination); a payout service pays on the source chain and
+  the validators settle it. Since block 1890 each validator reviews a Solana
+  settlement itself before it signs. One withdrawal spends one deposit batch
+  (bucket).
+- **Reads.** `vault_bridge_status` (buckets, deposits, redemptions) and
+  `vault_bridge_route` ([RPC Method Coverage](../rpc/method-coverage.md)).
 
 ## Shielded Track
 

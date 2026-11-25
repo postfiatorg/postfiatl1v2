@@ -76,9 +76,10 @@ The verifier path is the consensus-critical part. Proving is wallet-side work;
 validators cache the Orchard action verifying key and verify bounded action
 bundles against the active resource policy.
 
-Current local budget packet:
+Current local budget packet (a local measurement; its date is not recorded on
+this page):
 
-- report: `reports/orchard-verification-budget-v1-report.json`;
+- report: `reports/orchard-verification-budget-v1-report.json` *(archived outside this repository; see `reports/README.md`)*;
 - checker: `verify_serialized_orchard_action`;
 - proof system: `postfiat.privacy.orchard-halo2.v2`;
 - circuit: `orchard.action.v2`;
@@ -106,8 +107,10 @@ When a verified Orchard action is applied, the node persists:
 
 ## Evidence
 
+The evidence below is from May 2026, when the network had five validators.
+
 - `scripts/testnet-orchard-wallet-finality-smoke` *(archived outside this repository; see `scripts/README.md`)*
 - `scripts/testnet-orchard-peer-certified-smoke` *(archived outside this repository; see `scripts/README.md`)*
 - `scripts/testnet-live-orchard-full-flow-smoke` *(archived outside this repository; see `scripts/README.md`)*
-- `reports/testnet-live-orchard-full-flow/live-orchard-full-flow-20260515T183724Z/testnet-live-orchard-full-flow.json`
-- `reports/orchard-verification-budget-v1-report.json`
+- `reports/testnet-live-orchard-full-flow/live-orchard-full-flow-20260515T183724Z/testnet-live-orchard-full-flow.json` *(archived outside this repository; see `reports/README.md`)*
+- `reports/orchard-verification-budget-v1-report.json` *(archived outside this repository; see `reports/README.md`)*

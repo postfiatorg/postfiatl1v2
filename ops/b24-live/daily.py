@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
 """B24 scheduled or --now update: $9/run, $250/month, $250 cumulative lane cap.
 
-No retry/backfill. --check is local only; --execute uses real time, the pinned
-collector, shared GPU lock, strict copy verification and three live operations.
+No retry/backfill. --check makes no AWS call or chain write; like every run it reads
+the six validators to find the release they run and the rehearsal tool built from
+it (release_pin.py). --execute uses real time, the pinned collector, shared GPU
+lock, strict copy verification and three live operations.
 Every failed run writes failure.json (run directory, else reading_alert.STATE),
 calls the optional B24_READING_NOTIFY hook once, and a reading counts only once
 its epoch is read back finalized from the chain.
 """
-import argparse,copy,fcntl,importlib.util,os,signal,time
+import argparse,copy,fcntl,importlib.util,os,shlex,signal,time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timezone
 from decimal import Decimal,ROUND_CEILING
 from sign import *
 from snapshot import export
-from live import run_operations,LOCK
+from live import run_operations,LOCK,read_six,points,receipt_rows
+from rpc import read
+from release_pin import Refusal
+import common,live,release_pin,sign,snapshot
 from reading_alert import record_failure
 ROOT=Path(__file__).resolve().parents[2]
-NAV=Path('/home/postfiat/repos/navstrategies-now')
+NAV=ROOT/'tools/nav-reserve-proof/schwab-tee'
 DEPLOYMENT=COORD/'evidence/now/deployment'
 SEED=DEPLOYMENT/'capture'
 BASE=COORD/'evidence/tee/phase5'
@@ -35,8 +40,6 @@ GPU_NATIVE=DEPLOYMENT/'postfiat-b24-nav-cuda'
 helpers.NATIVE=NATIVE
 helpers.ELF=DEPLOYMENT/'b24-nav.elf'
 
-# b24-release5-20261117, ac91a1f42. Both processes on every validator must match.
-DAILY_NODE_SHA = '69de5ce01bbda92ac5507565388d9e9655457be9bdd37582efd5d38f969bcd18'
 
 def require_runtime():
     paths=[SEED/'manifest.json',SEED/'profile.json',DEPLOYMENT/'profile-template.json',DEPLOYMENT/'capture-plan.json',NATIVE,GPU_NATIVE,helpers.ELF]
@@ -129,17 +132,40 @@ def collect(now,on_demand,d,mode,stamp,p):
     cost=runner.cost_preflight(aws,plan);p.stage='budget';budget=reserve_lane(plan['runId'],cost['resource_time_bound_usd'],now.strftime('%Y-%m'));save(d/'budget.json',budget);p.stage='oauth-baseline';helpers.oauth_baseline(d/'oauth-baseline.json')
     p.stage='capture';capture=d/'capture';runner.execute(plan,manifest,capture,aws,profile_operation=load(DEPLOYMENT/'profile-template.json'),profile_cli=NATIVE,on_demand=on_demand);assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
     manifest=load(capture/'manifest.json')
-    p.stage='archive-verification';helpers.command([sys.executable,NAV/'containers/yolo-nitro/aws/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
+    p.stage='archive-verification';helpers.command([sys.executable,NAV/'operator/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
     p.stage='cleanup-timer';helpers.command(['systemctl','--user','disable','--now',plan['cleanupTimer']])
     p.stage='reading-qualification';helpers.command([sys.executable,TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,'--native-cli',NATIVE,'--root-der',COORD/'evidence/tee/aws-nitro-root.der','--output',d/'negative-reading'])
     p.stage='proof';helpers.command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',helpers.ELF,'--native-cli',NATIVE,'--prover-cli',GPU_NATIVE,'--output',d/'proof'])
     return manifest,capture,budget
-def runtime_check(d, filename='runtime-hashes.json'):
+def fleet_statuses():
+    def one(i):
+        try:return read('status',{},i)
+        except Exception as error:return error
+    with ThreadPoolExecutor(max_workers=6) as pool:return dict(zip(release_pin.VALIDATORS,pool.map(one,range(6))))
+def remote_copy(tool,digest):
+    """validator-0 runs the read-only export with its own copy of the rehearsal tool."""
+    remote='/tmp/b23-tee-nav-canary-'+digest[:16]
+    result=subprocess.run(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10',snapshot.VALIDATOR0,'sha256sum '+shlex.quote(remote)],capture_output=True,text=True,timeout=30)
+    if result.returncode or result.stdout.split()[:1]!=[digest]:raise Refusal(f'scp -p {tool} {snapshot.VALIDATOR0}:{remote}: validator-0 has no copy of the rehearsal tool')
+    return remote
+def use_tool(tool):
+    """Every module of the job rehearses with the chosen tool."""
+    for module in (common,sign,snapshot,live):module.CANARY=tool
+    globals()['CANARY']=tool
+def release_check():
+    """The release all six run, both processes on each, and a rehearsal tool from the same source."""
+    chosen=release_pin.release(release_pin.fleet(fleet_statuses()),COORD)
     with ThreadPoolExecutor(max_workers=6) as pool:
-        versions=dict(pool.map(lambda peer: runtime(peer, DAILY_NODE_SHA),PEERS))
-    save(d/filename,versions)
-    if set(versions) != {f'validator-{i}' for i in range(6)} or not all(v['matches'] for v in versions.values()):
-        raise RuntimeError('B24 reading requires release 5 RPC and transport on all six validators')
+        versions=dict(pool.map(lambda peer: runtime(peer, chosen['node_sha256']),PEERS))
+    bad=[n for n in release_pin.VALIDATORS if not versions.get(n,{}).get('matches')]
+    if bad:raise Refusal(f"{release_pin.CHECK} after restarting both units on {', '.join(bad)} on the installed release: their running processes are not the binary {chosen['node_sha256'][:16]} their manifest names")
+    chosen['validator0_copy']=remote_copy(chosen['tool'],chosen['tool_sha256'])
+    use_tool(Path(chosen['tool']))
+    return dict(release=chosen,processes=versions)
+def runtime_check(d, filename='runtime-hashes.json'):
+    try:result=release_check()
+    except Refusal as refusal:save(d/filename,dict(refused=str(refusal)));raise
+    save(d/filename,result);return result
 def confirm_landed(d,epoch,packet):
     """Read the chain again until the new epoch is finalized with this packet, within LANDING_WAIT."""
     deadline=time.monotonic()+LANDING_WAIT
@@ -172,15 +198,85 @@ def submit(d,capture,manifest,budget,p):
         finally:
             lock.seek(0)
             if lock.read().strip()=='NOW':lock.seek(0);lock.truncate();lock.flush()
+def continue_after_submit(d,p):
+    """The submit landed (accepted on all six) but the run stopped before finalize and route pricing; run only those."""
+    p.stage='continue-inputs';capture=d/'capture';manifest=load(capture/'manifest.json');budget=load(d/'budget.json')
+    ops=load(d/'canary/operations.json');assert [o['label'] for o in ops]==['daily-submit','daily-finalize','daily-route-pricing']
+    txid=load(d/'live/01-daily-submit/expected-state.json')['canary_receipts'][0]['receipt']['tx_id']
+    six=read_six(txid);save(d/'continue-submit-six.json',six);assert len(points(six))==1
+    assert all(any(x['tx_id']==txid and x['accepted'] for x in receipt_rows(r['receipts'])) for r in six),'submit not accepted on all six'
+    p.stage='chain-lock'
+    with LOCK.open('a+') as lock:
+        wait_lock(lock,time.monotonic()+LOCK_WAIT,'chain lock');lock.seek(0)
+        if lock.read().strip():raise RuntimeError('chain lock held')
+        lock.seek(0);lock.truncate();lock.write('NOW\n');lock.flush()
+        try:
+            p.stage='runtime-check';runtime_check(d,'continue-runtimes.json')
+            p.stage='continue-submission';current=d/'continue-before.json';export(current)
+            final,receipts=run_operations(ops[1:],current,d/'live-continue',lock_owner='NOW')
+            p.stage='landing-check';nav=confirm_landed(d,manifest['observation_epoch'],ops[0]['operation']['reserve_packet_hash'])
+            save(d/'complete.json',dict(epoch=manifest['observation_epoch'],six_validator_verified=True,landed_on_chain=True,budget=budget,final_snapshot=str(final),submit_tx_id=txid,receipts=receipts))
+            with STATUS.open('a') as status:status.write(f"\nREADING COMPLETE {datetime.now(timezone.utc).isoformat()}: epoch {nav['finalized_epoch']}, NAV {nav['nav_per_unit']/1e6:.6f}; six validators and full ledger verified. Evidence: {d}\n")
+        finally:
+            lock.seek(0)
+            if lock.read().strip()=='NOW':lock.seek(0);lock.truncate();lock.flush()
+# A captured reading is the account's value at its cutoff. Later than this it is submitted by a new capture, not by --resume.
+RESUME_MAX_AGE_SECONDS=12*3600
+def submit_state(d):
+    """Whether an interrupted submission's first operation reached the chain: 'none', 'unsent' or 'landed'.
+
+    Its files are written before it is sent, so their presence proves nothing. 'unsent' needs all six
+    validators to hold no receipt for it and nothing pending; anything between is refused."""
+    step=d/'live/01-daily-submit'
+    if not (d/'live').exists():return 'none',None
+    if not (step/'expected-state.json').exists():return 'unsent',None
+    txid=load(step/'expected-state.json')['canary_receipts'][0]['receipt']['tx_id']
+    six=read_six(txid);save(d/'resume-submit-six.json',six)
+    if len(points(six))!=1:raise RuntimeError('validators disagree on the tip; resume when all six agree')
+    held=[any(x['tx_id']==txid for x in receipt_rows(r['receipts'])) for r in six]
+    accepted=[any(x['tx_id']==txid and x['accepted'] for x in receipt_rows(r['receipts'])) for r in six]
+    if all(accepted):return 'landed',txid
+    if not any(held) and all(r['server']['mempool']['pending']==0 for r in six):return 'unsent',txid
+    raise RuntimeError(f'the submit {txid[:16]} is on some validators and not accepted on all six; not resumed')
+def resume(d,progress=None,now=None):
+    """Submit an already captured and proven reading; no AWS. Same run lock, runtime check, rehearsal and landing check."""
+    p=progress or Progress();p.mode='resume';p.directory=d
+    p.stage='resume-inputs';capture=d/'capture'
+    for path in (capture/'manifest.json',capture/'final-inventory.json',d/'budget.json',d/'archive-verification.json',d/'negative-reading',d/'proof/public-values.bin',d/'proof/proof-calldata.bin'):
+        if not path.exists():raise FileNotFoundError(str(path))
+    if (d/'complete.json').exists():raise ValueError('reading already landed')
+    p.stage='run-lock';DAILY.mkdir(mode=0o700,parents=True,exist_ok=True)
+    with (DAILY/'run.lock').open('a') as running:
+        fcntl.flock(running,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        p.stage='scheduled-service-check';active=subprocess.check_output(['systemctl','--user','show','b24-tee-nav-daily.service','--property=ActiveState','--value'],text=True).strip()
+        if active in ('active','activating','deactivating'):raise ValueError('Scheduled B24 reading is active; do not run concurrently')
+        p.stage='resume-submit-state';state,txid=submit_state(d)
+        if state=='landed':return continue_after_submit(d,p)
+        p.stage='resume-age';manifest=load(capture/'manifest.json');age=(now or datetime.now(timezone.utc)).timestamp()-manifest['cutoff_unix_ms']/1000
+        if age>RESUME_MAX_AGE_SECONDS:raise ValueError(f'python3 ops/b24-live/daily.py --now: this capture is {age/3600:.1f} hours old, over the {RESUME_MAX_AGE_SECONDS//3600} hours --resume submits')
+        assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
+        p.stage='pre-submit-runtime-check';runtime_check(d,'resume-runtimes.json')
+        stamp=datetime.now(timezone.utc).strftime('%Y%m%dt%H%M%S')
+        if state=='unsent':(d/'live').rename(d/('live-unsent-'+stamp))
+        if (d/'canary').exists():(d/'canary').rename(d/('canary-failed-'+stamp))
+        submit(d,capture,manifest,load(d/'budget.json'),p)
 def main():
-    ap=argparse.ArgumentParser(description=__doc__);g=ap.add_mutually_exclusive_group(required=True);g.add_argument('--check',action='store_true');g.add_argument('--execute',action='store_true');g.add_argument('--now',action='store_true');a=ap.parse_args();now=datetime.now(timezone.utc)
+    ap=argparse.ArgumentParser(description=__doc__);g=ap.add_mutually_exclusive_group(required=True);g.add_argument('--check',action='store_true');g.add_argument('--execute',action='store_true');g.add_argument('--now',action='store_true');g.add_argument('--resume',type=Path,help='Run directory with a captured, proven reading');a=ap.parse_args();now=datetime.now(timezone.utc)
     if a.check:
-        require_runtime()
+        require_runtime();pin=release_check()['release']
         seed=load(SEED/'manifest.json');m=helpers.reading_manifest(seed,max(int(now.timestamp()*1000)+120000,seed['cutoff_unix_ms']+1),seed['observation_height'],seed['observation_epoch'],seed['cutoff_unix_ms'])
         plan=load(DEPLOYMENT/'capture-plan.json');helpers.runner_module().check_inputs(helpers.runner_module().reviewed_plan(plan),m)
         identity=json.loads(subprocess.check_output([str(NATIVE),'identity','--elf',str(helpers.ELF)]));assert identity['program_vkey']==load(SEED/'profile.json')['sp1_program_vkey']
-        print(json.dumps(dict(local_check=True,asset_id=m['nav_asset_id'],profile=m['proof_profile_id'],epoch=m['observation_epoch'],cutoff_unix_ms=m['cutoff_unix_ms'],run_cap_usd='9',month_cap_usd='250',cumulative_lane_cap_usd='250',aws_calls=0,chain_writes=0)));return
+        print(json.dumps(dict(local_check=True,release=pin['name'],fleet_revision=pin['revision'],node_sha256=pin['node_sha256'],rehearsal_tool=pin['tool'],rehearsal_tool_sha256=pin['tool_sha256'],rehearsal_tool_revision=pin['tool_revision'],asset_id=m['nav_asset_id'],profile=m['proof_profile_id'],epoch=m['observation_epoch'],cutoff_unix_ms=m['cutoff_unix_ms'],run_cap_usd='9',month_cap_usd='250',cumulative_lane_cap_usd='250',aws_calls=0,chain_writes=0)));return
     os.umask(0o077)
     def stop(signum,frame):raise SystemExit(128+signum)
-    signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop);run(now,a.now)
+    signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
+    if a.resume:
+        progress=Progress()
+        try:resume(a.resume.resolve(),progress)
+        except BaseException as error:
+            if not (isinstance(error,SystemExit) and error.code in (0,None)):record_failure(progress.stage,error,progress.directory,progress.mode)
+            raise
+        return
+    run(now,a.now)
 if __name__=='__main__':main()

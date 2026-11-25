@@ -7,6 +7,9 @@ A round is clean when the plan's fixed criteria hold: the internal control passe
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 of 4: testnet 29 (VL seq. 27) | 2026-10-28 | 2026-10-27 16:13Z | 0 / 0 | 25/25 | 0 | 0.49 / 1 | 1.15 / 10 | 0 / 0 | 14.46 / 44 | 0.49 / 10 | 0.34 / 2 | reproduces published UNL | clean |
 
+On 25 November 2026 this repository records only round 1 of 4; whether later
+rounds ran is not recorded here.
+
 Notes:
 
 - Module: `subscorer_v3.py` with SHA-256 `f71f29ddf00c3825447fc19034340d4ef714b9668345c51e6872586a844c5dc5`. Any module change restarts the count.

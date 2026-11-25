@@ -14,7 +14,7 @@ import os
 import shutil
 import sys
 
-HELPERS=Path('/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit')
+HELPERS=Path(__file__).resolve().parents[2]/'.scratch-deposit'
 sys.path.insert(0,str(HELPERS))
 import pftl
 import facility as f

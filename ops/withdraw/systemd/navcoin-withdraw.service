@@ -5,7 +5,7 @@ After=network-online.target
 [Service]
 WorkingDirectory=%h/repos/postfiatl1v2-live/ops/withdraw
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/home/postfiat/repos/navstrategies-b23-tee-nav/.venv/bin/python service.py
+ExecStart=%h/repos/postfiatl1v2-live/.venv-ops/bin/python service.py
 Restart=always
 RestartSec=5
 StandardOutput=append:/home/postfiat/repos/b23-coord/evidence/withdraw/service.log

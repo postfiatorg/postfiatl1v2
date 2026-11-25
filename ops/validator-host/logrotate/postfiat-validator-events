@@ -1,0 +1,8 @@
+/var/log/postfiat/validator-*/transport-validator-events.ndjson {
+    size 2G
+    rotate 3
+    compress
+    missingok
+    notifempty
+    copytruncate
+}

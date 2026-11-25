@@ -4,6 +4,10 @@ The observer-inference packet closes a narrow gap in the privacy argument:
 candidate count \(k\) is not asserted by the paper. It is derived by
 intersecting the candidate partitions left visible to a declared observer.
 
+> **Status on `main` (25 November 2026):** this packet exists as a schema and
+> fixtures under `docs/governance/agent/`. Its verifier script is archived
+> outside this repository, and no code in `crates/` or `python/` implements it.
+
 This is controlled-testnet evidence only. It does not mutate registry state and
 does not transfer authority.
 
@@ -101,7 +105,8 @@ The canonical valid fixture is:
 docs/governance/agent/fixtures/privacy_observer_inference_model/valid_observer_inference_model.json
 ```
 
-Current roots:
+Current roots (computed by the archived verifier; not recomputed in the review
+of 25 November 2026):
 
 | Root | Value |
 | --- | --- |

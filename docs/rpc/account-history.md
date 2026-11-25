@@ -215,8 +215,12 @@ it.
 ## Index Rebuild and Backfill
 
 The index is an operator cache rebuilt from the retained blocks, archived
-batches and receipts; it is not consensus state. Ordered commit does not
-refresh it. Run the build as maintenance:
+batches and receipts; it is not consensus state. After each durable block
+commit the node appends the block's rows to it
+(`append_account_tx_index_after_durable_commit` in
+`crates/node/src/storage_commit.rs`); a failed append never fails the commit
+and leaves the index behind, which `account_tx_index_status` reports. Run the
+build as maintenance to catch it up or rebuild it:
 
 ```bash
 postfiat-node account-tx-index-build --data-dir <validator-data>
@@ -251,5 +255,6 @@ These transparent balance changes are not `account_tx` rows yet:
 - `scripts/postfiat-rpc-account-tx`
 - `crates/node/src/tests/account_tx_exchange_history.rs`
 - `crates/node/tests/exchange_rpc_history.rs`
-- `reports/testnet-six-wallet-account-tx-smoke/`
-- `reports/testnet-account-tx-disk-index-smoke/`
+- The smoke reports `testnet-six-wallet-account-tx-smoke` and
+  `testnet-account-tx-disk-index-smoke` were archived outside the repository
+  with the other generated reports (`reports/README.md`).

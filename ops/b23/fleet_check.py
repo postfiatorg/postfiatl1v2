@@ -9,7 +9,8 @@ import json
 import subprocess
 import sys
 
-sys.path.insert(0, "/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".scratch-deposit"))
 import pftl  # noqa: E402
 
 SHAS = {"3039c21af67420a9": "abc228ed(rel4)", "092314967d021c2f": "ca287e65(rel3)", "b4a6d3fc3d6d0b45": "7b4d850d(rel2)", "c822bac5fd087eed": "bbefee80(rel1)", "35513b7ce319162e": "5d13c775(r2-1)"}

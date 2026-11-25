@@ -14,7 +14,7 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0,'/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit')
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'.scratch-deposit'))
 import pftl
 import facility as f
 from live_snapshot import export_snapshot

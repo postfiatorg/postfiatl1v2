@@ -50,10 +50,17 @@ flowchart LR
 | `crates/privacy_orchard` | PostFiat adapter over the upstream Rust/Zcash Orchard/Halo2 implementation. |
 | `crates/storage` | Persistent state and snapshots. |
 | `crates/node` | Node orchestration, CLI, RPC, wallet flows. |
+| `crates/pfusdc_proofs` | Proof statements of the pfUSDC bridges, also run inside the SP1 guest programs (`programs/`). |
+| `crates/nav_reserve_protocol` | Host-side construction of NAV reserve packets. |
 
 ## Crate Dependency Graph
 
-Arrows point from a crate to the local crate it depends on.
+Arrows point from a crate to the local crate it depends on (normal
+dependencies in each `Cargo.toml` on `main`, checked on 25 November 2026).
+Test harnesses and models (`cobalt_*`, `fastswap_model`, `arc-conformance`),
+contract packages (`arc-sp1-contracts`, `pft-token-contracts`) and
+`wallet_wasm` (browser wallet core: depends on `crypto_provider`, `rpc_sdk` and
+`types`) are not drawn.
 
 ```mermaid
 flowchart TD
@@ -72,6 +79,10 @@ flowchart TD
   proofs[crates/proofs<br/>proof abstractions]
   rpc[crates/rpc_sdk<br/>client RPC SDK]
   storage[crates/storage<br/>state and snapshots]
+  nav[crates/nav_reserve_protocol<br/>NAV reserve packets]
+  pfusdc[crates/pfusdc_proofs<br/>bridge proof statements]
+  lane[crates/pft_lane_proofs<br/>lane export statements]
+  uniswap[crates/pftl_uniswap_proofs<br/>Uniswap mint statements]
 
   node[crates/node<br/>node orchestration and CLI]
   bench[crates/bench_harness<br/>benchmark harness]
@@ -82,7 +93,9 @@ flowchart TD
   bridge --> types
   cobalt --> crypto
   cobalt --> types
+  execution --> bridge
   execution --> crypto
+  execution --> nav
   execution --> types
   fastpay --> crypto
   fastpay --> types
@@ -92,14 +105,27 @@ flowchart TD
   network --> crypto
   ordering --> crypto
   ordering --> mempool
+  ordering --> types
   privacy --> crypto
   privacy --> proofs
   privacy --> types
   orchard --> crypto
   proofs --> crypto
   rpc --> crypto
+  rpc --> execution
   rpc --> types
   storage --> types
+  nav --> types
+  pfusdc --> cobalt
+  pfusdc --> crypto
+  pfusdc --> ordering
+  pfusdc --> types
+  lane --> ordering
+  lane --> pfusdc
+  lane --> types
+  uniswap --> crypto
+  uniswap --> pfusdc
+  uniswap --> types
 
   node --> bridge
   node --> crypto
@@ -110,6 +136,8 @@ flowchart TD
   node --> ordering
   node --> privacy
   node --> orchard
+  node --> lane
+  node --> uniswap
   node --> rpc
   node --> storage
   node --> types
@@ -130,6 +158,7 @@ flowchart TD
   fuzz --> execution
   fuzz --> mempool
   fuzz --> network
+  fuzz --> node
   fuzz --> ordering
   fuzz --> privacy
   fuzz --> orchard

@@ -4052,7 +4052,7 @@ fn solana_exit_refund_is_a_second_release_decision_with_a_canonical_cancel_refer
 fn refunded_redemption_state_is_refused_while_the_second_release_is_unset() {
     let main_text = Err("vault_bridge_redemption.state must be pending or settled".to_string());
     crate::solana_exit::set_second_release_for_tests(None);
-    // The production table: no chain of this build schedules the second release yet.
+    // Unset, as in a build without the entry: no chain schedules the second release.
     assert!(!crate::solana_exit::second_release_scheduled_on("postfiat-wan-devnet-2"));
     assert!(!crate::solana_exit::second_release_scheduled_on("some-other-chain"));
     // The context-free check is main's, always.
@@ -4064,6 +4064,12 @@ fn refunded_redemption_state_is_refused_while_the_second_release_is_unset() {
     assert_eq!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 0, "postfiat-wan-devnet-2"), Ok(()));
     assert!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 1, "postfiat-wan-devnet-2").is_err());
     assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED), main_text);
+    // The production table schedules it on the WAN chain only.
+    crate::solana_exit::use_second_release_table_for_tests();
+    assert!(crate::solana_exit::second_release_scheduled_on("postfiat-wan-devnet-2"));
+    assert!(!crate::solana_exit::second_release_scheduled_on("some-other-chain"));
+    assert_eq!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 0, "postfiat-wan-devnet-2"), Ok(()));
+    assert_eq!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 0, "some-other-chain"), main_text);
     crate::solana_exit::set_second_release_for_tests(None);
 }
 
@@ -4112,10 +4118,23 @@ fn solana_exit_second_release_is_off_unless_set_and_never_before_the_first() {
         "postfiat-wan-devnet-2",
         "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
     );
-    // The first release is the live one; the second ships unset.
+    // Both releases are live on the WAN chain: the first from 1841, the second from 1890.
     assert_eq!(release_height(chain, genesis), Some(1841));
-    assert_eq!(second_release_height(chain, genesis), None);
-    for h in [0, 1840, 1841, 1842, u64::MAX] {
+    assert_eq!(second_release_height(chain, genesis), Some(1890));
+    for h in [0, 1840, 1841, 1842, 1889] {
+        assert!(!second_release_active(chain, genesis, h), "{h}");
+    }
+    for h in [1890, 1891, u64::MAX] {
+        assert!(second_release_active(chain, genesis, h), "{h}");
+    }
+    // A chain or genesis without an entry has no second release.
+    assert_eq!(second_release_height("unrelated-chain", genesis), None);
+    assert_eq!(second_release_height(chain, &"00".repeat(48)), None);
+    assert!(!second_release_active("unrelated-chain", genesis, u64::MAX));
+    assert!(!second_release_active(chain, &"00".repeat(48), u64::MAX));
+    // Unset, as in a build without the entry: off at every height.
+    crate::solana_exit::set_second_release_for_tests(None);
+    for h in [0, 1840, 1841, 1890, u64::MAX] {
         assert!(!second_release_active(chain, genesis, h), "{h}");
     }
     crate::solana_exit::set_second_release_for_tests(Some(2000));

@@ -1,0 +1,20 @@
+{
+  "schema": "postfiat.yolo.synthetic_kms_sigv4_vectors.v1",
+  "runId": "yolo-phase4-qualification-20260905",
+  "reference": {
+    "package": "botocore",
+    "version": "1.40.0",
+    "authModuleSha256": "8d0c13982d5ba5fd11076afe8f918859e866e64f78f6a687fd65f086f977b394",
+    "source": "https://github.com/boto/botocore/blob/1.40.0/botocore/auth.py"
+  },
+  "cases": {
+    "Decrypt": {
+      "body": "{\"CiphertextBlob\":\"ZW5jcnlwdGVkLXNlY3JldA==\",\"EncryptionContext\":{\"label\":\"évidence\",\"runId\":\"synthetic-wire-test\"},\"KeyId\":\"arn:aws:kms:us-east-2:111122223333:key/synthetic-key\",\"Recipient\":{\"AttestationDocument\":\"c3ludGhldGljLW5pdHJvLWRvY3VtZW50\",\"KeyEncryptionAlgorithm\":\"RSAES_OAEP_SHA_256\"}}",
+      "authorization": "AWS4-HMAC-SHA256 Credential=synthetic-access/20260905/us-east-2/kms/aws4_request, SignedHeaders=content-type;host;x-amz-date;x-amz-security-token;x-amz-target, Signature=837c3b5318d38ff711e5ebd14c0f598fb722c576a23c6f35b8ad9d97881b4bf3"
+    },
+    "GenerateDataKey": {
+      "body": "{\"EncryptionContext\":{\"label\":\"évidence\",\"runId\":\"synthetic-wire-test\"},\"KeyId\":\"arn:aws:kms:us-east-2:111122223333:key/synthetic-key\",\"KeySpec\":\"AES_256\",\"Recipient\":{\"AttestationDocument\":\"c3ludGhldGljLW5pdHJvLWRvY3VtZW50\",\"KeyEncryptionAlgorithm\":\"RSAES_OAEP_SHA_256\"}}",
+      "authorization": "AWS4-HMAC-SHA256 Credential=synthetic-access/20260905/us-east-2/kms/aws4_request, SignedHeaders=content-type;host;x-amz-date;x-amz-security-token;x-amz-target, Signature=c04a977973af6b861fccc3e2ff2ae27c88663b401d61e6cdc8da46900f6dfa97"
+    }
+  }
+}

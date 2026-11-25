@@ -7,7 +7,8 @@ from __future__ import annotations
 import json
 import sys
 
-sys.path.insert(0, "/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".scratch-deposit"))
 import pftl  # noqa: E402
 
 B23 = "ca7845134c8e95819082fcd2f1612808e20a37dfabab98dab120f99fd2c54c18ffb50d98c0664480420c881773244627"

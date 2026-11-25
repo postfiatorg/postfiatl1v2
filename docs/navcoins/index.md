@@ -1,10 +1,18 @@
 # NAVCoins
 
-> **Current product status (2026-07-30):** A666 v2, Ethereum-mainnet pfUSDC,
-> proof-gated wA666, private PFTL issue/redeem, and the wA666/USDC Uniswap v4
-> venue are deployed and functionally proven. The service remains limited
-> availability rather than production GA. Start with
+> **Current product status (2026-11-25):** NAVCoins run on the controlled
+> devnet `postfiat-wan-devnet-2`; none is generally available. B24, the
+> Schwab-backed NAVCoin, has been created and cashed in with real money since
+> mid-November; its newest reading on the chain is epoch 9. A666 v2 and BMNRC
+> are on the chain with older readings. pfUSDC comes from Ethereum and, since
+> November, Solana. Details and dates are in [Today](#today) below. The
+> 2026-07-30 status of A666 is in
 > [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+>
+> **B24 (Schwab-backed), 2026-11-23:** epoch 9 finalized at NAV 1.006419. The TEE
+> Schwab reader and the reading pipeline are in this repository under
+> `tools/nav-reserve-proof/schwab-tee/` and `ops/b24-live/`; operating guide:
+> [B24 Schwab NAV Reading](../runbooks/b24-schwab-nav-reading.md).
 
 NAVCoins are floating-NAV issued assets whose supply, minting, redemption, and
 halt behavior are tied to machine-checkable reserve packets. They are not
@@ -32,11 +40,51 @@ in the proof profile and replayable from the packet.
 
 | Name | Meaning | Current status |
 |---|---|---|
-| NAVCoin | The asset class and protocol pattern: proof profile, reserve packet, supply discipline, mint/redeem controls, and market-operation limits. | Implemented on PFTL; A666 v2 is the deployed production lineage, with release hardening still open. |
+| NAVCoin | The asset class and protocol pattern: proof profile, reserve packet, supply discipline, mint/redeem controls, and market-operation limits. | Implemented on PFTL; A666 v2, BMNRC and B24 are on the controlled devnet, with release hardening still open. |
+| B24 | The Schwab-backed NAVCoin: a proven reading of a Schwab account's equity. | On the devnet with real money since mid-November; newest reading epoch 9 (height 1842). See [Today](#today). |
+| B23 | The earlier Schwab NAVCoin line that B24 replaced. | Replaced; its name remains in the proof profile and code (`b23-*`). |
+| BMNRC | The BMNR carry NAVCoin (stock long, perpetual short). | Created on the devnet on 2026-10-02; one reading (epoch 1, height 1099). |
 | a651 | The first named NAVCoin instance for the proven six-leg reserve portfolio. | Legacy/deprecated product lineage. Its historical Ethereum pool had zero pool-specific liquidity at the last a651 inspection; a651 remains migration and research history. |
 | a652 | A second NAVCoin instance used to prove cross-NAVCoin swap mechanics. | WAN devnet evidence only, not a production public asset. |
-| a666 | The deployed NAVCoin lineage for large, low-slippage primary subscriptions, symmetric primary redemption, and proof-backed Ethereum representation. | PFTL A666 v2, wA666, and the wA666/USDC pool are deployed; transparent/private flows work; public GA remains closed. |
-| pfUSDC | A PFTL-side, source-labeled vault-bridge receipt used as countable cash for NAVCoin settlement. | Direct Ethereum-mainnet ingress/egress is deployed and proved a complete `20m12s` latency run; the older Arbitrum route is deprecated. |
+| a666 | The deployed NAVCoin lineage for large, low-slippage primary subscriptions, symmetric primary redemption, and proof-backed Ethereum representation. | PFTL A666 v2, wA666, and the wA666/USDC pool are deployed; public GA remains closed. Newest reading epoch 9 (height 1108), older than its 128-block gap at height 1900. |
+| pfUSDC | A PFTL-side, source-labeled vault-bridge receipt used as countable cash for NAVCoin settlement. | Ethereum-mainnet ingress/egress is deployed (a complete `20m12s` latency run was proved; no real Ethereum deposit or withdrawal is recorded since 2026-11-21). Solana deposits and, since 2026-11-23, withdrawals run with small caps. The older Arbitrum route is deprecated. |
+
+## Today
+
+Read-only `nav_reserve_proof_status` on validator 0, 2026-11-25 10:50 UTC,
+height 1900:
+
+| Asset | Newest finalized reading | Proof profile source class |
+|---|---|---|
+| B24 | epoch 9, `nav_per_unit` 1006419 (NAV 1.006419), submitted at height 1842 (23 November) | `b23-schwab-account-equity-nitro-sp1-v1` |
+| A666 | epoch 9, `nav_per_unit` 116736912, submitted at height 1108 (October) | `stakehub-six-leg-reserves-v3` |
+| BMNRC | epoch 1, `nav_per_unit` 100000000, submitted at height 1099 (2 October) | `manifest-driven` |
+
+All three profiles have a 128-block `max_epoch_gap_blocks`. Create and cash-in
+at NAV (`nav_mint_at_nav`, `nav_redeem_at_nav`) fail closed with
+`nav_reserve_stale_deadman` once the chain is more than that many blocks past
+the newest reading's finalize height (`ensure_nav_asset_live_for_epoch` in
+`crates/execution/src/nav_vault_asset_execution.rs`). The chain counts blocks,
+not time, so on an idle chain an old reading stays usable longer.
+
+- **B24.** The B24 reading of the Schwab account's equity is taken in a Nitro
+  enclave and proven with SP1. The daily job (`ops/b24-live/daily.py`, timer
+  `ops/b24-live/b24-tee-nav-daily.timer`, 17:55 UTC) has a $9-per-run and
+  $250 cap, does not retry, and counts a reading only once it is read back
+  finalized. Readings landed at heights 1323 to 1842 (epochs 1 to 9); none
+  landed on 24 or 25 November up to height 1900. The job pins a node binary
+  (`DAILY_NODE_SHA`, `69de5ce0…`) that is not the fleet's (`6dd2ee56…` on
+  25 November), so its runtime check stops it until the pin moves
+  ([25 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-25.md)).
+  The 24 November handoff puts the end of create and cash-in on the epoch-9
+  reading at block 1943. B24 replaced the earlier B23 line
+  (`ops/b24-replacement/`).
+- **A666 and BMNRC.** Their readings are older than the 128-block gap at
+  height 1900. A new reading is needed before NAV-priced create and cash-in can
+  run on them.
+- **pfUSDC.** Ethereum and Solana deposits mint separate pfUSDC series. Solana
+  pfUSDC can be withdrawn to Solana since 23 November, within small caps; see
+  [Network Status](../status/network-status.md#usdc-bridges).
 
 ## What the proof does and does not prove
 

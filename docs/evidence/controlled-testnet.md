@@ -1,5 +1,11 @@
 # Controlled Testnet Evidence
 
+!!! note "Recorded evidence"
+    The `reports/` files named on this page are archived outside this repository
+    (see `reports/README.md`); most are from May 2026, when the network had five
+    validators. Paths under `benchmarks/` and `docs/` are in the repository.
+    Checked on 25 November 2026.
+
 Controlled-testnet evidence proves the chain can run as an engineering network
 with project-controlled validators and machine-readable gates.
 

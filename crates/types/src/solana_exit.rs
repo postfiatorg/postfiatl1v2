@@ -32,19 +32,28 @@ pub fn release_height(chain: &str, genesis: &str) -> Option<u64> {
 const SECOND_RELEASES: &[(&str, &str, Option<u64>)] = &[(
     "postfiat-wan-devnet-2",
     "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
-    None, // Governance agrees this height once every validator runs the second release.
+    Some(1890), // Agreed WAN height of the second release.
 )];
 
 #[cfg(any(test, feature = "test-second-release"))]
 thread_local! {
-    static SECOND_RELEASE_FOR_TESTS: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+    /// `None`: `SECOND_RELEASES` decides. `Some(None)`: no chain schedules the second release,
+    /// as in a build without its entry. `Some(Some(h))`: every chain schedules it at `h`.
+    static SECOND_RELEASE_FOR_TESTS: std::cell::Cell<Option<Option<u64>>> = const { std::cell::Cell::new(None) };
 }
 
-/// Sets a second release height for every chain of this thread (tests only). The first
-/// release still applies where `RELEASES` sets it.
+/// Overrides the second release for every chain of this thread (tests only): `None` unsets it
+/// (a build without the entry), `Some(h)` sets it at `h`. The first release still applies
+/// where `RELEASES` sets it.
 #[cfg(any(test, feature = "test-second-release"))]
 pub fn set_second_release_for_tests(height: Option<u64>) {
-    SECOND_RELEASE_FOR_TESTS.with(|h| h.set(height));
+    SECOND_RELEASE_FOR_TESTS.with(|h| h.set(Some(height)));
+}
+
+/// Returns this thread to the `SECOND_RELEASES` table (tests only).
+#[cfg(any(test, feature = "test-second-release"))]
+pub fn use_second_release_table_for_tests() {
+    SECOND_RELEASE_FOR_TESTS.with(|h| h.set(None));
 }
 
 /// Whether this build schedules the second release on `chain`. While it does not, the
@@ -52,8 +61,8 @@ pub fn set_second_release_for_tests(height: Option<u64>) {
 /// them. Records are created only from the release height on (`second_release_active`).
 pub fn second_release_scheduled_on(chain: &str) -> bool {
     #[cfg(any(test, feature = "test-second-release"))]
-    if SECOND_RELEASE_FOR_TESTS.with(|h| h.get()).is_some() {
-        return true;
+    if let Some(height) = SECOND_RELEASE_FOR_TESTS.with(|h| h.get()) {
+        return height.is_some();
     }
     SECOND_RELEASES
         .iter()
@@ -72,7 +81,7 @@ pub fn second_release_active(chain: &str, genesis: &str, height: u64) -> bool {
     let first = release_height(chain, genesis);
     #[cfg(any(test, feature = "test-second-release"))]
     if let Some(second) = SECOND_RELEASE_FOR_TESTS.with(|h| h.get()) {
-        return height >= second && first.is_none_or(|f| height >= f);
+        return second.is_some_and(|second| height >= second && first.is_none_or(|f| height >= f));
     }
     first.is_some_and(|f| height >= f)
         && second_release_height(chain, genesis).is_some_and(|second| height >= second)

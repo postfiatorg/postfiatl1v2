@@ -4,6 +4,8 @@
 > this page were overtaken by the A666 v2 mainnet deployment. Use
 > [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
 > for live identifiers, economics, proof boundaries, and release status.
+> B24, BMNRC and the Solana pfUSDC series are not on this page; their state on
+> 2026-11-25 is on [NAVCoins](index.md#today).
 
 NAVCoins separate the asset's backing from the places where users access or
 trade the asset. A venue can host liquidity without becoming a separate backing

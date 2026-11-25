@@ -1,5 +1,10 @@
 # Shielded Wallet
 
+Shielded wallet flows are Orchard/Halo2-based. Public submission of shielded
+actions is off on every validator of `postfiat-wan-devnet-2`
+([Network Status](../status/network-status.md)); the commands below run against
+a local devnet.
+
 The existing Orchard wallet and the PFSH02 rehearsal wallet use separate keys and scan different pools.
 
 ## PFSH02 browser wallet

@@ -150,6 +150,16 @@ PY
 
 Inspect the canary's staged SHA, manifest verification, restored watchdog state and fleet convergence before rolling validator 1. Check the per-host evidence after each restart. Restore predecessor units only while the predecessor can replay every committed block. Use the saved units at `/etc/postfiat/releases/main-r64-20261121/rollback-units/` and the kit's `restore-watchdog.sh` on each affected host, then recheck root convergence. After a new decision or burn requires this release, repair forward.
 
+### 2.1 Rebuild the B24 rehearsal tool from the release
+
+As soon as all six report `$REV`, and before the next 17:55 UTC B24 reading, run on the main machine:
+
+```bash
+ops/b24-live/rehearsal_tool.sh "$REL" "$REV" "$(sha256sum "$B" | cut -d' ' -f1)"
+```
+
+It builds `tools/b23-nav-canary` at `$REV` with `--locked`, installs it as `b23-coord/artifacts/$REL/postfiat-b23-nav-canary` and prints the line for `ops/b24-live/known-releases.txt`. Add that line, copy the tool to validator-0 as `/tmp/b23-tee-nav-canary-<first 16 hex of its sha256>`, then run `python3 ops/b24-live/daily.py --check`: it must name `$REL`. Until then the daily job refuses to run, and says which of these is missing.
+
 ## 3. Register the descriptor with burns closed
 
 When the next proposal height reaches H, review the registration batch and submit through the six resident validator signers. The prepare command needs a writable scratch store with its matching integrity file accessible to the node. Run it inside the same store and key mounts used above.
@@ -687,3 +697,31 @@ python3 ops/sol-live/exit_govern.py refund --revision "$REV" --release-height "$
 ```
 
 The seven earlier Solana series retain their own liabilities. The exit pays burns from every bucket of this shared custody whose ID derives from its own revision's policy, and the custody must cover all of them; moving liabilities between series requires separate governance and conservation tests for outstanding amounts, queued redemptions, counted reserves and allocations.
+
+## One proving machine
+
+The withdrawal prover can share the four-GPU deposit machine instead of renting its own. None of this has been run on a GPU yet; check it on the machine before moving payouts.
+
+- **Why it collided.** SP1 picks the device, not our code: without a device id, sp1-sdk 6.3.1 connects to device 0 and sp1-cuda 6.3.1 starts `~/.sp1/bin/sp1-gpu-server` with `CUDA_VISIBLE_DEVICES=<id>` behind `/tmp/sp1-cuda-<id>.sock`. The deposit prover takes devices 0 to 3, one server and socket each.
+- **Split.** One settings file, `/etc/pf-sol-exit-prove.conf` (root's, mode 644), gives both: `DEPOSIT_CUDA_DEVICES=0,1,2` for the deposit prover and `EXIT_CUDA_DEVICE=3` for the withdrawal prover. Each start refuses an overlap, and the deposit start refuses a `SOL_DEPOSIT_GPUS` that contradicts the file. Each prover keeps its own lock, work tree and SP1 home; no port is involved.
+- **Memory.** One RTX 5090 (32 GB) has proven both programs; neither peak is measured. A whole GPU each, so they never share GPU memory. Host memory and CPU (32 + 4 threads) are shared and not measured. Three-GPU deposit proofs are slower; not measured.
+- **Proof host.** Build `ops/withdraw/proof_host.rs` with this change; `--cuda-device N` or `PROOF_HOST_CUDA_DEVICE=N` picks the device, default 0. It refuses a device whose socket answers. The forced command passes only the file's device.
+- **Stale servers.** A GPU server outlives a killed proof host (timeout, out of memory). A server is a leftover when its parent is not a live proof host, that is neither `proof-host` (the withdrawal prover) nor `host-live` (a deposit prover): init or a subreaper took it. Holding its lock, the forced command stops a leftover on its device and refuses a server of a live proof host. The deposit start stops leftovers on any device and never a server of a live proof host: on one of its own devices it refuses and names the device and the process, for example the withdrawal prover's when the settings file is missing. Write device numbers without a leading zero (`3`, not `03`); both scripts refuse any other form.
+- **One user.** Both provers run as the same user. Each reads the other's GPU servers' environment in `/proc` to find their device; a server of another user cannot be read, is skipped, and is neither stopped nor refused.
+
+On the four-GPU machine, as root, with the staged tree from `copy-exit-prover.sh`:
+
+```bash
+printf '%s\n' DEPOSIT_CUDA_DEVICES=0,1,2 EXIT_CUDA_DEVICE=3 EXIT_WORK_DIR=/workspace/exit/b23-withdraw-20261116 \
+    EXIT_SP1_HOME=/workspace/exit/home > /etc/pf-sol-exit-prove.conf
+chown root:root /etc/pf-sol-exit-prove.conf; chmod 644 /etc/pf-sol-exit-prove.conf
+bash ops/sol-live/prover-start.sh
+mkdir -p /workspace/b23-gpu
+install -m755 exit-prover-command.sh /usr/local/bin/pf-sol-exit-prove
+```
+
+The payout worker starts the withdrawal prover itself through `pf-sol-exit-prove`; by hand: `cd /workspace/exit/b23-withdraw-20261116 && HOME=/workspace/exit/home SP1_PROVER=cuda RAYON_NUM_THREADS=4 ./proof-host --cuda-device 3 withdrawal egress.elf exit-witness.json /tmp/w prove`.
+
+Check: `stat -c '%U %a' /etc/pf-sol-exit-prove.conf; cat /etc/pf-sol-exit-prove.conf; ls -l /tmp/sp1-cuda-*.sock; ss -xlp | grep sp1-cuda; for p in $(pgrep -x sp1-gpu-server); do echo "$p parent $(awk '{print $4}' /proc/$p/stat) $(tr '\0' '\n' </proc/$p/environ | grep CUDA_VISIBLE)"; done; nvidia-smi --query-compute-apps=pid,gpu_bus_id,used_memory --format=csv; nvidia-smi --query-gpu=index,pci.bus_id --format=csv`. Sockets 0 to 2 belong to the deposit servers, socket 3 only exists during a withdrawal proof.
+
+Moving to one machine also changes the payout worker's SSH target (`HOST`, `PORT` in `exit_proof.py`, `authorize-exit-prover.sh`, `exit-prover.fingerprint`) and, if the bundle ships the rebuilt binary, the pinned proof-host hash (`install-exit-user.sh`, `build-exit-bundle.py`). To go back to two machines: restore the SSH target, delete `/etc/pf-sol-exit-prove.conf` on the deposit machine, and restart the deposit prover; without the file it takes all four devices again.
