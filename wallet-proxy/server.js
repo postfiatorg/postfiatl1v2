@@ -1469,6 +1469,24 @@ wss.on('connection', (ws, req) => {
             return;
         }
 
+        // S3.2e: rpc-serve's RpcRequest.id is a String. Any other id could only be
+        // answered under a placeholder id, which the proxy pairs by string id: refuse it.
+        if (parsed.id !== undefined && parsed.id !== null && typeof parsed.id !== 'string') {
+            ws.send(JSON.stringify({
+                version: 'postfiat-local-rpc-v1',
+                id: 'proxy-error',
+                ok: false,
+                result: null,
+                error: {
+                    code: 'proxy_request_id_not_string',
+                    message: `${typeof parsed.method === 'string' ? parsed.method.slice(0, 64) : 'request'} refused: `
+                        + `its id is a ${Array.isArray(parsed.id) ? 'array' : typeof parsed.id}; the node accepts only a string id`
+                },
+                events: []
+            }));
+            return;
+        }
+
         // S3.2b: the proxy derives ids from a client's id (timeout votes add about
         // 30 bytes), and rpc-serve refuses ids over 256 bytes: bound them here.
         if (typeof parsed.id === 'string' && Buffer.byteLength(parsed.id, 'utf8') > PROXY_MAX_CLIENT_ID_BYTES) {
