@@ -4,6 +4,13 @@
 **Status:** Study and design note. Step one is implemented on this branch for `blocks`, `receipts` and `tx`; steps two and three are proposals.
 **Base:** origin/main `f82ed6986`.
 
+> **Status note (25 November 2026):** step one is on `main` as `9d34b58e0`
+> (PR 227). The live build `04600868` descends from that commit and carries the
+> same `block_finality.rs` and storage code (`git diff` between the two is empty
+> for those files). On 25 November a `blocks` read by height on validator 0
+> answered in 0.3 to 0.5 seconds through a tunnel. Steps two and three are
+> still proposals.
+
 Validator reads are slow in production: 7 to 10 seconds per read. They are
 behind the slow screens, the readiness timeouts and much of the wait before a
 proof. This note measures where the time goes and proposes three steps that can

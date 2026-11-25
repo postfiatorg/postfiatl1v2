@@ -166,6 +166,9 @@ Fallback reads return `index_used: false` and keep the bounded scan limits.
 
 ## Disk-Only Smoke
 
+The smoke scripts in this section and the next were archived outside this
+repository (see `scripts/README.md`); the sections record what they checked.
+
 ```bash
 scripts/testnet-account-tx-disk-index-smoke
 ```
@@ -185,6 +188,9 @@ Validator doctor uses the same effective readiness rule for
 
 ## Six-Wallet Fan-In Smoke
 
+The `reports/` files below are from May 2026 and are archived outside this
+repository (see `reports/README.md`).
+
 ```bash
 scripts/testnet-six-wallet-account-tx-smoke
 ```
@@ -193,7 +199,8 @@ This local operator smoke starts a four-validator harness, generates six
 sender wallets plus one sink wallet, funds each sender, signs six transparent
 wallet transfers into the sink, seals the six fan-in transactions in one
 transparent batch, rebuilds the retained-history index, and queries read-only
-RPC `account_tx_history` for the sink and every sender. A green run proves the
+RPC `account_tx` (through the Python client's `account_tx_history`) for the
+sink and every sender. A green run proves the
 sink history registers all six inbound transactions and every sender history
 registers both the faucet funding row and outbound sink transfer with
 `all_index_used: true`, `total_scanned_block_count: 0`, and
