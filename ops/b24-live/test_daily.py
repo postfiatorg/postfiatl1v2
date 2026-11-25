@@ -3,6 +3,7 @@ import copy
 import fcntl
 import os
 import shlex
+import subprocess
 from datetime import datetime,timezone
 import hashlib
 import importlib.util
@@ -131,9 +132,24 @@ class ReleasePinTests(unittest.TestCase):
         for module in (daily.common,daily.sign,daily.snapshot,daily.live):self.assertEqual(module.CANARY,self.tool)
         self.assertEqual(daily.CANARY,self.tool)
 
-    def test_a_tool_that_does_not_record_its_revision_is_accepted_by_its_listed_hash(self):
+    def test_a_tool_that_does_not_record_its_source_is_refused_with_the_rebuild_command(self):
         self.tool=self.tool_at('sol-exit-r2',None);self.known.write_text(f'sol-exit-r2 046008683 {NODE} {self.sha(self.tool)}\n')
-        self.assertEqual(self.pick()['tool_revision'],'046008683 (from '+str(self.known)+':1)')
+        with self.assertRaises(release_pin.Refusal) as refused:self.pick()
+        self.assertIn(f'ops/b24-live/rehearsal_tool.sh sol-exit-r2 {self.REV} {NODE}',str(refused.exception))
+        self.assertIn('does not record its source',str(refused.exception))
+
+    def test_a_modified_tree_is_refused_and_placed_files_are_named(self):
+        for recorded in ('046008683+modified','04600868+modified'):
+            with self.subTest(recorded):
+                self.tool=self.tool_at('sol-exit-r2',recorded);self.known.write_text(f'sol-exit-r2 046008683 {NODE} {self.sha(self.tool)}\n')
+                with self.assertRaisesRegex(release_pin.Refusal,'modified'):self.pick()
+        placed='046008683+placed:Cargo.lock=0123456789abcdef,build.rs=fedcba9876543210,src/main.rs=00112233445566ff'
+        self.tool=self.tool_at('sol-exit-r2',placed);self.known.write_text(f'sol-exit-r2 046008683 {NODE} {self.sha(self.tool)}\n')
+        self.assertEqual(self.pick()['tool_revision'],placed)
+        for bad in ('046008683+placed:src/lib.rs=0123456789abcdef','046008683+placed:build.rs=xyz','046008683+other'):
+            with self.subTest(bad):
+                self.tool=self.tool_at('sol-exit-r2',bad);self.known.write_text(f'sol-exit-r2 046008683 {NODE} {self.sha(self.tool)}\n')
+                with self.assertRaises(release_pin.Refusal):self.pick()
 
     def test_one_validator_differs(self):
         self.statuses['validator-3']['build_git_revision']='71dbc9b3';self.statuses['validator-3']['deployment_runtime_artifacts']['binary_sha256']='d46376ff'*8
@@ -183,6 +199,41 @@ class ReleasePinTests(unittest.TestCase):
             self.assertEqual(daily.remote_copy('/x/tool','ab'*32),'/tmp/b23-tee-nav-canary-abababababababab')
             ssh.return_value.returncode=1;ssh.return_value.stdout=''
             with self.assertRaisesRegex(release_pin.Refusal,'^validator-0 has no copy of the rehearsal tool at /tmp/b23-tee-nav-canary-abababababababab; copy it with: scp -p /x/tool '):daily.remote_copy('/x/tool','ab'*32)
+
+class ToolSourceTests(unittest.TestCase):
+    """The source text rehearsal_tool.sh records, on a scratch git repository."""
+    def setUp(self):
+        self.tree=Path(tempfile.mkdtemp());self.addCleanup(__import__('shutil').rmtree,self.tree)
+        run=lambda *a:subprocess.run(['git','-C',str(self.tree),*a],check=True,capture_output=True)  # noqa: E731
+        (self.tree/'tools/b23-nav-canary/src').mkdir(parents=True);(self.tree/'tools/b23-nav-canary/src/main.rs').write_text('old\n')
+        (self.tree/'tools/b23-nav-canary/Cargo.lock').write_text('old\n');(self.tree/'crates').mkdir();(self.tree/'crates/x.rs').write_text('x\n')
+        run('init','-q');run('add','.');run('-c','user.email=t@t','-c','user.name=t','commit','-qm','c')
+        self.commit=subprocess.run(['git','-C',str(self.tree),'rev-parse','--short=9','HEAD'],capture_output=True,text=True).stdout.strip()
+        import tool_source;self.source=tool_source
+    def test_a_clean_tree_is_its_commit(self):
+        self.assertEqual(self.source.text(self.tree),self.commit)
+    def test_placed_files_are_named_with_their_hashes_in_a_fixed_form(self):
+        for name,body in (('build.rs','fn main(){}\n'),('src/main.rs','new\n'),('Cargo.lock','new\n')):(self.tree/'tools/b23-nav-canary'/name).write_text(body)
+        placed=['tools/b23-nav-canary/build.rs','tools/b23-nav-canary/src/main.rs','tools/b23-nav-canary/Cargo.lock']
+        h=lambda body:hashlib.sha256(body.encode()).hexdigest()[:16]  # noqa: E731
+        self.assertEqual(self.source.text(self.tree,placed),f'{self.commit}+placed:Cargo.lock={h("new\n")},build.rs={h("fn main(){}\n")},src/main.rs={h("new\n")}')
+    def test_any_other_difference_is_modified(self):
+        (self.tree/'crates/x.rs').write_text('changed\n')
+        self.assertEqual(self.source.text(self.tree),self.commit+'+modified')
+        (self.tree/'crates/x.rs').write_text('x\n');(self.tree/'stray.txt').write_text('s\n')
+        self.assertEqual(self.source.text(self.tree),self.commit+'+modified')
+        (self.tree/'stray.txt').unlink();(self.tree/'tools/b23-nav-canary/Cargo.lock').write_text('new\n')
+        self.assertEqual(self.source.text(self.tree,['tools/b23-nav-canary/src/main.rs']),self.commit+'+modified')
+        self.assertEqual(self.source.text(self.tree,['crates/x.rs']),self.commit+'+modified')
+
+class ReproducibleBuildTests(unittest.TestCase):
+    """rehearsal_tool.sh builds where only the commit decides the path and nothing random reaches the binary."""
+    def test_the_script_builds_at_a_fixed_path_without_runpath_or_build_paths(self):
+        script=(Path(__file__).with_name('rehearsal_tool.sh')).read_text()
+        self.assertNotIn('mktemp',script)
+        self.assertIn('src=$root/$full',script);self.assertIn('target=$root/$full.target',script)
+        for flag in ('-C linker=/usr/bin/cc','--remap-path-prefix=$src=','--remap-path-prefix=$cargo_home=','--remap-path-prefix=$rustup_home='):self.assertIn(flag,script)
+        self.assertIn('POSTFIAT_BUILD_SOURCE=$source_text',script)
 
 class FailureAlertTests(unittest.TestCase):
     """Every failed run leaves a record and calls the hook once; nothing touches the network."""
