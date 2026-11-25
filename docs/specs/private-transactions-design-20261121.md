@@ -148,6 +148,20 @@ decision (section 6).
 
 ### 4.2 A payment action with change
 
+The draft implementation of `asset_orchard_transfer_v1` requires a finalized
+`asset_orchard_transfer_activation_height` governance amendment. Every network
+starts with the transfer disabled. The amendment value must be strictly after
+its block height. Admission checks the next block, and validators check the
+executed block height during proposal and replay. Certified block import and
+archive replay require the activation amendment’s validator authorizations.
+The earliest unpaused value
+applies. The private readiness report exposes the scheduled height under
+`asset_orchard_transfers`.
+
+Release approval requires closure of the independent review findings and a
+byte-identical replay of the live chain against the running release. The
+activation tests cover synthetic state.
+
 A new circuit and action, `asset_orchard_transfer_v1`:
 
 - two payment inputs and two payment outputs of **one** asset, with dummy notes allowed, so one

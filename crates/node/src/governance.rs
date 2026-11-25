@@ -2594,6 +2594,15 @@ pub fn verify_governance_genesis_bundle_snapshot(
     Ok((report, bundle.operator_manifests))
 }
 
+// The first release supporting this amendment already requires signed
+// governance, including when consuming an externally certified block.
+fn schedules_asset_orchard_transfers(batch: &GovernanceActionBatch) -> bool {
+    batch
+        .amendments
+        .iter()
+        .any(|amendment| amendment.kind == GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT)
+}
+
 pub fn apply_governance_batch(options: ApplyBatchOptions) -> io::Result<Vec<Receipt>> {
     apply_governance_batch_internal(options, None, false)
 }
@@ -2669,10 +2678,15 @@ fn apply_governance_batch_internal(
         )?,
         None => fastpay_pre_state_effects_for_next_block(&store, &ledger)?,
     };
-    if historical_replay.is_none() && !allow_unsigned_test_fixture {
-        let registry = due_activations.registry.clone().unwrap_or(
-            read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?,
-        );
+    if (historical_replay.is_none() && !allow_unsigned_test_fixture)
+        || schedules_asset_orchard_transfers(&batch)
+    {
+        let registry = due_activations
+            .registry
+            .clone()
+            .unwrap_or(read_validator_registry_file(
+                &store.data_dir().join(VALIDATOR_REGISTRY_FILE),
+            )?);
         verify_live_signed_governance_batch(
             &genesis,
             &governance,

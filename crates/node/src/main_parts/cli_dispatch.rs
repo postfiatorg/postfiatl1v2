@@ -306,6 +306,7 @@ use postfiat_types::{
     GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
+    GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS,
@@ -509,6 +510,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-bridge-exit-root-activation-height"
         | "ratify-external-lane-export-root-activation-height"
         | "ratify-shielded-atomic-batch-activation-height"
+        | "ratify-asset-orchard-transfer-activation-height"
         | "ratify-recipient-format-activation-height"
         | "ratify-asset-orchard-pricing-enforcement-activation-height"
         | "ratify-asset-orchard-pricing-max-nav-age-blocks"

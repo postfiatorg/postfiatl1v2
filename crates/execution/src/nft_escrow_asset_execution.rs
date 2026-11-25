@@ -627,6 +627,8 @@ pub struct AssetExecutionCompatibility {
     pub pfusdc_source_series_activation_height: Option<u64>,
     pub atomic_swap_activation_height: Option<u64>,
     pub atomic_swap_paused: bool,
+    /// Scheduled by finalized governance. Every constructor keeps shielded transfers disabled.
+    pub asset_orchard_transfer_activation_height: Option<u64>,
     pub yolo_target_activation_height: Option<u64>,
     /// Height from which destination address fields must be canonical PFTL
     /// addresses. `None` keeps historical behavior.
@@ -697,6 +699,14 @@ impl AssetExecutionCompatibility {
         self
     }
 
+    pub const fn with_asset_orchard_transfer_activation_height(
+        mut self,
+        height: Option<u64>,
+    ) -> Self {
+        self.asset_orchard_transfer_activation_height = height;
+        self
+    }
+
     pub const fn with_yolo_target_activation_height(mut self, height: Option<u64>) -> Self {
         self.yolo_target_activation_height = height;
         self
@@ -718,6 +728,7 @@ impl AssetExecutionCompatibility {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: Some(0),
             atomic_swap_paused: false,
+            asset_orchard_transfer_activation_height: None,
             yolo_target_activation_height: None,
             recipient_format_activation_height: None,
             rejected_tx_fee_activation_height: None,
@@ -747,6 +758,7 @@ impl AssetExecutionCompatibility {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            asset_orchard_transfer_activation_height: None,
             yolo_target_activation_height: None,
             recipient_format_activation_height: None,
             rejected_tx_fee_activation_height: None,
@@ -776,6 +788,7 @@ impl AssetExecutionCompatibility {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            asset_orchard_transfer_activation_height: None,
             yolo_target_activation_height: None,
             recipient_format_activation_height: None,
             rejected_tx_fee_activation_height: None,
@@ -805,6 +818,7 @@ impl AssetExecutionCompatibility {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            asset_orchard_transfer_activation_height: None,
             yolo_target_activation_height: None,
             recipient_format_activation_height: None,
             rejected_tx_fee_activation_height: None,
@@ -834,6 +848,7 @@ impl AssetExecutionCompatibility {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            asset_orchard_transfer_activation_height: None,
             yolo_target_activation_height: None,
             recipient_format_activation_height: None,
             rejected_tx_fee_activation_height: None,

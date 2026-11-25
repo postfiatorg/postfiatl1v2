@@ -9,22 +9,6 @@
 // its asset and amount by its named account, and an exit moves exactly its amount from the
 // pool's count of that asset to the destination account.
 
-/// The height from which a chain accepts `asset_orchard_transfer_v1`. A chain not listed
-/// refuses it. Every validator must run a version that knows the action before this height.
-pub(crate) fn asset_orchard_transfer_activation_height_for_chain(chain_id: &str) -> Option<u64> {
-    match chain_id {
-        // Local and disposable networks.
-        "postfiat-local" | "postfiat-local-six" | "postfiat-rehearsal" => Some(0),
-        // The live network is added here, with a height, by the release that turns it on.
-        _ => None,
-    }
-}
-
-pub(crate) fn asset_orchard_transfer_active(genesis: &Genesis, block_height: u64) -> bool {
-    asset_orchard_transfer_activation_height_for_chain(&genesis.chain_id)
-        .is_some_and(|height| block_height >= height)
-}
-
 fn asset_orchard_transfer_receipt_id(
     genesis: &Genesis,
     batch_id: &str,
@@ -77,7 +61,10 @@ pub(crate) fn execute_asset_orchard_transfer_action(
             message,
         )
     };
-    if !asset_orchard_transfer_active(genesis, block_height) {
+    if !asset_execution_compatibility
+        .asset_orchard_transfer_activation_height
+        .is_some_and(|activation| block_height >= activation)
+    {
         return reject(
             "asset_orchard_transfer_not_active",
             format!(

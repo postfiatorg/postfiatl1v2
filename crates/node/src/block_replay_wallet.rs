@@ -3104,7 +3104,9 @@ pub(super) fn replay_archived_payload(
                     .vault_bridge_route_profile_activations
                     .iter()
                     .any(|activation| !activation.amendment.signed_authorizations.is_empty());
-            if has_v2_authorization {
+            // This activation was introduced with signed governance. The
+            // compatibility path for older unsigned amendments cannot enable it.
+            if has_v2_authorization || schedules_asset_orchard_transfers(&batch) {
                 verify_live_signed_governance_batch(
                     genesis,
                     state.governance,
