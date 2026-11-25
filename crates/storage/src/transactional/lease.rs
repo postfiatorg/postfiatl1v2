@@ -180,7 +180,45 @@ pub(super) fn shared_transactional_store(
     }
 }
 
+thread_local! {
+    static WRITER_LEASE_DEADLINE_OVERRIDE: std::cell::Cell<Option<std::time::Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Run `operation` with a shorter wait for the database file on this thread.
+///
+/// A caller that has another answer ready (a recent cached report) uses this
+/// so that it does not wait out the full lease deadline behind the sibling
+/// process. The override never lengthens the configured deadline and is
+/// removed when `operation` returns or unwinds.
+pub fn with_writer_lease_deadline<T>(
+    deadline: std::time::Duration,
+    operation: impl FnOnce() -> T,
+) -> T {
+    struct Restore(Option<std::time::Duration>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            WRITER_LEASE_DEADLINE_OVERRIDE.with(|cell| cell.set(self.0));
+        }
+    }
+    // A nested call never lengthens the wait an outer caller asked for.
+    let _restore = Restore(WRITER_LEASE_DEADLINE_OVERRIDE.with(|cell| {
+        let outer = cell.get();
+        cell.set(Some(outer.map_or(deadline, |outer| outer.min(deadline))));
+        outer
+    }));
+    operation()
+}
+
 fn writer_lease_deadline() -> std::time::Duration {
+    let configured = configured_writer_lease_deadline();
+    match WRITER_LEASE_DEADLINE_OVERRIDE.with(std::cell::Cell::get) {
+        Some(shorter) => shorter.min(configured),
+        None => configured,
+    }
+}
+
+fn configured_writer_lease_deadline() -> std::time::Duration {
     std::env::var("POSTFIAT_STORAGE_WRITER_LEASE_DEADLINE_MS")
         .ok()
         .and_then(|value| value.parse::<u64>().ok())

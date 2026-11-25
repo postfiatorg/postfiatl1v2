@@ -21,10 +21,27 @@ const RELEASES: &[(&str, &str, Option<u64>)] = &[(
 )];
 
 pub fn release_height(chain: &str, genesis: &str) -> Option<u64> {
+    #[cfg(any(test, feature = "test-second-release"))]
+    if let Some(height) = FIRST_RELEASE_FOR_TESTS.with(|h| h.get()) {
+        return Some(height);
+    }
     RELEASES
         .iter()
         .find(|(c, g, _)| *c == chain && *g == genesis)?
         .2
+}
+
+#[cfg(any(test, feature = "test-second-release"))]
+thread_local! {
+    /// `Some(h)`: every chain of this thread has the first release at `h` (tests only).
+    static FIRST_RELEASE_FOR_TESTS: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Schedules the first release at `height` on every chain of this thread (tests only); `None`
+/// returns to `RELEASES`.
+#[cfg(any(test, feature = "test-second-release"))]
+pub fn set_first_release_for_tests(height: Option<u64>) {
+    FIRST_RELEASE_FOR_TESTS.with(|h| h.set(height));
 }
 
 /// The second Solana exit release. Unset means off: the build then follows the first release
@@ -59,6 +76,13 @@ pub fn use_second_release_table_for_tests() {
 /// Whether this build schedules the second release on `chain`. While it does not, the
 /// second release's records on that chain are refused exactly as the first release refuses
 /// them. Records are created only from the release height on (`second_release_active`).
+///
+/// This matches the chain id alone, not the genesis: its one caller, the record check of
+/// `validate_asset_state(chain_id)`, receives no genesis from its 30 callers in execution and
+/// node (Orchard state application among them). A chain that reuses the WAN chain's id with
+/// another genesis therefore accepts the second release's record forms (`refunded`), but the
+/// release never activates there (`second_release_active` checks the genesis), so no such record
+/// is created on it.
 pub fn second_release_scheduled_on(chain: &str) -> bool {
     #[cfg(any(test, feature = "test-second-release"))]
     if let Some(height) = SECOND_RELEASE_FOR_TESTS.with(|h| h.get()) {

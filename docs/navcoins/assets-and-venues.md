@@ -36,7 +36,7 @@ PFTL export has been accepted through the route's disclosed finality verifier.
 
 | Context | Status | Notes |
 |---|---|---|
-| PFTL WAN fleet | **Production A666 v2 is finalized and its issue/redeem/export route is active.** | Asset `521c…74b6` has no permanent maximum supply. Transparent and private primary issue/redeem transitions have committed. |
+| PFTL WAN fleet | A666 v2 is deployed. At height 1900 the stale reserve packet blocked NAV-priced mint and redeem. Current export availability is unknown. See [per-operation observations](index.md#today). | Asset `521c…74b6` has no permanent maximum supply. Transparent and private primary issue/redeem transitions have committed. |
 | Ethereum Sepolia | Controlled wA666 stack and route evidence exist. | Controlled testing only; the route is not a trustless mainnet product. |
 | Ethereum mainnet | **wA666 contracts and the hookless v4 pool are deployed and functionally exercised.** | wA666 is `0xeE4C…9bE5`; pool `0xc5f1…6e98` was seeded with `3,000 wA666 + 3,000 USDC` and third-party swaps finalized. Re-read chain state before making a current liquidity or price claim. |
 

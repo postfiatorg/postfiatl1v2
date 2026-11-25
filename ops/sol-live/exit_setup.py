@@ -50,9 +50,22 @@ VERIFIER_UNPINNED = "the rebuilt verifier's hash is not pinned yet"
 VERIFIER_SHA256 = "0x3406becc6db7ba7c250f8db55dc43965656093bb4ceb3e330d2f452edd465fdf"
 
 
+# The pin covers the whole ProgramData tail: the 123,152-byte ELF of the reproducible build
+# (sha256 below) and the zeros up to the 127,168 bytes `ExtendProgram` grew the account to. A
+# future extend changes the pin even with the same code.
+VERIFIER_ELF_SHA256 = "4091ee16db29154e7aae642b637320c0a0d0cdee110da88d07416ab7b1c15b21"
+PROGRAM_DATA_SIZE = 127_168
+
+
 def verifier_pin():
     require(VERIFIER_SHA256 is not None, VERIFIER_UNPINNED)
     return VERIFIER_SHA256
+
+
+def program_data_pin(elf, size=PROGRAM_DATA_SIZE):
+    """The pin of `elf` deployed into a ProgramData tail of `size` bytes: its sha256 zero-filled."""
+    require(len(elf) <= size, "The ELF is larger than the program data account.")
+    return "0x" + hashlib.sha256(elf + bytes(size - len(elf))).hexdigest()
 
 PROFILE = ROOT / "crates/types/src/solana_exit_profile.json"
 ANCHOR_TX = "9da535ba12b9f8eb7e877e8dfb985503b0ecb8eda0fcee06f2e98a40d8627c62f55c517db4e407ca0f61603489b02f2e"

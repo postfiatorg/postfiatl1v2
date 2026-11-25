@@ -17,19 +17,23 @@ not transfer authority.
 
 ## Residual Model
 
+The count-based score assumes each remaining candidate is equally likely after conditioning on the observer’s information. With unequal probabilities the best single guess has probability `max(p_i)`. The historical fixture field `posterior_bps` stores the rounded equal-weight estimate. No field measurement here validates equal weights.
+
 All probabilities are represented as integer basis points. The verifier uses
-the conservative single-target posterior bound:
+the equal-weight single-target estimate:
 
 ```text
 posterior_bps = ceil(10000 / candidate_count)
 ```
 
+For 16 equally likely candidates the best guess is 6.25%. If one candidate has probability 40% and the other fifteen each have 4%, the same candidate count yields a **40% best guess**. [Worked probability fixture](../fixtures/privacy/candidate-weights.json)
+
 The baseline route requires:
 
 | Bound | v1 value |
 | --- | ---: |
-| Maximum single-channel posterior | 1,250 bps |
-| Maximum joint metadata posterior | 625 bps |
+| Maximum equal-weight single-channel estimate | 1,250 bps |
+| Maximum equal-weight joint estimate | 625 bps |
 | Activity window candidates | 128 |
 | Same fee-class candidates | 32 |
 | Same asset / policy candidates | 16 |
@@ -40,10 +44,10 @@ The baseline route requires:
 | Joint metadata candidate count | 16 |
 | Observation freshness | 3,600 seconds |
 
-The batch-size floor gives the weakest single-channel bound: 1/8, or 1,250
+Under equal weights the batch-size floor gives the largest single-channel estimate: 1/8, or 1,250
 bps. The baseline privacy route still requires a 16-candidate joint metadata
 cohort, so combining timing, fee, asset-policy, disclosure, and admission
-metadata must leave a posterior no worse than 1/16, or 625 bps. If the joint
+metadata must leave at least 16 candidates. Their equal-weight estimate is 625 bps at the floor. If the joint
 cohort falls below that floor, the flow is not baseline-private even if every
 single channel independently passes.
 
@@ -52,7 +56,7 @@ flowchart TD
   CandidateSet[Candidate shielded actions]
   Metadata[Declared metadata filters<br/>timing, fee class, asset policy,<br/>batch, disclosure, RPC]
   Residual[Residual candidate count]
-  Posterior[Single-target posterior<br/>ceil(10000 / candidate_count)]
+  Posterior[Equal-weight estimate<br/>ceil(10000 / candidate_count)]
   Bounds[Deanonymization bounds<br/>single-channel and joint floors]
   Decision[Privacy route<br/>baseline, hold, downgrade,<br/>disclosure, fail closed]
 

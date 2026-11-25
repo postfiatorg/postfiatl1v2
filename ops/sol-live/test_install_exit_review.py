@@ -30,7 +30,9 @@ FAKES = {
                'chmod 755 "$3/bin/python"; exit 0; fi; '
                'if [[ -n ${OLD_PYTHON:-} && $1 == -c ]]; then exit 1; fi; exec "$REAL_PYTHON" "$@"',
 }
-FILES = ("exit_review.py", "pft-sol-exit-review.service", "pft-sol-exit-review.timer", "exit-requirements.lock")
+FILES = ("exit_review.py", "pft-sol-exit-review.service", "pft-sol-exit-review.timer", "exit-requirements.lock",
+         "exit_review_door.py", "pft-sol-exit-sign-door.path", "pft-sol-exit-sign-door.service")
+SETTLER_PUB = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKs5n3hP0Uq2b0cS4y8n1d1oVQyP2l3e7m0QJbq3j5vX pft-sol-exit-settler"
 
 
 class Host:
@@ -53,11 +55,47 @@ class Host:
             for name in FILES:
                 tar.add(HERE / name, arcname=f"ops/sol-live/{name}")
 
-    def run(self, **env):
+    def run(self, *extra, **env):
         environment = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", LOG=str(self.log), STATE=str(self.d),
                            REAL_PYTHON=sys.executable, INSTALL_ROOT=str(self.root), **env)
         return subprocess.run(["bash", str(SCRIPT), "validator-3", "27653", "https://solana.example/host-3",
-                               str(self.archive)], capture_output=True, text=True, env=environment)
+                               str(self.archive), *extra], capture_output=True, text=True, env=environment)
+
+
+class DoorInstallTest(unittest.TestCase):
+    def test_the_settler_key_gets_one_restricted_forced_command_line(self):
+        with tempfile.TemporaryDirectory() as d:
+            host = Host(d)
+            key = Path(d, "settler.pub")
+            key.write_text(SETTLER_PUB + "\n")
+            result = host.run("--settler-key", str(key))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            lines = (host.root / "var/lib/pf-sol-exit-review-ssh/.ssh/authorized_keys").read_text().splitlines()
+            self.assertEqual(lines, ['restrict,command="/opt/postfiat/sol-exit-review/venv/bin/python -I '
+                                     '/opt/postfiat/sol-exit-review/exit_review_door.py" ' + SETTLER_PUB])
+            self.assertTrue((host.root / "opt/postfiat/sol-exit-review/exit_review_door.py").is_file())
+            log = host.log.read_text().splitlines()
+            self.assertIn("usermod -d /var/lib/pf-sol-exit-review-ssh -s /bin/sh pf-sol-exit-review", log)
+            self.assertIn("systemctl enable --now pft-sol-exit-sign-door.path", log)
+            self.assertTrue((host.root / "etc/systemd/system/pft-sol-exit-sign-door.service").is_file())
+
+    def test_a_key_file_with_options_or_two_keys_is_refused(self):
+        for text in ('command="/bin/sh" ' + SETTLER_PUB, SETTLER_PUB + "\n" + SETTLER_PUB, "ssh-rsa AAAA x"):
+            with self.subTest(text=text[:20]), tempfile.TemporaryDirectory() as d:
+                host = Host(d)
+                key = Path(d, "settler.pub")
+                key.write_text(text + "\n")
+                result = host.run("--settler-key", str(key))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("not one ssh-ed25519 public key line", result.stderr)
+                self.assertFalse((host.root / "var/lib/pf-sol-exit-review-ssh").exists())
+
+    def test_without_the_option_no_door_is_opened(self):
+        with tempfile.TemporaryDirectory() as d:
+            host = Host(d)
+            self.assertEqual(host.run().returncode, 0)
+            self.assertFalse((host.root / "var/lib/pf-sol-exit-review-ssh").exists())
+            self.assertNotIn("sign-door", host.log.read_text())
 
 
 class InstallTest(unittest.TestCase):

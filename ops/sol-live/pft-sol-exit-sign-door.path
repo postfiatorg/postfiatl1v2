@@ -1,0 +1,10 @@
+[Unit]
+Description=Sign the Solana exit decisions handed in through the settlement loop's restricted door
+
+[Path]
+# exit_review_door.py writes one entry per handed-in decision here.
+PathChanged=/var/lib/postfiat-exit-review/inbox
+Unit=pft-sol-exit-sign-door.service
+
+[Install]
+WantedBy=paths.target
