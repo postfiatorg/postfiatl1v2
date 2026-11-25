@@ -288,7 +288,9 @@ def review_burn(action, burn, node, sol, memory=None):
     require(len(rows) == 1, "redemption state: burn not found on this node")
     red = rows[0]
     require(red["state"] == "pending" and red["settled_atoms"] == 0, "redemption state: not pending and unsettled")
-    covered = node("vault_bridge_route", asset_id=SERIES).get("covered_bucket_ids") or [BUCKET]
+    # A first-release node omits the field; a second-release node's list is taken as reported.
+    covered = node("vault_bridge_route", asset_id=SERIES).get("covered_bucket_ids")
+    covered = [BUCKET] if covered is None else covered
     require(red["bucket_id"] in covered, "covered bucket: the burn's bucket is not covered")
     owner = canonical_owner(red["destination_ref"])
     key = marker(burn)

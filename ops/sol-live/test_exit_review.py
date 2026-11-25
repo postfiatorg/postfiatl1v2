@@ -173,6 +173,20 @@ class ReviewTest(unittest.TestCase):
                 self.review(**case)
             self.assertIn(name.strip(), str(caught.exception))
 
+    def test_the_covered_buckets_follow_a_captured_route_report_and_an_empty_list_covers_nothing(self):
+        route = json.loads((Path(rv.__file__).parent / "fixtures/fork-open-route.json").read_text())
+        # A first-release node omits the field: only the revision-8 bucket is covered.
+        self.assertNotIn("covered_bucket_ids", route)
+
+        class RouteNode(Node):
+            def __call__(self, method, **params):
+                return dict(route) if method == "vault_bridge_route" else super().__call__(method, **params)
+
+        self.assertEqual(self.review(node=RouteNode())["decision"], PAID_KIND)
+        route["covered_bucket_ids"] = []
+        with self.assertRaisesRegex(rv.Refused, "covered bucket"):
+            self.review(node=RouteNode())
+
     def test_a_prefunded_or_crowded_marker_is_still_reviewed_by_its_creating_transaction(self):
         for case in (dict(prefund=True), dict(crowd=150), dict(prefund=True, crowd=150)):
             with self.subTest(**case):
