@@ -3,4 +3,4 @@
 # The job reads the release from the six validators' status and refuses one not
 # listed here. After a validator release, ops/b24-live/rehearsal_tool.sh builds the
 # tool into b23-coord/artifacts/<release-name>/ and prints the line to add.
-sol-exit-r2 046008683 6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b c335f184e6f1a295659f49f44aefe5949de04211b9715c1db414a5a7df557752
+sol-exit-r2 046008683 6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b 13cd840ab7e631b13b5ee4a179938f3b654bbd274b46a0b09eef4c3725091b87
