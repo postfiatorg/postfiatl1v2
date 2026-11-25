@@ -559,7 +559,7 @@ for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; 
   - the lead host drafts the decision with its node's data directory;
   - the lead host assembles it the same way;
   - the proposer submits the batch round with its validator key.
-  
+
   Root ssh for settlement can go only once those three have a restricted way as well. Keep each validator key readable only by the node user.
 - **Shared providers.** Independence also needs each host's Solana endpoint to be a different provider; the check above only warns.
 

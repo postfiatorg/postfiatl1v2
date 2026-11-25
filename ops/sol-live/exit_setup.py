@@ -65,8 +65,6 @@ def verifier_pin():
 def program_data_pin(elf, size=PROGRAM_DATA_SIZE):
     """The pin of `elf` deployed into a ProgramData tail of `size` bytes: its sha256 zero-filled."""
     require(len(elf) <= size, "The ELF is larger than the program data account.")
-    import hashlib
-
     return "0x" + hashlib.sha256(elf + bytes(size - len(elf))).hexdigest()
 
 PROFILE = ROOT / "crates/types/src/solana_exit_profile.json"
