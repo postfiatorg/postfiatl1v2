@@ -97,7 +97,7 @@ release service binds it to loopback. The following defaults apply when
 | Method family | Transport | Default (bare server) | Authorization | Effect |
 | --- | --- | --- | --- | --- |
 | Reads | RPC TCP | Enabled | Public queries | Read node or chain data |
-| FastSwap and FastLane<br>`fastlane_asset_control_apply`, `fastlane_asset_control_catch_up`, `fastlane_asset_control_prepare`, `fastlane_exit`, `fastswap_apply`, `fastswap_cancel_apply`, `fastswap_catch_up`, `fastswap_commit`, `fastswap_commit_round`, `fastswap_new_round_vote`, `fastswap_precommit`, `fastswap_prepare` | RPC TCP | Enabled | Protocol signatures, policy authorizations or quorum certificates, as required by the operation | Prepare, vote, catch up or apply protocol transitions |
+| FastSwap and FastLane<br>`fastlane_asset_control_apply`, `fastlane_asset_control_catch_up`, `fastlane_asset_control_prepare`, `fastlane_exit`, `fastswap_apply`, `fastswap_cancel_apply`, `fastswap_catch_up`, `fastswap_commit`, `fastswap_commit_round`, `fastswap_new_round_vote`, `fastswap_precommit`, `fastswap_prepare` | RPC TCP | Enabled | Signed intents, policy authorization or quorum certificates. A new-round vote uses existing prepared swap state and local round checks, without a caller signature. | Prepare, vote, catch up or apply protocol transitions |
 | Owned payments and unwraps<br>`owned_apply`, `owned_apply_v3`, `owned_sign`, `owned_sign_v3`, `owned_unwrap_apply`, `owned_unwrap_apply_v3`, `owned_unwrap_sign`, `owned_unwrap_sign_v3` | RPC TCP | Enabled (`--allow-owned-lane` / `--disable-owned-lane`) | Signed owner intents or certified operations | Sign or apply owned-lane transitions |
 | Mempool submission | RPC TCP | Disabled (`--allow-mempool-submit`) | Signed transaction or protocol payload | Submit to the mempool |
 | Finality submission and voting | RPC TCP | Disabled (`--allow-mempool-submit-finality`) | Signed transaction, batch or consensus evidence as required by the method | Coordinate certification, voting or finality |
@@ -107,7 +107,10 @@ release service binds it to loopback. The following defaults apply when
 <!-- /rpc-family-table -->
 
 The generated validator RPC service explicitly enables the owned lane and
-finality submission. Mempool and finality submissions share per-peer and
+finality submission. The legacy `server_info.rpc.read_only` field tracks the
+mempool, finality, Orchard batch and owned-lane switches. FastSwap/FastLane
+protocol mutations remain reachable when that field is true, and private
+action admission has its own switch. Mempool and finality submissions share per-peer and
 global rate limits. Those counters do **not** cover owned-lane applies.
 The [RPC Method Inventory](../runbooks/rpc-method-inventory.md) lists the
 transport policy for each method.

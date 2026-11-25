@@ -24,6 +24,7 @@ METHOD_RE = re.compile(r'pub const METHOD_[A-Z0-9_]+:\s*&str\s*=\s*"([^"]+)"')
 
 POSTURE_NOTES = {
     "status": "public chain/node health read",
+    "fastswap_new_round_vote": "unsigned request for an already-prepared swap; active validator persists and signs its recovery vote",
     "server_info": "XRP-like server info alias",
     "metrics": "public node metrics read",
     "ledger": "XRP-like latest ledger alias with bounded block sample",
@@ -526,7 +527,7 @@ def build_inventory() -> dict[str, Any]:
         {
             "id": "fastswap_public_protocol_mutations",
             "severity": "authenticated_protocol_surface",
-            "description": "FastSwap lock/vote/apply and FastLane control methods are remotely enabled protocol mutations, not reads; request signatures and quorum certificates are their authorization boundary.",
+            "description": "FastSwap lock/vote/apply and FastLane control methods are remotely enabled protocol mutations, not reads; their method-specific checks use signed intents, certificates or existing prepared state for a recovery vote.",
         },
     ]
     return {
@@ -609,9 +610,9 @@ Report: `{rel(report_path)}`
 This inventory is generated from Rust SDK method constants, node RPC dispatch,
 the remote `rpc-serve` allowlist, and the Python RPC client. It is a launch
 surface map, not a feature wishlist. “Public protocol mutation” means remotely
-reachable by default but cryptographically authorized by a signed intent,
-owner authorization, policy command, or quorum certificate; it does not mean
-an unauthenticated state write. The generator fails closed if a newly observed
+reachable by default with method-specific protocol checks. For example, a new
+round vote uses existing prepared state and an unsigned RPC request; other
+methods require signed intents, policy authorization or quorum certificates. The generator fails closed if a newly observed
 method lacks an explicit posture.
 
 ## Summary
@@ -644,7 +645,7 @@ method lacks an explicit posture.
 def exchange_guide_table(inventory: dict[str, Any]) -> str:
     rows = [
         ("Reads", "read_only_public", "Public queries", "Read node or chain data"),
-        ("FastSwap and FastLane", "authorized_protocol_mutation_public", "Protocol signatures, policy authorizations or quorum certificates, as required by the operation", "Prepare, vote, catch up or apply protocol transitions"),
+        ("FastSwap and FastLane", "authorized_protocol_mutation_public", "Signed intents, policy authorization or quorum certificates. A new-round vote uses existing prepared swap state and local round checks, without a caller signature.", "Prepare, vote, catch up or apply protocol transitions"),
         ("Owned payments and unwraps", "owned_lane_gated", "Signed owner intents or certified operations", "Sign or apply owned-lane transitions"),
         ("Mempool submission", "controlled_write_gated", "Signed transaction or protocol payload", "Submit to the mempool"),
         ("Finality submission and voting", "finality_submit", "Signed transaction, batch or consensus evidence as required by the method", "Coordinate certification, voting or finality"),

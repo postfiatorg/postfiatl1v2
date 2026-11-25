@@ -7,9 +7,9 @@ Report: `docs/runbooks/rpc-method-inventory.json`
 This inventory is generated from Rust SDK method constants, node RPC dispatch,
 the remote `rpc-serve` allowlist, and the Python RPC client. It is a launch
 surface map, not a feature wishlist. “Public protocol mutation” means remotely
-reachable by default but cryptographically authorized by a signed intent,
-owner authorization, policy command, or quorum certificate; it does not mean
-an unauthenticated state write. The generator fails closed if a newly observed
+reachable by default with method-specific protocol checks. For example, a new
+round vote uses existing prepared state and an unsigned RPC request; other
+methods require signed intents, policy authorization or quorum certificates. The generator fails closed if a newly observed
 method lacks an explicit posture.
 
 ## Summary
@@ -44,7 +44,7 @@ method lacks an explicit posture.
 | --- | --- | --- |
 | account_tx_index_incremental_store | scale_follow_up | account_tx index is an operator cache with incremental append and disk-backed shards, built by account-tx-index-build; ordered commit appends to a current index; rebuild after a gap or schema upgrade. |
 | public_write_edge_not_default | intentional_gate | Signed-mempool, Orchard batch creation and private action admission each require their matching server switch. |
-| fastswap_public_protocol_mutations | authenticated_protocol_surface | FastSwap lock/vote/apply and FastLane control methods are remotely enabled protocol mutations, not reads; request signatures and quorum certificates are their authorization boundary. |
+| fastswap_public_protocol_mutations | authenticated_protocol_surface | FastSwap lock/vote/apply and FastLane control methods are remotely enabled protocol mutations, not reads; their method-specific checks use signed intents, certificates or existing prepared state for a recovery vote. |
 
 ## Methods
 
@@ -101,7 +101,7 @@ method lacks an explicit posture.
 | fastswap_commit | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
 | fastswap_commit_round | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
 | fastswap_effects | read_only_public | yes | no | no | yes | no |  |
-| fastswap_new_round_vote | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
+| fastswap_new_round_vote | authorized_protocol_mutation_public | yes | no | no | yes | no | unsigned request for an already-prepared swap; active validator persists and signs its recovery vote |
 | fastswap_objects | read_only_public | yes | no | no | yes | no |  |
 | fastswap_policy | read_only_public | yes | no | no | yes | no |  |
 | fastswap_precommit | authorized_protocol_mutation_public | yes | no | no | yes | no |  |

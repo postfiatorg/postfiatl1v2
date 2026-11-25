@@ -31,15 +31,15 @@
       "severity": "intentional_gate"
     },
     {
-      "description": "FastSwap lock/vote/apply and FastLane control methods are remotely enabled protocol mutations, not reads; request signatures and quorum certificates are their authorization boundary.",
+      "description": "FastSwap lock/vote/apply and FastLane control methods are remotely enabled protocol mutations, not reads; their method-specific checks use signed intents, certificates or existing prepared state for a recovery vote.",
       "id": "fastswap_public_protocol_mutations",
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-11-25T20:31:31Z",
+  "generated_utc": "2026-11-25T20:47:10Z",
   "git": {
     "dirty": true,
-    "revision": "003af00011c6af086f14f4d4017e450a11eaf45f"
+    "revision": "b339b44b32d423c7eca15e09fe695f39c63d587d"
   },
   "methods": [
     {
@@ -863,7 +863,7 @@
       "controlled_write_allowed_when_enabled": false,
       "method": "fastswap_new_round_vote",
       "node_dispatch": false,
-      "notes": "",
+      "notes": "unsigned request for an already-prepared swap; active validator persists and signs its recovery vote",
       "owned_lane_allowed_when_enabled": false,
       "posture": "authorized_protocol_mutation_public",
       "privacy_alpha_allowed_when_enabled": false,
