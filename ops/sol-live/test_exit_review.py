@@ -391,6 +391,35 @@ class SignDoorTest(unittest.TestCase):
         self.assertIn("no review of this decision on validator-3", self.result(sha)["refused"])
         self.assertFalse(self.binary.with_name("argv.json").exists())
 
+    def test_a_refusal_is_not_final_and_a_signature_is(self):
+        sha = self.hand_in()
+        # The reviewer had not run when the decision was first handed in.
+        (self.outbox / f"{sha}.json").write_text(json.dumps(dict(
+            decision_sha256=sha, proposal_slot=1901, expires_at_height=1931, refused="no review yet")))
+        rv.sign_door(self.cfg, self.inbox, self.outbox)
+        self.assertEqual(self.result(sha)["authorization"], "auth")
+        self.binary.with_name("argv.json").unlink()
+        rv.sign_door(self.cfg, self.inbox, self.outbox)
+        self.assertFalse(self.binary.with_name("argv.json").exists(), "a signed decision is not signed again")
+
+    def test_results_are_group_readable_and_old_ones_are_removed(self):
+        import os, time
+        sha = self.hand_in()
+        os.umask(os.umask(0o077) and 0o077)
+        try:
+            rv.sign_door(self.cfg, self.inbox, self.outbox)
+        finally:
+            os.umask(0o022)
+        self.assertEqual((self.outbox / f"{sha}.json").stat().st_mode & 0o777, 0o640)
+        stale = self.outbox / f"{'11' * 32}.json"
+        stale.write_text("{}")
+        old = time.time() - rv.DOOR_RETAIN_SECONDS - 60
+        os.utime(stale, (old, old))
+        os.utime(self.outbox / f"{sha}.json", (old, old))
+        rv.sign_door(self.cfg, self.inbox, self.outbox)
+        self.assertFalse(stale.exists(), "a result whose decision left the inbox is removed after a day")
+        self.assertTrue((self.outbox / f"{sha}.json").exists(), "a result whose decision still waits is kept")
+
     def test_an_entry_whose_name_is_not_its_decision_is_refused(self):
         sha = self.hand_in()
         (self.inbox / f"{sha}.json").rename(self.inbox / f"{'00' * 32}.json")

@@ -49,6 +49,24 @@ class Door(unittest.TestCase):
         code, out, _ = self.ask(dict(request="result", decision_sha256=SHA))
         self.assertEqual((code, json.loads(out)), (0, dict(decision_sha256=SHA, state="pending")))
 
+    def test_the_inbox_is_bounded_and_old_entries_are_removed(self):
+        import os, time
+        kinds = ["solana_exit_r8_paid:" + f"{n:02x}" * 48 + ":9:0:" + "cd" * 64 for n in range(door.MAX_ENTRIES + 1)]
+        for kind in kinds[:-1]:
+            self.assertEqual(self.ask(self.review(amendment=dict(AMEND, kind=kind)))[0], 0)
+        code, _, err = self.ask(self.review(amendment=dict(AMEND, kind=kinds[-1])))
+        self.assertEqual(code, door.REFUSED)
+        self.assertIn("already wait", err)
+        # A decision that already waits may be handed in again.
+        self.assertEqual(self.ask(self.review(amendment=dict(AMEND, kind=kinds[0]), proposal_slot=11))[0], 0)
+        # After a day an entry is removed and there is room again.
+        first = self.inbox / (hashlib.sha256(kinds[1].encode()).hexdigest() + ".json")
+        old = time.time() - door.RETAIN_SECONDS - 60
+        os.utime(first, (old, old))
+        self.assertEqual(self.ask(self.review(amendment=dict(AMEND, kind=kinds[-1])))[0], 0)
+        self.assertFalse(first.exists())
+        self.assertEqual([p.name for p in self.inbox.iterdir() if p.name.endswith(".tmp")], [])
+
     def test_the_result_is_the_hosts_signature_or_its_refusal(self):
         for result in (dict(authorization={"v": 3}), dict(refused="no review of this decision on validator-3")):
             (self.outbox / f"{SHA}.json").write_text(json.dumps(dict(result, decision_sha256=SHA,

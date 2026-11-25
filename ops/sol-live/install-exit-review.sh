@@ -108,7 +108,9 @@ if [[ -n $settler_key ]]; then
         || fail "cannot install the door"
     # The door writes the inbox as the reviewer; the node user's signing step writes the outbox.
     install -d -m750 -o "$user" -g "$user" "$reviews/inbox" || fail "cannot create the door's inbox"
-    install -d -m750 -o postfiat -g "$user" "$reviews/outbox" || fail "cannot create the door's outbox"
+    # Set-group-id: a result the node user writes belongs to the reviewer's group, so the door,
+    # which runs as the reviewer, can return it.
+    install -d -m2750 -o postfiat -g "$user" "$reviews/outbox" || fail "cannot create the door's outbox"
     # Root owns the key file, so neither the reviewer nor the node user can widen it. sshd runs the
     # forced command through the user's shell, so the shell is /bin/sh; the command= line is all it runs.
     install -d -m755 -o root -g root "$home" "$home/.ssh" || fail "cannot create $home"

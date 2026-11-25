@@ -16,11 +16,16 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 INBOX = Path("/var/lib/postfiat-exit-review/inbox")
 OUTBOX = Path("/var/lib/postfiat-exit-review/outbox")
 LIMIT = 65536
+# The inbox is bounded: at most this many decisions wait at once, and an entry is removed after
+# RETAIN_SECONDS. A settlement's signatures expire after 30 blocks, far inside that.
+MAX_ENTRIES = 64
+RETAIN_SECONDS = 24 * 3600
 REFUSED = 2
 KIND = re.compile(r"solana_exit_(r8_paid|refund):[0-9a-f:]+")
 SHA = re.compile(r"[0-9a-f]{64}")
@@ -36,11 +41,37 @@ def require(ok, message):
 
 
 def write(path, body):
-    tmp = path.with_suffix(".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
-    with os.fdopen(fd, "w") as stream:
-        json.dump(body, stream, sort_keys=True)
-    os.replace(tmp, path)
+    # A name of its own per request: two requests for one decision never share a half-written file.
+    tmp = path.with_name(f".{path.stem}.{os.getpid()}.{time.monotonic_ns()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
+    try:
+        with os.fdopen(fd, "w") as stream:
+            json.dump(body, stream, sort_keys=True)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def make_room(inbox, name, now=None):
+    """Remove entries and leftovers older than RETAIN_SECONDS, then refuse a new decision when
+    MAX_ENTRIES already wait. Handing in a waiting decision again replaces it and is always allowed."""
+    now = time.time() if now is None else now
+    waiting = 0
+    for entry in os.scandir(inbox):
+        try:
+            if not entry.is_file(follow_symlinks=False):
+                continue
+            if now - entry.stat(follow_symlinks=False).st_mtime > RETAIN_SECONDS:
+                os.unlink(entry.path)
+            elif entry.name.endswith(".json") and entry.name != name:
+                waiting += 1
+        except FileNotFoundError:
+            continue
+    require(waiting < MAX_ENTRIES, f"{MAX_ENTRIES} decisions already wait on this host; try again later")
 
 
 def read(path):
@@ -66,6 +97,7 @@ def handle(request, inbox, outbox):
         require(type(slot) is int and type(expires) is int and 0 < slot < expires,
                 "proposal slot and expiry height must be integers, the expiry after the slot")
         sha = hashlib.sha256(amendment["kind"].encode()).hexdigest()
+        make_room(inbox, f"{sha}.json")
         write(inbox / f"{sha}.json", dict(amendment=amendment, proposal_slot=slot, expires_at_height=expires))
         return dict(decision_sha256=sha, state="handed in")
     if request.get("request") == "result":

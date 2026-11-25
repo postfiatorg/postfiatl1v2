@@ -54,14 +54,54 @@ def call(method, *params):
                 raise
 
 
-# The highest finalized slot this watcher has seen; the tip it uses never goes below it.
-HIGHEST = [0]
+# The highest finalized slot this watcher has seen, with the time it was seen. The tip it uses
+# never goes below it. It is kept in a file, so a restart during a provider outage does not open
+# deposits against a fallback that is behind.
+HIGHEST = [None]
+
+
+def highest_file():
+    return BASE / "highest-finalized-slot.json"
+
+
+def highest():
+    """(slot, seen_at) of the highest finalized slot seen; (0, 0.0) before the first. A record that
+    exists and cannot be read raises ValueError: the watcher fails closed until it is repaired."""
+    if HIGHEST[0] is None:
+        path = highest_file()
+        if not path.exists():
+            HIGHEST[0] = (0, 0.0)
+        else:
+            try:
+                record = read(path)
+                slot, seen_at = record["slot"], record["seen_at"]
+                if type(slot) is not int or slot < 0 or type(seen_at) not in (int, float):
+                    raise TypeError("fields")
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                raise ValueError(f"cannot read {path.name}: {error}") from error
+            HIGHEST[0] = (slot, float(seen_at))
+    return HIGHEST[0]
+
+
+def plausible(slot, now):
+    """Whether a provider's slot can be the chain's: not further ahead of the highest seen than the
+    chain can have advanced since, at its fastest. One wild answer must not be kept as the highest."""
+    top, seen_at = highest()
+    return top == 0 or slot <= top + max(0.0, now - seen_at) / FASTEST_SLOT_SECONDS + LIMIT
+
+
+def remember(slot, now):
+    if slot > highest()[0]:
+        HIGHEST[0] = (slot, now)
+        save(highest_file(), dict(slot=slot, seen_at=now))
 
 
 def finalized_tip():
     """The public finalized slot, from both providers. A fallback can only make the watcher
     stricter: when the first provider fails, a second answer below the highest slot seen is no
-    answer, and two answers further apart than LIMIT close deposits. Raises ValueError."""
+    answer, and two answers further apart than LIMIT close deposits. The higher answer is kept
+    before either refusal, so a later check cannot open on the lower one. Raises ValueError."""
+    now = time.time()
     answers = {}
     for url in (URL, FALLBACK_URL):
         body = dict(jsonrpc="2.0", id=1, method="getSlot", params=[{"commitment": "finalized"}])
@@ -69,17 +109,18 @@ def finalized_tip():
             slot = requests.post(url, json=body, timeout=8).json()["result"]
         except (requests.RequestException, KeyError, ValueError, TypeError):
             continue
-        if type(slot) is int:
+        if type(slot) is int and slot >= 0 and plausible(slot, now):
             answers[url] = slot
     if not answers:
         raise ValueError("no Solana provider answered the finalized slot")
+    before = highest()[0]
+    remember(max(answers.values()), now)
     if len(answers) == 2 and abs(answers[URL] - answers[FALLBACK_URL]) > LIMIT:
         raise ValueError(f"the Solana providers disagree by {abs(answers[URL] - answers[FALLBACK_URL])} slots")
-    if URL not in answers and answers[FALLBACK_URL] < HIGHEST[0]:
-        raise ValueError(f"the fallback provider is {HIGHEST[0] - answers[FALLBACK_URL]} slots behind "
+    if URL not in answers and answers[FALLBACK_URL] < before:
+        raise ValueError(f"the fallback provider is {before - answers[FALLBACK_URL]} slots behind "
                          "the highest finalized slot seen")
-    HIGHEST[0] = max(HIGHEST[0], *answers.values())
-    return HIGHEST[0]
+    return highest()[0]
 
 
 def epoch_bounds(slot):

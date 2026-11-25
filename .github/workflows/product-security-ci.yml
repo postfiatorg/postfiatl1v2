@@ -37,6 +37,8 @@ jobs:
         run: scripts/test-rpc-method-inventory
       - name: Verify binary and media artifact disposition
         run: scripts/test-public-artifact-policy
+      - name: Verify devnet start paths pass the storage acknowledgement (#26)
+        run: scripts/test-devnet-start-flags
       - name: Verify consensus determinism surface
         run: scripts/test-consensus-determinism-surface
       - name: Verify cryptographic call-site policy

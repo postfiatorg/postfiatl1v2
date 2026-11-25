@@ -214,6 +214,7 @@ nav:
           - Ingress Permit Activation: runbooks/ingress-permit-activation.md
           - External Lane Export Root Activation: runbooks/external-lane-export-root-activation.md
           - Lane Base Sepolia Dry Run: runbooks/lane-base-sepolia-dry-run.md
+          - Prover Credit Alert: runbooks/prover-credit-alert.md
   - Security:
       - Overview: security/index.md
       - Threat Model: security/threat-model.md

@@ -596,11 +596,29 @@ DOOR_OUTBOX = Path("/var/lib/postfiat-exit-review/outbox")
 def door_result(outbox, sha, request, **result):
     body = dict(result, decision_sha256=sha, proposal_slot=request.get("proposal_slot"),
                 expires_at_height=request.get("expires_at_height"))
-    tmp = Path(outbox) / f"{sha}.tmp"
+    tmp = Path(outbox) / f".{sha}.{os.getpid()}.tmp"
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
     with os.fdopen(fd, "w") as stream:
+        # The outbox is set-group-id to the reviewer's group (install-exit-review.sh), whose door
+        # returns this file; the mode is set here so the service's umask cannot hide it.
+        os.fchmod(stream.fileno(), 0o640)
         json.dump(body, stream, sort_keys=True)
     os.replace(tmp, Path(outbox) / f"{sha}.json")
+
+
+# A result is kept this long after its decision left the inbox.
+DOOR_RETAIN_SECONDS = 24 * 3600
+
+
+def prune_door_results(inbox, outbox, now=None):
+    now = time.time() if now is None else now
+    for result in Path(outbox).iterdir():
+        try:
+            if (result.is_file() and not result.is_symlink() and now - result.lstat().st_mtime > DOOR_RETAIN_SECONDS
+                    and not (Path(inbox) / result.name).exists()):
+                result.unlink()
+        except FileNotFoundError:
+            continue
 
 
 def sign_door(cfg, inbox=DOOR_INBOX, outbox=DOOR_OUTBOX, run=subprocess.run):
@@ -618,8 +636,13 @@ def sign_door(cfg, inbox=DOOR_INBOX, outbox=DOOR_OUTBOX, run=subprocess.run):
             continue
         answered = Path(outbox) / f"{sha}.json"
         if answered.exists():
-            done = json.loads(read_regular(answered))
-            if (done.get("proposal_slot"), done.get("expires_at_height")) == (
+            # Only a signature is final. A refusal or an error is this host's answer at that moment
+            # (its reviewer may not have run yet), so the decision is looked at again when handed in again.
+            try:
+                done = json.loads(read_regular(answered))
+            except (OSError, ValueError):
+                done = {}
+            if "authorization" in done and (done.get("proposal_slot"), done.get("expires_at_height")) == (
                     request.get("proposal_slot"), request.get("expires_at_height")):
                 continue
         try:
@@ -638,6 +661,7 @@ def sign_door(cfg, inbox=DOOR_INBOX, outbox=DOOR_OUTBOX, run=subprocess.run):
         except (RpcError, KeyError, TypeError, ValueError, OSError) as error:
             door_result(outbox, sha, request, error=f"{type(error).__name__}: {error}")
             print(f"sign-door: error {sha}: {error}", file=sys.stderr)
+    prune_door_results(inbox, outbox)
 
 
 def root_only(path, owner=0):
