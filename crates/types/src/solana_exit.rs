@@ -59,6 +59,13 @@ pub fn use_second_release_table_for_tests() {
 /// Whether this build schedules the second release on `chain`. While it does not, the
 /// second release's records on that chain are refused exactly as the first release refuses
 /// them. Records are created only from the release height on (`second_release_active`).
+///
+/// This matches the chain id alone, not the genesis: its one caller, the record check of
+/// `validate_asset_state(chain_id)`, receives no genesis from its 30 callers in execution and
+/// node (Orchard state application among them). A chain that reuses the WAN chain's id with
+/// another genesis therefore accepts the second release's record forms (`refunded`), but the
+/// release never activates there (`second_release_active` checks the genesis), so no such record
+/// is created on it.
 pub fn second_release_scheduled_on(chain: &str) -> bool {
     #[cfg(any(test, feature = "test-second-release"))]
     if let Some(height) = SECOND_RELEASE_FOR_TESTS.with(|h| h.get()) {
