@@ -21,7 +21,11 @@ validator and phase. At each height:
 A lone prepare QC and the legacy direct certificate have no commit authority
 after activation. The committed block embeds its proposal, optional timeout
 ancestry, prepare QC and precommit QC, so history replay does not trust an
-in-memory cache. Snapshot v6 retains signer safety and verified-QC artifacts.
+in-memory cache. Snapshots retain signer safety and verified-QC artifacts: v6
+introduced this, and `main` writes v7 while still reading v6 and v5
+(`SNAPSHOT_VERSION` in `crates/types/src/core_chain.rs`,
+`crates/node/src/lifecycle_queries.rs`). The live devnet uses consensus v2
+([Network Status](../status/network-status.md)).
 
 ```mermaid
 flowchart TD

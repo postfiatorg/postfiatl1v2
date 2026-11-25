@@ -1,6 +1,7 @@
 # Storage Scaling and Bounded Finality Research Specification
 
 **Status:** Text Improvement Harness full gate passed on 2026-08-26 — average 88.67/100 (GPT 91.20, Fable 85.60, GLM 89.20; five runs per lane; run group `storage-scaling-research-spec`); scored content SHA-256 `573788c9d39239aa53523c1f3b7bb8063a00e0c39526927f548e580163768916`; Task Node lock pending operator decision
+**Status note (25 November 2026):** the derived implementation milestone was retired on 23 October 2026 as `OFFLINE QUALIFIED` ([storage milestone](../plans/completed/storage-scaling-milestone.md)). Whether the Task Node lock named above was made is not recorded here.
 **Date:** 2026-08-26
 **Decision owner:** Post Fiat
 **Author:** Domagoj Ravlić (`dravlic`)

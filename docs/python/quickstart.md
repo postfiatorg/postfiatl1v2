@@ -37,7 +37,7 @@ from postfiat_rpc import (
 )
 
 client = PostFiatRpcClient("127.0.0.1:27650")
-wallet = create_wallet(chain_id="postfiat-controlled-testnet", wallet_dir="wallets")
+wallet = create_wallet(chain_id="postfiat-local", wallet_dir="wallets")  # the chain id of scripts/devnet-up
 
 request_faucet_pft(
     data_dir="devnet/local/validator-0",
@@ -56,7 +56,8 @@ print(result.tx_id)
 
 ## Smoke Evidence
 
-- `reports/testnet-live-python-rpc-client-smoke/`
-- `reports/testnet-python-rpc-client-smoke/`
-- `reports/testnet-six-wallet-account-tx-smoke/`
-- `reports/testnet-python-wallet-functions-smoke/`
+The smoke reports (`testnet-live-python-rpc-client-smoke`,
+`testnet-python-rpc-client-smoke`, `testnet-six-wallet-account-tx-smoke`,
+`testnet-python-wallet-functions-smoke`) were archived outside the repository
+with the other generated reports (`reports/README.md`). The client's tests are
+in `python/tests/`.

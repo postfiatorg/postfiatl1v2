@@ -1,6 +1,6 @@
 # Account Tx Index
 
-Status: v3 retained-history index (rows in bounded per-account chunks, metadata-only aggregate); block commits extend it
+Status: v4 retained-history index on `main` since 9 November 2026 (rows in bounded per-account chunks, metadata-only aggregate); block commits extend it
 Date: 2026-10-26
 
 `account_tx` is a read-only public RPC method for account history: transparent
@@ -13,6 +13,16 @@ stale, or unreadable, the aggregate `account_tx_index.json` (the same counts and
 ranges, written last) can vouch for the same chunk files; if that is also
 absent or stale, the node falls back to the existing bounded retained-history
 scan instead of failing the public read.
+
+## Live state (25 November 2026)
+
+At height 1900 `account_tx_index_status` on all six validators reported
+`index_usable: false` and `disk_index_usable: false` with
+`unsupported account_tx index schema postfiat-account-tx-index-v3`: their
+indexes stop at height 1193 and were not rebuilt for v4 (see
+[Upgrade Backfill](#upgrade-backfill)). Until the build is run, `account_tx`
+answers through the bounded archive scan; an `account_tx` read on validator 0
+returned `index_used: false`.
 
 ## Layout
 
@@ -166,6 +176,9 @@ Fallback reads return `index_used: false` and keep the bounded scan limits.
 
 ## Disk-Only Smoke
 
+The smoke scripts in this section and the next were archived outside this
+repository (see `scripts/README.md`); the sections record what they checked.
+
 ```bash
 scripts/testnet-account-tx-disk-index-smoke
 ```
@@ -185,6 +198,9 @@ Validator doctor uses the same effective readiness rule for
 
 ## Six-Wallet Fan-In Smoke
 
+The `reports/` files below are from May 2026 and are archived outside this
+repository (see `reports/README.md`).
+
 ```bash
 scripts/testnet-six-wallet-account-tx-smoke
 ```
@@ -193,7 +209,8 @@ This local operator smoke starts a four-validator harness, generates six
 sender wallets plus one sink wallet, funds each sender, signs six transparent
 wallet transfers into the sink, seals the six fan-in transactions in one
 transparent batch, rebuilds the retained-history index, and queries read-only
-RPC `account_tx_history` for the sink and every sender. A green run proves the
+RPC `account_tx` (through the Python client's `account_tx_history`) for the
+sink and every sender. A green run proves the
 sink history registers all six inbound transactions and every sender history
 registers both the faucet funding row and outbound sink transfer with
 `all_index_used: true`, `total_scanned_block_count: 0`, and

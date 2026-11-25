@@ -282,7 +282,11 @@ mod tests {
     };
 
     fn setup() -> (Genesis, LedgerState, SolanaRouteState, Vec<u8>) {
-        let genesis = Genesis::new("postfiat-local");
+        setup_on("postfiat-local")
+    }
+
+    fn setup_on(chain: &str) -> (Genesis, LedgerState, SolanaRouteState, Vec<u8>) {
+        let genesis = Genesis::new(chain);
         let family =
             AssetDefinition::new(&genesis.chain_id, "test-issuer", "pfUSDC", 1, 6).unwrap();
         let client = SolanaLightClient {
@@ -397,6 +401,652 @@ mod tests {
             AssetExecutionCompatibility::strict(),
             &[],
         )
+    }
+
+    const EXIT_GENESIS: &str = "45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0";
+    const EXIT_VAULT: &str = "e2a6fbfcf1e65a0f3e08d400c97d913e3e4eca81f84c814efa0bbcada24aac8b";
+    /// The default minimum, the smallest exit burn the chain accepts without a governed value.
+    const EXIT_AMOUNT: u64 = postfiat_types::solana_exit::DEFAULT_MIN_WITHDRAWAL_ATOMS;
+    const EXIT_MINT: &str = "c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61";
+
+    /// A deposit of the exit family into the shared Solana custody, credited under `revision`.
+    /// These tests exercise the second release's rules, so they set it on this thread.
+    fn exit_custody_deposit(revision: u32) -> (Genesis, LedgerState) {
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(0));
+        let (genesis, mut ledger, mut route, mut journal) = setup();
+        let family = postfiat_types::solana_exit::FAMILY.to_string();
+        ledger.asset_definitions[0].asset_id = family.clone();
+        ledger.nav_assets[0].asset_id = family.clone();
+        route.profile.asset_id = family;
+        route.profile.route_epoch = revision;
+        route.profile.vault_address = EXIT_VAULT.into();
+        route.profile.token_address = EXIT_MINT.into();
+        let pins = route.profile.solana.as_mut().unwrap();
+        pins.genesis_hash = EXIT_GENESIS.into();
+        pins.route_binding = postfiat_types::solana_deposit_route_binding(
+            &genesis.chain_id,
+            &genesis_hash(&genesis),
+            &route.profile.route_id,
+            EXIT_GENESIS,
+            EXIT_VAULT,
+        )
+        .unwrap();
+        journal[163..195].copy_from_slice(&hex_to_bytes(EXIT_VAULT).unwrap());
+        journal[195..227].copy_from_slice(&hex_to_bytes(&pins.route_binding).unwrap());
+        ledger.solana_route = Some(route.clone());
+        credit(&genesis, &mut ledger, &route, &journal).unwrap();
+        let nav = &mut ledger.nav_assets[0];
+        nav.finalized_epoch = 1;
+        nav.finalized_reserve_packet_hash = "aa".repeat(48);
+        nav.nav_per_unit = 1_000_000;
+        (genesis, ledger)
+    }
+
+    /// The compatibility a governed, open Solana exit gives the burn path.
+    fn open_exit() -> AssetExecutionCompatibility {
+        let mut compatibility = AssetExecutionCompatibility::strict()
+            .with_pfusdc_source_series_activation_height(Some(0));
+        compatibility.solana_exit_heights = Some((0, u64::MAX));
+        compatibility.solana_exit_open_height = Some(0);
+        compatibility
+    }
+
+    fn exit_burn(
+        genesis: &Genesis,
+        ledger: &mut LedgerState,
+        bucket_id: &str,
+        amount_atoms: u64,
+        destination_ref: String,
+    ) -> Result<(), Rejection> {
+        exit_burn_with(
+            genesis,
+            ledger,
+            bucket_id,
+            amount_atoms,
+            destination_ref,
+            open_exit(),
+        )
+    }
+
+    fn exit_burn_with(
+        genesis: &Genesis,
+        ledger: &mut LedgerState,
+        bucket_id: &str,
+        amount_atoms: u64,
+        destination_ref: String,
+        compatibility: AssetExecutionCompatibility,
+    ) -> Result<(), Rejection> {
+        let owner = ledger.trustlines[0].account.clone();
+        let operation = VaultBridgeBurnToRedeemOperation {
+            owner: owner.clone(),
+            issuer: ledger.nav_assets[0].issuer.clone(),
+            asset_id: ledger.nav_assets[0].asset_id.clone(),
+            bucket_id: bucket_id.into(),
+            amount_atoms,
+            epoch: 1,
+            reserve_packet_hash: "aa".repeat(48),
+            destination_ref,
+        };
+        let transaction = SignedAssetTransaction {
+            unsigned: postfiat_types::UnsignedAssetTransaction {
+                chain_id: genesis.chain_id.clone(),
+                genesis_hash: genesis_hash(genesis),
+                protocol_version: genesis.protocol_version,
+                address_namespace: ADDRESS_NAMESPACE.to_string(),
+                transaction_kind: VAULT_BRIDGE_BURN_TO_REDEEM_TRANSACTION_KIND.to_string(),
+                signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+                source: owner,
+                fee: 0,
+                sequence: 1,
+                operation: AssetTransactionOperation::VaultBridgeBurnToRedeem(operation.clone()),
+            },
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            public_key_hex: String::new(),
+            signature_hex: String::new(),
+        };
+        apply_vault_bridge_burn_to_redeem(
+            genesis,
+            ledger,
+            &transaction,
+            &operation,
+            20,
+            compatibility,
+            &[],
+        )
+    }
+
+    include!("solana_exit_first_release_cases.rs");
+    include!("solana_exit_release_height_cases.rs");
+
+    /// `release_height_cases::outcomes()` run on origin/main a720cc80f: the issuer-payment
+    /// refusal, the closed-outside-interval refusal and the transparent supply-delta check at
+    /// 1840, 1841 and 1842 on the WAN genesis.
+    const RELEASE_HEIGHT_GOLDEN: [(&str, &str, &str); 12] = [
+        (
+            "issuer_payment@1840",
+            "accepted",
+            "ab1d71a239b489b9d7103d5caeda8f1c7145b946c82b9553c24b0b1802bd391a0a4840e5c4b13ed69507b3a36752d99f",
+        ),
+        (
+            "ungoverned_exit_burn@1840",
+            "missing_vault_bridge_pinned_profile: vault bridge lifecycle references a source/policy profile that is not registered",
+            "055e800dc33535397cdc759751e30e99e8b77856ee3c37cf3b63b3c8d0dcabab71589e753273b65e090d6b1c87b84831",
+        ),
+        (
+            "governed_exit_burn@1840",
+            "accepted",
+            "2e697b100a544d7cee80621f05e18292e3d8c4b2b126c362f11f4f7e26bf0328b086143bfa4457d56b3443641d8493e9",
+        ),
+        (
+            "transparent_burn@1840",
+            "false: invalid_asset_state: asset.asset_id does not match chain, issuer, code, and version",
+            "88719d7679b5e9490e4e09dfc85da62d5960823b7742c3d30704cfb3ca5ef0e57495e7960dbc2b017bc3e5dd1cca8ef6",
+        ),
+        (
+            "issuer_payment@1841",
+            "solana_exit_issuer_payment_disabled: revision-8 issuer payments cannot create redeemable claims",
+            "5e2caa8624f9e9fb5e489572500ec53cfe462244d429a33fb1f459caaabda40fce434c3c3985d027d5385e9957ce2eaf",
+        ),
+        (
+            "ungoverned_exit_burn@1841",
+            "solana_exit_burns_closed: Solana exit burns are closed outside the governed descriptor interval",
+            "055e800dc33535397cdc759751e30e99e8b77856ee3c37cf3b63b3c8d0dcabab71589e753273b65e090d6b1c87b84831",
+        ),
+        (
+            "governed_exit_burn@1841",
+            "accepted",
+            "5e6147c9cf5c6c5467f1331b5db6ada8118042ee9b33845ad4cab83788a4840e103e3bd3ecdce6982e28eb7c0fab5b98",
+        ),
+        (
+            "transparent_burn@1841",
+            "false: solana_exit_unmatched_supply_change: revision-8 supply change -1 requires matching outstanding and counted backing (outstanding change 0, counted change 0)",
+            "88719d7679b5e9490e4e09dfc85da62d5960823b7742c3d30704cfb3ca5ef0e57495e7960dbc2b017bc3e5dd1cca8ef6",
+        ),
+        (
+            "issuer_payment@1842",
+            "solana_exit_issuer_payment_disabled: revision-8 issuer payments cannot create redeemable claims",
+            "5e2caa8624f9e9fb5e489572500ec53cfe462244d429a33fb1f459caaabda40fce434c3c3985d027d5385e9957ce2eaf",
+        ),
+        (
+            "ungoverned_exit_burn@1842",
+            "solana_exit_burns_closed: Solana exit burns are closed outside the governed descriptor interval",
+            "055e800dc33535397cdc759751e30e99e8b77856ee3c37cf3b63b3c8d0dcabab71589e753273b65e090d6b1c87b84831",
+        ),
+        (
+            "governed_exit_burn@1842",
+            "accepted",
+            "f648ee88ace441ff9f824301f437950eb28f09bb84d0618086cf78e76353d1db726b7188e79f1f0b4eac2a3bdc01f869",
+        ),
+        (
+            "transparent_burn@1842",
+            "false: solana_exit_unmatched_supply_change: revision-8 supply change -1 requires matching outstanding and counted backing (outstanding change 0, counted change 0)",
+            "88719d7679b5e9490e4e09dfc85da62d5960823b7742c3d30704cfb3ca5ef0e57495e7960dbc2b017bc3e5dd1cca8ef6",
+        ),
+    ];
+
+    #[test]
+    fn unset_second_release_matches_the_first_release_around_its_height() {
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        let golden: Vec<(String, String, String)> = RELEASE_HEIGHT_GOLDEN
+            .iter()
+            .map(|(n, v, d)| (n.to_string(), v.to_string(), d.to_string()))
+            .collect();
+        let outcomes = release_height_cases::outcomes();
+        assert_eq!(outcomes, golden);
+    }
+
+    /// `first_release_cases::outcomes()` run on origin/main a720cc80f, the live first release.
+    const FIRST_RELEASE_GOLDEN: [(&str, &str, &str); 6] = [
+        (
+            "r8_burn",
+            "accepted",
+            "97ce70d8d26f9a408615c659545a081a10f76186a9d5659d087c2b67f7553aae5428fbdd886d6b2aee48520ccad80004",
+        ),
+        (
+            "r9_burn",
+            "missing_vault_bridge_pinned_profile: vault bridge lifecycle references a source/policy profile that is not registered",
+            "fd2f3f30bc0441db7daff96d4e1cbad509bef20f95a2d3e14b713028eec03ef4b40aa4914a15039f83d8d826de014ca9",
+        ),
+        (
+            "r8_off_curve_owner",
+            "accepted",
+            "02aca8fdd75a949613c3b3efbd4514ad33503e52aa26f5e97168c85165167de454e7436352e1d5e8ece4884d67ca7dfc",
+        ),
+        (
+            "r8_below_minimum",
+            "accepted",
+            "6c4a59f4bff1034ef2080f6f04dca3e6ce9b1bf20e1238d3036da7a8fa05fa6ec5a9b191e1d0b9c89b118b76cdc3f82b",
+        ),
+        (
+            "r9_below_minimum_off_curve",
+            "missing_vault_bridge_pinned_profile: vault bridge lifecycle references a source/policy profile that is not registered",
+            "fd2f3f30bc0441db7daff96d4e1cbad509bef20f95a2d3e14b713028eec03ef4b40aa4914a15039f83d8d826de014ca9",
+        ),
+        (
+            "r8_unreconciled",
+            "solana_exit_supply_mismatch: revision-8 series supply 5000001 differs from bucket outstanding 5000000",
+            "d11cd8620c318be4d8805dd777d00e98940212ae26683aed53c1f60b457eeac4ff051cb540c90109e67b2416dc6e82ef",
+        ),
+    ];
+
+    fn first_release_outcomes() -> Vec<(&'static str, String, String)> {
+        first_release_cases::outcomes()
+    }
+
+    fn golden() -> Vec<(&'static str, String, String)> {
+        FIRST_RELEASE_GOLDEN
+            .iter()
+            .map(|(n, v, d)| (*n, v.to_string(), d.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn unset_second_release_burns_exactly_as_the_first_release() {
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        assert_eq!(first_release_outcomes(), golden());
+    }
+
+    #[test]
+    fn second_release_burn_rules_start_at_its_height() {
+        // The cases burn at block 20: a second release at 21 has not started.
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(21));
+        assert_eq!(first_release_outcomes(), golden());
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(20));
+        let second = first_release_outcomes();
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        let verdict = |name: &str| {
+            let row = second.iter().find(|(n, _, _)| *n == name).unwrap();
+            row.1.split(':').next().unwrap().to_string()
+        };
+        // Revision 8 burns as before, with the same ledger.
+        assert_eq!(second[0], golden()[0]);
+        assert_eq!(verdict("r9_burn"), "accepted");
+        assert_eq!(
+            verdict("r8_off_curve_owner"),
+            "solana_exit_destination_not_wallet"
+        );
+        assert_eq!(verdict("r8_below_minimum"), "solana_exit_below_minimum");
+        assert_eq!(
+            verdict("r9_below_minimum_off_curve"),
+            "solana_exit_destination_not_wallet"
+        );
+        assert_eq!(verdict("r8_unreconciled"), "solana_exit_supply_mismatch");
+        let unreconciled = &second
+            .iter()
+            .find(|(n, _, _)| *n == "r8_unreconciled")
+            .unwrap()
+            .1;
+        assert!(unreconciled.contains("in bucket"), "{unreconciled}");
+    }
+
+    fn exit_destination() -> String {
+        format!("solana-spl:{EXIT_GENESIS}:{}", "ce".repeat(32))
+    }
+
+    #[test]
+    fn every_solana_revision_of_the_custody_redeems_through_the_exit() {
+        for revision in [3, 9] {
+            let (genesis, mut ledger) = exit_custody_deposit(revision);
+            let bucket = ledger.vault_bridge_bucket_states[0].clone();
+            assert_ne!(bucket.bucket_id, postfiat_types::solana_exit::BUCKET);
+            let line = ledger.trustlines[0].clone();
+            assert_eq!(
+                line.asset_id,
+                postfiat_types::solana_source_series_id(
+                    &genesis.chain_id,
+                    &bucket.asset_id,
+                    &bucket.bucket_id
+                )
+            );
+            exit_burn(
+                &genesis,
+                &mut ledger,
+                &bucket.bucket_id,
+                EXIT_AMOUNT,
+                exit_destination(),
+            )
+            .unwrap_or_else(|e| panic!("revision {revision}: {e:?}"));
+            let after = ledger.vault_bridge_bucket(&bucket.bucket_id).unwrap();
+            assert_eq!(ledger.trustlines[0].balance, line.balance - EXIT_AMOUNT);
+            assert_eq!(
+                after.outstanding_vault_bridge_atoms,
+                bucket.outstanding_vault_bridge_atoms - EXIT_AMOUNT
+            );
+            assert_eq!(
+                after.redemption_queue_atoms,
+                bucket.redemption_queue_atoms + EXIT_AMOUNT
+            );
+            let redemption = ledger.vault_bridge_redemptions.last().unwrap().clone();
+            assert_eq!(redemption.bucket_id, bucket.bucket_id);
+            assert_eq!(
+                redemption.withdrawal_packet.source_bucket_id,
+                bucket.bucket_id
+            );
+            assert_eq!(
+                redemption.withdrawal_packet.source_chain_id,
+                postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
+            );
+            // Settlement retires the burn against its own bucket.
+            settle_governed_solana_payout(
+                &mut ledger,
+                &genesis.chain_id,
+                &redemption.withdrawal_packet_hash,
+                &"5e".repeat(48),
+                21,
+                true,
+            )
+            .unwrap_or_else(|e| panic!("revision {revision} settlement: {e}"));
+            let settled = ledger.vault_bridge_bucket(&bucket.bucket_id).unwrap();
+            assert_eq!(
+                settled.redemption_queue_atoms,
+                bucket.redemption_queue_atoms
+            );
+            assert_eq!(
+                settled.counted_value_atoms,
+                bucket.counted_value_atoms - EXIT_AMOUNT
+            );
+        }
+    }
+
+    #[test]
+    fn a_cancelled_burn_is_refunded_once_in_its_own_series_and_bucket() {
+        let (genesis, mut ledger) = exit_custody_deposit(9);
+        let bucket = ledger.vault_bridge_bucket_states[0].clone();
+        let line = ledger.trustlines[0].clone();
+        let supply = |l: &LedgerState| crate::issued_asset_supply(l, &line.asset_id).unwrap();
+        let supply_before = supply(&ledger);
+        exit_burn(
+            &genesis,
+            &mut ledger,
+            &bucket.bucket_id,
+            EXIT_AMOUNT,
+            exit_destination(),
+        )
+        .unwrap();
+        let packet = ledger
+            .vault_bridge_redemptions
+            .last()
+            .unwrap()
+            .withdrawal_packet_hash
+            .clone();
+        assert_eq!(supply(&ledger), supply_before - EXIT_AMOUNT);
+        let refund = "6e".repeat(48);
+        assert!(refund_cancelled_solana_burn(
+            &mut ledger,
+            &genesis.chain_id,
+            &"77".repeat(48),
+            &refund,
+            21
+        )
+        .is_err());
+        refund_cancelled_solana_burn(&mut ledger, &genesis.chain_id, &packet, &refund, 21).unwrap();
+        // The burner holds the amount again, in the same series; the bucket's sums are as before.
+        let after = ledger.vault_bridge_bucket(&bucket.bucket_id).unwrap();
+        assert_eq!(ledger.trustlines[0].balance, line.balance);
+        assert_eq!(ledger.trustlines[0].asset_id, line.asset_id);
+        assert_eq!(
+            after.outstanding_vault_bridge_atoms,
+            bucket.outstanding_vault_bridge_atoms
+        );
+        assert_eq!(after.redemption_queue_atoms, bucket.redemption_queue_atoms);
+        assert_eq!(after.counted_value_atoms, bucket.counted_value_atoms);
+        assert_eq!(supply(&ledger), supply_before);
+        assert_eq!(supply(&ledger), after.outstanding_vault_bridge_atoms);
+        let red = ledger.vault_bridge_redemptions.last().unwrap();
+        assert_eq!(
+            red.state,
+            postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED
+        );
+        assert_eq!(
+            (red.settled_atoms, red.settlement_receipt_hash.as_str()),
+            (0, refund.as_str())
+        );
+        red.validate_for_chain(&genesis.chain_id).unwrap();
+        // A second refund, and a payout settlement after the refund, change nothing.
+        let before = ledger.clone();
+        assert!(
+            refund_cancelled_solana_burn(&mut ledger, &genesis.chain_id, &packet, &refund, 22)
+                .is_err()
+        );
+        assert!(settle_governed_solana_payout(
+            &mut ledger,
+            &genesis.chain_id,
+            &packet,
+            &"5e".repeat(48),
+            22,
+            true
+        )
+        .is_err());
+        assert_eq!(ledger, before);
+    }
+
+    #[test]
+    fn a_paid_burn_cannot_be_refunded() {
+        let (genesis, mut ledger) = exit_custody_deposit(9);
+        let bucket = ledger.vault_bridge_bucket_states[0].bucket_id.clone();
+        exit_burn(
+            &genesis,
+            &mut ledger,
+            &bucket,
+            EXIT_AMOUNT,
+            exit_destination(),
+        )
+        .unwrap();
+        let packet = ledger
+            .vault_bridge_redemptions
+            .last()
+            .unwrap()
+            .withdrawal_packet_hash
+            .clone();
+        settle_governed_solana_payout(
+            &mut ledger,
+            &genesis.chain_id,
+            &packet,
+            &"5e".repeat(48),
+            21,
+            true,
+        )
+        .unwrap();
+        let before = ledger.clone();
+        assert!(refund_cancelled_solana_burn(
+            &mut ledger,
+            &genesis.chain_id,
+            &packet,
+            &"6e".repeat(48),
+            22
+        )
+        .is_err());
+        assert_eq!(ledger, before);
+    }
+
+    #[test]
+    fn solana_exit_refuses_owners_that_are_not_wallets() {
+        let (genesis, mut ledger) = exit_custody_deposit(9);
+        let bucket = ledger.vault_bridge_bucket_states[0].bucket_id.clone();
+        let before = ledger.clone();
+        for owner in [
+            // AhmUaCijypvcbYMDxeXVbUPqjPX1tiHfLH6NWkYnQTCi, the USDC custody token account.
+            "902ab403a58407aed4a100bf03f5e6e982f8a433ff7f0c98c8114e346ba96857",
+            // FQe34dCQg9m6yEW6NjbjoR8LfWwKGLX2hBvTdY2Lu6s1, the verifier's light PDA.
+            "d611da10ce47786f6bc97c0b046215f672a398a70da4525c38ec14808dd41ab8",
+        ] {
+            let destination = format!("solana-spl:{EXIT_GENESIS}:{owner}");
+            assert_eq!(
+                exit_burn(&genesis, &mut ledger, &bucket, EXIT_AMOUNT, destination)
+                    .unwrap_err()
+                    .0,
+                "solana_exit_destination_not_wallet"
+            );
+            assert_eq!(ledger, before);
+        }
+        // The identity, small-order points and non-canonical encodings are no wallet keys.
+        let p_minus_1 = format!("ec{}7f", "ff".repeat(30));
+        let p = format!("ed{}7f", "ff".repeat(30));
+        let p_plus_1 = format!("ee{}7f", "ff".repeat(30));
+        let identity = format!("01{}", "00".repeat(31));
+        for owner in [identity, p_minus_1, p, p_plus_1] {
+            let destination = format!("solana-spl:{EXIT_GENESIS}:{owner}");
+            assert_eq!(
+                exit_burn(&genesis, &mut ledger, &bucket, EXIT_AMOUNT, destination)
+                    .unwrap_err()
+                    .0,
+                "solana_exit_destination_not_wallet",
+                "{owner}"
+            );
+            assert_eq!(ledger, before);
+        }
+        // An Ed25519 wallet key is accepted.
+        exit_burn(
+            &genesis,
+            &mut ledger,
+            &bucket,
+            EXIT_AMOUNT,
+            exit_destination(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn solana_exit_refuses_a_burn_below_the_minimum_before_any_debit() {
+        let (genesis, mut ledger) = exit_custody_deposit(9);
+        let bucket = ledger.vault_bridge_bucket_states[0].bucket_id.clone();
+        let before = ledger.clone();
+        assert_eq!(
+            exit_burn(&genesis, &mut ledger, &bucket, 299_999, exit_destination())
+                .unwrap_err()
+                .0,
+            "solana_exit_below_minimum"
+        );
+        assert_eq!(ledger, before);
+        exit_burn(&genesis, &mut ledger, &bucket, 300_000, exit_destination()).unwrap();
+        // A governed lower minimum admits the 0.02 USDC canary amount.
+        let mut ledger = before;
+        let mut lowered = open_exit();
+        lowered.solana_exit_min_atoms = 20_000;
+        exit_burn_with(
+            &genesis,
+            &mut ledger,
+            &bucket,
+            20_000,
+            exit_destination(),
+            lowered,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn solana_exit_supply_checks_cover_a_revision_9_bucket_like_revision_8() {
+        let (genesis, mut ledger) = exit_custody_deposit(9);
+        let chain = genesis.chain_id.clone();
+        let bucket = ledger.vault_bridge_bucket_states[0].clone();
+        assert_ne!(bucket.bucket_id, postfiat_types::solana_exit::BUCKET);
+        let series = ledger.trustlines[0].asset_id.clone();
+        // The revision-9 series is recognised as a covered custody series.
+        assert_eq!(
+            solana_exit_series_bucket(&chain, &ledger, &series, true),
+            Some(bucket.bucket_id.clone())
+        );
+        assert_eq!(solana_exit_series_bucket(&chain, &ledger, "00", true), None);
+        // Its series supply reconciles with its own bucket, and revision 8 stays covered.
+        let claims = SolanaExitAccounting::read(&chain, &ledger, &[], true).unwrap();
+        let own = claims.bucket(&bucket.bucket_id).unwrap();
+        assert_eq!(
+            (own.series_id.as_str(), own.supply),
+            (series.as_str(), bucket.outstanding_vault_bridge_atoms)
+        );
+        assert!(claims.bucket(postfiat_types::solana_exit::BUCKET).is_some());
+        claims.require_reconciled().unwrap();
+        // An Orchard balance of the series counts as supply, as for revision 8.
+        let orchard = [AssetOrchardAssetBalance {
+            asset_id: series.clone(),
+            ingress_total: 1,
+            egress_total: 0,
+            live_total: 1,
+        }];
+        let shielded = SolanaExitAccounting::read(&chain, &ledger, &orchard, true).unwrap();
+        let error = shielded.require_reconciled().unwrap_err();
+        assert_eq!(error.0, "solana_exit_supply_mismatch");
+        assert!(error.1.contains(&bucket.bucket_id), "{}", error.1);
+        // A supply change without matching outstanding is refused; a paired credit with
+        // matching outstanding and counted backing passes.
+        let mut grown = ledger.clone();
+        grown.trustlines[0].balance += 1;
+        let after = SolanaExitAccounting::read(&chain, &grown, &[], true).unwrap();
+        assert_eq!(
+            claims.verify_change(&after).unwrap_err().0,
+            "solana_exit_unmatched_supply_change"
+        );
+        let mut backed = ledger.clone();
+        let b = backed
+            .vault_bridge_bucket_states
+            .iter_mut()
+            .find(|b| b.bucket_id == bucket.bucket_id)
+            .unwrap();
+        b.outstanding_vault_bridge_atoms += 1;
+        b.counted_value_atoms += 1;
+        let mut after = SolanaExitAccounting::read(&chain, &backed, &[], true).unwrap();
+        after.credit(&series, 1).unwrap();
+        claims.verify_change(&after).unwrap();
+        // A burn from an unreconciled revision-9 bucket is refused before any debit.
+        ledger.trustlines[0].balance -= 1;
+        let before = ledger.clone();
+        let refused = exit_burn(
+            &genesis,
+            &mut ledger,
+            &bucket.bucket_id,
+            EXIT_AMOUNT,
+            exit_destination(),
+        );
+        assert_eq!(refused.unwrap_err().0, "solana_exit_supply_mismatch");
+        assert_eq!(ledger, before);
+    }
+
+    #[test]
+    fn solana_exit_keeps_each_bucket_limit_and_refuses_cross_cases() {
+        let (genesis, mut ledger) = exit_custody_deposit(9);
+        let bucket = ledger.vault_bridge_bucket_states[0].clone();
+        // More than the bucket holds, even with a larger series balance. The series
+        // supply then exceeds the bucket outstanding, which the supply check refuses
+        // before the bucket limit is reached.
+        ledger.trustlines[0].balance += 1;
+        let before = ledger.clone();
+        let over = bucket.outstanding_vault_bridge_atoms + 1;
+        assert_eq!(
+            exit_burn(
+                &genesis,
+                &mut ledger,
+                &bucket.bucket_id,
+                over,
+                exit_destination()
+            )
+            .unwrap_err()
+            .0,
+            "solana_exit_supply_mismatch"
+        );
+        assert_eq!(ledger, before);
+        // An EVM destination cannot leave a Solana bucket.
+        let evm = format!("evm-erc20:1:0x{}", "22".repeat(20));
+        assert!(exit_burn(&genesis, &mut ledger, &bucket.bucket_id, EXIT_AMOUNT, evm).is_err());
+        assert_eq!(ledger, before);
+        // A Solana bucket of another custody does not exit through this one.
+        let (genesis, mut other, _, values) = setup();
+        let route = other.solana_route.clone().unwrap();
+        credit(&genesis, &mut other, &route, &values).unwrap();
+        other.nav_assets[0].finalized_epoch = 1;
+        other.nav_assets[0].finalized_reserve_packet_hash = "aa".repeat(48);
+        other.nav_assets[0].nav_per_unit = 1_000_000;
+        let other_bucket = other.vault_bridge_bucket_states[0].bucket_id.clone();
+        let before = other.clone();
+        let destination = format!("solana-spl:{}:{}", "01".repeat(32), "ce".repeat(32));
+        assert!(exit_burn(
+            &genesis,
+            &mut other,
+            &other_bucket,
+            EXIT_AMOUNT,
+            destination
+        )
+        .is_err());
+        assert_eq!(other, before);
     }
 
     #[test]

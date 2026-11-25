@@ -1,6 +1,7 @@
 # NAVCoin Reference Posts
 
-Current deployed status is tracked in
+The state on 2026-11-25 is on [NAVCoins](index.md#today); the A666 deployment
+record of 2026-07-30 is
 [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
 The public posts below explain product lineage and research boundaries; older
 a651/Arbitrum posts are not current deployment claims.

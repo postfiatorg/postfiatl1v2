@@ -25,8 +25,10 @@ for dir in /opt/postfiat "$app" "$svc" /var/log/pf-sol-exit; do
         [[ -d "$dir" && $(stat -c %u "$dir") == 0 && -z $(find "$dir" -maxdepth 0 -perm /022 -print) ]]
     fi
 done
-if [[ -f "$app/revision" ]]; then
-    [[ $(cat "$app/revision") == "$rev" ]]
+# A different revision is an upgrade. It is allowed only with both units stopped (checked
+# below). The self-test log is reset, so the self-test must pass again before the worker starts.
+if [[ -f "$app/revision" && $(cat "$app/revision") != "$rev" ]]; then
+    echo "Upgrading installed worker from $(cat "$app/revision") to $rev."
 fi
 state=$(systemctl list-unit-files --type=service --no-legend --no-pager | awk -v unit="$unit" '$1 == unit {print $2}')
 [[ -z "$state" || $state == disabled ]]

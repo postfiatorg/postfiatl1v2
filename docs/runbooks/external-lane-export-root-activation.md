@@ -28,7 +28,7 @@ No activation while one such route can still owe a withdrawal.
 
 ### First inventory, from the repository (2026-11-11)
 
-The domain was introduced by `b2747f396` (2026-11-10) and is defined at `crates/ordering_fast/src/consensus_v2.rs:29-30`. A source commit that does not descend from `b2747f396` cannot know it. Whether each verifier pins the PFTL chain being activated, and whether its route can still owe a withdrawal, is not established here.
+The domain was introduced by `b2747f396` (2026-11-10) and is defined at `crates/ordering_fast/src/consensus_v2.rs:29-30`. A source commit that does not descend from `b2747f396` cannot know it. The devnet's running build `04600868` (2026-11-25) descends from it; whether the root is activated on the devnet was not read for this review. Whether each verifier pins the PFTL chain being activated, and whether its route can still owe a withdrawal, is not established here.
 
 | Program (key) | Deployed verifier | Knows the export-root block id | Shown by |
 |---|---|---|---|

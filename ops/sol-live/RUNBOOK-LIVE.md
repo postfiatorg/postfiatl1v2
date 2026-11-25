@@ -189,7 +189,7 @@ jq -e '.guest.forward and .guest.start==.config.initial_committee and .simulatio
 
 Setup re-verifies the archived certificate and compares the authenticated committee, accepted ingress record and bucket across six validators. It checks finalized Solana vault config, custody, and USDC mint at one slot, deployed programs and loader authorities, executes the frozen checkpoint guest on every selected segment through the six-way finalized tip, and checks both simulated PDA bodies. At a stationary 1753 tip the guest can prove ancestry ending there. Wait for a later finalized block before signing.
 
-The tag-3 instruction is 317 bytes. Its SHA-256 is `bb32524804b64a9d7d40fec86c9735f8c1f5d5d03d7a8a6963e8c21f83903fe4`. The dedicated pause authority is `ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx`. Its signing file stays offline from the payout service. Review the instruction, ordered accounts and simulated bindings in `unsigned.json`.
+The tag-3 instruction is 317 bytes. Its SHA-256 is `7d02bbfe0bc6b43a52746ed5d13cd506ea0b7d4b1628d00c279fc9ed38cf19b6`. Its route binds the shared custody, so the verifier must first be upgraded to the reviewed custody-route build. The dedicated pause authority is `ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx`. Its signing file stays offline from the payout service. Review the instruction, ordered accounts and simulated bindings in `unsigned.json`.
 
 ### Install the reviewed Task Node gateway and relay before tag 3
 
@@ -349,7 +349,7 @@ timeout 610s python3 ops/sol-live/exit_cutover.py wait-closed --api "$API" --sec
 python3 ops/sol-live/exit_canary.py preflight --output "$KIT/canary"
 ```
 
-### Must be true before the real 0.02 pfUSDC test
+### Must be true before the real minimum-amount canary
 
 Repeat the disabled relay checks from step 4 against the same deployed gateway and relay. Freeze both deployments through settlement.
 
@@ -371,14 +371,14 @@ Review the saved evidence for each completed step. Evaluate the final two checks
 
 ```bash
 grep -Fxq 'service-proof verified' "$KIT/evidence/service-proof.log"
-PYTHONPATH="$PWD/ops/sol-live" python3 -c 'import json; from exit_qualification_socket import qualify; print(json.dumps(qualify()))' | jq -e '.payout_ready and (.burns_open==false) and (.qualified_parent != null) and (.series_supply_atoms | type == "string") and (.series_supply_atoms == .bucket_outstanding_atoms) and (.relayer_lamports >= .relayer_floor_lamports + .payout_budget_lamports)'
+PYTHONPATH="$PWD/ops/sol-live" python3 -c 'import json; from exit_qualification_socket import qualify; print(json.dumps(qualify()))' | jq -e '.payout_ready and (.burns_open==false) and (.qualified_parent != null) and (.series_supply_atoms | type == "string") and (.series_supply_atoms == .bucket_outstanding_atoms) and all(.buckets[]; .series_supply_atoms == .outstanding_atoms) and (.relayer_lamports >= .relayer_floor_lamports + .payout_budget_lamports)'
 ```
 
 ### Staff and rehearse settlement before the first open
 
 Name a settlement on-call, backup and independently reachable operator for each of the six resident signers. Record coverage, escalation contacts, expected payout volume and available custody margin in the cutover evidence. Each operator must complete a restore rehearsal on isolated state with test credentials. Exercise loss of that signer, fence the old instance, restore the authorized identity and its latest safety journals without duplicate signing, verify its committee identity and finalized parent, then complete a six-signature close and paid settlement. Record all six outcomes and who can perform each restore on call. Defer the first open if any signer, recovery path or settlement shift is unavailable.
 
-## 8. Open burns in a separate unanimous decision
+## 8. Open burns in a separate decision (the first open is unanimous)
 
 The frozen checker requires old-quorum V2 `signed_authorizations` in a supported single-update governance payload. Historical block 924 contains five Cobalt authorizations and zero V2 authorizations. That block predates the trusted anchor. A future Cobalt-only rotation after 1753 blocks payment across it. Readiness executes the frozen guest from the trusted committee, checks every segment endpoint and binds the resulting block hash, height and state root to six agreeing validators. It reuses previously verified finalized segments. An update at the tip requires a verified successor. Require the separately reviewed chain interlock in the exact scheduled build before opening. Drain pending burns before an incompatible change. A rotation format the frozen guest cannot verify requires a reviewed verifier repair. An HTTP flag cannot stop direct L1 burns after opening.
 
@@ -389,9 +389,11 @@ jq -e '.height==(.qualified_parent.block_height+1) and (.validators|length)==6 a
 curl -fsS "$API/readiness/qualify" | tee "$KIT/evidence/open-readiness.json" | jq -e '.ready and .burns_open'
 ```
 
-Qualification brackets the accounting reads with the same six-way height, hash and root. All six revision-8 route reports must show the full series supply equal to their bucket outstanding and the independently read source bucket. The separate custody test covers liabilities across all shared buckets, including queued redemptions. Missing full-supply reports keep opening closed. The wrapper checks the closed descriptor on six validators and requests fresh qualification on /run/pf-sol-exit/qualify.sock. Systemd gives pf-sol-exit ownership of the directory. Open verifies the connected peer UID against the installed pf-sol-exit account before requesting a response. The loopback HTTP listener remains available to the relay. It restarts qualification when the agreed parent changes before submission. After an ambiguous submission inspect the six receipts before another round. It invokes `ratify-solana-exit-open` on the resident node for the next proposal height. It obtains all six authorizations and submits a separate ordinary governance batch. Check six accepted receipts and open flags. At this point a direct L1 client can burn. Keep the public relay disabled.
+Qualification brackets the accounting reads with the same height, hash and root on six validators (five agreeing ones for a re-open). For every covered bucket of the shared custody, the route reports of its own series must show the full series supply equal to its bucket outstanding and the independently read source bucket. The separate custody test covers liabilities across all shared buckets, including queued redemptions. Missing full-supply reports keep opening closed. The wrapper checks the closed descriptor on six validators (on five agreeing ones for a re-open, when the route report shows `closed_since_registration`) and requests fresh qualification on /run/pf-sol-exit/qualify.sock. Systemd gives pf-sol-exit ownership of the directory. Open verifies the connected peer UID against the installed pf-sol-exit account before requesting a response. The loopback HTTP listener remains available to the relay. It restarts qualification when the agreed parent changes before submission. After an ambiguous submission inspect the receipts before another round. It invokes `ratify-solana-exit-open` on the resident node for the next proposal height. The first open obtains all six authorizations; a re-open after a close needs five, like the close. It submits a separate ordinary governance batch. Check the accepted receipts and open flags. At this point a direct L1 client can burn. Keep the public relay disabled.
 
-## 9. Pay and settle one 0.02 pfUSDC canary
+## 9. Pay and settle one canary at the governed minimum
+
+The canary burns exactly the governed minimum withdrawal that readiness reports (0.30 USDC by default), from the covered series with the most redeemable pfUSDC. Fund the test account with at least that much Solana-backed pfUSDC in one series first. Do not lower the minimum for the canary.
 
 The source is StakeHub's encrypted b23-bob wallet under `~/.pft/wallets/4eca662d469907e4/` with passphrase at `~/.pft/b23-bob.passphrase`. The destination is `Ce5Yv528pKVrVq4JbQchZ8zasCAzxT3f9uCfatTZcfo8`. Preserve the same canary directory across retries.
 
@@ -400,7 +402,7 @@ python3 ops/sol-live/exit_canary.py prepare --output "$KIT/canary"
 jq '{before,fields}' "$KIT/canary/plan.json"
 python3 ops/sol-live/exit_canary.py burn --output "$KIT/canary"
 python3 ops/sol-live/exit_canary.py check --output "$KIT/canary"
-jq -e '.token_deltas=={"custody":-20000,"recipient":20000} and .withdrawal_packet_hash and .solana_tx' "$KIT/canary/paid.json"
+jq -e '.amount_atoms as $a | $a > 0 and .token_deltas=={"custody":-$a,"recipient":$a} and .withdrawal_packet_hash and .solana_tx' "$KIT/canary/paid.json"
 ```
 
 The checker compares the signed envelope including fee and sequence, the six finalized burn confirmations, the permanent Solana marker, the transaction-local custody debit and ATA credit, and the 20,000-atom debit recorded by that accepted L1 burn. Later wallet credits do not affect this check. If a finalized burn already exists, rerun `check` in its original directory. After a signing or submission interruption run `python3 ops/sol-live/exit_canary.py recover --output "$KIT/canary"`, then `check`. Recovery verifies the saved ML-DSA envelope offline and looks up its exact ID on all six. If absent everywhere it submits those same bytes against a fresh, matching quote. Preserve the directory if the signed file is missing or incomplete. A paid marker with unavailable history proves payment; obtain the finalized transaction from an archival RPC before attesting settlement.
@@ -419,12 +421,12 @@ python3 ops/sol-live/exit_govern.py paid --revision "$REV" --release-height "$H"
 PAID_ID=$(jq -er .tx_id "$KIT/canary/paid-round.json")
 PAID_HEIGHT=$(jq -er .height "$KIT/canary/paid-round.json")
 python3 ops/sol-live/exit_canary.py settlement-check --output "$KIT/canary" --amendment "$PAID_ID" --height "$PAID_HEIGHT"
-jq -e '(.validators|length)==6 and .state.settled==20000 and .reference.ordinal==0' "$KIT/canary/settled.json"
+jq -e '(.validators|length)==6 and .state.settled==.state.amount and .reference.ordinal==0' "$KIT/canary/settled.json"
 ```
 
-The paid command discovers the running validator binary, validates its data directory and uses `ratify-solana-exit-paid` to draft from paid.json. It checks the exact packet, finalized slot, raw 64-byte signature and ordinal in the draft before any signing. Each resident signer requires its independent approval for that parent and payout. On an ambiguous submission, locate the accepted amendment and height on all six by the saved draft ID before retrying. Recover paid-round.json from the verified receipt rather than issuing a second attestation.
+The paid command discovers the running validator binary, validates its data directory and uses `ratify-solana-exit-paid` to draft from paid.json. It checks the exact packet, finalized slot, raw 64-byte signature and ordinal in the draft before any signing. Each resident signer requires its independent approval for that parent and payout. The wrapper takes each decision's signature count from the route report (`decision_signatures`, see `exit_rules.py`); a chain on the first release reports none, and then every decision needs all six. From the second release, paid and close need the chain's normal quorum (5 of 6): the wrapper continues when one validator is unavailable or has not approved, names the signers in its output and saved evidence, and stops if fewer than five sign or the height's proposer is unavailable. For close and paid, every read (fleet tip, Ethereum route, closed descriptor, payout reference and the receipt survey) also needs only five validators that agree, and names the unreachable ones. `accepted.json` is written before the receipt survey, so a validator lost after submission does not lose the evidence of a committed action. The first open stays unanimous; a re-open after a close needs the same five of six as the close, so one lost validator can neither block nor lock holders' exit. On an ambiguous submission, locate the accepted amendment and height on all six by the saved draft ID before retrying. Recover paid-round.json from the verified receipt rather than issuing a second attestation.
 
-Require six accepted settlement receipts. On each validator verify that the original redemption is settled for 20,000 atoms with `settlement_receipt_hash` equal to the accepted amendment ID. Reconcile the revision-8 queue, counted reserves and supply allocations against the saved baseline. The check accounts for intervening burns, other settled packets, newly counted receipts and newly issued supply allocations from the same bucket. Keep the original baseline across retries. An outstanding signature or accounting discrepancy keeps the public relay disabled.
+Require six accepted settlement receipts. On each validator verify that the original redemption is settled for its full amount (the governed minimum) with `settlement_receipt_hash` equal to the accepted amendment ID. Reconcile its bucket's queue, counted reserves and supply allocations against the saved baseline. The check accounts for intervening burns, other settled packets, newly counted receipts and newly issued supply allocations from the same bucket. Keep the original baseline across retries. An outstanding signature or accounting discrepancy keeps the public relay disabled.
 
 ## 10. Enable the public relay
 
@@ -436,9 +438,181 @@ After the finalized payout and its verified L1 settlement, enable admission usin
 "$HOME/.local/lib/pf-sol-exit-relay/exit_relay.py" enable "$KIT/canary/paid.json" | tee "$KIT/evidence/public-paid-job.log"
 ```
 
+## Before the second release height is set
+
+### The second Solana withdrawal release: what it changes, what is signed, in which order
+
+**What a user gets, from the release height H on:**
+- Every Solana deposit can be withdrawn, from any Solana-source bucket of the shared custody, not only the revision-8 batch of 23 November.
+- A withdrawal that can never be paid (for example, the destination token account is frozen or closed) can be cancelled on Solana by its destination owner or by the pause key. It is then refunded on Post Fiat to the burner, in the same asset and bucket, by a decision of five of six validators. A burn is never both paid and refunded.
+- A minimum of 0.30 USDC per withdrawal, a governed value.
+- The payout address is checked before the burn: its owner must be a wallet key.
+- Five of six validators can close, pay, re-open and refund.
+
+**What the owner signs, and with which key:**
+- **Upgrade authority** `4JJEuaYtJvgtMVixTbXfppHJPh6tcU5g7g7UtkvxK3sB` (today on the relay host): the three steps of "Upgrade the initialised Solana verifier": the extension by 10,240 bytes (about 0.052 SOL), the upgrade (buffer and upgrade), and the migration (tag 9).
+- **Pause key** `ow7wprz3MPEN15BGLyNvdJr5AUq4LNZK2ox1gY1QEJx`: later, and only after H, a cancel of one unpayable burn. The transaction is prepared and checked with `exit_cancel.py` ("Cancel a burn with the pause key"); the tool never holds the key.
+- **Optional:** after the migration's read-back, move the upgrade authority to an offline key or a multisig (step 11 of the upgrade). Never `--final`.
+
+**What each of the six validator operators installs:**
+- the release build of `postfiat-node` with the same H, before H;
+- the per-host reviewer, with that host's own Solana endpoint ("Independent settlement reviews").
+
+**The order from today's state to live:**
+
+| Step | Must be true first | How to go back |
+| --- | --- | --- |
+| 1. Merge the release; build `postfiat-node` and the verifier from the merge; replay the live chain | The replay ends in the live tip hash and state root. | Nothing is deployed yet. |
+| 2. Install the per-host reviewer on the six hosts, one at a time | The relay's settler runs with `--single-owner-fleet`. On each host the release binaries and `/etc/postfiat` are owned by root. | Stop and disable the reviewer's timer; the first release does not use it. |
+| 3. Upgrade the verifier: extend, upgrade, migrate | The payout worker is stopped and admission disabled. The on-chain upgrade authority equals the signer. | Before the migration: upgrade back to the deployed build (`3b16fc30…`). After it: only the new build again. |
+| 4. Pin `VERIFIER_SHA256` to the read-back hash and restart the worker | The pinned hash equals the chain's. | Stop the worker. |
+| 5. Set H in source; build the release; install it on all six validators | Every validator reports the release build, and H is far enough ahead for all six. | Before H, return to the first release's build: nothing has changed on the chain. |
+| 6. Reach H | Every paid burn is settled, and the settler is stopped just before H. | None after H: the rules are on the chain. Close withdrawals with five of six. |
+| 7. Run from H | The relay runs `exit_govern.py paid` and `refund`; each host signs from its own review. | Close withdrawals with five of six. |
+
+**Numbers:**
+- **Verifier after the upgrade:** 123,152 bytes, SHA-256 `4091ee16db29154e7aae642b637320c0a0d0cdee110da88d07416ab7b1c15b21`. It fits the deployed 116,928 bytes plus the 10,240-byte extension. The deployed program today: 116,928 bytes, `3b16fc309501814e0bba718ecadb80f02993f6f355153a13f37ae9d47d29354c`.
+- **Node:** the replayed release build of `postfiat-node` has SHA-256 `b7015cda92dd94aa510e25a948c43c9700f10b80d0ea0b45ac815cdefb293ac8`. With H unset it reproduced the live chain block for block to the live tip and state root. No node code has changed since that build.
+
+**Not in this release:**
+- **Paying across a validator-set rotation.** A burn in the block after a rotation waits, with a named status, until a later checkpoint makes it payable.
+- **A user-facing cancel.** Users have no button or command for it; only the destination owner's own Solana signature or the pause key, through `exit_cancel.py`.
+- **A cancel made through another program.** Refund drafting reads only top-level instructions, so such a cancel is not found.
+
+### Checklist
+
+H (`SECOND_RELEASES` in `crates/types/src/solana_exit.rs`) is a source constant today, not a governed value. Every validator must run a build with the same H before H, or it diverges at the first block that uses the second release's rules.
+
+- [ ] Every validator's status read reports the second-release build (`build_git_revision`).
+- [ ] The Solana verifier is upgraded and its hash is pinned (`VERIFIER_SHA256` in `exit_setup.py`).
+- [ ] The tools report the second release's rules from the chain's route report.
+- [ ] A replay of the live chain with the build passes and matches the live state root.
+- [ ] The per-host settlement reviewer runs on all six hosts and approved the latest payout on each (see "Independent settlement reviews").
+
+A governed or interlocked activation would need validators to ratify H only from the second-release build, the code to read the stored activation instead of the constant, and ratification to be refused while any active validator reports another build.
+
+### Independent settlement reviews
+
+Under the second release, five of six signatures decide paid, close, re-open and refund. A signature is only as good as the review behind it. On each validator host, a review is independent when all of the following hold:
+- **Where it runs:** on that host, as its own user `pf-sol-exit-review`.
+- **What it reads:**
+  - the burn and its redemption from that host's own node;
+  - Solana through an endpoint configured on that host. Every verdict names that endpoint's host, never the full URL.
+- **What it derives itself:** each address (marker, light, associated token account).
+- **Which transaction it checks:** the one that created the marker by the verifier's own rule.
+  - That is the successful transaction whose verifier instruction names the marker; the program creates a marker once.
+  - The reviewer pages the marker's whole history to find it, up to 20,000 transactions.
+  - Once a review approves, the reviewer remembers that transaction's signature (`/var/lib/postfiat-exit-review/writers/`) and later reviews check it again directly, so transactions that name the marker afterwards cannot push it out of reach.
+  - Lamport transfers to the address and transactions that only name it are ignored, as the program ignores a prefund.
+- **What it checks:**
+  - the redemption is pending, unsettled and in a covered bucket;
+  - the destination is canonical;
+  - the marker's byte (1 paid, 2 cancelled) at finalized;
+  - exactly one payout or cancel instruction of the verifier in that transaction;
+  - the proof's public values, rebuilt from the buffer's own uploads before the payout, match the burn (burn, amount, destination, bucket, family, chain tag);
+  - for a payout, the mint and the exact custody and recipient amounts.
+- **How its verdict is kept:**
+  - The verdict names the decision's SHA-256 and is sealed with the reviewer's Ed25519 key.
+  - The keypair is readable only by `pf-sol-exit-review`.
+  - The signing step reads only the public key, so it can check a verdict but not make one.
+  - The signing step trusts the public key and the config only when they and `/etc/postfiat` are owned by root and writable by no one else; otherwise it refuses by name, because the node user could then replace the key or point the config at its own verdicts.
+- **How it signs:** `exit_review.py sign --amendment-file F --proposal-slot H --expires-at-height E --authorization-file A` signs only a decision approved by a verdict at most 15 minutes old.
+  - It builds the node's signing command itself: the resident binary, this host's data directory, validator name and key file.
+  - The resident binary is the executable the kernel runs for the node user's `transport-validator-serve` process of this data directory (`/proc/PID/exe`), never a name taken from a command line. It must lie in `/opt/postfiat/releases/<release>/postfiat-node`, and the binary, its release directory and `/opt/postfiat/releases` must be owned by root and writable by no one else; otherwise, or when there is not exactly one such process, the step refuses. Check this on each host before the height: `stat -c '%U %a %n' /opt/postfiat/releases /opt/postfiat/releases/*/ /opt/postfiat/releases/*/postfiat-node` prints `root` and no group or other write bit.
+  - It takes no command from its caller, and refuses any other argument.
+  - It checks the amendment file's hash before and after the signing command, and removes the authorization if the file changed.
+- **Exit codes:** 0 approved; 2 refused with a named reason; 3 an RPC error or a reply of an unexpected shape, named in one line; 4 a local file it cannot read. In `scan`, one failing burn stops neither the other burns' reviews nor the clearance. Verdicts older than a day are removed.
+
+`govern.py` runs `exit_review.py sign` on each host for paid and refund under the second release. A host whose reviewer refused is printed with its reason as "refused by its own reviewer", apart from unreachable hosts, even when the other five reach the quorum.
+
+`exit_review.py show-clearance` gives that host's own sealed rotation clearance for an opening or re-opening. A first-release chain keeps the go-live review files and six signatures. The go-live tools `operator/settle.py` (now only with `--single-owner-fleet`) and `operator/clearance.py` write those files from the relay host, and the reviewer replaces them. Update `settle.py` and `settler.sh` together: without the flag `settle.py` exits and prints the command to run, and `settler.sh` prints an `ALERT` line for any failed settle.
+
+**Install, one host at a time.** Set `COMMIT` (the reviewed commit), `HOST`, `VALIDATOR` (`validator-0` to `validator-5`), `PORT` (that node's RPC port) and `URL` (that host's own Solana RPC URL). Copy the archive and the script to the host, then run the script there as root:
+
+```bash
+git archive -o exit-review.tar "$COMMIT" ops/sol-live
+scp exit-review.tar ops/sol-live/install-exit-review.sh "root@$HOST:/root/"
+ssh "root@$HOST" bash /root/install-exit-review.sh "$VALIDATOR" "$PORT" "$URL" /root/exit-review.tar
+```
+
+The script needs Python 3.10 or newer and `setfacl` (the `acl` package). Any failed step stops it with its reason. It installs:
+- the reviewer and its venv, from the hash-pinned `exit-requirements.lock` with `--require-hashes`;
+- the user `pf-sol-exit-review`, which alone owns the key (mode 0600), with `postfiat` in its group so the node user can read the verdicts and the config (mode 0640);
+- the public key, readable by all;
+- read access for the reviewer to the names in the node's `consensus-v2-safety` directory and nothing else of the node;
+- the timer `pft-sol-exit-review.timer`, every minute.
+
+The script runs the first review and stops if it ends in an RPC or access error.
+
+**Check the six providers.** Use at least three different Solana providers across the six hosts. With `HOSTS` set to the six hosts, this prints each host's provider (host name only) and warns when fewer than three differ:
+
+```bash
+for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; done | python3 ops/sol-live/exit_review.py endpoints
+```
+
+**What stays open.**
+- **Root ssh from the relay.** The relay host still reaches every validator host as root over ssh (`govern.py`, `remote`). Root can run the node's signing command with the validator key directly, or replace the reviewer, so a compromised relay host can still sign on all six. Only the operators can close this:
+  - give the relay a non-root key whose forced command allows only `exit_review.py sign` with its four arguments;
+  - keep each validator key readable only by the node user;
+  - remove root ssh for settlement.
+- **Shared providers.** Independence also needs each host's Solana endpoint to be a different provider; the check above only warns.
+
+**Order, so that no payout waits unsettled** (each payout blocks the next until it is settled):
+1. While the chain runs the first release, install the reviewer on all six hosts, one at a time. The relay's settler keeps running with `--single-owner-fleet`; the reviewers only write verdicts.
+2. For the next payout, confirm on each host that `/var/lib/postfiat-exit-review/<sha256 of the paid decision>.json` approves the same decision the settler signed.
+3. Just before the second release height, let the settler settle every paid burn, then stop it.
+4. From the height, the relay runs `exit_govern.py paid` (and `refund`). It only drafts and collects signatures; each host signs from its own review.
+
+### Upgrade the initialised Solana verifier
+
+The deployed verifier (`0x3b16fc30…`, byte-identical to `solana/deploy/build.sh` of `main`) stores in its light account a route that also binds the revision-8 bucket. The new program computes the custody route without it, so the light's `route` (bytes 136–168 of 289) must change once. Instruction tag 9 does this. Its arguments must rebuild the stored route, so the new route is fixed by the account. It runs once and leaves the checkpoint, the pause state, the checkpoint accounts and every paid marker unchanged. `solana/pfusdc-egress-verifier/tests/upgrade_rehearsal.py` rehearses these steps on the dumped mainnet state. The same build adds tag 10, `cancel` ([refund design](../../docs/specs/solana-exit-refund-design-20261124.md)). It changes no stored data and needs no step of its own. At 122,976 bytes, the image still fits in the 10,240-byte extension.
+
+The L1 needs no close. The first release keeps running and revision-8 burns stay open. The new build can cancel from the upgrade on, but the pause key signs no cancel until the second release height is active (see "Cancel a burn with the pause key"). From the upgrade until the new service runs, the verifier or the old service refuses every payout, and burns wait unpaid. Stop the payout worker and disable public admission for that window. Revision-9 exits start only at the second release height.
+
+**Before each signing step (4, 5, 6, 8):** read ProgramData `D7YLTGrE…` and confirm that its upgrade authority (bytes 13–45, option byte 12 = 1) equals the key about to sign, `4JJEua…`. Record the transaction signature of every step in `$KIT/evidence/upgrade-signatures.txt`.
+
+**No authority change:** do not run `solana program set-upgrade-authority`, and never `--final`, until step 8 has been read back. Tag 9 reads the current upgrade authority, so removing it before the migration locks withdrawals for good.
+
+| Step | Signer | Check |
+| --- | --- | --- |
+| 1. Build the reviewed commit twice with `solana/deploy/build.sh` (platform-tools v1.58) | none | Both builds equal; record `pfusdc_egress_verifier.so` SHA-256. A second person rebuilds and compares. |
+| 2. Read the deployed state | none | Program code `0x3b16fc30…`; light `FQe34dCQ…` holds route `84b17839…c767`, height and `paused` as recorded. |
+| 3. Stop the payout worker, disable admission | operator | The disable procedure in Recovery. |
+| 4. `solana program extend 8Dxp8bfgEh6ankapfBdkTds5cebqrtPdFxpZSP6JsGAF 10240` | upgrade authority `4JJEua…` (with `--payer`) | Read back the ProgramData length: 127,213 bytes (45 + 116,928 + 10,240). The loader refuses less than 10,240 bytes; about 0.052 SOL rent. |
+| 5. `solana program write-buffer pfusdc_egress_verifier.so --buffer-authority <upgrade authority>` | payer, upgrade authority | `solana program dump <buffer>` equals the build. |
+| 6. `solana program upgrade <buffer> 8Dxp8bfg…` | upgrade authority | The buffer's rent returns to the spill account. |
+| 7. Read back the program | none | The first bytes equal the build and the rest of ProgramData is zero. Note the SHA-256 of the whole ProgramData tail (`data[45:]`); `profile_code` hashes exactly that. On a local Agave 4.4.1 validator the tail was exactly the image. |
+| 8. Send tag 9 (below) | upgrade authority | Tag 9 takes exactly three accounts: the upgrade authority (signer), the light `FQe34dCQ…` (writable) and ProgramData `D7YLTGrE…` (read-only). Read back the light: only bytes 136–168 differ from step 2. They now hold `02b02d4b…558e` (`tests/route-vector.txt`); `height` and `paused` are unchanged. |
+| 9. Set `VERIFIER_SHA256` in `exit_setup.py` to the step-7 hash, then install and self-test the service build | operator | Before the restart, the installed service's `VERIFIER_SHA256` equals the SHA-256 of the ProgramData tail read now from the chain. |
+| 10. Start the worker, re-enable admission | operator | Pending revision-8 burns are paid. |
+| 11. Optional, after the step-8 read-back: `solana program set-upgrade-authority 8Dxp8bfg… --new-upgrade-authority <offline key or multisig>` | upgrade authority | Never `--final`. The service pins the authority (`profile_code` in `exit_setup.py` requires `MAINNET_PAYER`), so that pin changes in the same reviewed release; until then payouts stop. |
+
+```bash
+python3 solana/pfusdc-egress-verifier/bootstrap.py --migrate "$KIT/setup.json" "$KIT/evidence/migrate-args.bin"
+PYTHONPATH="$PWD/ops/sol-live" python3 - <<'PY'
+import os
+from pathlib import Path
+from exit_setup import DIRECTORY, ExitCluster, Instruction, LIGHT, LOADER, MAINNET_PAYER, VERIFIER, pda, ro, rw
+c = ExitCluster(MAINNET_PAYER)
+c.unlock(DIRECTORY / "mainnet-payer.json")
+data = Path(os.environ["KIT"], "evidence/migrate-args.bin").read_bytes()
+programdata = pda(LOADER, bytes(VERIFIER))
+print(c.send("exit.migrate", [Instruction(VERIFIER, b"\x09" + data, [ro(MAINNET_PAYER, True), rw(LIGHT), ro(programdata)])]))
+PY
+```
+
+`$KIT/setup.json` is the configuration of the 23 November initialisation. Its route equals the one built from `ops/sol-live/fixtures/exit-setup.json`. With any other configuration, tag 9 refuses with `Binding`. A second run also refuses with `Binding`, and a signer other than the upgrade authority is refused.
+
+If a step fails:
+- **Step 4.** An extension is permanent. Read the ProgramData length first; repeat only if it is still 116,973 bytes, because a repeat extends and charges again.
+- **Step 5.** A half-written buffer stays funded. Resume it with `solana program write-buffer … --buffer <buffer key>`, or close it with `solana program close <buffer key>` to recover the rent.
+- **Step 6.** The upgrade is atomic: either the new code is in place (step 7 shows it) or nothing changed. Repeat with the same buffer.
+- **Step 8.** The account keeps the old route, and every withdrawal refuses with `Binding`. Fix the arguments and repeat. To go back instead, upgrade to the `main` build (`0x3b16fc30…`), which works on the unmigrated account.
+- **After a successful migration.** The old program refuses every withdrawal with `Binding`, which is safe but stops payouts. To recover, upgrade to the new build again. No instruction restores the old route.
+
 ## Recovery
 
-On signer loss or a settlement backlog, disable public admission immediately by running `"$HOME/.local/bin/disable-sol-exit"` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Five validators can finalize direct burns. Direct burns remain possible until a unanimous close commits. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. With all six available, close direct L1 admission with a separate unanimous decision, pay and settle all pending claims using their original packets, and reconcile custody before considering a separate reopen. Preserve evidence and wait for six accepted receipts and six closed descriptors.
+On signer loss or a settlement backlog, disable public admission immediately by running `"$HOME/.local/bin/disable-sol-exit"` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Direct burns remain possible until a close is committed, because five validators can finalize them. Five can also close direct L1 admission with a separate decision, and the same five can re-open it after that close, so a lost sixth signer neither blocks nor locks holders' exit. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. Pay and settle all pending claims using their original packets, and reconcile custody before re-opening. Preserve evidence and wait for accepted receipts and closed descriptors on at least five agreeing validators; the wrapper names any validator that did not answer.
 
 ```bash
 source "$HOME/.config/postfiat/sol-exit-oncall.env"
@@ -475,7 +649,44 @@ assert c.account(LIGHT)["data"][-1]==flag
 PY
 ```
 
-The seven earlier Solana series retain their own liabilities. Migration requires separate governance and conservation tests for outstanding amounts, queued redemptions, counted reserves and allocations. This release binds only revision 8.
+### Cancel a burn with the pause key
+
+The verifier lets two parties cancel a proven, unpaid burn: its destination owner, or the pause authority. Nobody else can. A cancel moves no funds; it makes the burn refundable on Post Fiat instead of payable on Solana.
+
+**When:**
+- **Who asks:** the holder (through support) or the settlement on-call. Never on a stranger's request.
+- **Which burns:** a burn whose destination can never receive, for example a frozen or closed token account, a program-owned owner, or a mint rule change.
+- **Not before the second release height is active,** that is, before five agreeing validators report `exit_release` 2. Before that the chain has no refund, and a cancelled burn could be neither paid nor refunded. No user-facing cancel exists before then.
+
+**Check first** (two people):
+1. The burn is unpayable: its job shows a named refusal (`refused: destination not a wallet …`), or the destination check refuses it now.
+2. The burn is not in flight: its job is not `paying`, the journal holds no unexpired attempt signature, and the marker account does not exist at finalized.
+3. The worker is stopped for this burn until the cancel is final.
+
+**Then,** with `ops/sol-live/exit_cancel.py`, which never holds or reads the pause key:
+1. **Prepare.** On the relay, stop the worker for this burn, then run `prepare`. It refuses unless the redemption is pending and unsettled, the marker does not exist at finalized, and no payout is in flight: neither the job paying, nor a recorded attempt whose block height has not passed. It checks that the worker's proof files are for this burn. It writes `unsigned.hex`, plus `summary.txt` and `summary.json`: the burn, amount, destination owner, marker address, program, the signer that must sign (the pause authority), the values buffer, the message hash and the last valid block height.
+2. **Sign.** On the offline pause host, the holder signs `unsigned.hex` with the pause key, before the last valid block height in the summary. Past that height, prepare again.
+3. **Verify.** On the relay, `verify` checks that the signed transaction is the prepared message, signed by the pause authority alone.
+4. **Send.** `send` refuses unless five agreeing validators report the second release. It re-checks the burn and the marker, uploads the burn's public values, and sends the transaction. Read back the marker: byte 2 at finalized. Record the signature, then follow "Refund a cancelled burn" below.
+
+```bash
+python3 ops/sol-live/exit_cancel.py prepare --burn "$BURN" --proof-dir "$EXIT_WORK/jobs/$BURN/<witness hash>" --journal "$EXIT_WORK/jobs.sqlite" --out "$KIT/cancel-$BURN"
+python3 ops/sol-live/exit_cancel.py verify --out "$KIT/cancel-$BURN" --signed "$KIT/cancel-$BURN/signed.hex"
+python3 ops/sol-live/exit_cancel.py send --out "$KIT/cancel-$BURN" --signed "$KIT/cancel-$BURN/signed.hex"
+```
+
+### Refund a cancelled burn
+
+1. On every validator host, the reviewer's timer finds the burn and writes that host's refund verdict. The reviewer reads the marker through that host's own Solana endpoint at finalized and derives its address from the burn ("Independent settlement reviews"). Confirm each verdict in `/var/lib/postfiat-exit-review/`.
+2. The burner must still hold a trust line for the burned series. If they removed it, ask them to re-create it; until then the refund is refused, and it can be repeated afterwards.
+3. On the relay, run the command below. It drafts the decision from the finalized cancelled marker, and each host signs only from its own review; five of six are needed.
+4. Read back on five agreeing validators: the redemption's state is `refunded`, and the burner's balance in the series rose by the amount.
+
+```bash
+python3 ops/sol-live/exit_govern.py refund --revision "$REV" --release-height "$H" --burn "$BURN" --output "$KIT/evidence/refund-$BURN.json"
+```
+
+The seven earlier Solana series retain their own liabilities. The exit pays burns from every bucket of this shared custody whose ID derives from its own revision's policy, and the custody must cover all of them; moving liabilities between series requires separate governance and conservation tests for outstanding amounts, queued redemptions, counted reserves and allocations.
 
 ## One proving machine
 

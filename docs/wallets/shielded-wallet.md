@@ -1,6 +1,9 @@
 # Shielded Wallet
 
-Shielded wallet flows are Orchard/Halo2-based.
+Shielded wallet flows are Orchard/Halo2-based. Public submission of shielded
+actions is off on every validator of `postfiat-wan-devnet-2`
+([Network Status](../status/network-status.md)); the commands below run against
+a local devnet.
 
 ## Current Commands
 

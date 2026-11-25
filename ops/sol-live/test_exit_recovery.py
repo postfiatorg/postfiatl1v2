@@ -41,7 +41,11 @@ class RecoveryTest(unittest.TestCase):
                 raise TimeoutError()
 
             c.call.side_effect = call
-            with patch.object(p, "check_custody"), self.assertRaises(TimeoutError):
+            with (
+                patch.object(p, "check_custody"),
+                patch.object(p, "check_verifier"),
+                self.assertRaises(TimeoutError),
+            ):
                 p.funded_send(
                     c,
                     "exit.withdrawal",
@@ -111,11 +115,11 @@ class RecoveryTest(unittest.TestCase):
                 burn_tx_id=BURN,
                 bucket_id=p.BUCKET,
                 amount_atoms=20000,
-                destination_ref=p.PREFIX + "12" * 32,
+                destination_ref=p.PREFIX + "ce" * 32,
                 created_at_height=5,
             )
             with patch.object(svc, "chain_payment", return_value=p.PAID_NO_HISTORY):
-                svc.restore_redemption(j, row)
+                svc.restore_redemption(j, row, {p.BUCKET: {}})
                 status = svc.checked_row(j, BURN)
                 self.assertEqual(status["stage"], "paid")
                 self.assertIsNone(status["solana_tx"])
@@ -185,11 +189,11 @@ class RecoveryTest(unittest.TestCase):
                 burn_tx_id=BURN,
                 bucket_id=p.BUCKET,
                 amount_atoms=20000,
-                destination_ref=p.PREFIX + "12" * 32,
+                destination_ref=p.PREFIX + "ce" * 32,
                 created_at_height=9,
             )
             with (
-                patch.object(svc, "redemptions", return_value=[row]),
+                patch.object(svc, "redemptions", return_value=([row], {p.BUCKET: {}})),
                 patch.object(svc, "chain_payment", return_value=p.PAID_NO_HISTORY),
                 patch.object(svc, "cluster"),
             ):
@@ -204,7 +208,7 @@ class RecoveryTest(unittest.TestCase):
                 burn_tx_id=BURN,
                 bucket_id=p.BUCKET,
                 amount_atoms=20000,
-                destination_ref=p.PREFIX + "12" * 32,
+                destination_ref=p.PREFIX + "ce" * 32,
                 created_at_height=7,
             )
             rpc = Mock()
@@ -212,7 +216,7 @@ class RecoveryTest(unittest.TestCase):
             with (
                 patch.object(svc, "cluster", return_value=rpc),
                 patch.object(svc, "chain_payment", return_value=None),
-                patch.object(svc, "redemptions", return_value=[row]),
+                patch.object(svc, "redemptions", return_value=([row], {p.BUCKET: {}})),
             ):
                 svc.rebuild(state)
             journal = svc.Journal(state / "jobs.sqlite")
@@ -244,7 +248,7 @@ class RecoveryTest(unittest.TestCase):
             (root / "jobs.sqlite").write_bytes(b"damaged")
             sidecar = root / "jobs.sqlite-wal"
             sidecar.write_bytes(b"forensic evidence")
-            with patch.object(svc, "redemptions", return_value=[]):
+            with patch.object(svc, "redemptions", return_value=([], {p.BUCKET: {}})):
                 svc.rebuild(root)
             self.assertEqual(sidecar.read_bytes(), b"forensic evidence")
             self.assertIsNone(svc.Journal(root / "jobs.sqlite").pending())

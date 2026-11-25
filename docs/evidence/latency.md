@@ -1,5 +1,11 @@
 # Latency Evidence
 
+!!! note "Recorded evidence"
+    The `reports/` files named on this page are archived outside this repository
+    (see `reports/README.md`); most are from May 2026, when the network had five
+    validators. Paths under `benchmarks/` and `docs/` are in the repository.
+    Checked on 25 November 2026.
+
 Latency evidence is attached to a specific workload, validator count, and
 controlled environment.
 
@@ -7,8 +13,8 @@ controlled environment.
 
 | Evidence | Result |
 | --- | --- |
-| Local 5-validator 20-round benchmark | submit-to-finality p50 1.563s, p95 1.709s, p99 1.753s |
-| Remote 5-validator normal-run smoke | certified round p50 1.032s, p95 1.116s, p99 1.139s |
+| Local 5-validator 20-round benchmark (14 May 2026) | submit-to-finality p50 1.563s, p95 1.709s, p99 1.753s |
+| Remote 5-validator normal-run smoke (14 May 2026) | certified round p50 1.032s, p95 1.116s, p99 1.139s |
 
 ## Evidence Paths
 

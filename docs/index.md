@@ -19,6 +19,17 @@ machine-checkable reserve packets. The design is in the
     Current facts are on [Network Status](status/network-status.md); the audit
     and release-gate position is on [Security](security/index.md).
 
+## What changed this week
+
+25 November 2026. Sources: [Current State](status/chain-state-current.md) and the
+[handoffs](handoffs/index.md).
+
+- **21 November.** All six validators moved to `main-r64-20261121`; `main` became the only long-lived branch ([Master State](status/master-state.md)).
+- **23 November.** The first Solana withdrawal release (rules from block 1841); first real withdrawals; the deposit route re-anchored at block 1847.
+- **24 November.** The second Solana exit release (rules from block 1890): every Solana deposit batch can be withdrawn, a refund path for a burn that cannot be paid, each validator reviews a settlement itself. Real withdrawals of 0.30, 0.30 and 4.00 USDC were paid and settled.
+- **25 November.** Read-only read: all six validators at height 1897, one state root, build `04600868` (the second Solana exit release). No B24 reading since epoch 9 (height 1842).
+- **Limits.** A controlled devnet with small caps, not announced: one withdrawal spends one deposit batch, the minimum is 0.30 USDC, the vault accepts 25 USDC more, a withdrawal takes about four minutes ([Network Status](status/network-status.md#usdc-bridges)).
+
 ## Start here
 
 | If you are | Read, in order |
@@ -33,9 +44,9 @@ Codenames such as A666, BMNRC, Z3 or G4 are defined in the
 
 ## What exists now
 
-Reviewed against main `4b4da1b91` on 2026-11-06. Implementation and local qualification
-below do not imply deployment; fleet observations retain their own dates on
-[Network Status](status/network-status.md).
+Reviewed against main `ce3659b22` and a read-only fleet read on 2026-11-25. Implementation
+and local qualification below do not imply deployment; fleet observations retain their own
+dates on [Network Status](status/network-status.md).
 
 | Area | State | Read |
 | --- | --- | --- |
@@ -43,15 +54,16 @@ below do not imply deployment; fleet observations retain their own dates on
 | Finality | Consensus v2 prepare/precommit with commit quorum certificates; 5 of 6 on the devnet. | [Finality](architecture/finality.md) |
 | Validator-trust governance | Cobalt ratifies validator-registry and trust-graph changes; active on the devnet since height 916. Other governance scopes and proposals remain Foundation-administered. | [Cobalt](governance/cobalt.md), [Validator Registry](governance/validator-registry.md) |
 | Settlement lanes | Consensus transactions, W6 atomic swaps, FastPay, FastSwap and Asset-Orchard, each with its own finality and recovery rules. | [Settlement Lanes](architecture/settlement-lanes.md) |
-| Privacy | Orchard/Halo2 deposit, spend, withdraw, scan and selective disclosure. The shielded stack is not post-quantum. | [Privacy](privacy/overview.md) |
+| Privacy | Orchard/Halo2 deposit, spend, withdraw, scan and selective disclosure. The shielded stack is not post-quantum. Public submission of shielded actions is off on every validator. | [Privacy](privacy/overview.md) |
 | Post-quantum authorization | ML-DSA-65 for accounts and validators; larger certificates accepted as a design cost. | [Quantum Authorization](quantum/authorization.md) |
 | Storage | Transactional `redb` storage active since height 930; G5 offline qualified on 2026-10-23 for the October 21 binary. G6 remains open; later binaries need their own qualification. | [Network Status](status/network-status.md), [State And Storage](architecture/state-and-storage.md) |
-| NAVCoins | A666 v2 is the deployed NAVCoin lineage (public general availability closed); BMNRC was created on the devnet on 2026-10-02. | [NAVCoins](navcoins/index.md) |
+| NAVCoins | A666 v2 (public general availability closed) and BMNRC (created 2026-10-02) are on the devnet. B24, the Schwab-backed NAVCoin, has been created and cashed in with real money since mid-November; its newest reading on the chain is epoch 9 (NAV 1.006419, height 1842). | [NAVCoins](navcoins/index.md) |
+| USDC bridges | pfUSDC is minted from USDC on Ethereum and on Solana. Solana deposits and withdrawals run on the devnet with small caps and limits; no real Ethereum deposit or withdrawal is recorded since 2026-11-21. | [Network Status](status/network-status.md#usdc-bridges), [Bridge Audit Map](status/bridge-audit-map.md) |
 | YOLO target receipts | Implemented and disabled by default; activation needs a future governance amendment. Receipts confer no trading, minting or reserve authority. | [YOLO Target Receipt v1](yolo/target-receipt-v1.md) |
-| RPC and clients | Newline-delimited JSON over TCP; read methods, controlled write methods, account history; Python client and Rust SDK. | [RPC](rpc/overview.md), [Python](python/quickstart.md) |
-| Wallets | Transparent, issued-asset, FastPay, swap, memo and shielded flows in source and tools. The private path was off and ungoverned at the last fleet observation. | [Web Wallet](wallets/web-wallet.md), [Shielded Wallet](wallets/shielded-wallet.md), [Network Status](status/network-status.md) |
+| RPC and clients | Newline-delimited JSON over TCP; read methods, controlled write methods, account history; Python client and Rust SDK. `blocks`, `receipts` and `tx` are answered by key since #227. | [RPC](rpc/overview.md), [Python](python/quickstart.md) |
+| Wallets | Transparent, issued-asset, FastPay, swap, memo and shielded flows in source and tools. Public submission of shielded actions is off on every validator. | [Web Wallet](wallets/web-wallet.md), [Shielded Wallet](wallets/shielded-wallet.md), [Network Status](status/network-status.md) |
 | Validators | A separate software signer, durable double-sign guard, deployment checker and two-user unit generation are implemented. Qualification of the selected release and deployment under two users remain open. | [Validators](validators/overview.md), [Signer Policy](runbooks/public-rpc-operator-policy.md#two-user-units) |
-| PFT on Base | A real Base Sepolia Lock released native PFT on a local six-validator fleet on 2026-11-06; replay was refused and the watcher confirmed backing. The Phase 2 audit remains open. Native export accounting exists behind `exports_enabled`, default off; the Base verifier deployment, export prover and relay remain open. | [PFT Token On Base](architecture/pft-token-on-base.md), [Genesis External Lanes](architecture/genesis-external-lanes.md) |
+| PFT on Base | A real Base Sepolia Lock released native PFT on a local six-validator fleet on 2026-11-06; replay was refused and the watcher confirmed backing. The Phase 2 audit remains open. Native export accounting exists behind `exports_enabled`, default off; the export proof program and relay are on `main`, and the Base verifier deployment remains open. | [PFT Token On Base](architecture/pft-token-on-base.md), [Genesis External Lanes](architecture/genesis-external-lanes.md) |
 
 What remains before public launch is listed in the
 [Release Gate Inventory](status/release-gate-inventory.md), the

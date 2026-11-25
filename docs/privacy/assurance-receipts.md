@@ -6,6 +6,10 @@ transparent again. The point is to let a holder prove bounded policy facts to a
 counterparty, custodian, auditor, or venue without giving that party permanent
 view-key access to the wallet.
 
+> **Status on `main` (25 November 2026):** this packet exists as a schema and
+> fixtures under `docs/governance/agent/`. Its verifier script is archived
+> outside this repository, and no code in `crates/` or `python/` implements it.
+
 This is the Railgun-style lesson PostFiat adopts: compliance should be a
 selective proof surface, not ambient public leakage. Private Proofs of Innocence
 shows the useful pattern: bind a shielded asset to a policy/list-provider root
@@ -83,7 +87,9 @@ The verifier checks:
 
 ## Current Evidence
 
-The first assurance receipt fixture is bound to the existing Orchard evidence:
+The first assurance receipt fixture is bound to the Orchard evidence below. The
+report files are from May 2026 and are archived outside this repository (see
+`reports/README.md`), so the hash check runs only against that archive:
 
 | Evidence | Claim |
 | --- | --- |

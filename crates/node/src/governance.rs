@@ -34,6 +34,25 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
     {
         config.quorum = postfiat_types::external_lane_amendment_threshold(config.validators.len());
     }
+    // From the second release, closing Solana burns, settling a payout, setting the
+    // minimum and re-opening after a close need the same threshold; the first opening
+    // stays unanimous. Before it every decision stays unanimous.
+    let second = postfiat_types::solana_exit::second_release_active(
+        &genesis.chain_id,
+        &genesis_hash(&genesis),
+        options.activation_height,
+    );
+    if second && postfiat_types::solana_exit::is_decision(&options.kind, true) {
+        let reopening = postfiat_types::solana_exit::closed_since_registration(
+            &store.read_governance()?,
+        );
+        config.quorum = postfiat_types::solana_exit::required_quorum(
+            &options.kind,
+            reopening,
+            config.validators.len(),
+            true,
+        );
+    }
     let lifecycle = GovernanceAmendmentLifecycle {
         activation_height: options.activation_height,
         veto_until_height: options.veto_until_height,

@@ -1,6 +1,17 @@
 # NAVCoin Create and Swap: Product and Build Specification
 
 **Status:** draft for build, 2026-09-30  
+
+!!! note "2026-11-25: dated status"
+
+    The status columns, gate states and build progress below are those of
+    30 September to 5 October 2026 and were not updated in the review of
+    25 November; gate states are the owner's. Since then BMNRC was created
+    (2 October; one reading, epoch 1 at height 1099), B24 went onto the devnet
+    with real money, and the validators moved to releases cut from `main`.
+    The state on 25 November is on [NAVCoins](index.md#today) and
+    [Network Status](../status/network-status.md).
+
 **Owner:** Post Fiat  
 **First instance:** the BMNR carry NAVCoin (`BMNRC`), which holds BMNRon long on Felix/Ethereum and shorts `xyz:BMNR` on Hyperliquid.
 

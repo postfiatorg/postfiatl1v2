@@ -6,6 +6,11 @@ PostFiat's current shielded flow has three production-shaped operations:
 2. Orchard private spend;
 3. Orchard-to-transparent withdraw.
 
+They are on `main`. On the live devnet, public submission of shielded actions
+is off on every validator, as recorded in the
+[handoff of 23 November 2026](../status/handoff-2026-11-23.md); the switch is
+not reported over RPC.
+
 ## Shielded Action Structure
 
 A shielded action exposes enough data for consensus verification while keeping
@@ -120,6 +125,9 @@ Accepted apply:
 - credits the transparent recipient in the same committed block.
 
 ## Evidence
+
+May 2026 runs; the reports are archived outside this repository (see
+`reports/README.md`).
 
 - `reports/testnet-orchard-wallet-finality-smoke/privacy-direct-deposit-20260515T132406Z/testnet-orchard-wallet-finality-smoke.json`
 - `reports/testnet-orchard-peer-certified-smoke/peer-direct-deposit-20260515T134027Z/testnet-orchard-peer-certified-smoke.json`
