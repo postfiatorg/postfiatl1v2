@@ -4,8 +4,8 @@ The source repository is public. The current network posture remains a
 controlled-testnet implementation; publication does not promote the software to
 mainnet or authorize real-value custody.
 
-Since 23 November 2026 the devnet's Solana route holds real USDC in a capped
-vault on Solana mainnet, and pfUSDC can be withdrawn back to Solana. This is a
+The devnet's Solana route holds real USDC in a capped vault on Solana
+mainnet, and since 23 November 2026 pfUSDC can be withdrawn back to Solana. This is a
 controlled devnet with small caps; there is no public announcement of Solana
 withdrawals ([handoff of 25 November](../status/handoff-2026-11-25.md)).
 

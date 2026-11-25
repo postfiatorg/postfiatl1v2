@@ -2,7 +2,7 @@
 
 !!! note "Dated page"
     Recorded on 17 July 2026. The public repository `postfiatorg/postfiatl1v2`
-    has existed since then. This page does not record whether its history was
+    exists today. This page does not record whether its history was
     produced through the gate below; read it as the gate's definition, not as
     today's state of the private history.
 
