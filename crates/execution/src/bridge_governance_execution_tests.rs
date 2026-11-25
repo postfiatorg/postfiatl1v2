@@ -709,7 +709,8 @@
                 settlement_amount_atoms: 0,
             }),
         );
-        assert!(execute_asset_transaction(&genesis, &mut ledger, &mint, 20).accepted);
+        // Finalization at 7 plus the 20-block profile is inclusive.
+        assert!(execute_asset_transaction(&genesis, &mut ledger, &mint, 27).accepted);
 
         let deadman_mint = signed_asset_transaction_with_minimum_fee(
             &genesis,

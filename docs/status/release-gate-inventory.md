@@ -42,7 +42,7 @@ repository because the docs site does not publish them.
 | 16 | Public history hygiene | Only sanitized history is public; the contaminated development history stays private. | DONE | [audit](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/OPEN-SOURCE-PRODUCTIONIZATION-AUDIT-20260716.md) § 12 ("Source publication is closed"); [publication gate](../security/public-history-publication.md) | D4 |
 | 17 | Launch authority | An explicit launch-authorization artifact exists (whitepaper: LaunchCertificate with ≥7 ratifiers). | OPEN | [audit](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/OPEN-SOURCE-PRODUCTIONIZATION-AUDIT-20260716.md) § 8 ("Exact artifact is not implemented") and § 12 ("launch authority") | D4 |
 | 18 | Operations readiness | Production alerting, independent fault drills, multi-region operations, and independent-operator evidence. | OPEN | [operations readiness inventory](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/OPEN-SOURCE-OPERATIONS-READINESS-INVENTORY-20260716.md) § Result; [audit](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/OPEN-SOURCE-PRODUCTIONIZATION-AUDIT-20260716.md) § 12 | D2, D3 |
-| 19 | Public operator runbook | Join, ML-DSA key custody, sidecar, and monitoring documentation a stranger can follow. | OPEN | milestone [D2 unchecked](../plans/active/l1v2-public-testnet-path-milestone.md); controlled-testnet pieces exist: [operator launch](../runbooks/controlled-testnet-operator-launch.md), [day two](../runbooks/operator-day-two.md), [emergency key rotation](../runbooks/validator-emergency-key-rotation.md), [incident response](../runbooks/incident-response.md) | D2 |
+| 19 | Independent operator onboarding | The [public operator runbook](../runbooks/public-operator-runbook.md) exists. Independent completion requires the evidence below. | OPEN | Public-network prerequisites and an independent rehearsal are outstanding. | D2 |
 | 20 | Topology/independence thresholds | Placement preflight and concentration caps are defined for launch. | OPEN | thresholds proposed in [launch-topology-thresholds.md](../architecture/launch-topology-thresholds.md) (awaiting the operator's confirmation; placement preflight and L3 verifier not built); [public launch boundary](../security/public-launch-boundary.md) (mechanics may be green "before public operator diversity exists") | D3 |
 | 21 | Privacy production burndown | Production-grade privacy gates: external audits, live soak, anonymity-set and disclosure model, frozen upgrade/emergency procedures. | OPEN | [privacy production burndown](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/privacy-production-burndown.md) (production-grade goal list; PRIV rows Partial) | Z3, D4 |
 
@@ -57,8 +57,14 @@ candidate yet.
 1. **Validator key custody (row 3)** — plaintext software key files are the
    recorded posture; every public operator story (D2) inherits this until a
    production custody path exists.
-2. **Public operator runbook (row 19)** — nothing stranger-followable exists;
-   only controlled-testnet operator documents are committed.
+2. **Independent onboarding (row 19).** Close each open step with a release-specific record.
+   - Download and verify a signed release and a second builder's matching checksum.
+   - Obtain and verify public genesis, bootstrap peers and their published identities.
+   - Register an independent validator and retain its accepted registration receipt.
+   - Demonstrate production key custody and recovery with the chosen signer.
+   - Run the L1v2 sidecar and record a verified round on the public network.
+   - Exercise public monitoring and record a delivered alert.
+   - Run the documented upgrade and recovery on a public candidate and retain the independent operator's rehearsal report.
 3. **Specialist external reviews (rows 11–14)** — the longest-lead-time OPEN
    items; the P13 `h_action` scope is prepared but no independent review is
    recorded.

@@ -1,13 +1,6 @@
-# PostFiat: An Authority-Validated Settlement Ledger
+# Archived whitepaper — PostFiat, June 2026
 
-### Governed trust evolution, shielded settlement, replayable machine classification, and post-quantum authorization
-
-**Whitepaper, Version 3 — June 2026; implementation boundary reconciled July 2026**
-
-**Canonical protocol-document candidate.** This is the only repository document
-intended to describe the protocol. It remains a controlled pre-testnet
-conformance draft: present-tense statements are limited by the explicit current
-implementation boundaries in this document and by `SECURITY.md`.
+The [current Post Fiat whitepaper](whitepaper.md) supersedes this version. This archived draft preserves the June design and its July implementation notes.
 
 ---
 
