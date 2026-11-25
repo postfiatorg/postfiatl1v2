@@ -37,10 +37,12 @@ class InstallTests(unittest.TestCase):
             "/usr/bin/systemctl start $unit, /usr/bin/systemctl stop $unit, /usr/bin/systemctl --no-pager status $unit"])
 
     def test_reinstall_refusals_precede_proof_invalidation(self):
-        invalidate = SCRIPT.index("install -m644 /dev/null /var/log/pf-sol-exit/self-test.log")
-        for guard in ('cat "$app/revision"', "systemctl is-active", '$state == disabled', 'check_port\n'):
-            self.assertLess(SCRIPT.index(guard), invalidate)
-        self.assertLess(invalidate, SCRIPT.index("useradd --system"))
+        body = SCRIPT.split("!= \"$0\" ]]; then return 0; fi", 1)[1]
+        invalidate = body.index("install -m644 /dev/null /var/log/pf-sol-exit/self-test.log")
+        for guard in ('cat "$app/revision"', 'require_stopped "$unit" "$test_unit"', '$state == disabled',
+                      "check_not_downgrade", 'check_port\n'):
+            self.assertLess(body.index(guard), invalidate)
+        self.assertLess(invalidate, body.index('create_account "$account"'))
 
     def test_private_input_is_copied_only_from_approved_open_descriptor(self):
         from exit_install_credential import copy_input
