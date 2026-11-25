@@ -52,6 +52,17 @@ sequenceDiagram
   Old--xV: Old key rejected after activation height
 ```
 
+## Releases
+
+Since 21 November 2026 `main` is the only long-lived branch and a release is
+built from a commit on `main` only; a short-lived release branch may set an
+activation height and is merged back
+([Master State](../status/master-state.md),
+[Release Process](../release-process.md)). On 25 November all six validators
+ran `04600868`, the head of `release/sol-exit-r2`, which was not yet on `main`
+([Network Status](../status/network-status.md)). Releases are rolled one
+validator at a time; see [Safe Validator Rollout](../runbooks/safe-validator-rollout.md).
+
 ## Current Tooling
 
 Main includes `postfiat-node validator-signer-serve` and

@@ -23,7 +23,8 @@ Status: **canonical operational-state reference**
     `deployment_manifest_verified` true on all six, one manifest
     (`cd37a303d953…`), one node binary
     (`6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b`) and
-    empty mempools.
+    empty mempools. At 10:50:57Z validator 0 reported height 1900 (read-only
+    `nav_reserve_proof_status`).
 
     `04600868` is the head of the release branch `release/sol-exit-r2`: `main`
     at `e5c4f6ceb` plus the release height, a reviewer-installer fix and a

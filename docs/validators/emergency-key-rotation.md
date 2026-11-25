@@ -31,5 +31,4 @@ flowchart TD
 ## Source
 
 - `docs/runbooks/validator-emergency-key-rotation.md`
-- `scripts/testnet-remote-emergency-key-rotation-rehearsal` *(archived outside this repository; see `scripts/README.md`)*
-- `reports/testnet-remote-emergency-key-rotation-rehearsal/`
+- `scripts/testnet-remote-emergency-key-rotation-rehearsal` and its reports *(archived outside this repository; see `scripts/README.md` and `reports/README.md`)*

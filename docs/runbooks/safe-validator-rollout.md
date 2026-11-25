@@ -1,5 +1,19 @@
 # Safe validator fleet rollout
 
+!!! note "2026-11-25: how the November releases were rolled"
+
+    The releases of 19 to 24 November were not rolled with this tool, and
+    [Current State](../status/chain-state-current.md) records no deployment
+    receipt for them; the last one is from 2026-10-30. The Solana exit releases
+    were rolled one validator at a time from a release kit:
+    `ops/sol-live/exit_release_kit.py` stages it in the style of the
+    `main-r64-20261121` release, and `ops/sol-live/exit_roll.py` plans the
+    release and guards each host restart, requiring six matching finalized
+    statuses. After each host an accepted transfer and six-way agreement on
+    height, tip and state root were checked (working rules of the
+    [23 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-23.md)).
+    Whether this tool stays the supported entrypoint is the owner's decision.
+
 `scripts/postfiat-safe-rollout` is the only supported controlled-testnet fleet
 deployment entrypoint. It consumes the canonical
 `deployment-validator-units-stage` report and never accepts an operator-chosen

@@ -45,6 +45,7 @@ scripts/testnet-rpc-doctor
 
 ## Evidence
 
-- `reports/testnet-validator-doctor/`
-- `reports/testnet-monitor-snapshot/`
-- `reports/testnet-rpc-doctor/`
+The commands write their reports under `reports/` (`testnet-validator-doctor`,
+`testnet-monitor-snapshot`, `testnet-rpc-doctor`). That directory is not kept in
+Git, and earlier reports were archived outside the repository
+(`reports/README.md`).
