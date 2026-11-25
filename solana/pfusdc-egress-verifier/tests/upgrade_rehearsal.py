@@ -133,6 +133,19 @@ def fetch(args):
                           vault_sha256=hashlib.sha256((out / "vault.so").read_bytes()).hexdigest())))
 
 
+def light_height(raw):
+    """The checkpoint height a light account stands at (u64 little-endian at byte 280)."""
+    return int.from_bytes(raw[280:288], "little")
+
+
+def light_check(live, snap):
+    """The loaded light against the light the snapshot dumped; the checkpoint height is named so
+    a light that moved since a fixture was pinned says so."""
+    doc = json.loads((snap / "accounts" / f"{LIGHT}.json").read_text())
+    dumped = base64.b64decode(doc["account"]["data"][0])
+    return tuple(dict(sha256=hashlib.sha256(raw).hexdigest(), height=light_height(raw)) for raw in (live, dumped))
+
+
 def fields(buffer):
     body = buffer[len(MAGIC) + 4 + int.from_bytes(buffer[len(MAGIC):len(MAGIC) + 4], "big"):]
     out = []
@@ -306,8 +319,7 @@ def run(args):
         programdata = Pubkey.find_program_address([bytes(VERIFIER)], LOADER)[0]
         local.call("requestAirdrop", str(authority.pubkey()), 1_000_000_000)
         live = local.account(LIGHT)
-        case("dumped light loaded unchanged", hashlib.sha256(live).hexdigest(),
-             hashlib.sha256(bytes.fromhex((HERE / "mainnet-light.hex").read_text().strip())).hexdigest())
+        case("dumped light loaded unchanged", *light_check(live, snap))
 
         # (a) The old program initialised exactly as on mainnet (the tag-3 arguments of the
         # 23 November initialisation), under a local program ID.
