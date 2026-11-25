@@ -2,6 +2,15 @@
 
 Validator launch is package-driven.
 
+!!! note "2026-11-25"
+
+    The launch certificate below is the design; no launch-certificate artifact
+    is implemented in the code (row 17 of the
+    [Release Gate Inventory](../status/release-gate-inventory.md)). The four
+    scripts under Source were archived outside the repository. The six devnet
+    validators were launched earlier and are Foundation-administered; no
+    outside validator can join ([Network Status](../status/network-status.md)).
+
 ## Launch Flow
 
 1. build release package;

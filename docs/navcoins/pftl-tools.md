@@ -5,6 +5,9 @@
 > deployment, and evidence entry points are documented in
 > [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
 > Do not infer current production routing from an older script name.
+> Added 2026-11-25: the B24 daily reading job and launch scripts are in
+> `ops/b24-live/` and `ops/b24-replacement/`, and the read-only NAV proof
+> watchdog is `tools/nav-proof-watch/`.
 
 This page maps the main NAVCoin tools to the evidence they produce. It is a
 starting point for operators and reviewers who need to find the actual scripts,
@@ -157,6 +160,5 @@ pages are:
 
 Excluded internal handoffs and runbooks remain useful for operators, but they
 are not part of the hosted MkDocs nav. Search them by path, for example
-`docs/status/otc-swaps-mvp-proven-2026-06-19.md`,
-`docs/status/pfusdc-bridge-handoff-2026-06-19.md`, and
+`docs/status/otc-swaps-mvp-proven-2026-06-19.md` and
 `docs/runbooks/wan-devnet-full-live-end-to-end-run.md`.

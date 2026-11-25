@@ -28,5 +28,5 @@ Write exposure changes:
 
 - `docs/runbooks/controlled-write-edge-policy.md`
 - `docs/runbooks/public-rpc-operator-policy.md`
-- `scripts/testnet-controlled-write-edge-policy-audit` *(archived outside this repository; see `scripts/README.md`)*
-- `reports/testnet-controlled-write-edge-policy/`
+- `scripts/testnet-controlled-write-edge-policy-audit` and its reports were
+  archived outside this repository (`scripts/README.md`, `reports/README.md`).

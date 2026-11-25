@@ -608,7 +608,7 @@ The payment v2 signing JSON uses chain fields from the quote plus a memo array:
 
 ```json
 {
-  "chain_id": "postfiat-wan-devnet",
+  "chain_id": "postfiat-wan-devnet-2",
   "genesis_hash": "...",
   "protocol_version": 1,
   "to": "pf...",

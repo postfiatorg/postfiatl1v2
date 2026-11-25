@@ -6,6 +6,8 @@
 **Normative dependencies:** [whitepaper](../whitepaper.md) §6 (Cobalt registry transitions), [storage-scaling-fix-spec](storage-scaling-fix-spec.md) (storage qualification), `dynamic-unl-scoring/docs/DeterministicFinalScore.md` (deterministic scoring), and the [Dynamic UNL evidence-source note](../governance/dynamic-unl-l1-evidence-source-note.md)  
 **Dependency locking:** before ratification, the launch bundle records the repository revision and SHA-256 digest of every normative dependency. Mutable paths above are review references only; an unpinned dependency fails genesis verification.
 
+**Review note (25 November 2026):** a locked specification, kept as written. Facts about the network in it are as of 30 August 2026; for the network today see [Network Status](../status/network-status.md).
+
 ## 1. Purpose and scope
 
 The public-testnet path plan has five phases:

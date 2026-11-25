@@ -1,5 +1,11 @@
 # Cobalt Evidence
 
+!!! note "Recorded evidence"
+    The `reports/` files named on this page are archived outside this repository
+    (see `reports/README.md`); most are from May 2026, when the network had five
+    validators. Paths under `benchmarks/` and `docs/` are in the repository.
+    Checked on 25 November 2026.
+
 Cobalt evidence proves bounded controlled-devnet protocol behavior. It does not
 prove public operator decentralization, and every operational claim needs an
 observation time plus an exact binary identity.

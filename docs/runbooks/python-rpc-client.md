@@ -154,7 +154,6 @@ public read as a `--method` value, with the node's parameter names as flags
   `cursor` and `next_cursor` `None`, and `pages`. The CLI form is
   `--method owned_objects --owner-public-key-hex HEX [--cursor C]
   [--omit-owner-keys] [--all-pages]`.
-- `wrap_owned(from_address, owner_public_key_hex, amount, asset="PFT")`
 - `owned_sign(signed_order_json, validator_id)` where the JSON contains the
   order, owner public key, and owner signature; bare orders fail closed.
 - `owned_apply(cert_json)`
@@ -208,7 +207,7 @@ from postfiat_rpc import (
     send_shielded_pft,
 )
 
-wallet = create_wallet(chain_id="postfiat-controlled-testnet", wallet_dir="wallets")
+wallet = create_wallet(chain_id="postfiat-local", wallet_dir="wallets")
 request_faucet_pft(data_dir="devnet/local/validator-0", to_address=wallet.address, amount=1000)
 
 client = PostFiatRpcClient("127.0.0.1:27650")
@@ -260,11 +259,11 @@ from postfiat_rpc import (
 
 client = PostFiatRpcClient("127.0.0.1:27650")
 issuer = create_wallet(
-    chain_id="postfiat-controlled-testnet",
+    chain_id="postfiat-local",
     wallet_dir="wallets/issuer",
 )
 holder = create_wallet(
-    chain_id="postfiat-controlled-testnet",
+    chain_id="postfiat-local",
     wallet_dir="wallets/holder",
 )
 
@@ -406,6 +405,14 @@ Current limitations:
   gated write methods.
 
 ## Smoke
+
+!!! note "History, May 2026"
+
+    The smoke runs and reports below date from 16–21 May 2026, on an earlier
+    controlled network with five read-only endpoints. Their scripts and
+    reports were archived outside the repository (`scripts/README.md`,
+    `reports/README.md`) and have not been re-run against
+    `postfiat-wan-devnet-2`. The client's current tests are in `python/tests/`.
 
 Run the local smoke:
 
