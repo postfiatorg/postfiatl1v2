@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Generate the independently dated fleet, authority and proof-identity statements."""
 import argparse
+import base64
 import json
+import posixpath
 import subprocess
 from pathlib import Path
 
@@ -68,6 +70,14 @@ def main():
         run = github(path)
         jobs = github(f"{path}/attempts/{run['run_attempt']}/jobs")
         records["identity"] = identity_observation(run, jobs["jobs"], records["identity"])
+        identity = records["identity"]
+        for field in ("artifact_sha256", "verification_key"):
+            identity.pop(field, None)
+        if identity["conclusion"] == identity["job"] == identity["comparison"] == "success":
+            path = "contents/programs/pft-lane-export/program-info.json"
+            blob = github(f"{path}?ref={identity['source_revision']}")
+            program = json.loads(base64.b64decode(blob["content"]))
+            identity.update(artifact_sha256=program["elf_sha256"], verification_key=program["program_vkey"])
         record_path.write_text(json.dumps(records, indent=2) + "\n")
     for name in PAGES:
         path = ROOT / name
@@ -75,7 +85,9 @@ def main():
         if s.count(START) != 1 or s.count(END) != 1:
             raise SystemExit(f"Missing or duplicate observation markers in {name}")
         a, b = s.index(START) + len(START), s.index(END)
-        updated = s[:a] + render(records) + s[b:]
+        provenance = posixpath.relpath("docs/status/component-observations.json", posixpath.dirname(name))
+        updated = (s[:a] + render(records)
+                   + f"[Observation records, source revisions, artifacts and observers]({provenance})\n\n" + s[b:])
         if check and updated != s:
             raise SystemExit(f"Stale observations in {name}")
         if updated != s:

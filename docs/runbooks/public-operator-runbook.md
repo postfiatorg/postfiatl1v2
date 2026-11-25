@@ -29,6 +29,8 @@ testnet opens.
 | [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
 | [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45684553972) | Source build / n/a | 2026-11-25T19:30:09Z | Unverified (workflow failure, comparison skipped) |
 
+[Observation records, source revisions, artifacts and observers](../status/component-observations.json)
+
 <!-- /component-observations -->
 
 ## 1. Prerequisites
