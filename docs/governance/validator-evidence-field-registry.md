@@ -309,8 +309,7 @@ It encodes:
 
 The rule-binding slice now makes `GovernanceRuleset` decisions cite these
 closed evidence fields directly. See
-Validator Evidence Ruleset Binding (that page is not in this repository on 25
-November 2026).
+Validator Evidence Ruleset Binding.
 
 ## Open Review Questions
 

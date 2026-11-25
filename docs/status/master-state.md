@@ -14,14 +14,14 @@ There is one line of code: `main` in this repository.
 - A branch that will not merge is tagged into the archive and deleted. It does not stay in the
   branch list.
 
-!!! warning "2026-11-25: the running build is not on `main` yet"
+!!! note "2026-11-25: the running build is on `main` again"
 
     The validators run `04600868`, the head of the release branch `release/sol-exit-r2`. It is
     `main` at `e5c4f6ceb` plus the release height (block 1890), a reviewer-installer fix and a
-    rehearsal-test fix. `git merge-base --is-ancestor 04600868 origin/main` fails at `ce3659b22`.
-    The pull request that merges it (#228) was open at the
-    [25 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-25.md).
-    Until it merges, the first rule above is not met.
+    rehearsal-test fix. From the rollout on 24 November until the merge it was not on `main`.
+    It was merged into `main` on 25 November 2026 at 11:43 UTC as `26acd4639` (#234, which carries #228 and #230);
+    `git merge-base --is-ancestor 04600868 origin/main` succeeds from that commit on, so the first
+    rule above is met again.
 
 ## What the validators run
 
@@ -31,7 +31,7 @@ Read from all six validators on 2026-11-25, 10:16–10:23 UTC, read-only `status
 | --- | --- |
 | Chain | `postfiat-wan-devnet-2` |
 | Build revision | `04600868` (`release/sol-exit-r2`; second Solana exit release, rules from block 1890) |
-| On `main` | Not yet (see the note above). Its base `e5c4f6ceb` is the merge of #223 |
+| On `main` | Yes, since `26acd4639` (#234, 25 November 2026). Its base `e5c4f6ceb` is the merge of #223 |
 | Binary SHA-256 | `6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b` |
 | Deployment manifest SHA-256 | `cd37a303d953e575727ee94141d2b897e0eff9c6cb9d91c5a09fd04b0ddb4d1b`; `deployment_manifest_verified` true |
 | Height | 1897, all six agreeing on tip and state root |
@@ -113,7 +113,7 @@ On 21 November 2026 every bridge service was moved to one checkout of `main`, at
 !!! note "2026-11-25: not all services run unmodified `main`"
 
     At the 25 November handoff (state of 24 November, 22:30 UTC) the relay host ran local edits,
-    recorded on the branch `ops/relay-host-live-edits-20261125` and in #229 and #230 (not merged),
+    recorded on the branch `ops/relay-host-live-edits-20261125` and in #229 (not merged) and #230 (on `main` since #234),
     and the Solana payout service ran a bundle of the second exit release plus a speed-up
     (`c033278b`). Moving them back to unmodified `main` is open work in that handoff.
 

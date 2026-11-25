@@ -2,13 +2,16 @@
 
 import argparse
 import hashlib
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
 from exit_setup import ROOT, fleet, rpc, save, six
 
-OLD = "main-r64-20261121"
+# The release now live and the one it replaced. The first exit release rolled over main-r64.
+OLD = os.getenv("EXIT_OLD_RELEASE", "main-r64-20261121")
+OLDER = os.getenv("EXIT_OLDER_RELEASE", "sol-release6-4-20261119")
 KIT = Path.home() / "var" / OLD
 
 
@@ -52,7 +55,7 @@ def main():
         (KIT / "env")
         .read_text()
         .replace(OLD, args.release)
-        .replace("sol-release6-4-20261119", OLD)
+        .replace(OLDER, OLD)
     )
     (dest / "env").write_text(env)
     for name in ("stage.sh", "roll-rest.sh", "deploy_host.sh", "restore-watchdog.sh"):
@@ -66,7 +69,8 @@ def main():
             ]
             if len(restarts) != 2:
                 raise ValueError("Unexpected predecessor restart sequence.")
-            for i in reversed(restarts):
+            # A kit copied from an exit release already carries the guard lines.
+            for i in [] if "EXIT_ROLL_GUARD" in script else reversed(restarts):
                 lines.insert(
                     i, 'python3 "${EXIT_ROLL_GUARD:?use exit_roll.py}" guard "$N"\n'
                 )
