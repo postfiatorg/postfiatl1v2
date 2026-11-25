@@ -89,11 +89,18 @@ crash-suffix truncation/checkpointing, manifest writes, and export writes are
 not. Whole-directory mutation-sentinel tests cover successful verification and
 each repair/refusal boundary.
 
-**Last recorded deployment (2026-10-30).** The controlled devnet has run this
-store since height 930 (2026-08-31). The latest fleet record names
-`vote-records-20261030`, binary `87cfe797…`, source `ae70d66d`;
-see [Network Status](../status/network-status.md). This is a dated record,
-not a fresh fleet observation.
+**Deployment (read on 25 November 2026).** The controlled devnet has run this
+store since height 930 (2026-08-31). Since then the fleet moved through several
+releases: `vote-records-20261030` (binary `87cfe797…`, source `ae70d66d`,
+recorded on 30 October), `main-r64-20261121` (source `674dbb18a`) on 21 November
+([Master State](../status/master-state.md)), and the Solana exit releases of
+23 and 24 November. On 25 November all six validators were at height 1897
+with one state root on build `04600868`. Validator 0's `status` reported
+`storage.backend` `redb` (4.2.0), `storage_format` `postfiat-redb-v1` and
+`scheduled_activation_height` 930. At height 1900 all six reported
+`transactional_active` true and `integrity_status`
+`verification_stale_or_missing`, with the last full verification at height 927
+(`reason_code` `storage_full_verification_stale` on validator 0).
 
 **Qualification: `OFFLINE QUALIFIED` (2026-10-23).** The packet for
 `store-handle-20261021`, binary `eea96ba6…`, source `86706699`, covers

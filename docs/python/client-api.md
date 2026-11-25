@@ -28,6 +28,11 @@ The client supports bounded reads plus gated wallet write helpers:
   unwrap vote/apply;
 - PFTL-to-Uniswap NAVCoin bridge route, packet, claim, supply, and receipt
   replay reads;
+- vault bridge status and route, pfUSDC ingress preflight and egress witness,
+  NAV reserve proof status, market-operations, external lane and fixed-rate FX
+  reads;
+- private pool readiness, snapshot and page reads (public submission of
+  shielded actions is off on every validator);
 - Orchard public pool report.
 
 ## Design Notes

@@ -4,6 +4,11 @@
 **Counted revision:** `1f478e0c` (`main`, 2026-08-28)  
 **Core production total:** **225,070 nonblank source lines**
 
+!!! note "Dated inventory"
+    These counts are for `1f478e0c` (28 August 2026). They were not recounted
+    for `main` of 25 November 2026, which has changed since (for example the
+    Solana withdrawal code of 23 and 24 November).
+
 ## Counting boundary
 
 This inventory measures the core protocol implementation that an auditor could

@@ -449,7 +449,7 @@ An export that is accepted and never paid loses nothing on PFTL beyond the expor
 
 The user-facing interface for the lane. The Python CLI reads a lane (`external_lane_info`) and watches it ([the watcher](#the-watcher)) but does not build or submit a release; the node commands of [the Base checkpoint source](#the-base-checkpoint-source) do. The design keeps the SP1 route for Base through its dispute games (option (a)) as a later upgrade.
 
-The Base half of exports: the PFTL finality verifier deployment for PFT on Base with its route profile and asset id, the release ELF and key of the export program (`programs/pft-lane-export`, built so far only for execute-mode tests), the relay and the Base `release` of an export. No deployed genesis enables exports; tests use the switch to qualify the native-chain implementation. Whether Phase 3 ships is the product owner's decision.
+The Base half of exports: the PFTL finality verifier deployment for PFT on Base with its route profile and asset id, the release ELF and key of the export program (`programs/pft-lane-export`; on `main` an ELF and its program identity are committed there, last refreshed on 19 November 2026 in `program-info.json`, and this page records no deployment that uses them), the relay and the Base `release` of an export. No deployed genesis enables exports; tests use the switch to qualify the native-chain implementation. Whether Phase 3 ships is the product owner's decision.
 
 ## Not before
 

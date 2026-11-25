@@ -16,8 +16,8 @@ that implements it. Shielded (Orchard) keys are covered in
 | Transaction signing context | `postfiat-l1-v2/tx/v1` (ML-DSA context string) | `TX_SIGNATURE_CONTEXT`, same file |
 | Hash function | SHA3-384 with a domain prefix: `SHA3-384(domain ‖ 0x00 ‖ bytes)` | `hash_bytes`, same file |
 | Address | `pf` + hex of the first 20 bytes of `SHA3-384("postfiat.address.v1" ‖ 0x00 ‖ public key)`; 42 characters | `address_from_public_key`, same file |
-| Address checksum | None | same file |
-| Recipient format check on transfers | None beyond "non-empty text, at most 256 bytes" | `crates/types/src/transactions_mempool_receipts.rs` |
+| Address checksum | Optional mixed-case display checksum; on-chain addresses stay lowercase | `crates/crypto_provider/src/address.rs` |
+| Recipient format check on transfers | Noncanonical recipients are rejected at RPC submission and mempool admission; execution applies the rule only after `recipient_format_v2_activation_height` | `crates/node/src/mempool_proposals.rs`, `crates/types/src/shielded_bridge_governance.rs` |
 | Key binding | The first spend stores the public key; later spends must use the same key | `crates/execution/src/entrypoints.rs` |
 | Key rotation for accounts | Not implemented | [Account Key Rotation Boundary](../specs/account-key-rotation-boundary.md) |
 
@@ -45,8 +45,10 @@ address = "pf" + lowercase_hex( SHA3-384( "postfiat.address.v1" || 0x00 || publi
 
 RPC submission, mempool admission and the wallet SDK reject noncanonical
 recipient fields. Execution enforces the same rule only after governance
-activates `recipient_format_activation_height`; historical execution stays
-unchanged before that height. These source changes still require deployment.
+activates `recipient_format_v2_activation_height`; historical execution stays
+unchanged before that height. This source is in the running build
+(`04600868`); whether governance has set the height on the devnet is not
+recorded here.
 
 Use the published parser and checksum rather than lowercasing arbitrary input:
 normalizing before checking the checksum would hide a mistyped mixed-case address.
