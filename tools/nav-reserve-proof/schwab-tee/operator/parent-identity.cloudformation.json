@@ -1,0 +1,67 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "YOLO Nitro parent identity and EC2-only pass-role permission. IAM resources only; no compute, key, bucket or network resources.",
+  "Metadata": {
+    "Runbook": "postfiatl1v2/tools/nav-reserve-proof/schwab-tee/README.md",
+    "ExpectedAccountId": "146575258003",
+    "ExistingGroup": "yolosetup"
+  },
+  "Resources": {
+    "ParentRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "yolo-nitro-parent-v1",
+        "Path": "/",
+        "Description": "YOLO Nitro parent; KMS access is granted later by the dedicated attested-recipient key policy.",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "Service": "ec2.amazonaws.com" },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Tags": [
+          { "Key": "Project", "Value": "yolo-tee" },
+          { "Key": "Scope", "Value": "portfolio-targets-only" }
+        ]
+      }
+    },
+    "ParentInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": "yolo-nitro-parent-v1",
+        "Path": "/",
+        "Roles": [{ "Ref": "ParentRole" }]
+      }
+    },
+    "GroupPassRole": {
+      "Type": "AWS::IAM::GroupPolicy",
+      "DependsOn": "ParentRole",
+      "Properties": {
+        "GroupName": "yolosetup",
+        "PolicyName": "yolo-nitro-parent-pass-role-v1",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "PassOnlyYoloNitroParentToEc2",
+              "Effect": "Allow",
+              "Action": "iam:PassRole",
+              "Resource": "arn:aws:iam::146575258003:role/yolo-nitro-parent-v1",
+              "Condition": {
+                "StringEquals": { "iam:PassedToService": "ec2.amazonaws.com" }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ParentRoleArn": { "Value": { "Fn::GetAtt": ["ParentRole", "Arn"] } },
+    "ParentInstanceProfileArn": { "Value": { "Fn::GetAtt": ["ParentInstanceProfile", "Arn"] } }
+  }
+}

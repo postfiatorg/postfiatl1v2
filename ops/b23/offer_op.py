@@ -16,7 +16,7 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, "/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".scratch-deposit"))
 import pftl  # noqa: E402
 
 LOCK = Path("/home/postfiat/repos/b23-coord/chain.lock")
