@@ -22,8 +22,8 @@ with one line in his next handoff. The recommendations below are pre-filled so
 
 Fact check of 25 November 2026: the signing fix `bbb291ce` and the YOLO
 target-receipt code `1412b4dc` are both ancestors of every release the
-validators have run since 21 November 2026 (`main-r64-20261121` and the build
-`04600868`). The two rows above are left for the operator to close.
+validators have run since 21 November 2026 (`main-r64-20261121`, `sol-exit-r1`
+and the build `04600868`). The two rows above are left for the operator to close.
 
 When every row is answered, the deferred Dynamic UNL milestone can be activated
 at the G7 boundary without further preparation.

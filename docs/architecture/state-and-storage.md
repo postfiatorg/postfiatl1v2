@@ -91,8 +91,8 @@ each repair/refusal boundary.
 
 **Deployment (read on 25 November 2026).** The controlled devnet has run this
 store since height 930 (2026-08-31). Since then the fleet moved through several
-releases: `vote-records-20261030` (binary `87cfe797…`, source `ae70d66d`) on
-30 October, `main-r64-20261121` (source `674dbb18a`) on 21 November
+releases: `vote-records-20261030` (binary `87cfe797…`, source `ae70d66d`,
+recorded on 30 October), `main-r64-20261121` (source `674dbb18a`) on 21 November
 ([Master State](../status/master-state.md)), and the Solana exit releases of
 23 and 24 November. On 25 November all six validators were at height 1897
 with one state root on build `04600868`. Validator 0's `status` reported

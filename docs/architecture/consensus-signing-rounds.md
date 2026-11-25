@@ -66,8 +66,9 @@ unchanged. The correction enforces the highest-voted-view contract within
 the existing versioned Consensus v2 path. Running nodes acquire the corrected
 authorization behavior only through an operator-controlled release.
 The function is in the source of every release the validators have run since
-21 November 2026: `674dbb18a` (`main-r64-20261121`) and the build `04600868`
-that runs on 25 November (checked with `git grep` on both commits).
+21 November 2026: `674dbb18a` (`main-r64-20261121`), `71dbc9b3` (`sol-exit-r1`)
+and the build `04600868` that runs on 25 November (checked with `git grep` on
+the three commits).
 
 ## Regression coverage
 

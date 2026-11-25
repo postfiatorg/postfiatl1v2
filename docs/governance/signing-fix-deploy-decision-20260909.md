@@ -8,8 +8,9 @@ restart, configuration change, host access, chain write, or rollout.
 !!! note "Later state (checked on 25 November 2026)"
     This sheet records the decision of 9 September 2026. The signing fix
     `bbb291ce` is now an ancestor of `main` and of every release the validators
-    have run since 21 November 2026: `674dbb18a` (`main-r64-20261121`) and the
-    build `04600868` that runs on 25 November (checked with
+    have run since 21 November 2026: `674dbb18a` (`main-r64-20261121`),
+    `71dbc9b3` (`sol-exit-r1`) and the build `04600868` that runs on 25
+    November (checked with
     `git merge-base --is-ancestor`). See [Master State](../status/master-state.md).
 
 ## Question
