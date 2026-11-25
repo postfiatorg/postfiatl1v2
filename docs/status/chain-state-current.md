@@ -6,7 +6,9 @@ fleet observation: the read-only all-six read of 2026-11-25 (`status`
 exit release (build revision `04600868`). Latest deployment receipt on this
 page: `2026-10-30T11:21:09Z`, release `vote-records-20261030`, tip 1168; none is
 recorded here for the releases of 19 to 24 November. The dated rollout records
-below retain their original observations.
+below retain their original observations. Their links into `release/*`
+branches on GitHub no longer resolve: those branches were archived and deleted
+on 21 November ([Master State](master-state.md#the-archive)).
 
 Status: **canonical operational-state reference**
 

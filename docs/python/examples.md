@@ -39,7 +39,7 @@ for row in history.rows:
 from postfiat_rpc import create_wallet
 
 wallet = create_wallet(
-    chain_id="postfiat-controlled-testnet",
+    chain_id="postfiat-local",
     wallet_dir="wallets",
 )
 
@@ -112,11 +112,11 @@ from postfiat_rpc import (
 
 client = PostFiatRpcClient("127.0.0.1:27650")
 issuer = create_wallet(
-    chain_id="postfiat-controlled-testnet",
+    chain_id="postfiat-local",
     wallet_dir="wallets/issuer",
 )
 holder = create_wallet(
-    chain_id="postfiat-controlled-testnet",
+    chain_id="postfiat-local",
     wallet_dir="wallets/holder",
 )
 

@@ -10,7 +10,7 @@
         > docs/status/testnet-path.md
     ```
 
-Generated at input commit `c1ae1d4a3` (2026-11-21), the newest commit touching the input documents at generation time.
+Generated at input commit `0d69b9e90` (2026-11-25), the newest commit touching the input documents at generation time.
 
 Inputs: the [testnet-path milestone](../plans/active/l1v2-public-testnet-path-milestone.md),
 the [storage scaling milestone](../plans/completed/storage-scaling-milestone.md) gate table,

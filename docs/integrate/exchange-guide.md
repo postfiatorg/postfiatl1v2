@@ -154,7 +154,7 @@ the running build (`04600868`). Rows written before it need an account history
 index rebuild to carry v2 memos; whether the devnet's indexes were rebuilt is
 not recorded here.
 
-After governance enables `require_memo_activation_height`, an exchange can set
+After governance enables `require_memo_v2_activation_height`, an exchange can set
 its account's require-memo flag with `account_set`. Covered payments without a
 memo then fail. The flag does not cover shielded withdrawals, escrow, atomic
 swap, offer, NFT, bridge or FastPay credits: an exchange must handle those
