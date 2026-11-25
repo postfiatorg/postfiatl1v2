@@ -2593,14 +2593,17 @@
             RpcProtocolError::EmptyMethod,
         );
 
-        let oversized_id = status_request("i".repeat(MAX_RPC_PARAM_STRING_BYTES + 1));
+        let oversized_id = status_request("i".repeat(MAX_RPC_ID_BYTES + 1));
         assert_eq!(
             oversized_id.validate_protocol().expect_err("oversized id"),
             RpcProtocolError::FieldTooLong {
                 field: "id",
-                max_bytes: MAX_RPC_PARAM_STRING_BYTES,
+                max_bytes: MAX_RPC_ID_BYTES,
             }
         );
+        status_request("i".repeat(MAX_RPC_ID_BYTES))
+            .validate_protocol()
+            .expect("an id at the bound");
 
         let oversized_param_key = "p".repeat(MAX_RPC_PARAM_NAME_BYTES + 1);
         let oversized_param_name = RpcRequest::new(

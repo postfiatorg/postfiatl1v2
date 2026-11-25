@@ -63,12 +63,20 @@ stored history since #227 (`crates/node/src/block_finality.rs`,
 `crates/storage/src/transactional.rs`; design note
 `docs/specs/fast-validator-reads-20261124.md`).
 
-A reply larger than the node's 4 MB frame limit is not sent: the caller reads
-an empty line after the idle timeout. A withdrawal witness is about 200 KB per
-block of ancestry, so the Solana payout service reads it in eight-block pages
+A reply larger than the node's 4 MB frame limit (`MAX_TRANSPORT_FRAME_BYTES`)
+is answered with the error `rpc_response_too_large`, which names the limit and
+the reply's size, and the connection stays usable (`write_rpc_serve_response`
+in `crates/node/src/rpc_cli.rs`, #224). A reply that cannot be written whole
+closes the connection. A request id longer than 256 bytes (`MAX_RPC_ID_BYTES`)
+or a line the node cannot read is answered under a placeholder id
+`remote-N`; the wallet proxy and the Python persistent client report that error
+under the request's own id and then drop the connection, so no later reply is
+paired with the wrong request. A node built without #224 sends nothing in the
+too-large case, and the caller reads an empty line after its idle timeout;
+`ops/sol-live/live.py` raises `ReplyTooLarge` for the error and `EmptyReply`
+for the empty line. A withdrawal witness is about 200 KB per block of
+ancestry, so the Solana payout service reads it in eight-block pages
 ([24 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-24.md)).
-An error code for this case (`rpc_response_too_large`) is not on `main`;
-`ops/sol-live/live.py` already accepts it.
 
 ## Bridge, Reserve, Archive And Private Pool Reads
 
