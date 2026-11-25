@@ -12,7 +12,9 @@ above 24 hours re-arms both. If the credit cannot be read, it reports that, agai
 while it stays unreadable, and exits with status 1 until a read succeeds. A reply of an
 unexpected shape counts the same: no `credit` field (`balance` is not taken in its place), a
 running instance without a positive `dph_total`, or an instance list that is not a list. A report
-whose hook fails is retried on the next run.
+whose hook fails is retried on the next run. An instance that is still being created has no rate
+yet, so for its first minutes the reading is not usable and one such report is sent; it clears by
+itself once Vast shows the instance's `dph_total`.
 
 ## Install
 
