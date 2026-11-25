@@ -23,6 +23,7 @@ import archive as arch
 import exit_profile
 from eth_journal import durable_json, ensure_directory, intent_path, read_eth_result, ReconciliationRequired
 from eth_send import RPC, VERIFIER, VAULT, OPERATOR, KEY
+from eth_finality import AwaitingFinality, confirm_action
 PY=sys.executable
 COORD=Path('/home/postfiat/repos/b23-coord');E=COORD/'evidence/withdraw';JOBS=E/'jobs'
 HOST_BIN=E/'bin/proof-host';ELF=E/'historical/egress.elf'
@@ -84,14 +85,16 @@ def readiness():
     buckets=[b for b in s['buckets'] if b['policy_hash']==profile_hash and b.get('status','active')=='active']
     jobs = [load(path) for path in JOBS.glob('*/job.json')]
     blocked = [j['burn_tx_id'] for j in jobs if j['stage'] in ('failed', 'reconciliation_required') and j.get('error_scope') != 'burn']
-    payments = [j['updated_at'] for j in jobs if j['stage'] == 'paid']
+    payments = [j['updated_at'] for j in jobs if j['stage'] == 'paid' and proven_paid(j)]
+    awaiting = [j['burn_tx_id'] for j in jobs if j['stage'] == 'awaiting_finality' or
+                (j['stage'] == 'paid' and not proven_paid(j))]
     stalled = [j['burn_tx_id'] for j in jobs if j['stage'] in ACTIVE_STAGES and
                (datetime.now(timezone.utc) - datetime.fromisoformat(j['updated_at'])).total_seconds() > 3600]
     preflight_error = payout_preflight()
     payout_ready = not (blocked or stalled or preflight_error)
     health = dict(ok=True, bucket_ready=len(buckets)==1, payout_ready=payout_ready,
                   payout_preflight_error=preflight_error, last_payment_recorded_at=max(payments, default=None),
-                  blocked_jobs=blocked, stalled_jobs=stalled)
+                  blocked_jobs=blocked, stalled_jobs=stalled, awaiting_finality_jobs=awaiting)
     if len(buckets)!=1:return dict(**health,ready=False,message='No single active deposit bucket for the current bridge setting.')
     if not payout_ready:
         health['message'] = preflight_error or 'The withdrawal worker has blocked or stalled jobs.'
@@ -172,57 +175,135 @@ def historical_checkpoint(blocks, height, audit_record):
     raise ReconciliationRequired('No accepted Ethereum ancestor in the bounded proof window; reconcile the burn.')
 
 
+def operator_checkpoint(prior, target):
+    # The checkpoint method is local-only on the validator. Use the same operator
+    # SSH route as archive export and the binary currently running its RPC unit.
+    command = """set -eu
+pid=$(systemctl show -p MainPID --value postfiat-validator-0-rpc.service)
+exe=$(readlink -e "/proc/$pid/exe")
+case "$exe" in /opt/postfiat/releases/*/postfiat-node) ;; *) echo 'Unexpected validator executable' >&2; exit 1;; esac
+exec runuser -u postfiat -- "$exe" pfusdc-checkpoint-witness --data-dir /var/lib/postfiat/validator-0 """
+    command += shlex.join(['--prior-checkpoint', prior, '--target-block', target])
+    return json.loads(run(['ssh', '-o','BatchMode=yes',arch.HOST,command], timeout=180).stdout)
+
+
 def native_witness(blocks, prior, target, withdrawal_id=None):
-    """Page the native exporter while preserving governance transitions at each boundary."""
+    """Get a bounded burn over the public reader and an unframed native checkpoint over operator SSH."""
     prior_hash = blocks[prior]['header']['block_hash']
-    ancestry = []
-    start = prior
-    span = 8  # Typical committee certificates take about 200 KB per block; RPC frames are 4 MB.
-    while True:
-        end = min(start + span, target)
-        final = end == target
-        params = {'prior_checkpoint': blocks[start]['header']['block_hash']}
-        if final and withdrawal_id:
-            method = 'pfusdc_egress_witness'
-            params['withdrawal_id'] = withdrawal_id
-        else:
-            method = 'pfusdc_checkpoint_witness'
-            params['target_block'] = blocks[end]['header']['block_hash']
-        try:
-            page = call(method, params)
-        except (RuntimeError, json.JSONDecodeError) as error:
-            # Older validators close the stream when their response is too large.
-            oversized = isinstance(error, json.JSONDecodeError) and not error.doc.strip()
-            if span <= 2 or not (oversized or 'rpc_response_too_large' in str(error)):
-                raise
-            span = max(2, span // 2)
-            continue
-        steps = page.get('finality_ancestry', [])
-        if (page['prior_checkpoint_block_id'] != params['prior_checkpoint'] or
-                page['block']['header']['block_hash'] != blocks[end]['header']['block_hash'] or
-                [step['block']['header']['block_hash'] for step in steps] !=
-                [blocks[h]['header']['block_hash'] for h in range(start+1, end)]):
-            raise ValueError('Native witness page differs from the six-validator finalized archive.')
-        ancestry.extend(steps)
-        if final:
-            return dict(page, finality_ancestry=ancestry, prior_checkpoint_block_id=prior_hash)
-        # Keep the boundary block as an ancestry step on the next page. The exporter
-        # includes its governance transition only when it can see the following block.
-        start = end - 1
+    header = blocks[target]['header']
+    if withdrawal_id:
+        parent = header['parent_hash']
+        burn = call('pfusdc_egress_witness', {'prior_checkpoint':parent,'withdrawal_id':withdrawal_id})
+        if (burn['prior_checkpoint_block_id'] != parent or burn.get('finality_ancestry')
+                or burn['block']['header'] != header or burn['withdrawal_packet']['withdrawal_id'] != withdrawal_id):
+            raise ValueError('Native burn witness differs from the finalized archive.')
+        if parent == prior_hash:
+            return burn
+    segment = operator_checkpoint(prior_hash, header['block_hash'])
+    steps = segment.get('finality_ancestry', [])
+    if (segment['prior_checkpoint_block_id'] != prior_hash or segment['block']['header'] != header
+            or [step['block']['header']['block_hash'] for step in steps] !=
+               [blocks[h]['header']['block_hash'] for h in range(prior+1, target)]):
+        raise ValueError('Native checkpoint witness differs from the finalized archive.')
+    return dict(burn, prior_checkpoint_block_id=prior_hash, finality_ancestry=steps) if withdrawal_id else segment
+
+
+def ethereum_reader():
+    return Web3(Web3.HTTPProvider(RPC, request_kwargs={'timeout':20})).eth
+
+
+def finalized_result(mode, out, expected, known_tx=None):
+    cached = read_eth_result(mode, out) if out.exists() else {}
+    tx = cached.get('tx') or known_tx
+    if not tx or (known_tx and tx.removeprefix('0x').lower() != known_tx.removeprefix('0x').lower()):
+        raise ReconciliationRequired('Missing or inconsistent Ethereum transaction id; reconcile the job.')
+    try:
+        finalized = confirm_action(ethereum_reader(), mode, tx, expected)
+    except ReconciliationRequired:
+        raise
+    except Exception as error:
+        raise AwaitingFinality('Cannot verify Ethereum finality for '+tx+': '+str(error)[:160]) from error
+    result = dict(cached, mode=mode, status=1, tx=finalized['tx'], block=finalized['block'],
+                  block_hash=finalized['block_hash'], finality=finalized)
+    durable_json(out, result)
+    return result
+
+
+def withdrawal_terms(job, directory):
+    fields = ('withdrawal_id', 'burn_tx_id', 'recipient', 'amount_atoms')
+    terms = {key:job.get(key) for key in (*fields, 'packet_digest')}
+    witness_path = directory/'exit-witness.json'
+    if witness_path.exists():
+        witness = load(witness_path)
+        packet = witness['withdrawal_packet']
+        for key in fields:
+            if terms[key] is not None and str(terms[key]).lower() != str(packet[key]).lower():
+                raise ReconciliationRequired('Job differs from retained withdrawal packet; reconcile '+key)
+            terms[key] = packet[key]
+        digest = witness.get('withdrawal_packet_evm_digest')
+        if digest and terms['packet_digest'] and digest != terms['packet_digest']:
+            raise ReconciliationRequired('Job differs from retained withdrawal packet digest; reconcile the burn.')
+        terms['packet_digest'] = digest or terms['packet_digest']
+    if any(value is None for value in terms.values()):
+        raise ReconciliationRequired('Missing withdrawal packet terms; reconcile the retained burn evidence.')
+    return terms
+
+
+def finalized_checkpoint(directory):
+    out = directory/'eth-result.json'
+    read_eth_result('checkpoint', out)
+    try:
+        witness = load(directory/'witness.json')
+        header = witness['block']['header']
+        expected = dict(prior=witness['prior_checkpoint_block_id'], target=header['block_hash'], height=header['height'])
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        raise ReconciliationRequired('Missing checkpoint witness; reconcile the retained Ethereum receipt.') from error
+    return finalized_result('checkpoint', out, expected)
+
+
+def was_paid(job):
+    return job.get('reconcile_paid_only') or job.get('stage') == 'paid' or bool(job.get('ethereum_tx')) or any(
+        entry[1] == 'paid' for entry in job.get('history', []))
 
 
 def recover_payment(job, directory):
     result = directory / 'eth-withdrawal.json'
-    if result.exists() or intent_path(result).exists():
-        try:
-            done = read_eth_result('withdraw', result) if result.exists() else eth_send('withdraw', directory/'proof', result)
-        except ReconciliationRequired as error:
-            stage(job, 'reconciliation_required', str(error))
-            raise
-        job.update(ethereum_tx='0x'+done['tx'].removeprefix('0x'), ethereum_block=done['block'], error=None)
-        stage(job, 'paid', 'USDC paid on Ethereum.')
-        return True
-    return False
+    historical = was_paid(job)
+    if not (result.exists() or intent_path(result).exists() or historical):
+        return False
+    if historical and not job.get('reconcile_paid_only'):
+        job['reconcile_paid_only'] = True
+        write_job(job)
+    try:
+        known_tx = job.get('ethereum_tx')
+        if result.exists():
+            read_eth_result('withdraw', result)
+        elif historical and intent_path(result).exists():
+            intent = load(intent_path(result))
+            if intent['mode'] != 'withdraw' or (known_tx and
+                    known_tx.removeprefix('0x').lower() != intent['tx'].removeprefix('0x').lower()):
+                raise ReconciliationRequired('Historical paid row differs from the signed withdrawal; reconcile the job.')
+            known_tx = intent['tx']
+        elif not historical:
+            eth_send('withdraw', directory/'proof', result)
+        # A legacy paid row can be recovered with just its original tx id and packet.
+        # This is always read-only on Ethereum, even when the old receipt file is absent.
+        terms = withdrawal_terms(job, directory)
+        done = finalized_result('withdraw', result, terms, known_tx)
+    except (ReconciliationRequired, OSError, ValueError, TypeError, KeyError) as error:
+        if not isinstance(error, ReconciliationRequired):
+            error = ReconciliationRequired('Unusable withdrawal evidence; reconcile '+str(error)[:160])
+        stage(job, 'awaiting_finality' if isinstance(error, AwaitingFinality) else 'reconciliation_required', str(error))
+        raise error
+    job.update(ethereum_tx=done['tx'], ethereum_block=done['block'], ethereum_finality=done['finality'], error=None)
+    stage(job, 'paid', 'USDC payout finalized on Ethereum.')
+    return True
+
+
+def proven_paid(job):
+    evidence = job.get('ethereum_finality') or {}
+    return (evidence.get('chain_id') == 1 and evidence.get('block_hash')
+            and evidence.get('expected', {}).get('burn_tx_id') == job['burn_tx_id'])
 
 
 def process(job):
@@ -243,17 +324,16 @@ def process(job):
         result = folder / 'eth-result.json'
         if result.exists() or intent_path(result).exists():
             stage(job, 'catching_up', 'Checking saved Ethereum checkpoint transaction.')
-            if result.exists():
-                read_eth_result('checkpoint', result)
-            else:
+            if not result.exists():
                 eth_send('checkpoint', folder, result)
+            finalized_checkpoint(folder)
     stage(job,'reading','Reading the finalized burn from all six validators.')
     bundle,A=export_bundle(d);blocks={b['header']['height']:b for b in A['blocks']['blocks']}
     red=[r for r in A['ledger']['vault_bridge_redemptions'] if r['withdrawal_packet']['burn_tx_id']==burn]
     if len(red)!=1:raise IneligibleBurn('This burn is not finalized on the network.')
     red=red[0];p=red['withdrawal_packet'];h=red['created_at_height']
     if p['source_chain_id']!=1 or p['vault_address'].lower()!='0xe7a432a28b20621a70e845c7f202004cf98e7a2c':raise IneligibleBurn('This burn is not for the Ethereum mainnet USDC vault.')
-    job.update(amount_atoms=str(p['amount_atoms']),recipient=p['recipient'],burn_height=h,withdrawal_id=p['withdrawal_id']);write_job(job)
+    job.update(amount_atoms=str(p['amount_atoms']),recipient=p['recipient'],burn_height=h,withdrawal_id=p['withdrawal_id'],packet_digest=red.get('withdrawal_packet_evm_digest'));write_job(job)
     six=read_six(burn);rs={json.dumps(x['receipts'],sort_keys=True) for x in six};assert len(six)==6 and len(rs)==1,'validators disagree on the burn receipt'
     receipt=[r for r in six[0]['receipts'] if r['tx_id']==burn];assert len(receipt)==1 and receipt[0]['accepted'],'burn receipt is not accepted'
     a=audit(d/'audit');v=a['contracts']['PFTLFinalityVerifierV1']['reads'];L=v['latestFinalizedHeight']
@@ -271,11 +351,10 @@ def settle(job, d, a, archive, blocks, L, h, receipt, packet):
         w=native_witness(blocks, L, end)
         cd=d/f'checkpoint-{L}-{end}';ensure_directory(cd);save(cd/'witness.json',w)
         checkpoint_result = cd / 'eth-result.json'
-        if checkpoint_result.exists():
-            read_eth_result('checkpoint', checkpoint_result)
-        else:
+        if not checkpoint_result.exists():
             prove('checkpoint',cd/'witness.json',cd,f'{burn[:16]}-cp-{end}')
             eth_send('checkpoint', cd, checkpoint_result)
+        finalized_checkpoint(cd)
         L=end
     stage(job,'proving','Building the withdrawal proof on the GPU.')
     w=native_witness(blocks, L, h, packet['withdrawal_id'])
@@ -292,11 +371,15 @@ def settle(job, d, a, archive, blocks, L, h, receipt, packet):
 
 
 def reconciliation_due(job, directory, startup):
-    if job.get('stage') != 'reconciliation_required':
+    if job.get('stage') == 'paid':
+        return not proven_paid(job)
+    if job.get('stage') not in ('awaiting_finality', 'reconciliation_required'):
         return False
     elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(job['updated_at'])).total_seconds()
     if not startup and elapsed < 300:
         return False
+    if job.get('stage') == 'awaiting_finality':
+        return True
     results = [directory/'eth-withdrawal.json',
                *(folder/'eth-result.json' for folder in directory.glob('checkpoint-*'))]
     return any(intent_path(result).exists() and not result.exists() for result in results)
@@ -314,7 +397,8 @@ def run_jobs(startup=False):
                 detail = str(error)[:400]
                 job['error'] = detail
                 job['error_scope'] = 'burn' if isinstance(error, IneligibleBurn) else 'route'
-                new_stage = 'reconciliation_required' if isinstance(error, ReconciliationRequired) else 'failed'
+                new_stage = ('awaiting_finality' if isinstance(error, AwaitingFinality) else
+                             'reconciliation_required' if isinstance(error, ReconciliationRequired) else 'failed')
                 if job.get('stage') != new_stage or job.get('detail') != detail:
                     stage(job, new_stage, detail)
         except (ValueError, OSError) as error:
@@ -338,7 +422,12 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self,*a):pass
     def reply(self,code,value):
         body=json.dumps(value).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body)
-    def public(self,job):return {k:job.get(k) for k in ('burn_tx_id','stage','detail','amount_atoms','recipient','ethereum_tx','error','created_at','updated_at')}
+    def public(self,job):
+        value = {k:job.get(k) for k in ('burn_tx_id','stage','detail','amount_atoms','recipient',
+                 'ethereum_tx','ethereum_finality','error','created_at','updated_at')}
+        if job.get('stage') == 'paid' and not proven_paid(job):
+            value.update(stage='awaiting_finality', detail='Checking the historical payout against finalized Ethereum.')
+        return value
     def do_GET(self):
         try:
             if self.path=='/api/bridge/withdrawals/readiness':return self.reply(200,readiness())

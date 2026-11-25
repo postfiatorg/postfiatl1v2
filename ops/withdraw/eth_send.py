@@ -46,6 +46,7 @@ def record_receipt(eth, mode, journal, out, recover=False):
     if Web3.to_hex(receipt.transactionHash).lower() != intent['tx'].lower():
         raise ValueError('receipt does not match the signed transaction')
     result = dict(mode=mode, tx=intent['tx'], status=receipt.status, block=receipt.blockNumber,
+                  block_hash=Web3.to_hex(receipt.blockHash),
                   gas_used=receipt.gasUsed, cost_wei=receipt.gasUsed * receipt.effectiveGasPrice,
                   before=intent['before'])
     durable_json(out, result)

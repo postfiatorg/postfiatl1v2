@@ -10,6 +10,7 @@ from eth_account import Account
 from web3 import Web3
 from web3.exceptions import TransactionNotFound
 
+from test_eth_finality import chain, terms
 import eth_send
 import service
 from eth_journal import durable_json, intent_path, read_eth_result
@@ -77,7 +78,7 @@ class RestartTests(unittest.TestCase):
         def wait(tx, timeout):
             self.assertIn(tx, accepted)
             return SimpleNamespace(transactionHash=bytes.fromhex(tx[2:]), status=1, blockNumber=22,
-                                   gasUsed=100, effectiveGasPrice=2)
+                                   blockHash=bytes.fromhex('ca'*32), gasUsed=100, effectiveGasPrice=2)
 
         def persist(path, value):
             if crash and path == out and boundary == 'before_receipt_write':
@@ -97,14 +98,26 @@ class RestartTests(unittest.TestCase):
         with patch.object(eth_send, 'OPERATOR', account.address), patch.object(eth_send, 'KEY', key), \
              patch.object(eth_send, 'durable_json', side_effect=persist), patch.object(service, 'JOBS', jobs), \
              patch.object(service, 'eth_send', side_effect=sender), \
-             patch.object(service, 'export_bundle', side_effect=WorkerStopped()) as export:
-            job = dict(burn_tx_id=burn, journal_version=1)
+             patch.object(service, 'export_bundle', side_effect=WorkerStopped()) as export, \
+             patch.object(service, 'ethereum_reader') as web:
+            job = dict(terms(burn), journal_version=1)
             service.stage(job, 'catching_up' if mode == 'checkpoint' else 'paying')
             with self.assertRaises(WorkerStopped):
                 eth_send.submit(client, mode, folder, out)
             self.assertTrue(intent_path(out).is_file())
             crash = False
             key.unlink()  # Recovery must not sign another transaction.
+            tx = json.loads(intent_path(out).read_text())['tx']
+            net, mined, _, _ = chain(terms(burn), tx=tx, height=22)
+            web.return_value = net
+            if mode == 'checkpoint':
+                prior, target = '12'*48, '34'*48
+                durable_json(folder/'witness.json', dict(prior_checkpoint_block_id=prior, block={'header':{'block_hash':target,'height':3}}))
+                log = mined['logs'][0]
+                mined['to'] = log['address'] = eth_send.VERIFIER
+                log['topics'] = [Web3.keccak(text='PFTLCheckpointAdvanced(bytes32,bytes32,uint64,bytes32)'),
+                                 Web3.keccak(hexstr=prior),Web3.keccak(hexstr=target)]
+                log['data'] = (3).to_bytes(32,'big') + bytes(32)
             if mode == 'withdraw':
                 service.run_jobs()
                 service.run_jobs()
@@ -137,11 +150,15 @@ class RestartTests(unittest.TestCase):
 
     def test_pending_payment_reconciles_immediately_on_startup(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(service, 'JOBS', Path(tmp)):
-            job = dict(burn_tx_id='11'*48, journal_version=1)
+            job = dict(terms(), journal_version=1)
             service.stage(job, 'reconciliation_required', 'receipt pending')
             out = Path(tmp)/job['burn_tx_id']/'eth-withdrawal.json'
             durable_json(intent_path(out), dict(tx='0x'+'11'*32, mode='withdraw'))
-            with patch.object(service, 'eth_send', return_value=dict(tx='0x'+'11'*32, block=55)) as send:
+            tx = '0x'+'11'*32
+            def mine(action, folder, result):
+                durable_json(result, dict(mode=action, tx=tx, block=55, status=1))
+            with patch.object(service, 'eth_send', side_effect=mine) as send, patch.object(service, 'ethereum_reader') as web:
+                web.return_value = chain(terms(), tx, 55)[0]
                 service.run_jobs()
                 send.assert_not_called()
                 service.run_jobs(startup=True)
