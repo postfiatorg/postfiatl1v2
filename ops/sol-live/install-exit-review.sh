@@ -45,6 +45,8 @@ install -m644 -o root -g root "$tmp/ops/sol-live/exit_review.py" "$app/exit_revi
 python3 -m venv "$app/venv" || fail "cannot create the reviewer's venv"
 "$app/venv/bin/python" -m pip install --quiet --require-hashes --no-deps --only-binary=:all: \
     -r "$tmp/ops/sol-live/exit-requirements.lock" || fail "cannot install the hash-pinned requirements"
+# The venv was created under umask 077; the reviewer's user must read and run it. Root keeps ownership.
+chmod -R go+rX "$app/venv" || fail "cannot make the venv readable by the reviewer"
 
 # The verdict key: created under umask 077, owned by the reviewer alone; its public half is public.
 if [[ ! -f $etc/sol-exit-review.key ]]; then

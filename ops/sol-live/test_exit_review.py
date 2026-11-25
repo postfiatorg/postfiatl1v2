@@ -173,6 +173,20 @@ class ReviewTest(unittest.TestCase):
                 self.review(**case)
             self.assertIn(name.strip(), str(caught.exception))
 
+    def test_the_covered_buckets_follow_a_captured_route_report_and_an_empty_list_covers_nothing(self):
+        route = json.loads((Path(rv.__file__).parent / "fixtures/fork-open-route.json").read_text())
+        # A first-release node omits the field: only the revision-8 bucket is covered.
+        self.assertNotIn("covered_bucket_ids", route)
+
+        class RouteNode(Node):
+            def __call__(self, method, **params):
+                return dict(route) if method == "vault_bridge_route" else super().__call__(method, **params)
+
+        self.assertEqual(self.review(node=RouteNode())["decision"], PAID_KIND)
+        route["covered_bucket_ids"] = []
+        with self.assertRaisesRegex(rv.Refused, "covered bucket"):
+            self.review(node=RouteNode())
+
     def test_a_prefunded_or_crowded_marker_is_still_reviewed_by_its_creating_transaction(self):
         for case in (dict(prefund=True), dict(crowd=150), dict(prefund=True, crowd=150)):
             with self.subTest(**case):
@@ -287,6 +301,40 @@ class SignTest(unittest.TestCase):
         rv.run_review(self.cfg, "paid", BURN)
         with self.assertRaisesRegex(rv.Refused, "decision"):
             rv.authorize(self.cfg, dict(self.amend(), value=0))
+        with self.assertRaisesRegex(rv.Refused, "decision"):
+            rv.authorize(self.cfg, dict(self.amend(), paused=True))
+
+    def test_the_node_omits_paused_when_false_and_the_decision_is_still_plain(self):
+        rv.run_review(self.cfg, "paid", BURN)
+        amend = {k: v for k, v in self.amend().items() if k != "paused"}
+        rv.authorize(self.cfg, amend)
+
+    def captured_amendment(self):
+        """An amendment as a WAN validator serialized it (route activation at 1754, captured in the
+        node's fixtures). `GovernanceAmendment` is unchanged in release 04600868."""
+        batch = Path(rv.__file__).resolve().parents[2] / "crates/node/tests/fixtures/solana-exit/governance-batch.json"
+        (activation,) = json.loads(batch.read_text())["vault_bridge_route_profile_activations"]
+        return activation["amendment"]
+
+    def test_a_captured_node_amendment_omits_paused_and_the_reviewer_signs_its_reviewed_decision(self):
+        captured = self.captured_amendment()
+        self.assertNotIn("paused", captured)
+        rv.run_review(self.cfg, "paid", BURN)
+        # Only the decision and its value differ from what the node sent.
+        rv.authorize(self.cfg, dict(captured, kind=PAID_KIND, value=1))
+        for paused in (True, 0, 1, None, "false", []):
+            with self.assertRaisesRegex(rv.Refused, "decision"):
+                rv.authorize(self.cfg, dict(captured, kind=PAID_KIND, value=1, paused=paused))
+
+    def test_a_reply_that_is_not_an_amendment_is_refused_not_a_crash(self):
+        rv.run_review(self.cfg, "paid", BURN)
+        with self.assertRaisesRegex(rv.Refused, "decision"):
+            rv.authorize(self.cfg, dict(self.captured_amendment(), kind=PAID_KIND, value=True))
+        for reply in (None, [], "amendment", 1):
+            with self.assertRaisesRegex(rv.Refused, "decision"):
+                rv.authorize(self.cfg, reply)
+        with self.assertRaisesRegex(rv.Refused, "decision"):
+            rv.authorize(self.cfg, {k: v for k, v in dict(self.captured_amendment(), value=1).items() if k != "kind"})
 
 
 FAKE_NODE = """#!/usr/bin/env python3
