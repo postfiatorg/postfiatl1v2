@@ -1,0 +1,8 @@
+# Validator releases the B24 daily job may run against, one line each:
+#   release-name  source-commit  node-sha256  rehearsal-tool-sha256
+# The job reads the release from the six validators' status and refuses one not
+# listed here. After a validator release, ops/b24-live/rehearsal_tool.sh builds the
+# tool into b23-coord/artifacts/<release-name>/ and prints the line to add.
+# The tool hash is the one the build gives on the machine that runs the job: the build repeats
+# on one machine and differs between machines (a711c0fe… on the work server for sol-exit-r2).
+sol-exit-r2 046008683 6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b 5b4cefd475972df9de951eba0265109de90f86e10a36077722c834f1b3989d1b

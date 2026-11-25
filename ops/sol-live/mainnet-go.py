@@ -398,7 +398,7 @@ def verify_budget(estimated_lamports):
             ]
         )
     )
-    instances = {61511840, read(STATE / "gpu.json")["new_contract"]}
+    instances = {61511840, 61487772, 62235343, read(STATE / "gpu.json")["new_contract"]}
     billed = {
         str(instance): sum(
             (

@@ -9,8 +9,9 @@ import rlp
 COORD=Path('/home/postfiat/repos/b23-coord')
 EVIDENCE=COORD/'evidence/tee/phase4'
 NODE=COORD/'artifacts/release4/postfiat-node'
-# Rehearsal engine must match the fleet release: built from sol-exit-r1 source 71dbc9b3.
-CANARY=COORD/'artifacts/sol-exit-r1/postfiat-b23-nav-canary'
+# Rehearsal engine must match the fleet release: built from sol-exit-r2 source 046008683.
+# The B24 daily job replaces it with the tool ops/b24-live/known-releases.txt lists for the fleet.
+CANARY=COORD/'artifacts/sol-exit-r2/postfiat-b23-nav-canary'
 NATIVE=Path('/mnt/HC_Volume_106212907/sec-fundamentals-proxy/b23-tee-nav-target/release/postfiat-b23-nav')
 ISSUER='pffcb93d9f87a843a8aa34e1adf241f5d58143e81b'
 ALICE='pfab9b9228942e5c529633a13aa271d5297bec6353'
