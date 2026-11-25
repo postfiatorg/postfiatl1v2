@@ -5,6 +5,10 @@ anonymity. The privacy metadata/anonymity-bound packet defines the public
 fields, inferable metadata, wallet discipline, and minimum activity thresholds
 required before a shielded flow can be called baseline-private.
 
+> **Status on `main` (25 November 2026):** this packet exists as a schema and
+> fixtures under `docs/governance/agent/`. Its verifier script is archived
+> outside this repository, and no code in `crates/` or `python/` implements it.
+
 The fixture is intentionally controlled-testnet only. It does not mutate live
 registry state and it does not transfer authority.
 

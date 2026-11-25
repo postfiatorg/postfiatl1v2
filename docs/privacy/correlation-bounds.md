@@ -6,6 +6,10 @@ treated as independent. Baseline privacy requires measured pairwise
 intersections, measured full joint metadata tuples, temporal-link cohorts,
 cross-window cohorts, RPC cohorts, and disclosure-reuse cohorts.
 
+> **Status on `main` (25 November 2026):** this packet exists as a schema and
+> fixtures under `docs/governance/agent/`. Its verifier script is archived
+> outside this repository, and no code in `crates/` or `python/` implements it.
+
 This is controlled-testnet evidence only. It does not mutate registry state and
 does not transfer authority.
 

@@ -58,6 +58,11 @@ Checked on 25 November 2026.
   only when it is started with `rpc-serve --allow-private-action-admission`;
   the switch is off unless set (`crates/node/src/private_action_rpc.rs`).
 - Post-quantum private payments are not on `main`.
+- The assurance-receipt, predicate-registry, metadata, deanonymization,
+  correlation, observer-inference, floor-calibration and longitudinal-linkage
+  items are schemas and fixtures under `docs/governance/agent/`. Their verifier
+  scripts are archived outside this repository, and no code in `crates/` or
+  `python/` implements them.
 
 ## System Diagram
 

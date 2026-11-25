@@ -4,6 +4,10 @@ The privacy metadata/anonymity-bound packet defines the fields and downgrade
 routes. The deanonymization-bound packet adds the residual model behind those
 floors.
 
+> **Status on `main` (25 November 2026):** this packet exists as a schema and
+> fixtures under `docs/governance/agent/`. Its verifier script is archived
+> outside this repository, and no code in `crates/` or `python/` implements it.
+
 The model is intentionally narrow. It assumes a public observer with the
 declared metadata channels and no off-chain side information. If off-chain side
 information, compromised wallet infrastructure, or direct third-party RPC
