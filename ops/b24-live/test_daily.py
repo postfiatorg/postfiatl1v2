@@ -17,27 +17,31 @@ sys.path.insert(0,str(Path(__file__).resolve().parent))
 spec=importlib.util.spec_from_file_location('b24_daily',Path(__file__).with_name('daily.py'))
 daily=importlib.util.module_from_spec(spec);spec.loader.exec_module(daily)
 import reading_alert
+import release_pin
+NODE='6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b'
 
 class OnDemandTests(unittest.TestCase):
     def setUp(self):
         self.state={'tip':{'height':1370},'ledger':{'nav_assets':[dict(asset_id=daily.B24,finalized_epoch=3)]}}
         self.seed={'schedule':{'opening_epoch':1},'nav_asset_id':daily.B24}
 
-    def test_release5_gate_rejects_a_mixed_fleet_before_capture(self):
+    def test_release_gate_rejects_a_mixed_fleet_before_capture(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             probe = MagicMock()
             probe.side_effect = lambda peer, sha: (peer[0], {'matches': peer != daily.PEERS[-1]})
-            with patch.object(daily, 'runtime', probe),patch.object(daily,'DAILY',root),patch.object(daily,'require_runtime'),patch.object(daily,'collect') as collect:
-                with self.assertRaisesRegex(RuntimeError,'all six validators'):
+            chosen=dict(name='sol-exit-r2',node_sha256=NODE,tool=str(root/'tool'),tool_sha256='ab'*32)
+            with patch.object(daily, 'runtime', probe),patch.object(daily,'DAILY',root),patch.object(daily,'require_runtime'),patch.object(daily,'collect') as collect,\
+                    patch.object(daily,'fleet_statuses'),patch.object(release_pin,'fleet'),patch.object(release_pin,'release',return_value=chosen):
+                with self.assertRaisesRegex(release_pin.Refusal,'running processes on validator-5 are not the binary 6dd2ee56d350854d'):
                     daily.execute(datetime.now(timezone.utc))
                 collect.assert_not_called()
             self.assertCountEqual([call.args for call in probe.call_args_list],
-                                  [(peer, daily.DAILY_NODE_SHA) for peer in daily.PEERS])
+                                  [(peer, NODE) for peer in daily.PEERS])
             self.assertEqual(len(daily.PEERS), 6)
 
     def test_both_running_processes_must_match_the_selected_release(self):
-        pin = daily.DAILY_NODE_SHA
+        pin = NODE
         cases = [
             (0, [pin, pin], True),
             (0, [pin, 'other'], False),
@@ -95,6 +99,90 @@ class OnDemandTests(unittest.TestCase):
             result['body']['reading']['cutoff_unix_ms']=99;daily.save(root/'result.json',result)
             with self.assertRaisesRegex(ValueError,'No reading matching'):
                 daily.helpers.finalized_cutoff(state,daily.B24,[root])
+
+class ReleasePinTests(unittest.TestCase):
+    """The job derives the release from the six status replies; local fixtures only."""
+    REV='04600868'
+    def setUp(self):
+        self.tmp=Path(tempfile.mkdtemp());self.addCleanup(__import__('shutil').rmtree,self.tmp)
+        self.coord=self.tmp/'coord';self.known=self.tmp/'known-releases.txt'
+        self.tool=self.tool_at('sol-exit-r2',self.REV)
+        self.known.write_text(f'# release commit node tool\nsol-exit-r2 046008683 {NODE} {self.sha(self.tool)}\n')
+        self.statuses={f'validator-{i}':dict(build_git_revision=self.REV,deployment_manifest_verified=True,deployment_runtime_artifacts=dict(binary_sha256=NODE)) for i in range(6)}
+    def tool_at(self,name,revision):
+        """A stand-in tool answering build-info; revision None is a tool built before it recorded one."""
+        tool=self.coord/'artifacts'/name/release_pin.TOOL;tool.parent.mkdir(parents=True,exist_ok=True)
+        info=json.dumps(dict(build_git_revision=revision,build_profile='release'))
+        tool.write_text('#!/bin/sh\n'+(f"test \"$1\" = build-info && echo '{info}' && exit 0\n" if revision else '')+'exit 2\n');tool.chmod(0o755);return tool
+    def sha(self,path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    def pick(self):return release_pin.release(release_pin.fleet(self.statuses),self.coord,self.known)
+
+    def test_fleet_agrees_and_matches_the_tool(self):
+        chosen=self.pick()
+        self.assertEqual((chosen['name'],chosen['revision'],chosen['node_sha256'],chosen['tool'],chosen['tool_revision']),('sol-exit-r2',self.REV,NODE,str(self.tool),self.REV))
+        probe=MagicMock(side_effect=lambda peer,sha:(peer[0],{'matches':sha==NODE}))
+        canaries=[patch.object(m,'CANARY',m.CANARY) for m in (daily.common,daily.sign,daily.snapshot,daily.live)]+[patch.dict(daily.__dict__,{'CANARY':daily.CANARY})]
+        for patcher in canaries:patcher.start();self.addCleanup(patcher.stop)
+        with patch.object(daily,'fleet_statuses',return_value=self.statuses),patch.object(daily,'COORD',self.coord),patch.object(release_pin,'KNOWN',self.known),\
+                patch.object(daily,'runtime',probe),patch.object(daily,'remote_copy',return_value='/tmp/copy') as copied:
+            result=daily.release_check()
+        copied.assert_called_once_with(str(self.tool),self.sha(self.tool))
+        self.assertEqual(sorted(result['processes']),release_pin.VALIDATORS)
+        for module in (daily.common,daily.sign,daily.snapshot,daily.live):self.assertEqual(module.CANARY,self.tool)
+        self.assertEqual(daily.CANARY,self.tool)
+
+    def test_a_tool_that_does_not_record_its_revision_is_accepted_by_its_listed_hash(self):
+        self.tool=self.tool_at('sol-exit-r2',None);self.known.write_text(f'sol-exit-r2 046008683 {NODE} {self.sha(self.tool)}\n')
+        self.assertEqual(self.pick()['tool_revision'],'046008683 (from '+str(self.known)+':1)')
+
+    def test_one_validator_differs(self):
+        self.statuses['validator-3']['build_git_revision']='71dbc9b3';self.statuses['validator-3']['deployment_runtime_artifacts']['binary_sha256']='d46376ff'*8
+        with self.assertRaisesRegex(release_pin.Refusal,r'do not run one release \(.*validator-3 71dbc9b3 d46376ff.*\); finish the rollout on all six, then run: python3 ops/b24-live/daily.py --check$'):self.pick()
+
+    def test_manifest_not_verified(self):
+        self.statuses['validator-2']['deployment_manifest_verified']=False
+        with self.assertRaisesRegex(release_pin.Refusal,r'^validator-2 reports deployment_manifest_verified=false; reinstall .* then run: python3 ops/b24-live/daily.py --check$'):self.pick()
+
+    def test_status_reply_without_the_fields(self):
+        self.statuses['validator-4']=dict(node_id='validator-4',block_height=1900)
+        with self.assertRaisesRegex(release_pin.Refusal,'^validator-4 status has no build_git_revision, deployment_manifest_verified, deployment_runtime_artifacts.binary_sha256'):self.pick()
+        self.statuses['validator-4']=RuntimeError('validator-4: connection refused')
+        with self.assertRaisesRegex(release_pin.Refusal,'^validator-4 gave no status reply'):self.pick()
+
+    def test_tool_from_another_revision(self):
+        other=self.tool_at('sol-exit-r2','71dbc9b3')
+        with self.assertRaisesRegex(release_pin.Refusal,f'has sha256 {self.sha(other)}, not the .* lists for sol-exit-r2; rebuild it from {self.REV} with: ops/b24-live/rehearsal_tool.sh sol-exit-r2 {self.REV} {NODE}$'):self.pick()
+        self.known.write_text(f'sol-exit-r2 046008683 {NODE} {self.sha(other)}\n')
+        with self.assertRaisesRegex(release_pin.Refusal,f'was built from 71dbc9b3, not the fleet\'s {self.REV}; rebuild it with: ops/b24-live/rehearsal_tool.sh sol-exit-r2'):self.pick()
+
+    def test_tool_missing(self):
+        self.tool.unlink()
+        with self.assertRaisesRegex(release_pin.Refusal,f'^The rehearsal tool for sol-exit-r2 is missing at {self.tool}; build and install it with: ops/b24-live/rehearsal_tool.sh sol-exit-r2 {self.REV} {NODE}$'):self.pick()
+
+    def test_unlisted_release_names_the_file_and_the_line(self):
+        self.known.write_text('# none yet\n')
+        with self.assertRaisesRegex(release_pin.Refusal,f'which {self.known} does not list; build its rehearsal tool and print the line to add with: ops/b24-live/rehearsal_tool.sh <release-name> {self.REV} {NODE}$'):
+            release_pin.release(release_pin.fleet(self.statuses),self.tmp/'empty-coord',self.known)
+        line=f'sol-exit-r2 {self.REV} {NODE} {self.sha(self.tool)}'
+        with self.assertRaises(release_pin.Refusal) as refused:self.pick()
+        self.assertTrue(str(refused.exception).endswith(f"add its line with: echo {shlex.quote(line)} >> {self.known}"),refused.exception)
+
+    def test_listed_node_hash_must_match_the_fleet(self):
+        self.statuses={k:dict(v,deployment_runtime_artifacts=dict(binary_sha256='ee'*32)) for k,v in self.statuses.items()}
+        with self.assertRaisesRegex(release_pin.Refusal,f'{self.known}:2 gives sol-exit-r2 the node {NODE}, but the six run {"ee"*32}'):self.pick()
+
+    def test_check_runs_the_same_comparison_before_anything_else(self):
+        self.statuses['validator-1']['deployment_manifest_verified']=None
+        with patch.object(sys,'argv',['daily.py','--check']),patch.object(daily,'require_runtime'),patch.object(daily,'fleet_statuses',return_value=self.statuses),patch.object(daily,'load') as loaded:
+            with self.assertRaisesRegex(release_pin.Refusal,'validator-1 reports deployment_manifest_verified=null'):daily.main()
+        loaded.assert_not_called()
+
+    def test_validator0_copy_must_match_the_tool(self):
+        with patch.object(daily.subprocess,'run') as ssh:
+            ssh.return_value.returncode=0;ssh.return_value.stdout='ab'*32+'  /tmp/b23-tee-nav-canary-abababababababab\n'
+            self.assertEqual(daily.remote_copy('/x/tool','ab'*32),'/tmp/b23-tee-nav-canary-abababababababab')
+            ssh.return_value.returncode=1;ssh.return_value.stdout=''
+            with self.assertRaisesRegex(release_pin.Refusal,'^validator-0 has no copy of the rehearsal tool at /tmp/b23-tee-nav-canary-abababababababab; copy it with: scp -p /x/tool '):daily.remote_copy('/x/tool','ab'*32)
 
 class FailureAlertTests(unittest.TestCase):
     """Every failed run leaves a record and calls the hook once; nothing touches the network."""

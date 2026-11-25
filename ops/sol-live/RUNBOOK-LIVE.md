@@ -150,6 +150,16 @@ PY
 
 Inspect the canary's staged SHA, manifest verification, restored watchdog state and fleet convergence before rolling validator 1. Check the per-host evidence after each restart. Restore predecessor units only while the predecessor can replay every committed block. Use the saved units at `/etc/postfiat/releases/main-r64-20261121/rollback-units/` and the kit's `restore-watchdog.sh` on each affected host, then recheck root convergence. After a new decision or burn requires this release, repair forward.
 
+### 2.1 Rebuild the B24 rehearsal tool from the release
+
+As soon as all six report `$REV`, and before the next 17:55 UTC B24 reading, run on the main machine:
+
+```bash
+ops/b24-live/rehearsal_tool.sh "$REL" "$REV" "$(sha256sum "$B" | cut -d' ' -f1)"
+```
+
+It builds `tools/b23-nav-canary` at `$REV` with `--locked`, installs it as `b23-coord/artifacts/$REL/postfiat-b23-nav-canary` and prints the line for `ops/b24-live/known-releases.txt`. Add that line, copy the tool to validator-0 as `/tmp/b23-tee-nav-canary-<first 16 hex of its sha256>`, then run `python3 ops/b24-live/daily.py --check`: it must name `$REL`. Until then the daily job refuses to run, and says which of these is missing.
+
 ## 3. Register the descriptor with burns closed
 
 When the next proposal height reaches H, review the registration batch and submit through the six resident validator signers. The prepare command needs a writable scratch store with its matching integrity file accessible to the node. Run it inside the same store and key mounts used above.

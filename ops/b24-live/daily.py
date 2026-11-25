@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """B24 scheduled or --now update: $9/run, $250/month, $250 cumulative lane cap.
 
-No retry/backfill. --check is local only; --execute uses real time, the pinned
-collector, shared GPU lock, strict copy verification and three live operations.
+No retry/backfill. --check makes no AWS call or chain write; like every run it reads
+the six validators to find the release they run and the rehearsal tool built from
+it (release_pin.py). --execute uses real time, the pinned collector, shared GPU
+lock, strict copy verification and three live operations.
 Every failed run writes failure.json (run directory, else reading_alert.STATE),
 calls the optional B24_READING_NOTIFY hook once, and a reading counts only once
 its epoch is read back finalized from the chain.
 """
-import argparse,copy,fcntl,importlib.util,os,signal,time
+import argparse,copy,fcntl,importlib.util,os,shlex,signal,time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timezone
 from decimal import Decimal,ROUND_CEILING
 from sign import *
 from snapshot import export
 from live import run_operations,LOCK,read_six,points,receipt_rows
+from rpc import read
+from release_pin import Refusal
+import common,live,release_pin,sign,snapshot
 from reading_alert import record_failure
 ROOT=Path(__file__).resolve().parents[2]
 NAV=Path('/home/postfiat/repos/navstrategies-now')
@@ -35,8 +40,6 @@ GPU_NATIVE=DEPLOYMENT/'postfiat-b24-nav-cuda'
 helpers.NATIVE=NATIVE
 helpers.ELF=DEPLOYMENT/'b24-nav.elf'
 
-# b24-release5-20261117, ac91a1f42. Both processes on every validator must match.
-DAILY_NODE_SHA = '6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b'  # sol-exit-r2 (04600868, built at 046008683)
 
 def require_runtime():
     paths=[SEED/'manifest.json',SEED/'profile.json',DEPLOYMENT/'profile-template.json',DEPLOYMENT/'capture-plan.json',NATIVE,GPU_NATIVE,helpers.ELF]
@@ -134,12 +137,35 @@ def collect(now,on_demand,d,mode,stamp,p):
     p.stage='reading-qualification';helpers.command([sys.executable,TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,'--native-cli',NATIVE,'--root-der',COORD/'evidence/tee/aws-nitro-root.der','--output',d/'negative-reading'])
     p.stage='proof';helpers.command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',helpers.ELF,'--native-cli',NATIVE,'--prover-cli',GPU_NATIVE,'--output',d/'proof'])
     return manifest,capture,budget
-def runtime_check(d, filename='runtime-hashes.json'):
+def fleet_statuses():
+    def one(i):
+        try:return read('status',{},i)
+        except Exception as error:return error
+    with ThreadPoolExecutor(max_workers=6) as pool:return dict(zip(release_pin.VALIDATORS,pool.map(one,range(6))))
+def remote_copy(tool,digest):
+    """validator-0 runs the read-only export with its own copy of the rehearsal tool."""
+    remote='/tmp/b23-tee-nav-canary-'+digest[:16]
+    result=subprocess.run(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10',snapshot.VALIDATOR0,'sha256sum '+shlex.quote(remote)],capture_output=True,text=True,timeout=30)
+    if result.returncode or result.stdout.split()[:1]!=[digest]:raise Refusal(f'validator-0 has no copy of the rehearsal tool at {remote}; copy it with: scp -p {tool} {snapshot.VALIDATOR0}:{remote}')
+    return remote
+def use_tool(tool):
+    """Every module of the job rehearses with the chosen tool."""
+    for module in (common,sign,snapshot,live):module.CANARY=tool
+    globals()['CANARY']=tool
+def release_check():
+    """The release all six run, both processes on each, and a rehearsal tool from the same source."""
+    chosen=release_pin.release(release_pin.fleet(fleet_statuses()),COORD)
     with ThreadPoolExecutor(max_workers=6) as pool:
-        versions=dict(pool.map(lambda peer: runtime(peer, DAILY_NODE_SHA),PEERS))
-    save(d/filename,versions)
-    if set(versions) != {f'validator-{i}' for i in range(6)} or not all(v['matches'] for v in versions.values()):
-        raise RuntimeError('B24 reading requires release 5 RPC and transport on all six validators')
+        versions=dict(pool.map(lambda peer: runtime(peer, chosen['node_sha256']),PEERS))
+    bad=[n for n in release_pin.VALIDATORS if not versions.get(n,{}).get('matches')]
+    if bad:raise Refusal(f"The running processes on {', '.join(bad)} are not the binary {chosen['node_sha256'][:16]} named by their manifest; restart both units on the installed release, then run: {release_pin.CHECK}")
+    chosen['validator0_copy']=remote_copy(chosen['tool'],chosen['tool_sha256'])
+    use_tool(Path(chosen['tool']))
+    return dict(release=chosen,processes=versions)
+def runtime_check(d, filename='runtime-hashes.json'):
+    try:result=release_check()
+    except Refusal as refusal:save(d/filename,dict(refused=str(refusal)));raise
+    save(d/filename,result);return result
 def confirm_landed(d,epoch,packet):
     """Read the chain again until the new epoch is finalized with this packet, within LANDING_WAIT."""
     deadline=time.monotonic()+LANDING_WAIT
@@ -209,11 +235,11 @@ def resume(d,progress=None):
 def main():
     ap=argparse.ArgumentParser(description=__doc__);g=ap.add_mutually_exclusive_group(required=True);g.add_argument('--check',action='store_true');g.add_argument('--execute',action='store_true');g.add_argument('--now',action='store_true');g.add_argument('--resume',type=Path,help='Run directory with a captured, proven reading');a=ap.parse_args();now=datetime.now(timezone.utc)
     if a.check:
-        require_runtime()
+        require_runtime();pin=release_check()['release']
         seed=load(SEED/'manifest.json');m=helpers.reading_manifest(seed,max(int(now.timestamp()*1000)+120000,seed['cutoff_unix_ms']+1),seed['observation_height'],seed['observation_epoch'],seed['cutoff_unix_ms'])
         plan=load(DEPLOYMENT/'capture-plan.json');helpers.runner_module().check_inputs(helpers.runner_module().reviewed_plan(plan),m)
         identity=json.loads(subprocess.check_output([str(NATIVE),'identity','--elf',str(helpers.ELF)]));assert identity['program_vkey']==load(SEED/'profile.json')['sp1_program_vkey']
-        print(json.dumps(dict(local_check=True,asset_id=m['nav_asset_id'],profile=m['proof_profile_id'],epoch=m['observation_epoch'],cutoff_unix_ms=m['cutoff_unix_ms'],run_cap_usd='9',month_cap_usd='250',cumulative_lane_cap_usd='250',aws_calls=0,chain_writes=0)));return
+        print(json.dumps(dict(local_check=True,release=pin['name'],fleet_revision=pin['revision'],node_sha256=pin['node_sha256'],rehearsal_tool=pin['tool'],rehearsal_tool_sha256=pin['tool_sha256'],rehearsal_tool_revision=pin['tool_revision'],asset_id=m['nav_asset_id'],profile=m['proof_profile_id'],epoch=m['observation_epoch'],cutoff_unix_ms=m['cutoff_unix_ms'],run_cap_usd='9',month_cap_usd='250',cumulative_lane_cap_usd='250',aws_calls=0,chain_writes=0)));return
     os.umask(0o077)
     def stop(signum,frame):raise SystemExit(128+signum)
     signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
