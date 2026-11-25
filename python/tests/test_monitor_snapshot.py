@@ -7,6 +7,7 @@ import runpy
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "testnet-monitor-snapshot"
@@ -188,6 +189,70 @@ class MonitorSnapshotTest(unittest.TestCase):
             self.args(),
         )
         self.assertIn("validator_clock_skew_critical", clock_report["criticals"])
+
+    def run_main_until_network(self, *argv: str) -> list[list[str]]:
+        """Run main() with `run_local` mocked; it launches the RPC doctor, the
+        first network call, so a recorded command means validation passed."""
+        calls: list[list[str]] = []
+
+        class NetworkStepReached(Exception):
+            pass
+
+        def fake_run_local(command: list[str]) -> None:
+            calls.append(command)
+            raise NetworkStepReached
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
+            self.module["main"].__globals__, {"run_local": fake_run_local}
+        ):
+            try:
+                self.module["main"]([*argv, "--log-dir", str(Path(tmp) / "logs")])
+            except NetworkStepReached:
+                pass
+        return calls
+
+    def test_nonfinite_latency_thresholds_rejected_before_network(self) -> None:
+        for flag in (
+            "--warn-rpc-p95-ms",
+            "--critical-rpc-p95-ms",
+            "--warn-proof-verify-ms",
+            "--critical-proof-verify-ms",
+        ):
+            for value in ("nan", "inf", "-inf", "1e999"):
+                with self.subTest(flag=flag, value=value):
+                    calls: list[list[str]] = []
+                    with self.assertRaisesRegex(SystemExit, f"^{flag} must be finite"):
+                        calls = self.run_main_until_network(f"{flag}={value}")
+                    self.assertEqual(calls, [])
+
+    def test_finite_ordered_latency_thresholds_reach_network_step(self) -> None:
+        for argv in (
+            (),
+            ("--warn-rpc-p95-ms", "250.5", "--critical-rpc-p95-ms", "1000"),
+            ("--warn-rpc-p95-ms", "0", "--critical-rpc-p95-ms", "0"),
+            ("--warn-proof-verify-ms", "100", "--critical-proof-verify-ms", "200"),
+        ):
+            with self.subTest(argv=argv):
+                calls = self.run_main_until_network(*argv)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(calls[0][0], "scripts/testnet-rpc-doctor")
+        with self.assertRaisesRegex(SystemExit, "RPC latency thresholds"):
+            self.run_main_until_network(
+                "--warn-rpc-p95-ms", "5000", "--critical-rpc-p95-ms", "1000"
+            )
+
+    def test_high_rpc_latency_alerts_with_valid_thresholds(self) -> None:
+        def latency(p95_ms: float) -> dict[str, object]:
+            return self.checks(self.monitor(rpc_latency={"p95_ms": p95_ms}))
+
+        self.assertEqual(latency(1000.0)["status"], "ok")
+        warned = latency(4000.0)
+        self.assertEqual(warned["status"], "warning")
+        self.assertEqual(warned["warnings"], ["rpc_latency_p95_warn"])
+        critical = latency(9000.0)
+        self.assertEqual(critical["status"], "critical")
+        self.assertIn("rpc_latency_p95_critical", critical["criticals"])
+        self.assertNotIn("rpc_latency_p95_warn", critical["warnings"])
 
     def test_proof_latency_distinguishes_no_history_from_unavailable(self) -> None:
         no_history = self.checks(

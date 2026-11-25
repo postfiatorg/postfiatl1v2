@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import stat
@@ -799,6 +800,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    # argparse's float() accepts nan/inf; NaN compares false against every
+    # latency, so it would silently disable the alert. Reject before any
+    # other check or network call.
+    for name in (
+        "warn_rpc_p95_ms",
+        "critical_rpc_p95_ms",
+        "warn_proof_verify_ms",
+        "critical_proof_verify_ms",
+    ):
+        if not math.isfinite(getattr(args, name)):
+            raise SystemExit(f"--{name.replace('_', '-')} must be finite")
     if args.include_account_tx_history and not args.account_address:
         raise SystemExit("--include-account-tx-history requires --account-address")
     if args.account_tx_from_height < 0:
