@@ -53,7 +53,7 @@ rc=0
 flock -n -E 75 prover.lock bash -c 'pkill -9 -f "^$PWD/host-live serve "
     for _ in {1..50}; do pgrep -f "^$PWD/host-live serve " >/dev/null || break; sleep 0.1; done
     for pid in $(pgrep -x sp1-gpu-server); do
-        dev=$(tr "\0" "\n" < "/proc/$pid/environ" | sed -n "s/^CUDA_VISIBLE_DEVICES=//p")
+        dev=$(tr "\0" "\n" < "/proc/$pid/environ" 2>/dev/null | sed -n "s/^CUDA_VISIBLE_DEVICES=//p")
         [[ $dev =~ ^[0-9]+$ ]] || continue
         parent=$(awk "{print \$4}" "/proc/$pid/stat" 2>/dev/null) || continue
         owner=$(cat "/proc/$parent/comm" 2>/dev/null || echo unknown)
