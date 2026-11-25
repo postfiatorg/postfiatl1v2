@@ -257,7 +257,7 @@ distinct NIST hash families (SHA-2 Merkle-Damgard vs. Keccak-f[1600] sponge):
         - "PFS-STMT" (m = 464 B; 465 B with counter)    -> H(m)[0..64]  (512 b)
         - "PFS-ABS " (fixed length per tag)             -> H(m)[0..64]  (512 b)
         - "PFS-CH  " (m = 76 B; 77 B with counter)      -> H(m)[0..48]  (E elem)
-                                                        || H(m)[64..128](512 b state)
+                                                        || H(m)[64..128] (512 b state)
         - "PFS-C4  " (m = 120 B; 121 B with counter)    -> H(m)[0..192] (20 PoW
                                                            + 52x21 query bits)
       Prefix-free Merkle-Damgard note: Because every compiler domain tag has a
@@ -1426,12 +1426,12 @@ and eta_{1,2,3} := rho_rs^{384,385,386}.
   (i)  Transposition identity: By GF(2)-linearity of L_{rho_rs} over active
        witness rows (0..139; trailing zero subrows 28..31 contribute 0) and
        bit-transposed mask rows (140..144), L_{rho_rs}(sum_b eq(r_1[14..18], b)
-       * s_comb_true[b](u)) == <U^(u)|_H, M_RS> identically.
+       * s_comb_true[b] (u)) == <U^(u)|_H, M_RS> identically.
   (ii) Soundness: If eval_z[x] != w_x(u) + tau*m_x(u) for some x in 0..4, then
        sum_{x=0}^4 gamma^x * (eval_z[x] - w_x(u) - tau*m_x(u)) is a nonzero
        univariate polynomial of degree <= 4 in gamma, vanishing with prob <=
        4 / |E|. Conditioned on nonzero difference, the Round-23 check forces
-       s'_comb[b*] != s_comb_true[b*](u) for some b*, making the transposed
+       s'_comb[b*] != s_comb_true[b*] (u) for some b*, making the transposed
        difference Delta_hat_{v,u} != 0 for at least one j* = 32v* + u* in
        0..383. Then (RS_target - RS_target_true(u)) + eta_1*(eval_zg - g1_m(u))
        + eta_2*(S_G1 - S_G1^(u)) + eta_3*(S_mask2 - S_mask2^(u)) is a nonzero

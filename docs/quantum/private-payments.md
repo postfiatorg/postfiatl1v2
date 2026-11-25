@@ -1,8 +1,12 @@
 # Quantum-Safe Private Payments
 
-Post Fiat L1 is building private payments that stay private and sound against a large quantum computer. The
+Post Fiat L1 is building private payments designed to stay private and sound against a large quantum computer. The
 system is called **Peel-Binius-Shielded**, and its transaction format is **PFSH02**. This page says what it does,
 what works today, what is still missing and how to check it yourself.
+
+**Format on `main`: PFSH03.** The code now uses PFSH03, which adds an ML-DSA-65 spend authorization for each
+input note ([specification](../security/peel-binius-shielded-pq-payments.md)). The measurements, sizes and
+milestone results on this page were taken on PFSH02 and have not been re-measured for PFSH03.
 
 ## Why a new system
 
@@ -11,8 +15,9 @@ existing shielded pool does not. It uses Orchard and Halo2, which rely on ellipt
 chain today and has a large quantum computer later could decrypt those notes and learn who paid whom and how much.
 They could also forge Halo2 proofs, which would let them spend money they do not have.
 
-PFSH02 uses only hash functions (SHAKE256 and SHA-384) and ML-KEM-1024, the post-quantum key-exchange standard.
-Neither has a known quantum attack beyond the generic speed-up that larger parameters absorb.
+PFSH02 uses no elliptic curves. It is built from hash functions (SHAKE256 inside the proof, SHA-512 and SHA-384
+around it), AES-256-GCM, ML-KEM-1024 for the encrypted envelopes and ML-DSA-65 for deposit and fee signatures.
+None of these has a known quantum attack that breaks it at the chosen sizes.
 
 ## What a payment hides
 
@@ -29,14 +34,15 @@ Issued payments and exits use L1 profile 2. Both wallets read the exact fee for 
 
 Replaying a rehearsal archive that contains an issued payment or exit in the original public-payer format requires its original decoder.
 
-The recipient finds their payment by trial-decrypting envelopes with their own ML-KEM key. Nobody else can tell
-which envelope is theirs. The sender does not need the recipient to be online.
+The recipient finds their payment by trial-decrypting envelopes with their own ML-KEM key. Nobody else should be
+able to tell which envelope is theirs; this rests on an assumption about ML-KEM-1024 that is proven for its
+predecessor Kyber but not yet for the standardized version. The sender does not need the recipient to be online.
 
 ## What works today
 
 The protocol runs as a standalone tool in
 [`tools/pft-binius-shielded-pq`](https://github.com/postfiatorg/postfiatl1v2/tree/feat/peel-binius-shielded-pq/tools/pft-binius-shielded-pq). It has a Rust prover and verifier
-and a second verifier written separately in Go. The Go verifier uses only the standard library except for
+and a second verifier in Go, written by the same team from the same specification. The Go verifier uses only the standard library except for
 ML-DSA-65 deposit signatures, which come from Cloudflare's CIRCL library (Go's standard library has no ML-DSA yet).
 Four sample transactions cover a deposit, a two-input payment, a one-input payment and a payment that spends a note created 25 deposits earlier and
 exits part of it to a public account.
@@ -47,17 +53,20 @@ exits part of it to a public account.
 | Verification, one core, Rust | under 50 ms | about 22 ms |
 | Verification, one core, Go | under 50 ms | about 32 ms (with the CPU's carry-less multiply instruction) |
 | Spending the last note of a full tree (16,777,216 notes) | under 50 ms | 20.3 ms Rust, 30.4 to 35.3 ms Go; 138,364 bytes |
-| Making a payment (proving) | — | 2.9 s on 16 cores, 26.7 s on one core, 562 MiB memory |
-| Wallet scanning other people's outputs | — | 4,722 outputs per second per core |
+| Making a payment (proving) | — | 2.9 s on 16 cores (32 threads), 26.7 s on one core, 562 MiB memory |
+| Wallet scanning other people's outputs | — | 4,722 to 6,073 outputs per second per core |
 
-Timings were measured on an AMD EPYC host, one core pinned with no other load on it, and repeated on GitHub's
-public runners. The Go verifier without that instruction takes about 72 ms, over budget.
+Timings were measured on an AMD EPYC host, one core pinned with no other load on it. The branch's CI workflow
+repeats the checks and a one-core benchmark on GitHub's public runners. The Go verifier without that instruction
+takes about 59 to 72 ms, over budget.
 
 `./verify.sh` replays everything in seven steps: Rust unit tests, Rust verification of the four payments and of a
 spend from a full-size tree, 35 named attacks and 150 random corruptions that must all be rejected, forged deposit
-signatures (wrong amount, swapped outputs, wrong key, missing signature, replay) that must be rejected, the independent Go verifier on the same payments and
-attacks, a recipient recovering their payment with Go's standard-library ML-KEM, an exact-arithmetic check of the
-security bounds and Z3 proofs that the circuit enforces value conservation.
+signatures (wrong amount, swapped outputs, wrong key, missing signature, replay) that must be rejected, the Go verifier on the same payments and
+attacks, a recipient recovering their payment with Go's standard-library ML-KEM, a script that
+recomputes the specification's security formulas in exact arithmetic (it checks the arithmetic, not the proofs) and
+Z3 proofs that the adder logic used for value conservation is exact (they do not cover how note values are wired
+into the hashes).
 
 ```sh
 cd tools/pft-binius-shielded-pq
@@ -69,17 +78,17 @@ sha256sum -c SHA256SUMS
 
 PFSH02 is not yet switched on for any public chain. On local test chains everything a user needs now works:
 validators verify and settle payments, the pool keeps its own ledger, and a command-line wallet and the browser wallet
-shield, pay and exit for PFT and pfUSDC. The six-validator upgrade rehearsal is done. What remains is an external review of the cryptography;
-the package for reviewers is ready. Only after review does a signed amendment choose an activation height. The build plan is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
+shield, pay and exit for PFT and pfUSDC. The six-validator upgrade rehearsal is done. Before activation there remain an external review of the cryptography and the code
+(the package for reviewers is ready). Only then does a signed amendment choose an activation height. The build plan is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
 The historical M1–M8 results below cover the standalone fixture and the original L1 profile 1, which charged a public PFT payer on issued spends.
 
 | Milestone | Delivers | Status |
 | --- | --- | --- |
 | M1 | A local validator verifies and finalizes a real PFSH02 payment | Done 22 Nov: six validators finalize and replay the sample payment; 21.5 to 34.3 ms inside the validator |
-| M2 | The on-chain transaction format, frozen with test vectors in Rust and Go | Done 22 Nov: 8 byte-exact payment vectors (PFT, pfUSDC, deposits, payments, exits); largest stored payment 146,546 of 149,130 bytes; validators check the proof and deposit signature before voting |
+| M2 | The on-chain transaction format, frozen with test vectors in Rust and Go | Done 22 Nov: 8 byte-exact payment vectors (PFT, pfUSDC, deposits, payments, exits); largest stored payment 144,770 bytes, at most 146,546 of 149,130; validators check the proof and deposit signature before voting |
 | M3 | The pool's own ledger state: note trees, nullifiers, root history, tree rollover | Done 22 Nov: separate pool per asset; old notes spendable after two full-tree rollovers; restart, snapshot and genesis replay agree; a real 1,734-block archived chain replays to identical block hashes and state roots |
-| M4 | Deposits signed by the account's ML-DSA-65 key, payments and exits, for PFT and pfUSDC | Done 22 Nov on a test chain: deposit, private payment, partial and full exit for PFT and pfUSDC; supply reconciles at every block (public + private pool + burned fees = 1,000,000,000 PFT) |
-| M5 | Activation height, per-block verification limits, every public submission path | Done 23 Nov in rehearsal: off unless a signed amendment sets a height; blocks before it are invalid; at most 4 payments per block; 25 to 36 ms per payment inside a validator; a six-validator round takes 0.51 to 0.57 s with one payment (0.31 s without) |
+| M4 | Deposits signed by the account's ML-DSA-65 key, payments and exits, for PFT and pfUSDC | Done 22 Nov on a test chain: deposit, private payment, partial and full exit for PFT and pfUSDC; supply reconciles at every block of the test chain and on replay (public + private pool + burned fees = 1,000,000,000 PFT) |
+| M5 | Activation height, per-block verification limits, every public submission path | Done 23 Nov in rehearsal: off unless a signed amendment sets a height; blocks before it are invalid; at most 4 payments per block; 24 to 45 ms per payment inside a validator, up to 55 ms when cold; a six-validator round with four payments took 0.98 to 1.03 s (0.31 to 0.84 s without) |
 | M6 | A wallet that scans for its notes, recovers from backup and pays from the command line | Done 23 Nov on a local chain: two wallets shield, pay and unshield PFT and pfUSDC from the Python CLI; Bob restores from backup and spends across a tree rollover; no secrets in 89 RPC requests or logs; a payment takes about 25 s to prove on one core (585 MB) |
 | M7 | The browser wallet flow; moving funds from the old Orchard pool | Done 23 Nov on a local chain: Alice and Bob, in two browser sessions, shield, pay, spend a received note and exit for PFT and pfUSDC, checked against 10 validator receipts; Orchard funds move out in two approved steps (exit to the public account, then a fresh PQ deposit) and survive a restart at either step; keys and proving stay on the user's machine; the old Orchard wallet still works. [Screenshots](../evidence/pq-private-payments-m7/) |
 | M8 | Upgrade rehearsal on a six-validator chain and external review before activation | Rehearsal done 23 Nov: on a fresh six-validator chain payments switch on at the scheduled height, mix with ordinary traffic, pause and reopen, and survive cold restart, snapshot import and full replay; the real 1,734-block archive replays identically; a validator that has not upgraded stops at the scheduling block instead of diverging. [Rehearsal record](../evidence/pq-private-payments-m8/rehearsal-record.md). External review: package ready ([review package](../evidence/pq-private-payments-m8/external-review-package.md)), reviewers not yet engaged |
@@ -95,10 +104,12 @@ Closed on 22 November in the standalone tool:
 
 ## What rests on assumptions
 
-The security argument is in the [PFSH02 specification](../security/peel-binius-shielded-pq-payments.md). Its
-quantum soundness bound rests on a new reduction in Appendix A.3 that no one outside the project has reviewed yet,
-and its multi-proof extraction in Appendix A.4 is stated as a conjecture. Privacy also assumes standard properties
-of SHAKE256 and ML-KEM-1024 that are believed but not proven. External review of the verifier and these proofs is a
+The security argument is in the [PFSH02 specification](../security/peel-binius-shielded-pq-payments.md). The proof
+system is new. Its whole security analysis was written by the project and has not been reviewed by anyone outside
+it: the classical soundness argument (Appendix A.1–A.2), the reduction for quantum attackers (A.3) and the
+zero-knowledge argument that privacy depends on (Appendix B). Protection against an attacker who reuses parts of
+other people's proofs (A.4) is stated as a conjecture. Privacy and authorization also rely on assumptions about
+SHAKE256 and ML-KEM-1024 that the specification marks as non-standard and gives no numbers for. External review of the verifier and these proofs is a
 condition of activation (M8).
 
 Privacy here covers the contents of payments. It does not hide network-level information such as the IP address or
