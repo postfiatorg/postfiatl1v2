@@ -237,6 +237,30 @@ def verify_open_parent(rows, tx_id, parent, need=6):
     )
 
 
+SETTLED_READS = 10
+SETTLED_PAUSE = 6
+
+
+def settle_paid(paid, need, rules, revision, parent, restricted=False, **expect):
+    """The one settlement path for every withdrawal: review the finalized payout against the
+    agreed redemption record (`exit_canary.reviewed_payout`), propose the paid decision (each
+    host's own reviewer decides whether it signs; the chain needs `need` signatures), then
+    check the agreed settlement receipt and bucket accounting against the state before."""
+    import time
+    from exit_canary import check_settlement, agreed_redemption, reviewed_payout
+
+    ref, before = reviewed_payout(paid, need, rules=rules, **expect)
+    result = govern("exit-paid", compatible=revision, qualified_parent=parent, payout=ref, rules=rules,
+                    restricted=restricted)
+    for attempt in range(SETTLED_READS):
+        after = agreed_redemption(paid["burn_tx_id"], need, rules["covered"])
+        if after["record"]["state"] != "pending":
+            break
+        time.sleep(SETTLED_PAUSE)
+    check_settlement(before, after["state"], result["tx_id"])
+    return dict(result, reference=ref, before=before, after=after["state"])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest="action", required=True)
@@ -247,7 +271,12 @@ def main():
     for name in ("submit", "open", "close", "paid", "refund"):
         p = subs.add_parser(name)
         if name == "paid":
-            p.add_argument("--paid", required=True, type=Path)
+            # Any withdrawal by its burn id; --paid is the canary's record and pins its wallet.
+            which = p.add_mutually_exclusive_group(required=True)
+            which.add_argument("--burn")
+            which.add_argument("--paid", type=Path)
+            # The installed settlement loop: signatures only through the hosts' restricted doors.
+            p.add_argument("--restricted", action="store_true")
         if name == "refund":
             p.add_argument("--burn", required=True)
         if name in ("close", "paid", "refund"):
@@ -354,11 +383,12 @@ def main():
                 dict(accepted, qualified_parent=state["qualified_parent"], routes=rows),
             )
     elif args.action == "paid":
-        from exit_canary import review_paid
+        from exit_canary import DEST, OWNER
 
-        ref = review_paid(read(args.paid), need=need)
-        result = govern("exit-paid", compatible=args.revision,
-                        qualified_parent=parent_of(head), payout=ref, rules=rules)
+        pins = dict(expect_owner=OWNER, expect_destination=DEST) if args.paid else {}
+        paid = read(args.paid) if args.paid else dict(burn_tx_id=args.burn)
+        result = settle_paid(paid, need, rules, args.revision, parent_of(head),
+                             restricted=args.restricted, **pins)
         save(args.output, result)
     elif args.action == "refund":
         # Only a pending, unsettled burn whose Solana marker reads cancelled at a finalized slot.
