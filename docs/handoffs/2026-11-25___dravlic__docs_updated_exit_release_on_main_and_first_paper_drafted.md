@@ -96,3 +96,23 @@ For the owner (date first asked):
 - **Task Node PRs:** #430, #436.
 - **Private repository:** PR #52.
 - **Previous handoff:** [2026-11-24: Second withdrawal release prepared and main checks green](2026-11-24___dravlic__second_withdrawal_release_prepared_and_main_checks_green.md).
+
+## End of session (15:26 UTC)
+
+**Merged after the text above was written.** #224 at 13:54 UTC, #213 and #226 at 14:33 UTC, each after its hosted run passed. The timer of the credit alert on the relay machine and the rebuild for one proving machine are open on the owner's side.
+
+**The rehearsal's result** (item 5 of the 25 November handoff), on copies of the chain and a local Solana test network:
+
+- A cancel with refund behaves as designed: the cancel, the six reviewers' own checks, the refund with five of six signatures, and every refusal (a payout after a cancel, a refund after a payout).
+- One fault showed. With one validator down, a paid withdrawal cannot be settled: the node accepts five signatures, and `govern.py` drafts the decision for six supporters. [#237](https://github.com/postfiatorg/postfiatl1v2/pull/237) drafts it again for exactly the validators that signed, with tests for each of the six being the missing one. It is not read by a second reader and not merged. The drafting host needs a node binary of that version; until then `govern.py` stops with a named error and submits nothing.
+- Limits: the proofs were not verified in the rehearsal (no proving machine there), and no validator was really stopped; its signature was left out.
+
+**The research paper: where it stands and how to continue it.**
+
+- It is not finished. An idle session does not mean a finished paper: the work runs as rounds of one independent check and one correction, and it is finished when a check's report starts with "no finding in this round". The harness score comes after that.
+- Round 1 of the check raised 21 points, all answered in the paper. Round 2 raised 14 new points, four of them serious. Correction round 2 started at 15:09 UTC.
+- The paper is `docs/research/solana-withdrawal-refund-safety.md` on the branch `research/solana-withdrawal-refund-safety-20261125` of the private repository, with the Lean project in `formal/solana-withdrawal-refund/`. I push the branch there after each correction round.
+- On the work server, tmux session `dravlic3` writes and corrects (worktree `~/repos/postfiatl1v2-dravlic3`), and `dravlic2` is the independent reader: read-only, it proves or refutes each statement before it reads the paper's proofs.
+- Files on the work server: the progress in `~/.cache/refund-paper-progress-20261125.md`, the reader's reports in `~/.cache/refund-paper-proof-check*-20261125.md`, the answers to them in `~/.cache/refund-paper-*answers*-20261125.md`, and the two prompts I send each round in `~/.cache/refund-paper-loop-correction-round.txt` and `~/.cache/refund-paper-loop-check-round.txt`.
+- I keep the rounds going until 19:30 UTC today or the fourth check, whichever comes first. After that both sessions stay open and idle, and the paper is free to take over; the last line of the progress file says where it stopped.
+- The paper stays private until the reviewer follow-ups of private pull request 52 are installed.
