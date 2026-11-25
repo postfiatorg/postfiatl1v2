@@ -34,7 +34,7 @@ def intermediate_chain(*, root_path=1, intermediate_ca=True, intermediate_can_si
                    .add_extension(x509.BasicConstraints(ca=ca, path_length=(root_path if index == 0 else 0) if ca else None), critical=True)
                    .add_extension(usage, critical=True))
         if index == 1 and critical_extension:
-            builder = builder.add_extension(x509.UnrecognizedExtension(ObjectIdentifier("1.2.3.4"), b"\x05\x00"), critical=True)
+            builder = builder.add_extension(x509.UnrecognizedExtension(ObjectIdentifier("1.2.3.4.5"), b"\x05\x00"), critical=True)
         certs.append(builder.sign(keys[max(index - 1, 0)], signature_hash or hashes.SHA384()))
     return (keys[0], certs[0], keys[2], certs[2]), [cert.public_bytes(serialization.Encoding.DER) for cert in certs[:2]]
 

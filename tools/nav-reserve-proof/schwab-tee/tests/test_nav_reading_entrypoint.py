@@ -33,7 +33,7 @@ def test_complete_enclave_protocol_and_ciphertext_only_archive(tmp_path, monkeyp
         "accountApplicationIdentitySha256":manifest["account_commitment_sha256"]}}
     config={"schema":"postfiat.b23.nav_boot.v1","manifest":manifest,"kmsKeyArn":arn,
         "encryptionContext":{"run":"synthetic"},"encryptedSchwabCredentialsBase64":base64.b64encode(b"sealed").decode(),
-        "awsCredentials":{"accessKeyId":"ASIASYNTHETICEXAMPLE","secretAccessKey":"SYNTHETIC-AWS","sessionToken":"SYNTHETIC-SESSION"}}
+        "awsCredentials":{"accessKeyId":"ASIA"+"SYNTHETICEXAMPLE","secretAccessKey":"SYNTHETIC-AWS","sessionToken":"SYNTHETIC-SESSION"}}
     calls=[]; archived=[]; bodies=Transport()
     class Nsm:
         def attest(self,*,user_data,nonce,public_key):

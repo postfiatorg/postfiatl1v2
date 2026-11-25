@@ -35,13 +35,13 @@ from pftl_schwab_tee.canonical import canonical_json_bytes, domain_sha256
 from pftl_schwab_tee.nav_reading import validate_manifest, verify_reading, exact, nav_source_policy, commitment48
 from pftl_schwab_tee.nitro_attestation import NitroNativeAttestationVerifier
 
-AWS_CREDENTIALS = Path("/home/postfiat/aws.txt")
+AWS_CREDENTIALS = Path.home() / "aws.txt"
 MINT_READER = TEE / "mint_reader" / "observe_deposit.py"
 # The MINT reader instantiates BrokerHubService with these unchanged defaults.
 SCHWAB_REMOTE = "pfrpc@productionrpc"
 SCHWAB_APP = Path("/home/pfrpc/repos/schwab.txt")
 SCHWAB_TOKENS = Path("/home/pfrpc/.config/navstrategies/schwab_tokens.json")
-PHASE2_BUDGET = Path("/home/postfiat/repos/b23-coord/evidence/tee/phase2/aws-budget.json")
+PHASE2_BUDGET = Path.home() / "repos/b23-coord/evidence/tee/phase2/aws-budget.json"
 
 
 def reviewed_plan(value):

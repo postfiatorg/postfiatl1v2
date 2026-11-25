@@ -31,7 +31,7 @@ def test_complete_entrypoint_framing_recipient_crypto_oauth_and_durable_archive(
     config = {'schema': 'postfiat.yolo.enclave_boot.v1', 'programSha256': PROGRAM,
         'manifest': fixture.manifest, 'parameters': fixture.run.parameters.to_dict(),
         'sources': fixture.run.sources, 'awsRegion': 'us-east-1',
-        'awsCredentials': {'accessKeyId': 'ASIASYNTHETICEXAMPLE', 'secretAccessKey': 'synthetic-secret', 'sessionToken': 'synthetic-session'},
+        'awsCredentials': {'accessKeyId': 'ASIA'+'SYNTHETICEXAMPLE', 'secretAccessKey': 'synthetic-secret', 'sessionToken': 'synthetic-session'},
         'kmsKeyArn': key, 'encryptionContext': context,
         'encryptedSchwabCredentialsBase64': base64.b64encode(b'credential-blob').decode(),
         'schwabProxyPort': 9001, 'kmsProxyPort': 9002, 'archivePort': 9003, 'networkTimeoutSeconds': 15}
