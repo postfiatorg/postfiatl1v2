@@ -1,5 +1,7 @@
 """Nothing can be set up or rehearsed against the deployed single-bucket verifier."""
 
+import hashlib
+import os
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -8,6 +10,7 @@ import exit_setup
 import rehearse_exit
 
 OLD = "3b16fc309501814e0bba718ecadb80f02993f6f355153a13f37ae9d47d29354c"
+ELF = Path(__file__).resolve().parents[2] / "solana/pfusdc-egress-verifier/target/deploy/pfusdc_egress_verifier.so"
 
 
 class VerifierPinTest(unittest.TestCase):
@@ -22,8 +25,23 @@ class VerifierPinTest(unittest.TestCase):
                 rehearse_exit.image_pins()
 
     def test_the_pin_is_the_upgraded_program_data_of_24_november(self):
-        # sha256 of the 123,152-byte build 4091ee16... zero-filled to the 127,168-byte ProgramData tail.
-        self.assertEqual(exit_setup.verifier_pin(), "0x3406becc6db7ba7c250f8db55dc43965656093bb4ceb3e330d2f452edd465fdf")
+        # Derived, not restated: the reproducible build's ELF (sha256 4091ee16...), zero-filled to the
+        # 127,168-byte ProgramData tail, hashes to the pin.
+        elf = Path(os.environ.get("EXIT_VERIFIER_ELF", ELF))
+        if not elf.is_file():
+            self.skipTest(f"the reproducible verifier build is not on this machine ({elf}); "
+                          "run build-exit-verifier.sh or set EXIT_VERIFIER_ELF")
+        data = elf.read_bytes()
+        self.assertEqual(hashlib.sha256(data).hexdigest(), exit_setup.VERIFIER_ELF_SHA256)
+        self.assertEqual(exit_setup.program_data_pin(data), exit_setup.verifier_pin())
+
+    def test_the_pin_hashes_the_elf_zero_filled_to_the_program_data_size(self):
+        elf = b"\x7fELF" + bytes(range(256)) * 3
+        want = hashlib.sha256(elf + bytes(exit_setup.PROGRAM_DATA_SIZE - len(elf))).hexdigest()
+        self.assertEqual(exit_setup.program_data_pin(elf), "0x" + want)
+        self.assertNotEqual(exit_setup.program_data_pin(elf + b"\0"), "0x" + hashlib.sha256(elf).hexdigest())
+        with self.assertRaisesRegex(ValueError, "larger than the program data"):
+            exit_setup.program_data_pin(bytes(exit_setup.PROGRAM_DATA_SIZE + 1))
 
     def test_no_code_pins_the_old_verifier(self):
         for path in Path(__file__).parent.glob("*.py"):
