@@ -1463,18 +1463,47 @@ pub fn verify_governance_amendment(
     {
         return Err("governance amendment domain mismatch".to_string());
     }
-    if postfiat_types::solana_exit::is_decision(&amendment.kind)
+    let second = postfiat_types::solana_exit::second_release_active(
+        &domain.chain_id,
+        &domain.genesis_hash,
+        amendment.activation_height,
+    );
+    if postfiat_types::solana_exit::is_decision(&amendment.kind, second)
         && (postfiat_types::solana_exit::release_height(&domain.chain_id, &domain.genesis_hash)
             .is_none_or(|h| amendment.activation_height < h)
             || amendment.value != 1
             || amendment.paused
-            || amendment.quorum != amendment.validators.len())
+            || if second {
+                amendment.quorum > amendment.validators.len()
+                    || amendment.quorum
+                        < postfiat_types::solana_exit::signer_floor(
+                            &amendment.kind,
+                            amendment.validators.len(),
+                            true,
+                        )
+            } else {
+                amendment.quorum != amendment.validators.len()
+            })
     {
-        return Err(
-            "Solana exit decision requires the scheduled release and unanimous governance".into(),
-        );
+        return Err(if second {
+            "Solana exit decision requires the scheduled release and its governance quorum"
+        } else {
+            "Solana exit decision requires the scheduled release and unanimous governance"
+        }
+        .into());
     }
-    validate_domain_amendment_kind(domain, &amendment.kind)?;
+    // The minimum-withdrawal kind exists from the second release only.
+    if second && amendment.kind.starts_with(postfiat_types::solana_exit::MIN_WITHDRAWAL) {
+        postfiat_types::solana_exit::minimum_withdrawal(&amendment.kind)?;
+    } else if second && amendment.kind.starts_with(postfiat_types::solana_exit::REFUND) {
+        postfiat_types::solana_exit::refund_fields(&amendment.kind)?;
+    } else if postfiat_types::pq_rehearsal_domain(&domain.chain_id, &domain.genesis_hash)
+        && postfiat_types::pq_fee_governance_kind(&amendment.kind)
+    {
+        // Allowed on the PQ rehearsal domain.
+    } else {
+        validate_amendment_kind(&amendment.kind)?;
+    }
     validate_amendment_value(&amendment.kind, amendment.value)?;
     let lifecycle = GovernanceAmendmentLifecycle {
         activation_height: amendment.activation_height,
@@ -1713,6 +1742,35 @@ fn validate_domain_amendment_kind(domain: &CobaltDomain, kind: &str) -> Result<(
         return Ok(());
     }
     validate_amendment_kind(kind)
+}
+
+/// Kinds a validator may ratify and certify. The second Solana exit release's minimum
+/// withdrawal is signable only where that release is active at the activation height; elsewhere
+/// it is refused as the first release refuses any unknown kind.
+pub(crate) fn validate_signing_kind(
+    domain: &CobaltDomain,
+    kind: &str,
+    activation_height: u64,
+) -> Result<(), String> {
+    if kind.starts_with(postfiat_types::solana_exit::MIN_WITHDRAWAL)
+        && postfiat_types::solana_exit::second_release_active(
+            &domain.chain_id,
+            &domain.genesis_hash,
+            activation_height,
+        )
+    {
+        return postfiat_types::solana_exit::minimum_withdrawal(kind).map(|_| ());
+    }
+    if kind.starts_with(postfiat_types::solana_exit::REFUND)
+        && postfiat_types::solana_exit::second_release_active(
+            &domain.chain_id,
+            &domain.genesis_hash,
+            activation_height,
+        )
+    {
+        return postfiat_types::solana_exit::refund_fields(kind).map(|_| ());
+    }
+    validate_domain_amendment_kind(domain, kind)
 }
 
 fn validate_amendment_kind(kind: &str) -> Result<(), String> {

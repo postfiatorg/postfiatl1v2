@@ -57,6 +57,17 @@ class BootstrapTests(unittest.TestCase):
         simulated = s.read(Path(__file__).parent / "fixtures/mainnet-bootstrap-simulation.json")
         light, anchor = [dict(a, data=base64.b64decode(a["data"][0])) for a in simulated]
         self.assertEqual(bootstrap_state(cfg, [None, empty]), "empty")
+        # The capture was simulated with the earlier revision-8 route binding (bytes
+        # 136..168). The rebuilt verifier binds the shared custody, so that light
+        # account is refused, and the same account with the custody binding is accepted.
+        from exit_precheck import expected_light
+
+        expected = expected_light(cfg)
+        differ = [i for i in range(len(expected) - 57) if light["data"][i] != expected[i]]
+        self.assertTrue(differ and min(differ) >= 136 and max(differ) < 168, differ)
+        with self.assertRaisesRegex(ValueError, "immutable light fields"):
+            bootstrap_state(cfg, [light, anchor])
+        light = dict(light, data=light["data"][:136] + expected[136:168] + light["data"][168:])
         self.assertEqual(bootstrap_state(cfg, [light, anchor]), "initialized")
         for pair in (
             [light, empty],

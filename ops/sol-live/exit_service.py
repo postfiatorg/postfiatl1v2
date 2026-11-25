@@ -7,28 +7,46 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import re
+from urllib.parse import parse_qs, urlsplit
 import sqlite3
 import threading
 import time
 
 from collections import deque, OrderedDict
+from live import ReplyTooLarge
 from exit_payout import (
     CheckpointAdvanced,
+    ATTEMPT_SECONDS,
+    BLOCK_TOO_LARGE,
+    BlockTooLarge,
+    BurnCancelled,
+    CANCELLED,
+    CommitteeRotated,
+    ROTATED,
+    attempt_deadline,
+    DestinationNotWallet,
     UnknownBurn,
     PAID_NO_HISTORY,
     prune_work,
     ASSET,
-    BUCKET,
     cluster,
+    covered_buckets,
+    destination_refusal,
     finish_payment,
+    holdings,
+    ACCOUNT,
     process,
     readiness,
     rpc,
+    rpc_any,
     signature,
     validate_burn,
+    NOT_WALLET,
 )
 
 BASE = "/solana/withdrawals"
+WAITING_BURN = "Waiting for the burn to reach every validator."
+WAITING_ROTATION = "Waiting for a checkpoint across a validator-set change."
 BURN = re.compile("[0-9a-f]{96}")
 COLUMNS = {"amount_atoms", "recipient", "burn_height", "solana_tx", "error", "detail"}
 
@@ -123,7 +141,7 @@ class Journal:
                 "SELECT due FROM jobs WHERE burn_tx_id=?", (burn,)
             ).fetchone()[0]
 
-    def defer(self, burn, progress=False):
+    def defer(self, burn, progress=False, detail=None):
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             retries = db.execute(
@@ -136,7 +154,7 @@ class Journal:
                 (
                     0 if progress else retries + 1,
                     int(time.time()) + delay,
-                    "Checkpoint advanced." if progress else "Retry scheduled.",
+                    detail or ("Checkpoint advanced." if progress else "Retry scheduled."),
                     burn,
                 ),
             )
@@ -210,14 +228,19 @@ def public_row(row):
             "solana_tx",
         )
     }
-    # Older journals may contain raw exception strings.
-    if value["error"]:
+    # Older journals may contain raw exception strings. A refused destination
+    # keeps its fixed, named reason so the holder learns why.
+    if value["error"] and not value["error"].startswith(
+        (NOT_WALLET, CANCELLED, BLOCK_TOO_LARGE, ROTATED, "Node reply too large")
+    ):
         value["error"] = "Withdrawal processing failed."
     if value["detail"] not in (
         None,
         "Retry scheduled.",
         "Checkpoint advanced.",
         "Finalized marker. Signature unavailable.",
+        WAITING_ROTATION,
+        WAITING_BURN,
     ):
         value["detail"] = None
     return value
@@ -275,12 +298,14 @@ def checked_row(journal, burn):
 
 
 def redemptions():
-    return rpc(0, "vault_bridge_status", asset_id=ASSET)["redemptions"]
+    """Finalized redemptions and the custody buckets the exit descriptor covers."""
+    s = rpc_any("vault_bridge_status", asset_id=ASSET)
+    return s["redemptions"], covered_buckets(s["buckets"])
 
 
-def restore_redemption(journal, row):
+def restore_redemption(journal, row, covered):
     burn = row["burn_tx_id"]
-    owner = validate_burn(row, burn)
+    owner = validate_burn(row, burn, covered)
     result = chain_payment(burn)
     journal.enqueue(burn, rebuilding=True)
     journal.update(
@@ -306,9 +331,10 @@ def rebuild(state):
     with tempfile.TemporaryDirectory(dir=state) as tmp:
         path = Path(tmp) / "recovered.sqlite"
         journal = Journal(path)
-        for row in redemptions():
-            if row["bucket_id"] == BUCKET:
-                restore_redemption(journal, row)
+        rows, covered = redemptions()
+        for row in rows:
+            if row["bucket_id"] in covered:
+                restore_redemption(journal, row, covered)
         with closing(journal.connect()) as db, db:
             if journal.pending() is not None:
                 c = cluster()
@@ -341,15 +367,33 @@ def process_next(journal, directory):
     if burn is None or journal.waiting_for_expiry():
         return False
     try:
-        process(
-            burn,
-            directory / burn,
-            lambda stage, **kw: journal.update(burn, stage, **kw),
-            attempt=journal.attempt(burn),
-            before_send=lambda sig, h: journal.record_attempt(burn, sig, h),
-        )
+        with attempt_deadline(time.monotonic() + ATTEMPT_SECONDS):
+            process(
+                burn,
+                directory / burn,
+                lambda stage, **kw: journal.update(burn, stage, **kw),
+                attempt=journal.attempt(burn),
+                before_send=lambda sig, h: journal.record_attempt(burn, sig, h),
+            )
     except UnknownBurn:
-        journal.update(burn, "failed", error="Unknown finalized burn.")
+        # A validator a block behind has not seen the burn yet: retried, never filed as failed.
+        journal.defer(burn, detail=WAITING_BURN)
+    except CommitteeRotated:
+        # Payable once a later checkpoint crosses the rotation: waiting, retried.
+        journal.defer(burn, detail=WAITING_ROTATION)
+    except BlockTooLarge as named:
+        # Asking again cannot help: filed with its reason; a later submission retries it.
+        journal.update(burn, "failed", error=str(named))
+        print(f"ALERT withdrawal {burn} filed as failed: {named}", flush=True)
+    except ReplyTooLarge as error:
+        journal.update(burn, "failed", error=f"Node reply too large: {error}")
+        print(f"ALERT withdrawal {burn} filed as failed: node reply too large: {error}", flush=True)
+    except BurnCancelled as cancelled:
+        # Cancelled on Solana: never retried; the refund is decided on Post Fiat.
+        journal.update(burn, "failed", error=str(cancelled))
+    except DestinationNotWallet as refused:
+        # Named and not retried: the holder must see why; a refund is still open.
+        journal.update(burn, "failed", error=str(refused))
     except CheckpointAdvanced:
         journal.defer(burn, progress=True)
     except Exception:
@@ -463,6 +507,110 @@ def service_readiness(server, *, fresh=False):
         return server.ready
 
 
+# Account readiness: strict query, a short per-account cache and a small bound on
+# concurrent reads. When the bound is hit the wallet gets 429 and retries.
+ACCOUNT_CACHE = OrderedDict()
+ACCOUNT_CACHE_SECONDS = 5
+ACCOUNT_READERS = 2
+ACCOUNT_SLOTS = threading.BoundedSemaphore(ACCOUNT_READERS)
+ACCOUNT_LOCK = threading.Lock()
+DESTINATION = re.compile("[1-9A-HJ-NP-Za-km-z]{32,44}")
+
+
+def account_reply(server, path):
+    """(HTTP code, body) for /readiness?account=…[&destination=…]."""
+    url = urlsplit(path)
+    try:
+        query = parse_qs(url.query, strict_parsing=True)
+    except ValueError:
+        query = None
+    if (
+        not query
+        or not set(query) <= {"account", "destination"}
+        or any(len(v) != 1 for v in query.values())
+        or ACCOUNT.fullmatch(query.get("account", [""])[0]) is None
+        or ("destination" in query and DESTINATION.fullmatch(query["destination"][0]) is None)
+    ):
+        return 400, dict(error="Invalid account readiness query.")
+    key = (query["account"][0], query.get("destination", [None])[0])
+    now = time.monotonic()
+    with ACCOUNT_LOCK:
+        hit = ACCOUNT_CACHE.get(key)
+        if hit and hit[0] > now:
+            return 200, hit[1]
+    if not ACCOUNT_SLOTS.acquire(blocking=False):
+        return 429, dict(error="Account readiness busy; retry in a few seconds.")
+    try:
+        value = account_readiness(server, path)
+    finally:
+        ACCOUNT_SLOTS.release()
+    with ACCOUNT_LOCK:
+        ACCOUNT_CACHE[key] = (time.monotonic() + ACCOUNT_CACHE_SECONDS, value)
+        while len(ACCOUNT_CACHE) > 1024:
+            ACCOUNT_CACHE.popitem(last=False)
+    return 200, value
+
+
+def account_readiness(server, path):
+    """Readiness plus the Solana-source series an account may offer, for the wallet."""
+    url = urlsplit(path)
+    if url.path != BASE + "/readiness" or not url.query:
+        return None
+    value = dict(service_readiness(server))
+    query = parse_qs(url.query)
+    account = query.get("account", [""])[0]
+    try:
+        series = holdings(
+            account,
+            value.get("buckets"),
+            minimum=int(value.get("min_withdrawal_atoms") or 1),
+        )
+    except Exception:
+        return dict(
+            value, ready=False, series=[], message="Account holdings unavailable."
+        )
+    value = dict(value, account=account, series=series)
+    if "destination" in query:
+        # The same owner check the payout service runs, before the wallet builds a burn.
+        try:
+            from solders.pubkey import Pubkey
+
+            refusal = destination_refusal(
+                destination_cluster(), Pubkey.from_string(query["destination"][0])
+            )
+        except Exception:
+            refusal = NOT_WALLET + " (destination could not be checked)"
+        value["destination_refusal"] = refusal
+        if refusal is not None:
+            value.update(ready=False, message=refusal)
+    return value
+
+
+DESTINATION_CLUSTER = None
+
+
+def destination_cluster():
+    """One shared cluster for wallet destination checks. Each read is one attempt with
+    a 5 s timeout and no 429 backoff, so a check holds its account slot only briefly."""
+    global DESTINATION_CLUSTER
+    if DESTINATION_CLUSTER is None:
+        from exit_setup import ExitCluster, FEE_PAYER, require
+
+        c = ExitCluster(FEE_PAYER)
+
+        def call(method, *params):
+            body = dict(jsonrpc="2.0", id=1, method=method, params=params)
+            response = c.http.post(c.rpc, json=body, timeout=5)
+            require(response.ok, f"{method} HTTP {response.status_code}")
+            msg = response.json()
+            require("error" not in msg, f"{method}: {msg.get('error')}")
+            return msg["result"]
+
+        c.call = call
+        DESTINATION_CLUSTER = c
+    return DESTINATION_CLUSTER
+
+
 class WithdrawalServer(ThreadingHTTPServer):
     request_queue_size = 16
 
@@ -526,6 +674,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, service_readiness(self.server, fresh=True))
         if self.path == BASE + "/readiness":
             return self.reply(200, service_readiness(self.server))
+        if urlsplit(self.path).path == BASE + "/readiness":
+            return self.reply(*account_reply(self.server, self.path))
         prefix = BASE + "/"
         if not self.path.startswith(prefix):
             return self.reply(404, dict(error="unknown path"))
@@ -564,17 +714,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(
                     429, dict(error="Withdrawal admission rate exceeded.")
                 )
+            rows, covered = redemptions()
             red = next(
-                (
-                    r
-                    for r in redemptions()
-                    if r["burn_tx_id"] == burn and r["bucket_id"] == BUCKET
-                ),
+                (r for r in rows if r["burn_tx_id"] == burn and r["bucket_id"] in covered),
                 None,
             )
             if red is None:
                 return self.reply(404, dict(error="Unknown finalized burn."))
-            validate_burn(red, burn)
+            validate_burn(red, burn, covered)
             row = self.server.journal.enqueue(burn)
         except OverflowError:
             return self.reply(429, dict(error="Withdrawal queue full."))

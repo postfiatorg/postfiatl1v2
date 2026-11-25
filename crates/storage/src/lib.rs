@@ -520,6 +520,16 @@ impl NodeStore {
         Ok(receipts)
     }
 
+    /// The receipts of `tx_id` in block order by the receipt-id key, or
+    /// `None` when transactional storage is not active (see
+    /// `TransactionalStore::receipts_for_tx_id` for when this is exact).
+    pub fn read_receipts_for_tx_id(&self, tx_id: &str) -> io::Result<Option<Vec<Receipt>>> {
+        if !self.transactional_storage_active()? {
+            return Ok(None);
+        }
+        Ok(Some(self.transactional_store()?.receipts_for_tx_id(tx_id)?))
+    }
+
     pub fn append_receipt(&self, receipt: Receipt) -> io::Result<()> {
         self.append_receipt_record(&receipt)
     }
@@ -644,6 +654,29 @@ impl NodeStore {
             self.read_jsonl_records(&self.data_dir.join(BLOCKS_APPEND_FILE), "block append")?
         {
             merge_appended_block(&mut blocks, block)?;
+        }
+        Ok(blocks)
+    }
+
+    /// Blocks from `from_height` on (the last ones when `None`), at most
+    /// `limit`. Transactional storage reads only those blocks by height; the
+    /// legacy log is read whole and filtered as before.
+    pub fn read_blocks_window(
+        &self,
+        from_height: Option<u64>,
+        limit: usize,
+    ) -> io::Result<Vec<BlockRecord>> {
+        if self.transactional_storage_active()? {
+            return Ok(self
+                .transactional_store()?
+                .blocks_window(from_height, limit)?);
+        }
+        let mut blocks = self.read_blocks()?.blocks;
+        if let Some(from_height) = from_height {
+            blocks.retain(|block| block.header.height >= from_height);
+            blocks.truncate(limit);
+        } else if blocks.len() > limit {
+            blocks = blocks[blocks.len() - limit..].to_vec();
         }
         Ok(blocks)
     }

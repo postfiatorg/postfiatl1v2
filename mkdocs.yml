@@ -22,6 +22,7 @@ exclude_docs: |
   !specs/transparent-transaction-envelope.md
   !specs/wallet-exchange-custody-model.md
   !specs/wallet-mnemonic-design.md
+  !specs/fast-validator-reads-20261124.md
   status/**
   !status/README.md
   !status/network-status.md
@@ -156,6 +157,7 @@ nav:
       - Wallets:
           - Transparent Wallet: wallets/transparent-wallet.md
           - Web Wallet: wallets/web-wallet.md
+          - FastPay Inventory Ordering: wallets/fastpay-inventory-ordering.md
           - Recovery Phrase Design: wallets/recovery-phrase-design.md
           - Shielded Wallet: wallets/shielded-wallet.md
           - Custody And Exchange: wallets/custody-and-exchange.md
@@ -265,6 +267,7 @@ nav:
       - Account Key Rotation Boundary: specs/account-key-rotation-boundary.md
       - Plaintext Key File Boundary: specs/plaintext-key-file-boundary.md
       - Wallet Mnemonic Design: specs/wallet-mnemonic-design.md
+      - Fast Validator Reads (2026-11-24): specs/fast-validator-reads-20261124.md
       - Account History Index Runbook: runbooks/account-tx-index.md
       - Evidence:
           - Index: evidence/index.md

@@ -10,6 +10,10 @@ publish = false
 [lib]
 path = "src/lib.rs"
 
+[features]
+# Lets tests set the second Solana exit release height per thread.
+test-second-release = []
+
 [dependencies]
 imbl = "7.0.2"
 base64.workspace = true

@@ -69,6 +69,7 @@ sha3 = { workspace = true }
 zeroize = { workspace = true }
 
 [dev-dependencies]
+postfiat-types = { path = "../types", features = ["test-second-release"] }
 orchard = { workspace = true }
 rand = "0.8.6"
 pft-binius-shielded = { path = "../../tools/pft-binius-shielded-pq/rust-prover", features = ["prover"] }

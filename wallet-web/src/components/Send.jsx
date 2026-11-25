@@ -87,13 +87,18 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
     setFastpayError(error);
   }, []);
 
-  // Only complete inventories reach fastpayObjects; see fastpay-inventory.js.
+  // Only confirmed all-pages reads reach fastpayObjects; see fastpay-inventory.js.
   const fastpayInventory = useMemo(() => createFastpayInventory({
     read: () => fetchOwnedObjectsSnapshot(rpc, publicKeyHex, { asset: 'PFT', limit: FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT }),
     publish: publishFastpay,
   }), [rpc, publicKeyHex, publishFastpay]);
+  // A replaced coordinator's outstanding read must not publish over its successor.
+  useEffect(() => {
+    fastpayInventory.attach();
+    return () => fastpayInventory.dispose();
+  }, [fastpayInventory]);
 
-  const fetchFastpayBalance = useCallback(async ({ showLoading = true } = {}) => {
+  const fetchFastpayBalance = useCallback(async ({ showLoading = true, retry = false } = {}) => {
     if (!fastpayEnabled || !publicKeyHex) {
       setFastpayBalance(null);
       setFastpayObjects([]);
@@ -103,7 +108,7 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
     }
 
     if (showLoading) setFastpayStatus('loading');
-    return fastpayInventory.refresh();
+    return retry ? fastpayInventory.retry() : fastpayInventory.refresh();
   }, [publicKeyHex, fastpayInventory, fastpayEnabled]);
 
   useEffect(() => {
@@ -136,7 +141,7 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
     }
 
     if (liveSnapshot.owned) {
-      fastpayInventory.applyFeed(liveSnapshot.owned, liveSnapshot.owned_complete);
+      fastpayInventory.applyFeed(liveSnapshot.owned);
     } else if (liveSnapshot.owned_error && fastpayBalance === null) {
       setFastpayStatus('error');
       setFastpayError(`FastPay balance unavailable: ${humanRpcErrorMessage(liveSnapshot.owned_error)}`);
@@ -630,7 +635,7 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
                 {fastpayStatus === 'error' && (
                   <div className="pf-warning" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span style={{ flex: 1 }}>{fastpayError || 'FastPay balance is unavailable.'}</span>
-                    <button className="pf-ghost" style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => fetchFastpayBalance().catch(() => {})}>Retry</button>
+                    <button className="pf-ghost" style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => fetchFastpayBalance({ retry: true }).catch(() => {})}>Retry</button>
                   </div>
                 )}
                 {fastpayStatus === 'ok' && fastpayObjects.length === 0 && (

@@ -1061,6 +1061,20 @@ pub struct VaultBridgeRouteReport {
     /// Admission status of the separately governed Solana exit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub burns_open: Option<bool>,
+    /// Smallest Solana exit burn the chain accepts, governed or the default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_withdrawal_atoms: Option<u64>,
+    /// Whether burns were closed since the exit descriptor's registration, so an
+    /// opening now is a re-opening that needs only the close quorum.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closed_since_registration: Option<bool>,
+    /// Second release: the buckets the exit descriptor covers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub covered_bucket_ids: Option<Vec<String>>,
+    /// Second release: signatures each decision (open, close, paid, min_withdrawal,
+    /// retire) needs now, out of the active set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_signatures: Option<std::collections::BTreeMap<String, usize>>,
     /// Current ledger anchor for this exact governed profile and epoch.
     /// Null means 29-field proofs for this epoch are refused; old 26-field
     /// deposits are admitted only if the profile has no anchor in any epoch.

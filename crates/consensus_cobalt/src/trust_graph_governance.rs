@@ -1106,7 +1106,7 @@ pub fn ratify_governance_amendment_with_lifecycle(
     support: Vec<String>,
     lifecycle: GovernanceAmendmentLifecycle,
 ) -> Result<GovernanceAmendment, String> {
-    validate_domain_amendment_kind(domain, kind)?;
+    validate_signing_kind(domain, kind, lifecycle.activation_height)?;
     validate_amendment_value(kind, value)?;
     validate_amendment_lifecycle(lifecycle)?;
     let (proposal, certificate, support) = certify_governance_amendment_with_lifecycle(
@@ -1200,7 +1200,7 @@ pub fn certify_governance_amendment_with_lifecycle(
 ) -> Result<(CobaltProposal, CobaltCertificate, Vec<String>), String> {
     validate_domain(domain)?;
     validate_config(config)?;
-    validate_domain_amendment_kind(domain, kind)?;
+    validate_signing_kind(domain, kind, lifecycle.activation_height)?;
     validate_amendment_value(kind, value)?;
     validate_amendment_lifecycle(lifecycle)?;
     let allowed: BTreeSet<&str> = config.validators.iter().map(String::as_str).collect();

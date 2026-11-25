@@ -3243,6 +3243,7 @@ dependencies = [
 name = "postfiat-execution"
 version = "0.1.0"
 dependencies = [
+ "curve25519-dalek",
  "pfusdc-sol-ingress-program",
  "postfiat-bridge",
  "postfiat-crypto-provider",

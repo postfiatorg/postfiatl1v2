@@ -626,6 +626,8 @@ pub struct AssetExecutionCompatibility {
     pub orchard_aware_bridge_claim_activation_height: Option<u64>,
     pub(crate) solana_exit_open_height: Option<u64>,
     pub(crate) solana_exit_heights: Option<(u64, u64)>,
+    /// Smallest Solana exit burn; the governed value or the default.
+    pub(crate) solana_exit_min_atoms: u64,
     pub pfusdc_source_series_activation_height: Option<u64>,
     pub atomic_swap_activation_height: Option<u64>,
     pub atomic_swap_paused: bool,
@@ -719,6 +721,7 @@ impl AssetExecutionCompatibility {
             orchard_aware_bridge_claim_activation_height: Some(0),
             solana_exit_heights: None,
             solana_exit_open_height: None,
+            solana_exit_min_atoms: postfiat_types::solana_exit::DEFAULT_MIN_WITHDRAWAL_ATOMS,
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: Some(0),
             atomic_swap_paused: false,
@@ -750,6 +753,7 @@ impl AssetExecutionCompatibility {
             orchard_aware_bridge_claim_activation_height: Some(0),
             solana_exit_heights: None,
             solana_exit_open_height: None,
+            solana_exit_min_atoms: postfiat_types::solana_exit::DEFAULT_MIN_WITHDRAWAL_ATOMS,
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -781,6 +785,7 @@ impl AssetExecutionCompatibility {
             orchard_aware_bridge_claim_activation_height: Some(0),
             solana_exit_heights: None,
             solana_exit_open_height: None,
+            solana_exit_min_atoms: postfiat_types::solana_exit::DEFAULT_MIN_WITHDRAWAL_ATOMS,
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -812,6 +817,7 @@ impl AssetExecutionCompatibility {
             orchard_aware_bridge_claim_activation_height: Some(0),
             solana_exit_heights: None,
             solana_exit_open_height: None,
+            solana_exit_min_atoms: postfiat_types::solana_exit::DEFAULT_MIN_WITHDRAWAL_ATOMS,
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -843,6 +849,7 @@ impl AssetExecutionCompatibility {
             orchard_aware_bridge_claim_activation_height: Some(0),
             solana_exit_heights: None,
             solana_exit_open_height: None,
+            solana_exit_min_atoms: postfiat_types::solana_exit::DEFAULT_MIN_WITHDRAWAL_ATOMS,
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -886,6 +893,7 @@ impl AssetExecutionCompatibility {
         governance: &postfiat_types::GovernanceState,
     ) -> Self {
         self.solana_exit_open_height = postfiat_types::solana_exit::open_height(governance);
+        self.solana_exit_min_atoms = postfiat_types::solana_exit::min_withdrawal_atoms(governance);
         self.solana_exit_heights = postfiat_types::solana_exit::registered(governance)
             .filter(|(_, a)| {
                 a.chain_id == genesis.chain_id && a.genesis_hash == genesis_hash(genesis)

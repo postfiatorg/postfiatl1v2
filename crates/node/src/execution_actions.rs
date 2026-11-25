@@ -49,17 +49,32 @@ pub(super) fn execute_fastlane_primary_for_chain(
             && certificate.votes.first().is_some_and(|vote| {
                 vote.checkpoint.pending_fee_burn_totals.iter().any(|row| {
                     row.amount_atoms > 0
-                        && bytes_to_hex(&row.asset_id.0) == postfiat_types::solana_exit::SERIES
+                        && postfiat_execution::solana_exit_series_bucket_at(
+                            genesis,
+                            ledger,
+                            &bytes_to_hex(&row.asset_id.0),
+                            block_height,
+                        )
+                        .is_some()
                 })
             })
         {
+            let second = postfiat_types::solana_exit::second_release_active(
+                &genesis.chain_id,
+                &genesis_hash(genesis),
+                block_height,
+            );
             return Receipt::rejected(
                 transaction
                     .tx_id()
                     .map(|id| bytes_to_hex(&id.0))
                     .unwrap_or_else(|_| "fastlane-invalid-id".into()),
                 "solana_exit_unmatched_supply_change",
-                "FastLane checkpoint fees cannot burn revision-8 reserves",
+                if second {
+                    "FastLane checkpoint fees cannot burn Solana-source reserves"
+                } else {
+                    "FastLane checkpoint fees cannot burn revision-8 reserves"
+                },
             );
         }
     }
@@ -1346,7 +1361,12 @@ pub(super) fn execute_governance_batch_with_replay(
                 "governance amendment already applied",
             ));
         } else {
-            if postfiat_types::solana_exit::is_decision(&amendment.kind) {
+            if postfiat_types::solana_exit::is_decision(
+                &amendment.kind,
+                genesis.is_some_and(|g| {
+                    crate::solana_exit_governance::second_release(g, block_height)
+                }),
+            ) {
                 if let Err(message) = crate::solana_exit_governance::apply_decision(
                     genesis,
                     governance,
@@ -1932,16 +1952,22 @@ pub(super) fn execute_governance_batch_with_replay(
                     || postfiat_types::solana_exit::registered(governance).is_some()
                 {
                     return Err(
-                        "Solana exit requires its original bucket and a single authorization"
-                            .into(),
+                        if crate::solana_exit_governance::second_release(genesis, block_height) {
+                            "Solana exit registration requires a bucket of the shared custody, no beacon bootstrap and no earlier registration"
+                        } else {
+                            "Solana exit requires its original bucket and a single authorization"
+                        }
+                        .into(),
                     );
                 }
                 crate::solana_exit_governance::verify_checkpoint_history(genesis, governance)?;
                 crate::solana_exit_governance::require_reconciled_bucket(
+                    genesis,
                     ledger
                         .as_deref()
                         .ok_or("Solana exit registration requires the committed ledger")?,
                     orchard_balances,
+                    block_height,
                 )?;
                 return postfiat_types::VaultBridgeRouteProfileRecordV1::new(
                     activation,
