@@ -1,0 +1,28 @@
+[Unit]
+Description=Propose the settlement of every paid Solana exit burn (one pass; hosts' own reviewers sign)
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Its own unprivileged user: it reads the validators through the relay's tunnels and asks each host's
+# restricted door (exit_review_door.py) for that host's own signature. It holds no validator key,
+# logs in as root nowhere and signs nothing. Settings (the Solana RPC URL) come from the
+# environment file, never from a command line.
+User=pft-sol-exit-settler
+Group=pft-sol-exit-settler
+EnvironmentFile=/etc/postfiat/sol-exit-settler.env
+Environment=SETTLER_STATE=/var/lib/pft-sol-exit-settler SOL_LIVE_STATE=/var/lib/pft-sol-exit-settler/sol-live
+Environment=PFT_SETTLER_SSH_KEY=/var/lib/pft-sol-exit-settler/.ssh/pft-sol-exit-settler
+WorkingDirectory=/opt/postfiat/sol-exit-settler/ops/sol-live
+ExecStart=/opt/postfiat/sol-exit-settler/venv/bin/python /opt/postfiat/sol-exit-settler/ops/sol-live/exit_settler.py
+# The pass's bound; each settlement inside it has its own (SETTLER_ATTEMPT_SECONDS, 900 s).
+TimeoutStartSec=50min
+StandardOutput=journal
+StandardError=journal
+ReadWritePaths=/var/lib/pft-sol-exit-settler
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=

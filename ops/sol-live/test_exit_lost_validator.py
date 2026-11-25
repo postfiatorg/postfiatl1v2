@@ -146,7 +146,23 @@ class Fleet:
             self.files[(i, value["--batch-file"])] = json.dumps(dict(batch=True))
         elif tool == "transport-peer-certified-batch-round" and self.kind.endswith("_open"):
             self.opened = True
+        elif tool == "transport-peer-certified-batch-round" and self.kind.startswith("solana_exit_r8_paid:"):
+            self.settle(self.kind.split(":")[1], "amend-" + self.kind[-8:])
         return ""
+
+    def settle(self, packet, receipt):
+        """The committed paid decision: its redemption settles out of the bucket's queue, counted
+        value and remaining supply (the accounting exit_canary.check_settlement compares)."""
+        (red,) = [r for r in self.status["redemptions"] if r["withdrawal_packet_hash"] == packet]
+        amount = red["amount_atoms"]
+        red.update(state="settled", settled_atoms=amount, settlement_receipt_hash=receipt)
+        (bucket,) = [b for b in self.status["buckets"] if b["bucket_id"] == red["bucket_id"]]
+        bucket["redemption_queue_atoms"] -= amount
+        bucket["counted_value_atoms"] -= amount
+        for a in self.status["allocations"]:
+            if a["bucket_id"] == red["bucket_id"] and a["purpose"] == "vault_bridge_supply":
+                a["remaining_atoms"] -= amount
+                break
 
     def patches(self, state):
         return [
@@ -208,7 +224,9 @@ class LostValidatorTest(unittest.TestCase):
                  destination_ref=exit_canary.DEST, withdrawal_packet_hash=f"{k}7" * 48)
             for k, b in enumerate(burns)
         ]
-        status = dict(buckets=[bucket], redemptions=reds, allocations=[], receipts=[])
+        supply = dict(purpose="vault_bridge_supply", bucket_id=payout.BUCKET, amount_atoms=600000,
+                      remaining_atoms=600000)
+        status = dict(buckets=[bucket], redemptions=reds, allocations=[supply], receipts=[])
 
         # Both are settled through the wrapper with validator 3 lost (the custody
         # check that lets the second be paid first is in test_exit_custody_paid.py).

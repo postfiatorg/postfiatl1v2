@@ -41,7 +41,7 @@ pub use generation::TransactionalGenerationPointerV1;
 use lease::shared_transactional_store;
 pub use lease::{
     release_inactive_shared_transactional_stores, transactional_open_counts,
-    transactional_open_counts_for, TransactionalOpenCounts,
+    transactional_open_counts_for, with_writer_lease_deadline, TransactionalOpenCounts,
 };
 
 pub const TRANSACTIONAL_BACKEND: &str = "redb";

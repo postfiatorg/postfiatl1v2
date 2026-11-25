@@ -85,14 +85,13 @@ class HandoffTest(unittest.TestCase):
         self.assertIn(json.loads(PROFILE.read_text())["route_id"], json.dumps(batch))
 
     def test_release_kit_keeps_the_predecessor_and_a_fresh_stage(self):
+        OLD, OLDER = "sol-exit-r2-20261125", "main-r64-20261121"
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)
-            old = base / release.OLD
+            old = base / OLD
             (old / "evidence").mkdir(parents=True)
             (old / "evidence/source-revision").write_text("aabbccdd1234\n")
-            (old / "env").write_text(
-                f"export REL={release.OLD}\nexport OLD=sol-release6-4-20261119\n"
-            )
+            (old / "env").write_text(f"export REL={OLD}\nexport OLD={OLDER}\n")
             for name in (
                 "stage.sh",
                 "roll-rest.sh",
@@ -110,7 +109,8 @@ class HandoffTest(unittest.TestCase):
             binary = base / "binary"
             binary.write_bytes(b"rehearsal")
             with (
-                patch.object(release, "KIT", old),
+                patch.object(release, "KIT_ROOT", base),
+                patch.dict("os.environ", EXIT_OLD_RELEASE=OLD, EXIT_OLDER_RELEASE=OLDER),
                 patch.object(
                     release, "fleet", return_value={"build_git_revision": "aabbccdd"}
                 ),
@@ -122,9 +122,23 @@ class HandoffTest(unittest.TestCase):
             ):
                 release.main()
             dest = base / "sol-exit-test"
-            self.assertIn("export OLD=" + release.OLD, (dest / "env").read_text())
+            self.assertEqual((dest / "env").read_text(), f"export REL=sol-exit-test\nexport OLD={OLD}\n")
             self.assertEqual((dest / "stage.sh").read_text(), f"source {dest}/env\n")
             self.assertFalse((dest / "stage").exists())
+
+    def test_release_kit_names_have_no_default_and_must_occur_in_the_env(self):
+        env = "export REL=sol-exit-r2-20261125\nexport OLD=main-r64-20261121\n"
+        for environ, message in (
+            (dict(), "EXIT_OLD_RELEASE"),
+            (dict(EXIT_OLD_RELEASE="sol-exit-r2-20261125"), "EXIT_OLDER_RELEASE"),
+            (dict(EXIT_OLD_RELEASE="a", EXIT_OLDER_RELEASE="a"), "differ"),
+        ):
+            with self.subTest(environ=environ), self.assertRaisesRegex(ValueError, message):
+                release.predecessors(environ)
+        with self.assertRaisesRegex(ValueError, "does not occur"):
+            release.next_env(env, "sol-exit-r2-20261125", "sol-release6-4-20261119", "sol-exit-r3")
+        self.assertEqual(release.next_env(env, "sol-exit-r2-20261125", "main-r64-20261121", "sol-exit-r3"),
+                         "export REL=sol-exit-r3\nexport OLD=sol-exit-r2-20261125\n")
 
     def test_cutover_keeps_burns_closed_until_service_qualified(self):
         doc = (HERE / "RUNBOOK-LIVE.md").read_text()

@@ -12,7 +12,7 @@ import time
 from live import CHAIN, PFTL_GENESIS, HOSTS, read, rpc, save, six, verify_node_ids
 from exit_precheck import parent_of
 from exit_setup import require
-from exit_release_kit import KIT as OLD_KIT
+from exit_release_kit import predecessor_kit
 
 
 def snapshot():
@@ -58,7 +58,7 @@ def rate_since(a, b):
 def restart_times():
     durations = []
     for i in range(6):
-        log = (OLD_KIT / f"evidence/deploy-v{i}/deploy.log").read_text()
+        log = (predecessor_kit() / f"evidence/deploy-v{i}/deploy.log").read_text()
 
         def seconds(label):
             (stamp,) = re.findall(
@@ -150,7 +150,7 @@ def run_one(kit, n):
 
 def roll(kit, n, dry):
     now = guard(kit, n)
-    old = (OLD_KIT / "evidence/source-revision").read_text().strip()[:8]
+    old = (predecessor_kit() / "evidence/source-revision").read_text().strip()[:8]
     rev = os.environ["REV"]
     require(
         [row["revision"] for row in now["validators"]] == [rev] * n + [old] * (6 - n),

@@ -50,7 +50,9 @@ oncall="$HOME/.config/postfiat/sol-exit-oncall.env"
 tmp=$(mktemp "${oncall}.XXXXXXXX")
 printf 'cd -- %q\nexport REV=%q H=%q KIT=%q\n' "$PWD" "$REV" "$H" "$KIT" > "$tmp"
 mv -T "$tmp" "$oncall"
-python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
+# Name the live release and the one it replaced; the kit has no defaults and refuses either missing.
+EXIT_OLD_RELEASE=<live release id> EXIT_OLDER_RELEASE=<release it replaced> \
+  python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
 export ARCHIVE="$KIT/anchor-replay" INTEGRITY="$EXIT_WORK/replay/source/.integrity.key"
 export FAUCET="$EXIT_WORK/replay/source/faucet_account.json"
 mkdir -m700 "$ARCHIVE"
@@ -554,6 +556,8 @@ The script needs Python 3.10 or newer and `setfacl` (the `acl` package). Any fai
 
 The script runs the first review and stops if it ends in an RPC or access error.
 
+**The settlement loop's restricted door.** Add `--settler-key FILE` (the loop's public key, printed by `install-exit-settler.sh`) to the install above. The script then writes one `restrict,command="…exit_review_door.py"` line into the reviewer user's `authorized_keys` and enables `pft-sol-exit-sign-door.path`. The door reads one JSON request on stdin. It accepts exactly two: hand in a drafted paid or refund decision for this host's own review, and return this host's result. The result is its signature, its refusal with the reason, or pending. It runs no command, names no file and gives no shell, transfer or forwarding. The node user signs a handed-in decision only from this host's own fresh verdict, as `exit_review.py sign` does (`exit_review.py sign-door`). What this changes: `exit_govern.py paid --restricted` collects every host's signature through the doors and never logs in as root to sign. With fewer than five signatures nothing is settled. Drafting, assembling and the proposer's batch submission still run through `govern.py`'s root login (see "What stays open").
+
 **Check the six providers.** Use at least three different Solana providers across the six hosts. With `HOSTS` set to the six hosts, this prints each host's provider (host name only) and warns when fewer than three differ:
 
 ```bash
@@ -561,10 +565,12 @@ for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; 
 ```
 
 **What stays open.**
-- **Root ssh from the relay.** The relay host still reaches every validator host as root over ssh (`govern.py`, `remote`). Root can run the node's signing command with the validator key directly, or replace the reviewer, so a compromised relay host can still sign on all six. Only the operators can close this:
-  - give the relay a non-root key whose forced command allows only `exit_review.py sign` with its four arguments;
-  - keep each validator key readable only by the node user;
-  - remove root ssh for settlement.
+- **Root ssh from the relay.** The relay host still reaches every validator host as root over ssh (`govern.py`, `remote`). Root can run the node's signing command with the validator key directly, or replace the reviewer, so a compromised relay host can still sign on all six. The restricted door removes root from the signatures (`--restricted`). It does not remove root from three other steps:
+  - the lead host drafts the decision with its node's data directory;
+  - the lead host assembles it the same way;
+  - the proposer submits the batch round with its validator key.
+
+  Root ssh for settlement can go only once those three have a restricted way as well. Keep each validator key readable only by the node user.
 - **Shared providers.** Independence also needs each host's Solana endpoint to be a different provider; the check above only warns.
 
 **Order, so that no payout waits unsettled** (each payout blocks the next until it is settled):
@@ -572,6 +578,36 @@ for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; 
 2. For the next payout, confirm on each host that `/var/lib/postfiat-exit-review/<sha256 of the paid decision>.json` approves the same decision the settler signed.
 3. Just before the second release height, let the settler settle every paid burn, then stop it.
 4. From the height, the relay runs `exit_govern.py paid` (and `refund`). It only drafts and collects signatures; each host signs from its own review.
+
+### Settlement loop as a service
+
+Today the relay's settlement loop is the tmux session `settler`, running `oncall/settler.sh` every 90 s. That loop settles through `exit_govern.py paid --burn` and the root login. The installed loop is `pft-sol-exit-settler.timer`. It runs one pass of `exit_settler.py` every 90 s, as its own user `pft-sol-exit-settler`. A pass works like this:
+- It holds a lock, so two passes never run at once.
+- It finds burns to settle through any answering validator.
+- It proposes each one with `exit_govern.py paid --burn B --restricted`, bounded to 900 s.
+- A burn that keeps failing waits from 90 s, doubling up to an hour. It raises one `ALERT` line when it starts failing and one when the loop gives up after 12 attempts; after that, settle it by hand.
+- Every failure is a journal line: `journalctl -u pft-sol-exit-settler`.
+
+The loop only proposes. Each host's reviewer signs through its door, and with fewer than five signatures nothing settles.
+
+**Install on the relay machine, as root there:**
+
+```bash
+git archive -o exit-settler.tar "$COMMIT" ops/sol-live solana/deploy
+bash ops/sol-live/install-exit-settler.sh exit-settler.tar /home/postfiat/.ssh/known_hosts
+```
+
+The script:
+- creates the user and its SSH key (mode 0600, never printed) and `/etc/postfiat/sol-exit-settler.env`, where the Solana RPC URL goes;
+- prints the public key and the line each validator's `install-exit-review.sh … --settler-key FILE` writes;
+- then asks all six doors a read-only request.
+
+It enables nothing while a host does not answer; it names that host and exits 3. It also enables nothing while drafting, assembling and submitting still need a root login; it says so and exits 4. Until it enables the timer, keep the tmux loop. When it does, stop the tmux loop first, then start the timer:
+
+```bash
+tmux send-keys -t settler C-c && tmux kill-session -t settler   # as the relay's on-call login
+systemctl enable --now pft-sol-exit-settler.timer
+```
 
 ### Upgrade the initialised Solana verifier
 
