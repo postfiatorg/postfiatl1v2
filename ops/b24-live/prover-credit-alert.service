@@ -15,4 +15,5 @@ EnvironmentFile=-%h/.config/prover-credit-alert/thresholds.env
 # The Vast CLI reads its own key file (~/.config/vastai/vast_api_key); nothing secret here.
 ExecStart=/usr/bin/python3 -I %h/repos/postfiatl1v2-live/ops/b24-live/prover_credit.py
 UMask=0077
-TimeoutStartSec=5min
+# Two Vast calls (60 s each) and the hook (60 s) take at most 3 min.
+TimeoutStartSec=10min

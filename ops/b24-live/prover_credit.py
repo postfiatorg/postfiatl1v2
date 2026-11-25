@@ -24,6 +24,8 @@ STATE=Path.home()/'.local/state/prover-credit-alert/state.json'
 LEVELS=('ok','warn','urgent')
 RUNNING={'running'}
 REPEAT_SECONDS=6*3600  # an unreadable credit is reported again after this long
+# Each Vast CLI call; two calls and the hook (reading_alert.notify, at most 60 s) stay far inside the unit's TimeoutStartSec.
+VASTAI_TIMEOUT_SECONDS=60
 
 def key_files():
     config=Path(os.environ.get('XDG_CONFIG_HOME') or Path.home()/'.config')
@@ -48,7 +50,7 @@ def redact(text,values=None):
 
 def vastai(*args):
     """Run one read-only CLI call; the error never carries the key or raw output."""
-    try:result=subprocess.run([str(VASTAI),*args,'--raw'],stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=120)
+    try:result=subprocess.run([str(VASTAI),*args,'--raw'],stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=VASTAI_TIMEOUT_SECONDS)
     except Exception as error:raise RuntimeError(f'vastai {args[-1]}: {type(error).__name__}') from None
     if result.returncode:raise RuntimeError(f'vastai {args[-1]} exited {result.returncode}: '+redact(' '.join(result.stderr.split()))[-200:])
     try:return json.loads(result.stdout)
@@ -111,7 +113,8 @@ def check(warn=24.0,urgent=6.0,state_path=STATE,run=vastai,send=notify):
         line=message('unreadable',error=redact(str(error))[:300])
         if not state['unreadable'] or time.time()-state.get('reported_at',0)>REPEAT_SECONDS:
             result=send(line)
-            if delivered(result):state.update(unreadable=True,reported_at=time.time())
+            # A delivered report is recorded at once, before anything else can fail or time out.
+            if delivered(result):state.update(unreadable=True,reported_at=time.time());write(state_path,state)
             print(line+f'; notification {result}',file=sys.stderr)
         else:print(line+'; already reported',file=sys.stderr)
         handled(state);write(state_path,state);return dict(state,ok=False)
@@ -121,7 +124,8 @@ def check(warn=24.0,urgent=6.0,state_path=STATE,run=vastai,send=notify):
     ok=True
     if LEVELS.index(now)>LEVELS.index(state['level']):
         result=send(message(now,credit,spend,count,hours,warn,urgent,stored=stored))
-        if not delivered(result):now,ok=state['level'],False
+        if delivered(result):state['level']=now;write(state_path,state)
+        else:now,ok=state['level'],False
         summary+=f'; notification {result}'
     print(summary)
     state['level']=now;handled(state);write(state_path,state);return dict(state,ok=ok,hours=hours)
