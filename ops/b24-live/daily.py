@@ -220,18 +220,46 @@ def continue_after_submit(d,p):
         finally:
             lock.seek(0)
             if lock.read().strip()=='NOW':lock.seek(0);lock.truncate();lock.flush()
-def resume(d,progress=None):
-    """Submit an already captured and proven reading; no AWS. Same lock, runtime check, rehearsal and landing check."""
+# A captured reading is the account's value at its cutoff. Later than this it is submitted by a new capture, not by --resume.
+RESUME_MAX_AGE_SECONDS=12*3600
+def submit_state(d):
+    """Whether an interrupted submission's first operation reached the chain: 'none', 'unsent' or 'landed'.
+
+    Its files are written before it is sent, so their presence proves nothing. 'unsent' needs all six
+    validators to hold no receipt for it and nothing pending; anything between is refused."""
+    step=d/'live/01-daily-submit'
+    if not (d/'live').exists():return 'none',None
+    if not (step/'expected-state.json').exists():return 'unsent',None
+    txid=load(step/'expected-state.json')['canary_receipts'][0]['receipt']['tx_id']
+    six=read_six(txid);save(d/'resume-submit-six.json',six)
+    if len(points(six))!=1:raise RuntimeError('validators disagree on the tip; resume when all six agree')
+    held=[any(x['tx_id']==txid for x in receipt_rows(r['receipts'])) for r in six]
+    accepted=[any(x['tx_id']==txid and x['accepted'] for x in receipt_rows(r['receipts'])) for r in six]
+    if all(accepted):return 'landed',txid
+    if not any(held) and all(r['server']['mempool']['pending']==0 for r in six):return 'unsent',txid
+    raise RuntimeError(f'the submit {txid[:16]} is on some validators and not accepted on all six; not resumed')
+def resume(d,progress=None,now=None):
+    """Submit an already captured and proven reading; no AWS. Same run lock, runtime check, rehearsal and landing check."""
     p=progress or Progress();p.mode='resume';p.directory=d
     p.stage='resume-inputs';capture=d/'capture'
     for path in (capture/'manifest.json',capture/'final-inventory.json',d/'budget.json',d/'archive-verification.json',d/'negative-reading',d/'proof/public-values.bin',d/'proof/proof-calldata.bin'):
         if not path.exists():raise FileNotFoundError(str(path))
     if (d/'complete.json').exists():raise ValueError('reading already landed')
-    if (d/'live/01-daily-submit').exists():return continue_after_submit(d,p)
-    assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
-    p.stage='pre-submit-runtime-check';runtime_check(d,'resume-runtimes.json')
-    if (d/'canary').exists():(d/'canary').rename(d/('canary-failed-'+datetime.now(timezone.utc).strftime('%Y%m%dt%H%M%S')))
-    submit(d,capture,load(capture/'manifest.json'),load(d/'budget.json'),p)
+    p.stage='run-lock';DAILY.mkdir(mode=0o700,parents=True,exist_ok=True)
+    with (DAILY/'run.lock').open('a') as running:
+        fcntl.flock(running,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        p.stage='scheduled-service-check';active=subprocess.check_output(['systemctl','--user','show','b24-tee-nav-daily.service','--property=ActiveState','--value'],text=True).strip()
+        if active in ('active','activating','deactivating'):raise ValueError('Scheduled B24 reading is active; do not run concurrently')
+        p.stage='resume-submit-state';state,txid=submit_state(d)
+        if state=='landed':return continue_after_submit(d,p)
+        p.stage='resume-age';manifest=load(capture/'manifest.json');age=(now or datetime.now(timezone.utc)).timestamp()-manifest['cutoff_unix_ms']/1000
+        if age>RESUME_MAX_AGE_SECONDS:raise ValueError(f'python3 ops/b24-live/daily.py --now: this capture is {age/3600:.1f} hours old, over the {RESUME_MAX_AGE_SECONDS//3600} hours --resume submits')
+        assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
+        p.stage='pre-submit-runtime-check';runtime_check(d,'resume-runtimes.json')
+        stamp=datetime.now(timezone.utc).strftime('%Y%m%dt%H%M%S')
+        if state=='unsent':(d/'live').rename(d/('live-unsent-'+stamp))
+        if (d/'canary').exists():(d/'canary').rename(d/('canary-failed-'+stamp))
+        submit(d,capture,manifest,load(d/'budget.json'),p)
 def main():
     ap=argparse.ArgumentParser(description=__doc__);g=ap.add_mutually_exclusive_group(required=True);g.add_argument('--check',action='store_true');g.add_argument('--execute',action='store_true');g.add_argument('--now',action='store_true');g.add_argument('--resume',type=Path,help='Run directory with a captured, proven reading');a=ap.parse_args();now=datetime.now(timezone.utc)
     if a.check:

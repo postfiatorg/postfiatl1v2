@@ -373,4 +373,55 @@ class FailureAlertTests(unittest.TestCase):
         self.assertEqual((record['stage'],record['invocation_id']),('service','killed'))
         self.assertEqual(len(self.messages()),2);self.assertIn('stopped with exit code 143',self.messages()[0]);self.assertIn('result signal',self.messages()[1])
 
+class ResumeTests(unittest.TestCase):
+    def setUp(self):
+        self.dir=tempfile.TemporaryDirectory();self.addCleanup(self.dir.cleanup);self.tmp=Path(self.dir.name)
+        self.d=self.tmp/'run';capture=self.d/'capture';capture.mkdir(parents=True)
+        self.cutoff=datetime(2026,11,25,18,0,tzinfo=timezone.utc)
+        daily.save(capture/'manifest.json',dict(observation_epoch=10,cutoff_unix_ms=int(self.cutoff.timestamp()*1000)))
+        daily.save(capture/'final-inventory.json',dict(noOwnedBillableComputeRemaining=True))
+        daily.save(self.d/'budget.json',{});daily.save(self.d/'archive-verification.json',{});(self.d/'negative-reading').mkdir()
+        (self.d/'proof').mkdir();(self.d/'proof/public-values.bin').write_bytes(b'v');(self.d/'proof/proof-calldata.bin').write_bytes(b'p')
+        for patcher in (patch.object(daily,'DAILY',self.tmp/'daily'),patch.object(daily.subprocess,'check_output',return_value='inactive\n')):
+            patcher.start();self.addCleanup(patcher.stop)
+    def six(self,rows):
+        return [dict(server=dict(ledger=dict(height=1900,state_root='r',hash='h'),mempool=dict(pending=0)),receipts=r) for r in rows]
+    def sent_step(self):
+        step=self.d/'live/01-daily-submit';step.mkdir(parents=True)
+        daily.save(step/'expected-state.json',dict(canary_receipts=[dict(receipt=dict(tx_id='t'*64))]))
+    def resume(self,hours=1):
+        from datetime import timedelta
+        with patch.object(daily,'runtime_check'),patch.object(daily,'submit') as submit,patch.object(daily,'continue_after_submit') as cont:
+            daily.resume(self.d,now=self.cutoff+timedelta(hours=hours));return submit,cont
+
+    def test_a_fresh_capture_is_submitted(self):
+        submit,cont=self.resume();submit.assert_called_once();cont.assert_not_called()
+    def test_an_old_capture_is_refused_and_names_the_command(self):
+        with self.assertRaisesRegex(ValueError,r'^python3 ops/b24-live/daily.py --now: this capture is 13\.0 hours old'):self.resume(hours=13)
+    def test_the_run_lock_is_taken(self):
+        (self.tmp/'daily').mkdir()
+        with (self.tmp/'daily/run.lock').open('a') as held:
+            fcntl.flock(held,fcntl.LOCK_EX)
+            with self.assertRaises(BlockingIOError):self.resume()
+    def test_a_scheduled_run_in_progress_refuses(self):
+        with patch.object(daily.subprocess,'check_output',return_value='activating\n'),self.assertRaisesRegex(ValueError,'Scheduled B24 reading is active'):self.resume()
+    def test_a_submit_that_was_prepared_and_never_sent_is_set_aside_and_sent(self):
+        self.sent_step()
+        with patch.object(daily,'read_six',return_value=self.six([[]]*6)):submit,cont=self.resume()
+        submit.assert_called_once();cont.assert_not_called()
+        self.assertFalse((self.d/'live').exists());self.assertEqual(len(list(self.d.glob('live-unsent-*'))),1)
+    def test_a_step_folder_without_its_files_was_never_sent(self):
+        (self.d/'live/01-daily-submit').mkdir(parents=True);submit,cont=self.resume();submit.assert_called_once()
+    def test_a_submit_accepted_on_all_six_continues_after_it_even_when_old(self):
+        self.sent_step()
+        with patch.object(daily,'read_six',return_value=self.six([[dict(tx_id='t'*64,accepted=True)]]*6)):submit,cont=self.resume(hours=30)
+        cont.assert_called_once();submit.assert_not_called();self.assertTrue((self.d/'live').exists())
+    def test_a_submit_on_some_validators_only_is_refused(self):
+        self.sent_step()
+        with patch.object(daily,'read_six',return_value=self.six([[dict(tx_id='t'*64,accepted=True)]]*3+[[]]*3)),self.assertRaisesRegex(RuntimeError,'not accepted on all six'):self.resume()
+        self.assertTrue((self.d/'live').exists())
+    def test_a_pending_transaction_is_not_treated_as_never_sent(self):
+        self.sent_step();rows=self.six([[]]*6);rows[2]['server']['mempool']['pending']=1
+        with patch.object(daily,'read_six',return_value=rows),self.assertRaises(RuntimeError):self.resume()
+
 if __name__=='__main__':unittest.main()
