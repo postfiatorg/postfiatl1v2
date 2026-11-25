@@ -2089,11 +2089,23 @@ fn apply_asset_orchard_private_primary_action_to_state(
         .is_some_and(|h| block_height >= h)
     {
         use postfiat_execution::SolanaExitAccounting;
-        let result = SolanaExitAccounting::read(ledger, shielded.asset_orchard_balances())
-            .and_then(|before| {
-                before.verify_change(&SolanaExitAccounting::read(
+        let second = postfiat_types::solana_exit::second_release_active(
+            &genesis.chain_id,
+            &genesis_hash(genesis),
+            block_height,
+        );
+        let result = SolanaExitAccounting::read(
+            &genesis.chain_id,
+            ledger,
+            shielded.asset_orchard_balances(),
+            second,
+        )
+        .and_then(|before| {
+            before.verify_change(&SolanaExitAccounting::read(
+                    &genesis.chain_id,
                     &trial_ledger,
                     trial_shielded.asset_orchard_balances(),
+                    second,
                 )?)
             });
         if let Err((code, message)) = result {

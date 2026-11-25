@@ -322,14 +322,15 @@ def parent_of(head):
     return {k: head[k] for k in ("block_height", "block_tip_hash", "state_root")}
 
 
-def check_unproved_updates(w):
+def check_unproved_updates(w, fetch=None):
+    fetch = fetch or rpc
     # A registry update at the last block has no successor QC in this segment.
     # Authenticate even an apparently empty governance payload before accepting it.
     for step in [*w.get("finality_ancestry", []), w]:
         h = step["block"]["header"]
         if h["batch_kind"] != "governance" or "governance_payload_json" in step:
             continue
-        (batch,) = rpc(
+        (batch,) = fetch(
             0, "batch_archive", batch_kind="governance", batch_id=h["batch_id"], limit=1
         )
         payload = batch["payload_json"]
@@ -351,7 +352,8 @@ def check_unproved_updates(w):
         )
 
 
-def qualify_path(members, anchor, head, out, *, simulation_height=None):
+def qualify_path(members, anchor, head, out, *, simulation_height=None, fetch=None):
+    fetch = fetch or rpc
     height, block, root = anchor["height"], anchor["block"], anchor["committee"]
     tip = head["block_height"]
     require(tip >= height, "Finalized tip precedes trusted checkpoint.")
@@ -368,13 +370,13 @@ def qualify_path(members, anchor, head, out, *, simulation_height=None):
         while height < tip:
             stop = simulation_height if height < simulation_height else tip
             if stop - height > 65:
-                target = select_target(height, rpc)
+                target = select_target(height, fetch)
             else:
-                (record,) = rpc(0, "blocks", from_height=stop, limit=1)
+                (record,) = fetch(0, "blocks", from_height=stop, limit=1)
                 target = record["header"]
                 require(target["height"] == stop, "Wrong checkpoint height.")
-            witness = public_checkpoint(rpc, height, block, target, members, anchor)
-            check_unproved_updates(witness)
+            witness = public_checkpoint(fetch, height, block, target, members, anchor)
+            check_unproved_updates(witness, fetch)
             validate_segment(witness, block, target, root)
             use_for_simulation = height == simulation_height
             values = execute_guest(witness, out if use_for_simulation else Path(tmp))

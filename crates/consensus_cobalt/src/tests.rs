@@ -4980,3 +4980,214 @@
             .contains(&"validator.private.kyc_status".to_string()));
         assert_eq!(decision.registry_delta_candidate.mutation_count, 0);
     }
+
+    include!("solana_exit_first_release_cases.rs");
+
+    /// `first_release_cases::outcomes()` run on origin/main a720cc80f, the live first release.
+    const FIRST_RELEASE_GOLDEN: [(&str, &str); 7] = [
+        (
+            "close_5_of_6",
+            "Solana exit decision requires the scheduled release and unanimous governance",
+        ),
+        (
+            "close_6_of_6",
+            "accepted",
+        ),
+        (
+            "paid_5_of_6",
+            "Solana exit decision requires the scheduled release and unanimous governance",
+        ),
+        (
+            "open_5_of_6",
+            "Solana exit decision requires the scheduled release and unanimous governance",
+        ),
+        (
+            "retire_5_of_6",
+            "Solana exit decision requires the scheduled release and unanimous governance",
+        ),
+        (
+            "min_withdrawal_6_of_6",
+            "unsupported governance amendment kind `solana_exit_min_withdrawal:300000`",
+        ),
+        (
+            "min_withdrawal_5_of_6",
+            "unsupported governance amendment kind `solana_exit_min_withdrawal:300000`",
+        ),
+    ];
+
+    fn golden() -> Vec<(&'static str, String)> {
+        FIRST_RELEASE_GOLDEN.iter().map(|(n, v)| (*n, v.to_string())).collect()
+    }
+
+    #[test]
+    fn unset_second_release_checks_decisions_exactly_as_the_first_release() {
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        assert_eq!(first_release_cases::outcomes(), golden());
+    }
+
+    const WAN_GENESIS: &str = "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9";
+
+    fn exit_domain(chain_id: &str) -> CobaltDomain {
+        CobaltDomain { chain_id: chain_id.into(), genesis_hash: WAN_GENESIS.into(), protocol_version: 1 }
+    }
+
+    /// `first_release_cases::outcomes()` on `domain` with the decisions activating at `height`.
+    fn exit_outcomes_at(domain: &CobaltDomain, height: u64) -> Vec<(&'static str, String)> {
+        use postfiat_types::solana_exit::{CLOSE, OPEN, PAID, RETIRE};
+        let validators: Vec<String> = (0..6).map(|i| format!("validator-{i}")).collect();
+        let verdict = |signed_kind: &str, kind: &str, signers: usize| {
+            let config = EssentialSubsetConfig { validators: validators.clone(), quorum: signers };
+            let lifecycle = GovernanceAmendmentLifecycle {
+                activation_height: height,
+                ..GovernanceAmendmentLifecycle::immediate()
+            };
+            let ratified = ratify_governance_amendment_with_lifecycle(
+                domain, &config, signed_kind, 1, validators[..signers].to_vec(), lifecycle,
+            );
+            match ratified {
+                Ok(mut amendment) => {
+                    amendment.kind = kind.into();
+                    match verify_governance_amendment(domain, &amendment) {
+                        Ok(()) => "accepted".to_string(),
+                        Err(error) => error,
+                    }
+                }
+                Err(error) => format!("ratify: {error}"),
+            }
+        };
+        let paid = format!("{PAID}{}:12345:0:{}", "11".repeat(48), "ab".repeat(64));
+        let minimum = "solana_exit_min_withdrawal:300000";
+        vec![
+            ("close_5_of_6", verdict(CLOSE, CLOSE, 5)),
+            ("close_6_of_6", verdict(CLOSE, CLOSE, 6)),
+            ("paid_5_of_6", verdict(&paid, &paid, 5)),
+            ("open_5_of_6", verdict(OPEN, OPEN, 5)),
+            ("retire_5_of_6", verdict(RETIRE, RETIRE, 5)),
+            ("min_withdrawal_6_of_6", verdict(CLOSE, minimum, 6)),
+            ("min_withdrawal_5_of_6", verdict(CLOSE, minimum, 5)),
+        ]
+    }
+
+    #[test]
+    fn the_wan_chain_checks_decisions_as_the_first_release_below_1890_and_as_the_second_from_it() {
+        postfiat_types::solana_exit::use_second_release_table_for_tests();
+        let wan = exit_domain("postfiat-wan-devnet-2");
+        assert_eq!(exit_outcomes_at(&wan, 1889), golden());
+        let from_1890 = exit_outcomes_at(&wan, 1890);
+        assert_ne!(from_1890, golden());
+        // From 1890 on, exactly what a second release set at the decisions' height decides.
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(1890));
+        assert_eq!(exit_outcomes_at(&wan, 1890), from_1890);
+        postfiat_types::solana_exit::use_second_release_table_for_tests();
+        assert_eq!(first_release_cases::outcomes(), from_1890);
+        // A chain with no entry decides as a build without the entry.
+        let other = exit_domain("postfiat-local-devnet");
+        let table = exit_outcomes_at(&other, 1900);
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        assert_eq!(exit_outcomes_at(&other, 1900), table);
+        assert_eq!(exit_outcomes_at(&wan, 1900), golden());
+    }
+
+    #[test]
+    fn second_release_decision_quorum_starts_at_its_height() {
+        // The cases activate at 1900: a second release at 1901 has not started.
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(1901));
+        assert_eq!(first_release_cases::outcomes(), golden());
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(1900));
+        let second = first_release_cases::outcomes();
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        let verdict = |name: &str| second.iter().find(|(n, _)| *n == name).unwrap().1.clone();
+        for name in ["close_5_of_6", "paid_5_of_6", "open_5_of_6", "close_6_of_6"] {
+            assert_eq!(verdict(name), "accepted", "{name}");
+        }
+        assert_eq!(
+            verdict("retire_5_of_6"),
+            "Solana exit decision requires the scheduled release and its governance quorum"
+        );
+        // The minimum kind is known now; these copies fail only their signed-kind binding.
+        for name in ["min_withdrawal_6_of_6", "min_withdrawal_5_of_6"] {
+            assert!(!verdict(name).contains("unsupported governance amendment kind"), "{name}");
+        }
+    }
+
+    #[test]
+    fn solana_exit_refund_kind_is_signable_only_under_the_second_release() {
+        let validators: Vec<String> = (0..6).map(|i| format!("validator-{i}")).collect();
+        let config = EssentialSubsetConfig { validators: validators.clone(), quorum: 5 };
+        let domain = CobaltDomain {
+            chain_id: "postfiat-wan-devnet-2".into(),
+            genesis_hash: "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9".into(),
+            protocol_version: 1,
+        };
+        let kind = format!(
+            "{}{}:473300000:{}",
+            postfiat_types::solana_exit::REFUND,
+            "ab".repeat(48),
+            "cd".repeat(64)
+        );
+        let ratify = |height| {
+            let lifecycle = GovernanceAmendmentLifecycle {
+                activation_height: height,
+                ..GovernanceAmendmentLifecycle::immediate()
+            };
+            ratify_governance_amendment_with_lifecycle(&domain, &config, &kind, 1, validators[..5].to_vec(), lifecycle)
+                .map(|_| ())
+        };
+        let unknown = Err(format!("unsupported governance amendment kind `{kind}`"));
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        assert_eq!(ratify(1900), unknown);
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(1900));
+        assert_eq!(ratify(1899), unknown);
+        assert_eq!(ratify(1900), Ok(()));
+        // The production table: from 1890 on the WAN chain, never on a chain without an entry.
+        postfiat_types::solana_exit::use_second_release_table_for_tests();
+        assert_eq!(ratify(1889), unknown);
+        assert_eq!(ratify(1890), Ok(()));
+        let other = CobaltDomain { chain_id: "postfiat-local-devnet".into(), ..domain.clone() };
+        let lifecycle = GovernanceAmendmentLifecycle { activation_height: 1900, ..GovernanceAmendmentLifecycle::immediate() };
+        assert_eq!(
+            ratify_governance_amendment_with_lifecycle(&other, &config, &kind, 1, validators[..5].to_vec(), lifecycle)
+                .map(|_| ()),
+            unknown
+        );
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+    }
+
+    #[test]
+    fn solana_exit_minimum_kind_is_signable_only_under_the_second_release() {
+        let validators: Vec<String> = (0..6).map(|i| format!("validator-{i}")).collect();
+        let config = EssentialSubsetConfig { validators: validators.clone(), quorum: 5 };
+        let domain = CobaltDomain {
+            chain_id: "postfiat-wan-devnet-2".into(),
+            genesis_hash: "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9".into(),
+            protocol_version: 1,
+        };
+        let kind = "solana_exit_min_withdrawal:300000";
+        let ratify = |height| {
+            let lifecycle = GovernanceAmendmentLifecycle {
+                activation_height: height,
+                ..GovernanceAmendmentLifecycle::immediate()
+            };
+            ratify_governance_amendment_with_lifecycle(&domain, &config, kind, 1, validators[..5].to_vec(), lifecycle)
+                .map(|_| ())
+        };
+        let unknown = Err(format!("unsupported governance amendment kind `{kind}`"));
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+        assert_eq!(ratify(1900), unknown);
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(1900));
+        assert_eq!(ratify(1899), unknown);
+        assert_eq!(ratify(1900), Ok(()));
+        // The production table: from 1890 on the WAN chain, never on a chain without an entry.
+        postfiat_types::solana_exit::use_second_release_table_for_tests();
+        assert_eq!(ratify(1889), unknown);
+        assert_eq!(ratify(1890), Ok(()));
+        let other = CobaltDomain { chain_id: "postfiat-local-devnet".into(), ..domain.clone() };
+        let lifecycle = GovernanceAmendmentLifecycle { activation_height: 1900, ..GovernanceAmendmentLifecycle::immediate() };
+        assert_eq!(
+            ratify_governance_amendment_with_lifecycle(&other, &config, kind, 1, validators[..5].to_vec(), lifecycle)
+                .map(|_| ()),
+            unknown
+        );
+        postfiat_types::solana_exit::set_second_release_for_tests(None);
+    }
+

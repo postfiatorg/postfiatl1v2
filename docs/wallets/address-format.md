@@ -171,9 +171,11 @@ postfiat-node transport-peer-certified-batch-round --data-dir PATH --topology PA
     takes the earliest unpaused amendment, and a paused amendment is refused.
 
     Before submitting it, check every address in use against the parsing rules,
-    and submit it last. On the devnet it was set to 1153 at block 1146 on
-    2026-10-23
-    ([record](https://github.com/postfiatorg/postfiatl1v2/blob/release/exchange-readiness-20261023/deployments/exchange-readiness-20261023/DEPLOY-SHEET.md#8-governance-activation-of-the-three-heights--covered-by-the-operators-go-of-the-day-only-after-6-and-7-are-clean-on-all-six)).
+    and submit it last. On the devnet the original kind was set to 1153 at
+    block 1146 on 2026-10-23; its record was on the branch
+    `release/exchange-readiness-20261023`, which was archived and deleted on
+    21 November with the other release branches
+    ([Master State](../status/master-state.md#the-archive)).
 
 When the round runs on a validator host against that validator's data
 directory, pass `--local-apply-before-certified-send`. Without it, the round
@@ -193,8 +195,9 @@ The view-(V+1) proposal must carry the locked block, so the same batch commits.
 The authorization's slot is the height, not the view. A validator that missed
 the delivery takes the same block with `transport-batch-send --batch-file B
 --certificate-file C` from a peer. The 2026-10-23 procedure, with code
-references, is
-[§8b of the release sheet](https://github.com/postfiatorg/postfiatl1v2/blob/release/exchange-readiness-20261023/deployments/exchange-readiness-20261023/DEPLOY-SHEET.md#8b-view-change-at-1144-2026-10-23--covered-by-the-operators-go-of-the-day).
+references, was §8b of the release sheet on the branch
+`release/exchange-readiness-20261023`, archived and deleted on 21 November
+([Master State](../status/master-state.md#the-archive)).
 
 ## Display
 

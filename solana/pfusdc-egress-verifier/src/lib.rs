@@ -21,6 +21,9 @@ pub const MAX_VALUES: usize = 2048;
 const LIGHT: &[u8] = b"egress-light";
 const CHECK: &[u8] = b"egress-checkpoint";
 const BURN: &[u8] = b"egress-burn";
+/// Marker states of a burn: no account (none), `PAID`, `CANCELLED`. Each is written once.
+pub const PAID: u8 = 1;
+pub const CANCELLED: u8 = 2;
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
@@ -33,7 +36,9 @@ pub enum Error {
     Replay,
     Paused,
     WrongDestination,
+    CancelNotAllowed,
 }
+
 impl From<Error> for ProgramError {
     fn from(error: Error) -> Self {
         ProgramError::Custom(error as u32)
@@ -58,7 +63,9 @@ impl Bootstrap {
     pub fn vault_route_binding(&self) -> [u8; 32] {
         // The WAN devnet's mainnet Solana ingress profile pins this commitment
         // at vault initialization, before the governance profile hash exists.
-        if self.solana_genesis == hex_literal::hex!("45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0") {
+        if self.solana_genesis
+            == hex_literal::hex!("45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0")
+        {
             return solana_sha256_hasher::hashv(&[
                 b"postfiat.pfusdc.solana.route_binding.v1",
                 b"postfiat-wan-devnet-2",
@@ -89,6 +96,92 @@ pub struct Light {
     pub latest: [u8; 48],
     pub height: u64,
     pub paused: bool,
+}
+
+/// Preimage of a light's route: the exit descriptor (fields 6, 7), the family (23), the
+/// first release's source bucket (26), the chain tag (32) and the vault and token code
+/// hashes (34, 36). The vault and mint aliases (33, 35) are the light's own.
+#[derive(BorshSerialize, BorshDeserialize)]
+pub struct RouteFields {
+    pub exit_profile: [u8; 48],
+    pub exit_epoch: [u8; 8],
+    pub family: [u8; 48],
+    pub bucket: [u8; 48],
+    pub chain_tag: [u8; 8],
+    pub vault_code: [u8; 32],
+    pub token_code: [u8; 32],
+}
+
+/// The custody route that replaces a light's one-bucket route. The fields must reproduce
+/// the stored route with field 26 in place, so the new route is fully determined by the
+/// account, and a light that already holds the custody route is refused.
+pub fn migrated_route(light: &Light, f: &RouteFields) -> Result<[u8; 32], ProgramError> {
+    let old = solana_sha256_hasher::hashv(&[
+        &f.exit_profile,
+        &f.exit_epoch,
+        &f.family,
+        &f.bucket,
+        &f.chain_tag,
+        &light.vault_alias,
+        &f.vault_code,
+        &light.mint_alias,
+        &f.token_code,
+    ])
+    .to_bytes();
+    if old != light.route || &f.chain_tag != b"SOLANA01" {
+        return Err(Error::Binding.into());
+    }
+    Ok(values::custody_route([
+        &f.exit_profile,
+        &f.exit_epoch,
+        &f.family,
+        &f.chain_tag,
+        &light.vault_alias,
+        &f.vault_code,
+        &light.mint_alias,
+        &f.token_code,
+    ]))
+}
+
+/// The program's upgrade authority, read from its ProgramData account.
+fn upgrade_authority(id: &Pubkey, programdata: &AccountInfo) -> Result<Pubkey, ProgramError> {
+    let loader = solana_sdk_ids::bpf_loader_upgradeable::ID;
+    let (key, _) = Pubkey::find_program_address(&[id.as_ref()], &loader);
+    if programdata.key != &key || programdata.owner != &loader {
+        return Err(ProgramError::InvalidSeeds);
+    }
+    // UpgradeableLoaderState::ProgramData: u32 tag 3, u64 slot, Option<Pubkey>.
+    let data = programdata.try_borrow_data()?;
+    match (data.get(..4), data.get(12), data.get(13..45)) {
+        (Some(tag), Some(1), Some(authority)) if tag == 3u32.to_le_bytes() => {
+            Ok(Pubkey::new_from_array(authority.try_into().unwrap()))
+        }
+        _ => Err(ProgramError::MissingRequiredSignature),
+    }
+}
+
+/// Who may cancel a proven, unmarked burn: its destination owner or the verifier's pause
+/// authority, signing, at any time; nobody else. A cancel moves no funds, and the pause
+/// authority can already stop every payout.
+pub fn cancel_allowed(owner_signed: bool, pause_signed: bool) -> ProgramResult {
+    if owner_signed || pause_signed {
+        Ok(())
+    } else {
+        Err(Error::CancelNotAllowed.into())
+    }
+}
+
+/// `cancel_allowed` for the instruction's signer account against the proven destination.
+pub fn cancel_signer_allowed(
+    light: &Light,
+    destination_hash_proven: &[u8],
+    signer: &Pubkey,
+    is_signer: bool,
+) -> ProgramResult {
+    let owner_signed =
+        is_signer && destination_hash(&light.solana_genesis, signer) == destination_hash_proven;
+    let pause_signed = is_signer && signer.as_ref() == light.pause_authority;
+    cancel_allowed(owner_signed, pause_signed)
 }
 
 fn pda(id: &Pubkey, account: &AccountInfo, seeds: &[&[u8]]) -> Result<u8, ProgramError> {
@@ -227,7 +320,13 @@ fn destination_hash(genesis: &[u8; 32], owner: &Pubkey) -> [u8; 48] {
     h.finalize().into()
 }
 
-fn consume(id: &Pubkey, accounts: &[AccountInfo], proof: &[u8], withdraw: bool) -> ProgramResult {
+fn consume(
+    id: &Pubkey,
+    accounts: &[AccountInfo],
+    proof: &[u8],
+    withdraw: bool,
+    cancel: bool,
+) -> ProgramResult {
     let [payer, light_account, prior, result, buffer, sys, rest @ ..] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
@@ -275,10 +374,46 @@ fn consume(id: &Pubkey, accounts: &[AccountInfo], proof: &[u8], withdraw: bool) 
         save(&light, light_account)?;
     }
     match &v.exit {
+        Some(exit) if cancel => cancel_burn(id, payer, sys, rest, &light, exit),
         Some(exit) => release_burn(id, payer, sys, rest, &light, exit),
         None if rest.is_empty() => Ok(()),
         None => Err(ProgramError::InvalidArgument),
     }
+}
+
+/// Write a proven burn's marker as cancelled. A payout and a cancel create the same
+/// account, so whichever lands first excludes the other.
+fn cancel_burn<'a>(
+    id: &Pubkey,
+    payer: &AccountInfo<'a>,
+    sys: &AccountInfo<'a>,
+    rest: &[AccountInfo<'a>],
+    light: &Light,
+    exit: &values::Exit,
+) -> ProgramResult {
+    let [nullifier, signer] = rest else {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    };
+    if exit.route != light.route
+        || light.vault_alias != exit.vault_alias
+        || light.mint_alias != exit.mint_alias
+    {
+        return Err(Error::Binding.into());
+    }
+    let burn = hash(exit.burn);
+    let bump = pda(id, nullifier, &[BURN, burn.as_ref()])?;
+    if nullifier.owner == id {
+        return Err(Error::Replay.into());
+    }
+    cancel_signer_allowed(light, exit.destination_hash, signer.key, signer.is_signer)?;
+    create(
+        id,
+        payer,
+        nullifier,
+        sys,
+        &[BURN, burn.as_ref(), &[bump]],
+        &[CANCELLED],
+    )
 }
 
 fn release_burn<'a>(
@@ -323,7 +458,7 @@ fn release_burn<'a>(
         nullifier,
         sys,
         &[BURN, burn.as_ref(), &[bump]],
-        &[1],
+        &[PAID],
     )?;
     let accounts = vec![
         AccountMeta::new_readonly(*authority.key, true),
@@ -366,7 +501,10 @@ solana_program_entrypoint::entrypoint!(process_instruction);
 pub fn process_instruction(id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     let (&tag, args) = data.split_first().ok_or(Error::Encoding)?;
     match tag {
-        2 | 8 => consume(id, accounts, args, tag == 2),
+        2 | 8 => consume(id, accounts, args, tag == 2, false),
+        // Cancel a proven, unpaid burn: payer, light, prior, result, buffer, system program,
+        // marker, and the signer: the destination owner or the pause authority.
+        10 => consume(id, accounts, args, true, true),
         3 => initialize(id, accounts, args),
         4 => {
             let [admin, account] = accounts else {
@@ -432,6 +570,139 @@ pub fn process_instruction(id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -
             }
             groth16::verify(&buffer.try_borrow_data()?, args)
         }
+        // One-time route migration of a light initialised by the first release, signed by
+        // the upgrade authority right after the upgrade. Checkpoint, markers and the pause
+        // state stay as they are; only `route` changes.
+        9 => {
+            let [authority, account, programdata] = accounts else {
+                return Err(ProgramError::NotEnoughAccountKeys);
+            };
+            if !authority.is_signer || upgrade_authority(id, programdata)? != *authority.key {
+                return Err(ProgramError::MissingRequiredSignature);
+            }
+            let fields = RouteFields::try_from_slice(args).map_err(|_| Error::Encoding)?;
+            let mut light = read_light(id, account)?;
+            light.route = migrated_route(&light, &fields)?;
+            save(&light, account)
+        }
         _ => Err(Error::Encoding.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unhex<const N: usize>(text: &str) -> [u8; N] {
+        hex::decode(text).unwrap().try_into().unwrap()
+    }
+
+    /// The mainnet light (FQe34dCQg9m6yEW6NjbjoR8LfWwKGLX2hBvTdY2Lu6s1) as read at slot
+    /// 473290673: bound to the revision-8 bucket, checkpoint at Post Fiat block 1851.
+    fn mainnet_light() -> Light {
+        Light::try_from_slice(
+            &hex::decode(include_str!("../tests/mainnet-light.hex").trim()).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn mainnet_fields() -> RouteFields {
+        let vector = include_str!("../tests/route-vector.txt");
+        let value = |key: &str| {
+            vector
+                .lines()
+                .find_map(|l| l.strip_prefix(key).and_then(|v| v.strip_prefix('=')))
+                .unwrap()
+        };
+        RouteFields {
+            exit_profile: unhex(value("f6")),
+            exit_epoch: unhex(value("f7")),
+            family: unhex(value("f23")),
+            // The first release's revision-8 bucket (postfiat_types::solana_exit::BUCKET).
+            bucket: unhex("4c045e289eaaa2c7ae7592b96ec0eeabe9fa0cfdd032783d359409dcc08d9dd0dfdd7cc8d483d6a88c12dc713522d2cc"),
+            chain_tag: unhex(value("f32")),
+            vault_code: unhex(value("f34")),
+            token_code: unhex(value("f36")),
+        }
+    }
+
+    #[test]
+    fn mainnet_light_migrates_to_the_custody_route_and_keeps_everything_else() {
+        let light = mainnet_light();
+        assert_eq!(light.height, 1851);
+        let route = migrated_route(&light, &mainnet_fields()).unwrap();
+        // The same route a fresh initialisation of this branch writes (tests/route-vector.txt).
+        assert_eq!(
+            hex::encode(route),
+            "02b02d4b458283c0e351a34adf9e25c896cca0cd9f2094d00a50e7f92a4d558e"
+        );
+        // Only bytes 136..168 (route) of the 289-byte account change.
+        let before = borsh::to_vec(&light).unwrap();
+        let mut after = mainnet_light();
+        after.route = route;
+        let after = borsh::to_vec(&after).unwrap();
+        assert_eq!(before.len(), 289);
+        let changed: Vec<usize> = (0..289).filter(|&i| before[i] != after[i]).collect();
+        assert!(changed.iter().all(|i| (136..168).contains(i)) && !changed.is_empty());
+    }
+
+    fn owner_hash(owner: &Pubkey) -> [u8; 48] {
+        destination_hash(&mainnet_light().solana_genesis, owner)
+    }
+
+    #[test]
+    fn the_destination_owner_may_cancel_at_any_time() {
+        let owner = Pubkey::new_from_array([7; 32]);
+        assert!(cancel_signer_allowed(&mainnet_light(), &owner_hash(&owner), &owner, true).is_ok());
+    }
+
+    #[test]
+    fn the_pause_authority_may_cancel_at_any_time() {
+        let light = mainnet_light();
+        let pause = Pubkey::new_from_array(light.pause_authority);
+        let owner = Pubkey::new_from_array([7; 32]);
+        assert!(cancel_signer_allowed(&light, &owner_hash(&owner), &pause, true).is_ok());
+    }
+
+    #[test]
+    fn a_stranger_or_an_unsigned_owner_may_not_cancel() {
+        let light = mainnet_light();
+        let owner = Pubkey::new_from_array([7; 32]);
+        let stranger = Pubkey::new_from_array([9; 32]);
+        let refused = Err(ProgramError::Custom(Error::CancelNotAllowed as u32));
+        assert_eq!(
+            cancel_signer_allowed(&light, &owner_hash(&owner), &stranger, true),
+            refused
+        );
+        assert_eq!(
+            cancel_signer_allowed(&light, &owner_hash(&owner), &owner, false),
+            refused
+        );
+        let pause = Pubkey::new_from_array(light.pause_authority);
+        assert_eq!(
+            cancel_signer_allowed(&light, &owner_hash(&owner), &pause, false),
+            refused
+        );
+    }
+
+    #[test]
+    fn marker_states_are_distinct_one_byte_values() {
+        assert_eq!((PAID, CANCELLED), (1, 2));
+        assert_eq!(Error::CancelNotAllowed as u32, 9);
+    }
+
+    #[test]
+    fn migration_runs_once_and_only_from_the_exact_old_route() {
+        let mut light = mainnet_light();
+        light.route = migrated_route(&light, &mainnet_fields()).unwrap();
+        // A second run finds the custody route, not the one-bucket route.
+        assert!(migrated_route(&light, &mainnet_fields()).is_err());
+        let light = mainnet_light();
+        let mut other = mainnet_fields();
+        other.bucket[0] ^= 1;
+        assert!(migrated_route(&light, &other).is_err());
+        let mut other = mainnet_fields();
+        other.vault_code[0] ^= 1;
+        assert!(migrated_route(&light, &other).is_err());
     }
 }

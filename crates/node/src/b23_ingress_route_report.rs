@@ -162,6 +162,10 @@ mod tests {
             live_value_enabled: true,
             active: true,
             burns_open: None,
+            min_withdrawal_atoms: None,
+            closed_since_registration: None,
+            covered_bucket_ids: None,
+            decision_signatures: None,
             beacon_finality_anchor: VaultBridgeRouteReport::select_beacon_anchor(
                 &[state],
                 &profile_hash,

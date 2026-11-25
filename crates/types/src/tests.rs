@@ -3901,3 +3901,302 @@ fn vault_bridge_solana_destination_binds_the_bucket_genesis_and_full_owner() {
         "{error}"
     );
 }
+
+const SOLANA_EXIT_TEST_DOMAIN: &str = "spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:e2a6fbfcf1e65a0f3e08d400c97d913e3e4eca81f84c814efa0bbcada24aac8b:c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61";
+
+#[test]
+fn solana_exit_covers_every_revision_bucket_of_the_shared_custody() {
+    use crate::solana_exit::{matches_bucket, BUCKET, FAMILY, POLICY};
+    let bucket = |family: &str, domain: &str, policy: &str| {
+        VaultBridgeBucketState::new(family, domain, policy, 1).unwrap()
+    };
+    assert_eq!(bucket(FAMILY, SOLANA_EXIT_TEST_DOMAIN, POLICY).bucket_id, BUCKET);
+    for policy in [POLICY.to_string(), "03".repeat(48), "09".repeat(48)] {
+        assert!(
+            matches_bucket(&bucket(FAMILY, SOLANA_EXIT_TEST_DOMAIN, &policy), true),
+            "revision bucket for {policy} must be able to exit"
+        );
+        // The first release covers revision 8 only.
+        assert_eq!(
+            matches_bucket(&bucket(FAMILY, SOLANA_EXIT_TEST_DOMAIN, &policy), false),
+            policy == POLICY
+        );
+    }
+    let other_custody = format!(
+        "spl:45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0:{}:c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61",
+        "77".repeat(32)
+    );
+    let ethereum = format!("erc20_bridge_vault:1:0x{}:0x{}", "e7".repeat(20), "a0".repeat(20));
+    let mut forged = bucket(FAMILY, SOLANA_EXIT_TEST_DOMAIN, &"09".repeat(48));
+    forged.bucket_id = BUCKET.into();
+    for outside in [
+        bucket(FAMILY, &other_custody, &"09".repeat(48)),
+        bucket(&"ab".repeat(48), SOLANA_EXIT_TEST_DOMAIN, &"09".repeat(48)),
+        bucket(FAMILY, &ethereum, &"09".repeat(48)),
+        forged,
+    ] {
+        assert!(!matches_bucket(&outside, true), "{outside:?}");
+        assert!(!matches_bucket(&outside, false), "{outside:?}");
+    }
+}
+
+/// Golden values recorded at a6cec1361, before the Solana exit covered every revision bucket.
+#[test]
+fn ethereum_redemption_packet_bytes_are_unchanged_by_the_solana_exit() {
+    let source = format!("erc20_bridge_vault:1:0x{}:0x{}", "e7".repeat(20), "a0".repeat(20));
+    let redemption = VaultBridgeRedemption::new(
+        "postfiat-wan-devnet-2",
+        "holder",
+        "issuer",
+        crate::solana_exit::FAMILY,
+        "ab".repeat(48),
+        source,
+        7,
+        20_000,
+        11,
+        "cd".repeat(48),
+        format!("evm-erc20:1:0x{}", "22".repeat(20)),
+        "ef".repeat(48),
+        1800,
+    )
+    .unwrap();
+    assert_eq!(redemption.withdrawal_packet_hash, "aa7de55e456d47da523aaa10f43e27399afae9728a7d591c94dc5c32cb283ceca815517951b7aa6f6df3b93c5c8a7fe6");
+    assert_eq!(redemption.withdrawal_packet_evm_digest, "368a1a48396a4c03c1c0f6b4bc0f1b4b250cd07835ab98d4e87f56849ad34543");
+}
+
+#[test]
+fn solana_exit_close_and_settlement_need_the_normal_quorum_only() {
+    use crate::solana_exit::{decision_quorum, CLOSE, OPEN, PAID, RETIRE};
+    let paid = format!("{PAID}{}:12345:0:{}", "11".repeat(48), "ab".repeat(64));
+    for n in [4usize, 6, 7] {
+        let normal = external_lane_amendment_threshold(n);
+        assert!(normal < n, "one lost validator must not block");
+        assert_eq!(decision_quorum(CLOSE, n, true), normal);
+        assert_eq!(decision_quorum(&paid, n, true), normal);
+        // Opening and retirement stay unanimous.
+        assert_eq!(decision_quorum(OPEN, n, true), n);
+        assert_eq!(decision_quorum(RETIRE, n, true), n);
+        // The first release needs every validator for every decision.
+        for kind in [CLOSE, paid.as_str(), OPEN, RETIRE] {
+            assert_eq!(decision_quorum(kind, n, false), n);
+        }
+    }
+}
+
+#[test]
+fn solana_exit_minimum_withdrawal_is_one_canonical_governed_amount() {
+    use crate::solana_exit::{
+        decision_quorum, is_decision, min_withdrawal_atoms, minimum_withdrawal,
+        DEFAULT_MIN_WITHDRAWAL_ATOMS, MIN_WITHDRAWAL,
+    };
+    // The default covers the relayer's permanent rent per payout (marker, checkpoint, ATA).
+    assert_eq!(DEFAULT_MIN_WITHDRAWAL_ATOMS, 300_000);
+    let kind = format!("{MIN_WITHDRAWAL}20000");
+    assert!(is_decision(&kind, true));
+    // Before the second release the kind is no Solana exit decision.
+    assert!(!is_decision(&kind, false));
+    assert_eq!(minimum_withdrawal(&kind), Ok(20_000));
+    for bad in [
+        "",
+        "0",
+        "020000",
+        "+20000",
+        "20000:",
+        "18446744073709551616",
+        "2e4",
+    ] {
+        assert!(
+            minimum_withdrawal(&format!("{MIN_WITHDRAWAL}{bad}")).is_err(),
+            "{bad}"
+        );
+    }
+    assert_eq!(
+        decision_quorum(&kind, 6, true),
+        external_lane_amendment_threshold(6)
+    );
+    // Without a registered descriptor and a later governed value, the default applies.
+    assert_eq!(
+        min_withdrawal_atoms(&GovernanceState::new(6)),
+        DEFAULT_MIN_WITHDRAWAL_ATOMS
+    );
+}
+
+#[test]
+fn solana_exit_refund_is_a_second_release_decision_with_a_canonical_cancel_reference() {
+    use crate::solana_exit::{decision_quorum, is_decision, refund_fields, CancelledBurn, REFUND};
+    let packet = "ab".repeat(48);
+    let signature = "cd".repeat(64);
+    let kind = format!("{REFUND}{packet}:473300000:{signature}");
+    // Before the second release the kind is no Solana exit decision.
+    assert!(!is_decision(&kind, false));
+    assert!(is_decision(&kind, true));
+    assert_eq!(decision_quorum(&kind, 6, true), external_lane_amendment_threshold(6));
+    assert_eq!(
+        refund_fields(&kind),
+        Ok(CancelledBurn { packet_hash: &packet, slot: 473_300_000, signature_hex: &signature })
+    );
+    for bad in [
+        format!("{REFUND}{packet}:0:{signature}"),
+        format!("{REFUND}{packet}:0473300000:{signature}"),
+        format!("{REFUND}{packet}:473300000:{}", "0".repeat(128)),
+        format!("{REFUND}{packet}:473300000:{signature}:0"),
+        format!("{REFUND}{}:473300000:{signature}", "AB".repeat(48)),
+        format!("{REFUND}{packet}:473300000"),
+        format!("solana_exit_r8_paid:{packet}:473300000:0:{signature}"),
+    ] {
+        assert!(refund_fields(&bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn refunded_redemption_state_is_refused_while_the_second_release_is_unset() {
+    let main_text = Err("vault_bridge_redemption.state must be pending or settled".to_string());
+    crate::solana_exit::set_second_release_for_tests(None);
+    // Unset, as in a build without the entry: no chain schedules the second release.
+    assert!(!crate::solana_exit::second_release_scheduled_on("postfiat-wan-devnet-2"));
+    assert!(!crate::solana_exit::second_release_scheduled_on("some-other-chain"));
+    // The context-free check is main's, always.
+    assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED), main_text);
+    assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_SETTLED), Ok(()));
+    // A chain's records accept "refunded" only where that chain schedules the second release.
+    assert_eq!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 0, "postfiat-wan-devnet-2"), main_text);
+    crate::solana_exit::set_second_release_for_tests(Some(2000));
+    assert_eq!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 0, "postfiat-wan-devnet-2"), Ok(()));
+    assert!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 1, "postfiat-wan-devnet-2").is_err());
+    assert_eq!(validate_vault_bridge_redemption_state(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED), main_text);
+    // The production table schedules it on the WAN chain only.
+    crate::solana_exit::use_second_release_table_for_tests();
+    assert!(crate::solana_exit::second_release_scheduled_on("postfiat-wan-devnet-2"));
+    assert!(!crate::solana_exit::second_release_scheduled_on("some-other-chain"));
+    assert_eq!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 0, "postfiat-wan-devnet-2"), Ok(()));
+    assert_eq!(validate_redemption_state_for_chain(VAULT_BRIDGE_REDEMPTION_STATE_REFUNDED, 0, "some-other-chain"), main_text);
+    crate::solana_exit::set_second_release_for_tests(None);
+}
+
+#[test]
+fn solana_exit_reopening_after_a_close_needs_only_the_close_quorum() {
+    use crate::solana_exit::{required_quorum, signer_floor, CLOSE, OPEN, RETIRE};
+    for n in [4usize, 6, 7] {
+        let normal = external_lane_amendment_threshold(n);
+        // The first opening stays unanimous; a re-opening follows the close.
+        assert_eq!(required_quorum(OPEN, false, n, true), n);
+        assert_eq!(required_quorum(OPEN, true, n, true), normal);
+        assert_eq!(required_quorum(CLOSE, false, n, true), normal);
+        assert_eq!(required_quorum(RETIRE, true, n, true), n);
+        // The stateless domain check admits the lowest quorum any state allows.
+        assert_eq!(signer_floor(OPEN, n, true), normal);
+        assert_eq!(signer_floor(RETIRE, n, true), n);
+        // The first release: a re-opening is unanimous too.
+        assert_eq!(required_quorum(OPEN, true, n, false), n);
+        assert_eq!(signer_floor(OPEN, n, false), n);
+        assert_eq!(signer_floor(CLOSE, n, false), n);
+    }
+}
+
+/// Golden bucket of a non-revision-8 policy of the shared custody. The payout
+/// service's Python derivation (`ops/sol-live/test_exit_custody_buckets.py`) must
+/// reproduce the same value.
+#[test]
+fn solana_exit_bucket_of_another_revision_is_the_shared_golden_value() {
+    use crate::solana_exit::{matches_bucket, FAMILY, SOURCE_DOMAIN};
+    let policy = "09".repeat(48);
+    let bucket = vault_bridge_bucket_id(FAMILY, SOURCE_DOMAIN, &policy).unwrap();
+    assert_eq!(
+        bucket,
+        "4683dbe99fcb2aef277f095e459ff541e1ef0774222aa6c1962e091d8f18c14743b82a54518b1f7eb48c451c9c5b21ce"
+    );
+    let state = VaultBridgeBucketState::new(FAMILY, SOURCE_DOMAIN, &policy, 1).unwrap();
+    assert_eq!(state.bucket_id, bucket);
+    assert!(matches_bucket(&state, true));
+    assert!(!matches_bucket(&state, false));
+}
+
+#[test]
+fn solana_exit_second_release_is_off_unless_set_and_never_before_the_first() {
+    use crate::solana_exit::{release_height, second_release_active, second_release_height};
+    let (chain, genesis) = (
+        "postfiat-wan-devnet-2",
+        "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    );
+    // Both releases are live on the WAN chain: the first from 1841, the second from 1890.
+    assert_eq!(release_height(chain, genesis), Some(1841));
+    assert_eq!(second_release_height(chain, genesis), Some(1890));
+    for h in [0, 1840, 1841, 1842, 1889] {
+        assert!(!second_release_active(chain, genesis, h), "{h}");
+    }
+    for h in [1890, 1891, u64::MAX] {
+        assert!(second_release_active(chain, genesis, h), "{h}");
+    }
+    // A chain or genesis without an entry has no second release.
+    assert_eq!(second_release_height("unrelated-chain", genesis), None);
+    assert_eq!(second_release_height(chain, &"00".repeat(48)), None);
+    assert!(!second_release_active("unrelated-chain", genesis, u64::MAX));
+    assert!(!second_release_active(chain, &"00".repeat(48), u64::MAX));
+    // Unset, as in a build without the entry: off at every height.
+    crate::solana_exit::set_second_release_for_tests(None);
+    for h in [0, 1840, 1841, 1890, u64::MAX] {
+        assert!(!second_release_active(chain, genesis, h), "{h}");
+    }
+    crate::solana_exit::set_second_release_for_tests(Some(2000));
+    assert!(!second_release_active(chain, genesis, 1999));
+    assert!(second_release_active(chain, genesis, 2000));
+    // Tests may set it on any chain; there the first release is absent.
+    assert!(second_release_active("unrelated-chain", genesis, 2000));
+    // A second height below the first still waits for the first.
+    crate::solana_exit::set_second_release_for_tests(Some(10));
+    assert!(!second_release_active(chain, genesis, 1840));
+    assert!(second_release_active(chain, genesis, 1841));
+    crate::solana_exit::set_second_release_for_tests(None);
+}
+
+/// origin/main a720cc80f's predicates, copied verbatim, against which the unset second
+/// release is compared.
+mod solana_exit_first_release {
+    use super::*;
+    use crate::solana_exit::{BUCKET, CLOSE, FAMILY, OPEN, PAID, POLICY, RETIRE};
+
+    pub fn matches_bucket(bucket: &VaultBridgeBucketState) -> bool {
+        bucket.bucket_id == BUCKET
+            && bucket.policy_hash == POLICY
+            && bucket.asset_id == FAMILY
+            && vault_bridge_bucket_id(FAMILY, &bucket.source_domain, POLICY).as_deref()
+                == Ok(BUCKET)
+    }
+
+    pub fn is_decision(kind: &str) -> bool {
+        matches!(kind, OPEN | CLOSE | RETIRE) || kind.starts_with(PAID)
+    }
+}
+
+#[test]
+fn solana_exit_first_release_predicates_equal_origin_main() {
+    use crate::solana_exit::{
+        decision_quorum, is_decision, matches_bucket, required_quorum, signer_floor, CLOSE,
+        FAMILY, MIN_WITHDRAWAL, OPEN, PAID, POLICY, RETIRE,
+    };
+    let paid = format!("{PAID}{}:12345:0:{}", "11".repeat(48), "ab".repeat(64));
+    let minimum = format!("{MIN_WITHDRAWAL}300000");
+    for kind in [OPEN, CLOSE, RETIRE, &paid, &minimum, "validator_set", "", "solana_exit_r8"] {
+        assert_eq!(is_decision(kind, false), solana_exit_first_release::is_decision(kind), "{kind}");
+        for n in [4usize, 6, 7] {
+            // The first release needs every validator: `require_unanimity`.
+            assert_eq!(decision_quorum(kind, n, false), n);
+            assert_eq!(required_quorum(kind, true, n, false), n);
+            assert_eq!(signer_floor(kind, n, false), n);
+        }
+    }
+    let bucket = |family: &str, domain: &str, policy: &str| {
+        VaultBridgeBucketState::new(family, domain, policy, 1).unwrap()
+    };
+    let mut forged = bucket(FAMILY, SOLANA_EXIT_TEST_DOMAIN, &"09".repeat(48));
+    forged.bucket_id = crate::solana_exit::BUCKET.into();
+    for b in [
+        bucket(FAMILY, SOLANA_EXIT_TEST_DOMAIN, POLICY),
+        bucket(FAMILY, SOLANA_EXIT_TEST_DOMAIN, &"09".repeat(48)),
+        bucket(FAMILY, SOLANA_EXIT_TEST_DOMAIN, &"03".repeat(48)),
+        bucket(&"ab".repeat(48), SOLANA_EXIT_TEST_DOMAIN, POLICY),
+        forged,
+    ] {
+        assert_eq!(matches_bucket(&b, false), solana_exit_first_release::matches_bucket(&b), "{b:?}");
+    }
+}

@@ -3,6 +3,15 @@
 Status: controlled-testnet operator checklist  
 Date: 2026-05-16
 
+!!! note "2026-11-25"
+
+    Commands marked HISTORICAL below were archived outside the repository, and
+    so were the `reports/` files some of them read; `reports/` is not kept in
+    Git (`scripts/README.md`, `reports/README.md`). The retained commands
+    (`testnet-validator-doctor`, `testnet-rpc-doctor`,
+    `testnet-monitor-snapshot`, `postfiat-rpc-account-tx`, `postfiat-rpc-query`,
+    `testnet-rpc-method-inventory`, `test-postfiat-logrotate`) are on `main`.
+
 This runbook is for an operator who already has a validator data directory and
 systemd services installed. It separates validator service health, read-only
 public RPC, controlled write RPC, and local evidence collection.

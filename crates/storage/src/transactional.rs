@@ -1133,6 +1133,98 @@ impl TransactionalStore {
         Ok(blocks)
     }
 
+    /// The blocks `blocks_in_height_order` returns from `from_height` on (the
+    /// last ones when `None`), at most `limit`, read by height instead of
+    /// loading the whole history.
+    pub fn blocks_window(
+        &self,
+        from_height: Option<u64>,
+        limit: usize,
+    ) -> StorageResult<Vec<BlockRecord>> {
+        let meta = self.meta()?;
+        if meta.finalized_height < meta.history_base_height {
+            return Err(StorageError::new(
+                StorageErrorCode::CountMismatch,
+                "invalid history range",
+            ));
+        }
+        let first = meta.history_base_height.saturating_add(1);
+        let last = meta.finalized_height;
+        let span = u64::try_from(limit).unwrap_or(u64::MAX);
+        if span == 0 || last < first {
+            return Ok(Vec::new());
+        }
+        let (start, end) = match from_height {
+            Some(from) => {
+                let start = from.max(first);
+                (start, last.min(start.saturating_add(span - 1)))
+            }
+            None => (last.saturating_sub(span - 1).max(first), last),
+        };
+        let mut blocks = Vec::new();
+        for height in start..=end {
+            let block = self.block(height)?.ok_or_else(|| {
+                StorageError::new(
+                    StorageErrorCode::CorruptRecord,
+                    format!("canonical block {height} is missing"),
+                )
+            })?;
+            if block.header.height != height {
+                return Err(StorageError::new(
+                    StorageErrorCode::CorruptRecord,
+                    format!("canonical block {height} has a mismatched embedded height"),
+                ));
+            }
+            blocks.push(block);
+        }
+        Ok(blocks)
+    }
+
+    /// The receipts `receipts_in_block_order` returns whose `tx_id` is
+    /// `tx_id`, in block order, read from the receipt-id record instead of
+    /// decoding the whole history. Exact because every receipt is stored
+    /// under its own `tx_id`: a commit checks it, and the legacy migration
+    /// (the only caller of `allow_legacy_receipt_id_mismatch`) pairs each
+    /// block receipt id with the persisted receipt of that `tx_id`.
+    pub fn receipts_for_tx_id(&self, tx_id: &str) -> StorageResult<Vec<Receipt>> {
+        Ok(self
+            .receipt_occurrences_for_tx_id(tx_id)?
+            .into_iter()
+            .map(|(_, receipt)| receipt)
+            .collect())
+    }
+
+    /// `receipts_for_tx_id` with the finalized height of each receipt's block.
+    pub fn receipt_occurrences_for_tx_id(&self, tx_id: &str) -> StorageResult<Vec<(u64, Receipt)>> {
+        let meta = self.meta()?;
+        if meta.finalized_height < meta.history_base_height {
+            return Err(StorageError::new(
+                StorageErrorCode::CountMismatch,
+                "invalid history range",
+            ));
+        }
+        // Every stored receipt id is a valid identifier, so no other can match.
+        if validate_identifier("receipt id", tx_id).is_err() {
+            return Ok(Vec::new());
+        }
+        let record: Option<StoredReceiptHistoryV1> =
+            self.read_json_record(RECEIPTS_BY_ID, RECEIPTS_BY_ID_TABLE, tx_id.as_bytes())?;
+        let Some(record) = record else {
+            return Ok(Vec::new());
+        };
+        validate_receipt_history(tx_id, &record)?;
+        Ok(record
+            .occurrences
+            .into_iter()
+            .filter(|occurrence| {
+                occurrence.finalized_height > meta.history_base_height
+                    && occurrence.finalized_height <= meta.finalized_height
+                    && occurrence.receipt.tx_id == tx_id
+            })
+            .map(|occurrence| (occurrence.finalized_height, occurrence.receipt))
+            .collect())
+    }
+
     pub fn receipts_in_block_order(&self) -> StorageResult<Vec<Receipt>> {
         let meta = self.meta()?;
         let capacity = usize::try_from(meta.receipt_count).map_err(|_| {
@@ -5594,6 +5686,54 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    /// The windowed read returns byte for byte what the full history read
+    /// returns after the `blocks` query's own filter, for every window.
+    #[test]
+    fn block_window_equals_the_filtered_full_history() {
+        let (_dir, store) = committed_two_blocks("block-window");
+        let all = store.blocks_in_height_order().expect("full history");
+        for from in [None, Some(0), Some(1), Some(2), Some(3), Some(u64::MAX)] {
+            for limit in [0, 1, 2, 3, usize::MAX] {
+                let mut expected = all.clone();
+                match from {
+                    Some(from) => {
+                        expected.retain(|block| block.header.height >= from);
+                        expected.truncate(limit);
+                    }
+                    None => expected = expected[expected.len().saturating_sub(limit)..].to_vec(),
+                }
+                let window = store.blocks_window(from, limit).expect("window");
+                assert_eq!(
+                    serde_json::to_vec(&window).expect("encode window"),
+                    serde_json::to_vec(&expected).expect("encode expected"),
+                    "from {from:?} limit {limit}"
+                );
+            }
+        }
+    }
+
+    /// The keyed receipt read returns byte for byte what the full receipt
+    /// scan returns after the `receipts` query's own filter by `tx_id`.
+    #[test]
+    fn receipts_for_tx_id_equal_the_filtered_full_scan() {
+        let (_dir, store) = committed_two_blocks("receipts-for-tx");
+        let all = store.receipts_in_block_order().expect("full scan");
+        let long = "x".repeat(MAX_ID_BYTES + 1);
+        for tx_id in ["tx-1", "tx-2", "tx-3", "", "tx\n1", long.as_str()] {
+            let expected = all
+                .iter()
+                .filter(|receipt| receipt.tx_id == tx_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            let keyed = store.receipts_for_tx_id(tx_id).expect("keyed read");
+            assert_eq!(
+                serde_json::to_vec(&keyed).expect("encode keyed"),
+                serde_json::to_vec(&expected).expect("encode expected"),
+                "tx_id {tx_id:?}"
+            );
+        }
     }
 
     include!("transactional/tamper_tests.rs");

@@ -19,7 +19,7 @@ class SpendGateTest(unittest.TestCase):
             redeemable_at_par=True,
             impairment_factor_bps=10000,
             counted_value_atoms=20000,
-            source_domain="sol",
+            source_domain=payout.SOURCE_DOMAIN,
             outstanding_vault_bridge_atoms=0,
             redemption_queue_atoms=20000,
             other_allocations_atoms=0,
@@ -53,6 +53,7 @@ class SpendGateTest(unittest.TestCase):
         c.call.side_effect = call
         record = Mock()
         with (
+            patch.object(payout, "check_verifier"),
             patch.object(payout, "rpc", return_value=status),
             patch.object(
                 payout,
@@ -82,7 +83,7 @@ class SpendGateTest(unittest.TestCase):
         bucket = dict(
             bucket_id=payout.BUCKET, policy_hash=payout.POLICY,
             source_series_id=payout.SERIES, status="active", redeemable_at_par=True,
-            impairment_factor_bps=10000, source_domain="sol", counted_value_atoms=20000,
+            impairment_factor_bps=10000, source_domain=payout.SOURCE_DOMAIN, counted_value_atoms=20000,
             outstanding_vault_bridge_atoms=10000, redemption_queue_atoms=10000,
             other_allocations_atoms=0, nav_subscription_allocations_atoms=0,
         )

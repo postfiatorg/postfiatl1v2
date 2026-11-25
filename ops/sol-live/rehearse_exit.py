@@ -25,8 +25,8 @@ from exit_setup import (
     TOKEN,
     VAULT,
     VERIFIER,
-    VERIFIER_SHA256,
     checkpoint_pda,
+    verifier_pin,
     expected_light,
 )
 from bridge import Cluster, pda
@@ -75,6 +75,13 @@ def local_post_fiat(node, evidence, directory, port):
                 proc.wait(timeout=30)
 
 
+def image_pins():
+    return {
+        "pfusdc_egress_verifier.so": verifier_pin(),
+        "pfusdc_vault.so": read(payout.CONFIG)["vault_code_hash"],
+    }
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--validator", required=True, type=Path)
@@ -83,10 +90,7 @@ def main():
     ap.add_argument("--evidence", required=True, type=Path)
     ap.add_argument("--rpc-port", type=int, default=21899)
     args = ap.parse_args()
-    pins = {
-        "pfusdc_egress_verifier.so": VERIFIER_SHA256,
-        "pfusdc_vault.so": read(payout.CONFIG)["vault_code_hash"],
-    }
+    pins = image_pins()
     for image, digest in pins.items():
         with (args.images / image).open("rb") as stream:
             assert "0x" + hashlib.file_digest(stream, "sha256").hexdigest() == digest
@@ -282,7 +286,7 @@ def main():
                         )
                         from exit_canary import token_deltas
 
-                        deltas = token_deltas(finalized, owner)
+                        deltas = token_deltas(finalized, 20000, owner)
                         save(
                             evidence / "local-payout.json",
                             dict(

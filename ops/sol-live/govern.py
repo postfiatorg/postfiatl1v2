@@ -9,6 +9,7 @@ import shlex
 import subprocess
 import time
 from live import HOSTS, R6, STATE, fleet, read, receipt_at, rpc, save
+import exit_rules
 
 
 def remote(i, args, data=None):
@@ -124,11 +125,81 @@ class ParentChanged(RuntimeError):
     """Qualification expired before submitting the round."""
 
 
-def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout=None):
-    head = fleet()
+def _unavailable(i):
+    raise RuntimeError(f"validator-{i} unavailable")
+
+
+def required_signatures(kind, n=6, *, rules=None):
+    """Signatures the chain requires, as its route report states them (`exit_rules`).
+    Without reported rules the first release applies: every validator signs."""
+    if kind.startswith("exit-") and rules is not None:
+        return exit_rules.signatures(rules, kind)
+    return n
+
+
+def allowed_quorums(kind, n=6, rules=None):
+    """The draft quorum the wrapper accepts: the one the chain reports for this action."""
+    return {required_signatures(kind, n, rules=rules)}
+
+
+class ReviewRefused(RuntimeError):
+    """A host's own reviewer refused to sign; its reason is reported, apart from unreachable hosts."""
+
+
+def collect(kind, step, n=6, need=None):
+    """Run `step` on every validator; keep going while the chain's quorum can still sign. A host
+    whose reviewer refused is reported with its reason even when the others reach the quorum."""
+    with ThreadPoolExecutor(n) as pool:
+        futures = {i: pool.submit(step, i) for i in range(n)}
+    done, lost, refused = {}, [], []
+    for i, future in futures.items():
+        try:
+            done[i] = future.result()
+        except ReviewRefused as error:
+            refused.append(f"validator-{i}: {error}")
+        except Exception:
+            lost.append(f"validator-{i}")
+    if refused:
+        print(f"{kind}: refused by its own reviewer: " + "; ".join(refused), flush=True)
+    need = required_signatures(kind, n) if need is None else need
+    if len(done) < need:
+        raise RuntimeError(
+            f"{kind}: {len(done)} of {n} validators available, {need} required; "
+            f"unavailable: {', '.join(lost) or 'none'}"
+            + (f"; refused by its own reviewer: {'; '.join(refused)}" if refused else "")
+        )
+    return done
+
+
+# The per-host settlement reviewer, installed on every validator host (RUNBOOK-LIVE.md,
+# "Independent settlement reviews"). Its `sign` runs the node's signing command only for a
+# decision that host's own reviewer approved within the last 15 minutes.
+REVIEWER = "/opt/postfiat/sol-exit-review/exit_review.py"
+REVIEWER_PYTHON = "/opt/postfiat/sol-exit-review/venv/bin/python"
+
+
+def independent_review(kind, rules):
+    """Under the second release, paid and refund are signed only through each host's own
+    reviewer. A first-release chain keeps the go-live review files and six signatures."""
+    return kind in ("exit-paid", "exit-refund") and rules is not None and rules.get("release") == 2
+
+
+# Solana exit decisions bound to a qualified Solana parent and drafted by `ratify-solana-<kind>`.
+EXIT_DECISIONS = ("exit-open", "exit-close", "exit-paid", "exit-refund")
+
+
+def read_quorum(kind, n=6, *, rules=None):
+    """Validators whose agreeing reads suffice: the signatures the chain requires."""
+    return required_signatures(kind, n, rules=rules)
+
+
+def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout=None,
+           rules=None, refund=None):
+    need = read_quorum(kind, rules=rules)
+    head = fleet(need)
     if head["build_git_revision"] != (compatible or R6):
         raise RuntimeError("waiting for compatible six-validator release")
-    if kind in ("exit-open", "exit-close", "exit-paid"):
+    if kind in EXIT_DECISIONS:
         from exit_precheck import parent_of
 
         if parent_of(head) != qualified_parent:
@@ -164,8 +235,13 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         remote(i, ["runuser", "-u", "postfiat", "--", "mkdir", "-p", work[i]])
         return binary, topo
 
-    with ThreadPoolExecutor(6) as pool:
-        runtime = list(pool.map(setup, range(6)))
+    # Prepare on every reachable validator; the draft's quorum decides how many must sign.
+    runtime = collect(kind, setup, need=min(allowed_quorums(kind, rules=rules)))
+    prop = h % 6
+    if prop not in runtime:
+        raise RuntimeError(f"Proposer validator-{prop} unavailable; retry at the next height.")
+    # The first available validator drafts and assembles; every signer checks the draft.
+    lead = min(runtime)
 
     def tool(i, *args):
         return remote(i, ["runuser", "-u", "postfiat", "--", runtime[i][0], *args])
@@ -184,22 +260,22 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         if profile["activation_height"] > h:
             raise ValueError("premature activation")
         save(local / "profile.json", profile)
-        put(0, "profile", profile)
+        put(lead, "profile", profile)
         tool(
-            0,
+            lead,
             "vault-bridge-route-profile-governance",
             "--data-dir",
-            dirs[0],
+            dirs[lead],
             "--validators",
             ",".join(names),
             "--profile-file",
-            work[0] + "/profile",
+            work[lead] + "/profile",
             "--amendment-file",
-            work[0] + "/amend",
+            work[lead] + "/amend",
             "--batch-file",
-            work[0] + "/draft",
+            work[lead] + "/draft",
         )
-    elif kind in ("exit-open", "exit-close", "exit-paid"):
+    elif kind in EXIT_DECISIONS:
         extra = []
         if kind == "exit-paid":
             extra = [
@@ -212,67 +288,111 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
                 "--signature-hex",
                 payout["signature_hex"],
             ]
+        if kind == "exit-refund":
+            extra = [
+                "--packet-hash",
+                refund["packet"],
+                "--solana-slot",
+                refund["slot"],
+                "--signature-hex",
+                refund["signature_hex"],
+            ]
         tool(
-            0,
+            lead,
             "ratify-solana-" + kind,
             *extra,
             "--data-dir",
-            dirs[0],
+            dirs[lead],
             "--validators",
             ",".join(names),
             "--height",
             h,
             "--amendment-file",
-            work[0] + "/amend",
+            work[lead] + "/amend",
         )
     elif kind == "activation":
         tool(
-            0,
+            lead,
             "ratify-solana-bridge-activation-height",
             "--data-dir",
-            dirs[0],
+            dirs[lead],
             "--validators",
             ",".join(names),
             "--height",
             h + 1,
             "--amendment-file",
-            work[0] + "/amend",
+            work[lead] + "/amend",
         )
     else:
         raise ValueError(kind)
-    amend = get(0, "amend")
+    amend = get(lead, "amend")
     if kind == "exit-paid":
         from exit_canary import match_reference
 
         match_reference(amend, payout)
-    if kind in ("exit-open", "exit-close", "exit-paid") and (
+    if kind == "exit-refund" and amend["kind"] != refund["kind"]:
+        raise ValueError("Refund draft differs from the cancelled marker's reference.")
+    if kind in EXIT_DECISIONS and (
         (
-            kind != "exit-paid"
+            kind not in ("exit-paid", "exit-refund")
             and amend["kind"] != "solana_exit_r8_" + kind.split("-")[1]
         )
         or amend["activation_height"] != h
         or amend["value"] != 1
         or amend.get("paused", False)
-        or amend["quorum"] != 6
+        or amend["quorum"] not in allowed_quorums(kind, rules=rules)
         or amend["validators"] != names
     ):
         raise ValueError("Unexpected Solana exit amendment.")
     save(local / "amendment.json", amend)
 
-    if kind == "exit-paid":
+    reviewed = set(runtime)
+    independent = independent_review(kind, rules)
+    if kind in ("exit-paid", "exit-refund") and not independent:
+        # Each signer's operator has checked the payout, or the finalized cancelled marker.
         def verify_review(i):
-            approval = read_operator_review(i, "/etc/postfiat/sol-exit-paid-review.json")
-            if approval != dict(kind=amend["kind"], parent=qualified_parent):
-                raise ValueError(
-                    f"Validator-{i} has not verified this payout and proposal parent."
+            if i not in runtime:
+                _unavailable(i)
+            try:
+                approval = read_operator_review(
+                    i, f"/etc/postfiat/sol-{kind}-review.json"
                 )
+            except subprocess.CalledProcessError as error:
+                # An unsafe or oversized review file stops the round; an unreachable
+                # host or a missing review only keeps that validator from signing.
+                if "operator review file" in (error.stderr or ""):
+                    return error
+                raise
+            if approval != dict(kind=amend["kind"], parent=qualified_parent):
+                return ValueError(
+                    f"Validator-{i} has not verified this {kind.split('-')[1]} and proposal parent."
+                )
+            return None
 
-        with ThreadPoolExecutor(6) as pool:
-            list(pool.map(verify_review, range(6)))
+        # Every reachable review is read before anyone signs. A review that differs
+        # or is unprotected stops the round; the chain's quorum must have reviewed.
+        reviews = collect(kind, verify_review, need=amend["quorum"])
+        for i in sorted(reviews):
+            if reviews[i] is not None:
+                raise reviews[i]
+        reviewed = set(reviews)
 
     def sign(i):
-        if i:
+        if i != lead:
             put(i, "amend", amend)
+        if independent:
+            # The host's own reviewer signs exactly the amendment it reviewed: it builds the
+            # node's signing command itself and takes no command from this caller.
+            try:
+                remote(i, ["runuser", "-u", "postfiat", "--", REVIEWER_PYTHON, "-I", REVIEWER, "sign",
+                           "--amendment-file", work[i] + "/amend", "--proposal-slot", h,
+                           "--expires-at-height", h + 30, "--authorization-file", work[i] + "/auth"])
+            except subprocess.CalledProcessError as error:
+                if error.returncode == 2:  # the reviewer's named refusal, not an unreachable host
+                    reason = ((error.stderr or "").strip().splitlines() or ["refused"])[-1]
+                    raise ReviewRefused(reason) from None
+                raise
+            return get(i, "auth")
         tool(
             i,
             "governance-authorization-sign",
@@ -293,57 +413,65 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         )
         return get(i, "auth")
 
-    if kind in ("exit-open", "exit-close", "exit-paid") and parent_of(fleet()) != qualified_parent:
+    if kind in EXIT_DECISIONS and parent_of(fleet(need)) != qualified_parent:
         raise ParentChanged("Parent changed before signing.")
-    with ThreadPoolExecutor(6) as pool:
-        auth = list(pool.map(sign, range(6)))
-    for i, a in enumerate(auth):
-        put(0, f"auth-{i}", a)
+    need = amend["quorum"] if kind.startswith("exit-") else required_signatures(kind)
+    auth = collect(
+        kind, lambda i: sign(i) if i in runtime and i in reviewed else _unavailable(i),
+        need=need,
+    )
+    signers = sorted(auth)
+    print(
+        f"{kind} signed by {len(signers)} of 6: "
+        + ", ".join(names[i] for i in signers),
+        flush=True,
+    )
+    for i, a in auth.items():
+        put(lead, f"auth-{i}", a)
     tool(
-        0,
+        lead,
         "governance-amendment-assemble",
         "--data-dir",
-        dirs[0],
+        dirs[lead],
         "--amendment-file",
-        work[0] + "/amend",
+        work[lead] + "/amend",
         "--authorization-files",
-        ",".join(f"{work[0]}/auth-{i}" for i in range(6)),
+        ",".join(f"{work[lead]}/auth-{i}" for i in signers),
         "--proposal-slot",
         h,
         "--output",
-        work[0] + "/signed",
+        work[lead] + "/signed",
     )
-    signed = get(0, "signed")
+    signed = get(lead, "signed")
     if kind == "route":
         tool(
-            0,
+            lead,
             "vault-bridge-route-profile-governance-assemble",
             "--data-dir",
-            dirs[0],
+            dirs[lead],
             "--profile-file",
-            work[0] + "/profile",
+            work[lead] + "/profile",
             "--signed-amendment-file",
-            work[0] + "/signed",
+            work[lead] + "/signed",
             "--proposal-slot",
             h,
             "--batch-file",
-            work[0] + "/batch",
+            work[lead] + "/batch",
         )
     else:
         tool(
-            0,
+            lead,
             "governance-batch",
             "--data-dir",
-            dirs[0],
+            dirs[lead],
             "--amendment-file",
-            work[0] + "/signed",
+            work[lead] + "/signed",
             "--batch-file",
-            work[0] + "/batch",
+            work[lead] + "/batch",
         )
-    prop = h % 6
-    if prop:
-        put(prop, "batch", get(0, "batch"))
-    if fleet()["block_tip_hash"] != head["block_tip_hash"]:
+    if prop != lead:
+        put(prop, "batch", get(lead, "batch"))
+    if fleet(need)["block_tip_hash"] != head["block_tip_hash"]:
         raise ParentChanged("tip advanced during signing")
     txid = signed.get("amendment_id") or signed["amendment"]["amendment_id"]
     print(f"{kind} height={h} proposer={prop} tx_id={txid}", flush=True)
@@ -378,9 +506,13 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         "--retry-backoff-ms",
         250,
     )
-    evidence = dict(tx_id=txid, height=h, validators=receipt_at(txid, h))
+    evidence = dict(tx_id=txid, height=h, signers=[names[i] for i in signers])
     if profile:
         evidence.update(profile=profile, profile_hash=amend["kind"].split(":")[-1])
+    # Record the submitted action before the survey: a validator lost now must not
+    # leave a committed action without its evidence.
+    save(local / "accepted.json", evidence)
+    evidence["validators"] = receipt_at(txid, h, need=need)
     save(local / "accepted.json", evidence)
     return evidence
 

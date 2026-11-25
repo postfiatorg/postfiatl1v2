@@ -22,4 +22,5 @@ base64 = { workspace = true }
 flate2 = { workspace = true }
 
 [dev-dependencies]
+postfiat-types = { path = "../types", features = ["test-second-release"] }
 postfiat-bridge = { path = "../bridge" }

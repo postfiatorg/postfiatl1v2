@@ -281,13 +281,13 @@ fn rpc_serve_drain(
                         &response,
                     )
                 });
-                let read_failed = event.error_code.as_deref() == Some("rpc_read_error");
+                let must_close = rpc_serve_connection_must_close(&event);
                 if event_sender.send((Some(event), false)).is_err() {
                     return;
                 }
                 idx = idx.saturating_add(1);
                 handled = handled.saturating_add(1);
-                if !keep_alive || !rpc_serve_connection_request_budget_allows(handled) || read_failed {
+                if !keep_alive || !rpc_serve_connection_request_budget_allows(handled) || must_close {
                     break;
                 }
                 // Observe both read-ahead and new socket bytes without
