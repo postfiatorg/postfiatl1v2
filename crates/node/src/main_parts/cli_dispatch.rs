@@ -286,7 +286,7 @@ use postfiat_ordering_fast::bft_quorum_threshold;
 use postfiat_privacy_orchard::{AssetOrchardSwapProvingKey, AssetOrchardSwapVerifyingKey};
 use postfiat_rpc_sdk::{
     error_response, read_request_file, success_response, to_pretty_json, RpcEvent, RpcRequest,
-    RpcResponse, MAX_RPC_REQUEST_BYTES,
+    RpcResponse, MAX_RPC_ID_BYTES, MAX_RPC_REQUEST_BYTES,
 };
 use postfiat_storage::NodeStore;
 #[cfg(test)]

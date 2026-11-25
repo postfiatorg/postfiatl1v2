@@ -12,7 +12,7 @@ import socket
 import requests
 
 ROOT = Path(__file__).resolve().parents[2]
-STATE = Path("/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-live")
+STATE = Path(os.environ.get("SOL_LIVE_STATE", "/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-live"))
 INSTANCE = os.environ.get("PFT_SOL_INSTANCE", "local")
 if INSTANCE not in ("local", "devnet"):
     raise ValueError("unknown Solana test cluster")
@@ -53,7 +53,12 @@ def save(p, data):
 
 
 class ReplyTooLarge(RuntimeError):
-    """The node's reply to this read exceeds its frame limit; asking again cannot help."""
+    """The node's reply to this read exceeds its frame limit; asking again cannot help.
+    `method` names the read."""
+
+    def __init__(self, message, method=""):
+        super().__init__(message)
+        self.method = method
 
 
 class EmptyReply(ReplyTooLarge):
@@ -78,11 +83,11 @@ def rpc(i, method, timeout=120, **params):
         )
         line = s.makefile("rb").readline(64 << 20)
     if not line.strip():
-        raise EmptyReply(f"{i} {method}: empty reply")
+        raise EmptyReply(f"{i} {method}: empty reply", method)
     r = json.loads(line)
     error = r.get("error")
     if r.get("id") == rid and isinstance(error, dict) and error.get("code") == "rpc_response_too_large":
-        raise ReplyTooLarge(f"{i} {method}: {error.get('message')}")
+        raise ReplyTooLarge(f"{i} {method}: {error.get('message')}", method)
     if r.get("id") != rid or r.get("ok") is not True:
         raise RuntimeError(f"{i} {method}: {r.get('error')}")
     return r["result"]

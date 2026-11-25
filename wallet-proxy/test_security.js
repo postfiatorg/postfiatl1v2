@@ -334,6 +334,57 @@ async function testS3(proxyUrl) {
     fail('S3.2b', 'invalid JSON test failed: ' + e.message);
   }
 
+  // S3.2d: a client id longer than the proxy's bound is refused at entry, so
+  // the proxy's own suffixes (timeout votes) always fit the node's 256 bytes.
+  try {
+    const ws = new WebSocket(proxyUrl);
+    const response = await new Promise((resolve, reject) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ version: 'postfiat-local-rpc-v1', id: 'x'.repeat(193), method: 'server_info', params: {} }));
+      });
+      ws.on('message', (data) => resolve(data.toString()));
+      ws.on('error', (e) => reject(e));
+      setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 5000);
+    });
+    const parsed = JSON.parse(response);
+    // The refusal names which request it refuses: its method and its id's length.
+    if (parsed.error && parsed.error.code === 'proxy_request_id_too_long' && /192/.test(parsed.error.message)
+        && /server_info/.test(parsed.error.message) && /193 bytes/.test(parsed.error.message)) {
+      ok('S3.2d: proxy refuses a client id over 192 bytes with proxy_request_id_too_long');
+    } else {
+      fail('S3.2d', 'unexpected response: ' + response);
+    }
+    ws.close();
+  } catch (e) {
+    fail('S3.2d', e.message);
+  }
+
+  // S3.2e: rpc-serve's RpcRequest.id is a String, so a number, boolean or object id can only be
+  // answered under a placeholder id: the proxy refuses it at entry, naming the request.
+  for (const [label, id] of [['number', 7], ['boolean', true], ['object', { n: 1 }]]) {
+    try {
+      const ws = new WebSocket(proxyUrl);
+      const response = await new Promise((resolve, reject) => {
+        ws.on('open', () => {
+          ws.send(JSON.stringify({ version: 'postfiat-local-rpc-v1', id, method: 'server_info', params: {} }));
+        });
+        ws.on('message', (data) => resolve(data.toString()));
+        ws.on('error', (e) => reject(e));
+        setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 5000);
+      });
+      const parsed = JSON.parse(response);
+      if (parsed.ok === false && parsed.error && parsed.error.code === 'proxy_request_id_not_string'
+          && /server_info/.test(parsed.error.message) && parsed.id === 'proxy-error') {
+        ok('S3.2e: proxy refuses a ' + label + ' client id with proxy_request_id_not_string');
+      } else {
+        fail('S3.2e ' + label, 'unexpected response: ' + response);
+      }
+      ws.close();
+    } catch (e) {
+      fail('S3.2e ' + label, e.message);
+    }
+  }
+
   // S3.2c: Dynamic test: send JSON missing required fields
   try {
     const ws = new WebSocket(proxyUrl);

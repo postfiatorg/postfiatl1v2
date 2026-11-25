@@ -50,7 +50,9 @@ oncall="$HOME/.config/postfiat/sol-exit-oncall.env"
 tmp=$(mktemp "${oncall}.XXXXXXXX")
 printf 'cd -- %q\nexport REV=%q H=%q KIT=%q\n' "$PWD" "$REV" "$H" "$KIT" > "$tmp"
 mv -T "$tmp" "$oncall"
-python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
+# Name the live release and the one it replaced; the kit has no defaults and refuses either missing.
+EXIT_OLD_RELEASE=<live release id> EXIT_OLDER_RELEASE=<release it replaced> \
+  python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
 export ARCHIVE="$KIT/anchor-replay" INTEGRITY="$EXIT_WORK/replay/source/.integrity.key"
 export FAUCET="$EXIT_WORK/replay/source/faucet_account.json"
 mkdir -m700 "$ARCHIVE"
@@ -149,6 +151,16 @@ PY
 ```
 
 Inspect the canary's staged SHA, manifest verification, restored watchdog state and fleet convergence before rolling validator 1. Check the per-host evidence after each restart. Restore predecessor units only while the predecessor can replay every committed block. Use the saved units at `/etc/postfiat/releases/main-r64-20261121/rollback-units/` and the kit's `restore-watchdog.sh` on each affected host, then recheck root convergence. After a new decision or burn requires this release, repair forward.
+
+### 2.1 Rebuild the B24 rehearsal tool from the release
+
+As soon as all six report `$REV`, and before the next 17:55 UTC B24 reading, run on the main machine:
+
+```bash
+ops/b24-live/rehearsal_tool.sh "$REL" "$REV" "$(sha256sum "$B" | cut -d' ' -f1)"
+```
+
+It builds `tools/b23-nav-canary` at `$REV` with `--locked`, installs it as `b23-coord/artifacts/$REL/postfiat-b23-nav-canary` and prints the line for `ops/b24-live/known-releases.txt`. Add that line, copy the tool to validator-0 as `/tmp/b23-tee-nav-canary-<first 16 hex of its sha256>`, then run `python3 ops/b24-live/daily.py --check`: it must name `$REL`. Until then the daily job refuses to run, and says which of these is missing.
 
 ## 3. Register the descriptor with burns closed
 
@@ -544,6 +556,8 @@ The script needs Python 3.10 or newer and `setfacl` (the `acl` package). Any fai
 
 The script runs the first review and stops if it ends in an RPC or access error.
 
+**The settlement loop's restricted door.** Add `--settler-key FILE` (the loop's public key, printed by `install-exit-settler.sh`) to the install above. The script then writes one `restrict,command="…exit_review_door.py"` line into the reviewer user's `authorized_keys` and enables `pft-sol-exit-sign-door.path`. The door reads one JSON request on stdin. It accepts exactly two: hand in a drafted paid or refund decision for this host's own review, and return this host's result. The result is its signature, its refusal with the reason, or pending. It runs no command, names no file and gives no shell, transfer or forwarding. The node user signs a handed-in decision only from this host's own fresh verdict, as `exit_review.py sign` does (`exit_review.py sign-door`). What this changes: `exit_govern.py paid --restricted` collects every host's signature through the doors and never logs in as root to sign. With fewer than five signatures nothing is settled. Drafting, assembling and the proposer's batch submission still run through `govern.py`'s root login (see "What stays open").
+
 **Check the six providers.** Use at least three different Solana providers across the six hosts. With `HOSTS` set to the six hosts, this prints each host's provider (host name only) and warns when fewer than three differ:
 
 ```bash
@@ -551,10 +565,12 @@ for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; 
 ```
 
 **What stays open.**
-- **Root ssh from the relay.** The relay host still reaches every validator host as root over ssh (`govern.py`, `remote`). Root can run the node's signing command with the validator key directly, or replace the reviewer, so a compromised relay host can still sign on all six. Only the operators can close this:
-  - give the relay a non-root key whose forced command allows only `exit_review.py sign` with its four arguments;
-  - keep each validator key readable only by the node user;
-  - remove root ssh for settlement.
+- **Root ssh from the relay.** The relay host still reaches every validator host as root over ssh (`govern.py`, `remote`). Root can run the node's signing command with the validator key directly, or replace the reviewer, so a compromised relay host can still sign on all six. The restricted door removes root from the signatures (`--restricted`). It does not remove root from three other steps:
+  - the lead host drafts the decision with its node's data directory;
+  - the lead host assembles it the same way;
+  - the proposer submits the batch round with its validator key.
+
+  Root ssh for settlement can go only once those three have a restricted way as well. Keep each validator key readable only by the node user.
 - **Shared providers.** Independence also needs each host's Solana endpoint to be a different provider; the check above only warns.
 
 **Order, so that no payout waits unsettled** (each payout blocks the next until it is settled):
@@ -562,6 +578,36 @@ for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; 
 2. For the next payout, confirm on each host that `/var/lib/postfiat-exit-review/<sha256 of the paid decision>.json` approves the same decision the settler signed.
 3. Just before the second release height, let the settler settle every paid burn, then stop it.
 4. From the height, the relay runs `exit_govern.py paid` (and `refund`). It only drafts and collects signatures; each host signs from its own review.
+
+### Settlement loop as a service
+
+Today the relay's settlement loop is the tmux session `settler`, running `oncall/settler.sh` every 90 s. That loop settles through `exit_govern.py paid --burn` and the root login. The installed loop is `pft-sol-exit-settler.timer`. It runs one pass of `exit_settler.py` every 90 s, as its own user `pft-sol-exit-settler`. A pass works like this:
+- It holds a lock, so two passes never run at once.
+- It finds burns to settle through any answering validator.
+- It proposes each one with `exit_govern.py paid --burn B --restricted`, bounded to 900 s.
+- A burn that keeps failing waits from 90 s, doubling up to an hour. It raises one `ALERT` line when it starts failing and one when the loop gives up after 12 attempts; after that, settle it by hand.
+- Every failure is a journal line: `journalctl -u pft-sol-exit-settler`.
+
+The loop only proposes. Each host's reviewer signs through its door, and with fewer than five signatures nothing settles.
+
+**Install on the relay machine, as root there:**
+
+```bash
+git archive -o exit-settler.tar "$COMMIT" ops/sol-live solana/deploy
+bash ops/sol-live/install-exit-settler.sh exit-settler.tar /home/postfiat/.ssh/known_hosts
+```
+
+The script:
+- creates the user and its SSH key (mode 0600, never printed) and `/etc/postfiat/sol-exit-settler.env`, where the Solana RPC URL goes;
+- prints the public key and the line each validator's `install-exit-review.sh … --settler-key FILE` writes;
+- then asks all six doors a read-only request.
+
+It enables nothing while a host does not answer; it names that host and exits 3. It also enables nothing while drafting, assembling and submitting still need a root login; it says so and exits 4. Until it enables the timer, keep the tmux loop. When it does, stop the tmux loop first, then start the timer:
+
+```bash
+tmux send-keys -t settler C-c && tmux kill-session -t settler   # as the relay's on-call login
+systemctl enable --now pft-sol-exit-settler.timer
+```
 
 ### Upgrade the initialised Solana verifier
 
@@ -689,3 +735,31 @@ python3 ops/sol-live/exit_govern.py refund --revision "$REV" --release-height "$
 ```
 
 The seven earlier Solana series retain their own liabilities. The exit pays burns from every bucket of this shared custody whose ID derives from its own revision's policy, and the custody must cover all of them; moving liabilities between series requires separate governance and conservation tests for outstanding amounts, queued redemptions, counted reserves and allocations.
+
+## One proving machine
+
+The withdrawal prover can share the four-GPU deposit machine instead of renting its own. None of this has been run on a GPU yet; check it on the machine before moving payouts.
+
+- **Why it collided.** SP1 picks the device, not our code: without a device id, sp1-sdk 6.3.1 connects to device 0 and sp1-cuda 6.3.1 starts `~/.sp1/bin/sp1-gpu-server` with `CUDA_VISIBLE_DEVICES=<id>` behind `/tmp/sp1-cuda-<id>.sock`. The deposit prover takes devices 0 to 3, one server and socket each.
+- **Split.** One settings file, `/etc/pf-sol-exit-prove.conf` (root's, mode 644), gives both: `DEPOSIT_CUDA_DEVICES=0,1,2` for the deposit prover and `EXIT_CUDA_DEVICE=3` for the withdrawal prover. Each start refuses an overlap, and the deposit start refuses a `SOL_DEPOSIT_GPUS` that contradicts the file. Each prover keeps its own lock, work tree and SP1 home; no port is involved.
+- **Memory.** One RTX 5090 (32 GB) has proven both programs; neither peak is measured. A whole GPU each, so they never share GPU memory. Host memory and CPU (32 + 4 threads) are shared and not measured. Three-GPU deposit proofs are slower; not measured.
+- **Proof host.** Build `ops/withdraw/proof_host.rs` with this change; `--cuda-device N` or `PROOF_HOST_CUDA_DEVICE=N` picks the device, default 0. It refuses a device whose socket answers. The forced command passes only the file's device.
+- **Stale servers.** A GPU server outlives a killed proof host (timeout, out of memory). A server is a leftover when its parent is not a live proof host, that is neither `proof-host` (the withdrawal prover) nor `host-live` (a deposit prover): init or a subreaper took it. Holding its lock, the forced command stops a leftover on its device and refuses a server of a live proof host. The deposit start stops leftovers on any device and never a server of a live proof host: on one of its own devices it refuses and names the device and the process, for example the withdrawal prover's when the settings file is missing. Write device numbers without a leading zero (`3`, not `03`); both scripts refuse any other form.
+- **One user.** Both provers run as the same user. Each reads the other's GPU servers' environment in `/proc` to find their device; a server of another user cannot be read, is skipped, and is neither stopped nor refused.
+
+On the four-GPU machine, as root, with the staged tree from `copy-exit-prover.sh`:
+
+```bash
+printf '%s\n' DEPOSIT_CUDA_DEVICES=0,1,2 EXIT_CUDA_DEVICE=3 EXIT_WORK_DIR=/workspace/exit/b23-withdraw-20261116 \
+    EXIT_SP1_HOME=/workspace/exit/home > /etc/pf-sol-exit-prove.conf
+chown root:root /etc/pf-sol-exit-prove.conf; chmod 644 /etc/pf-sol-exit-prove.conf
+bash ops/sol-live/prover-start.sh
+mkdir -p /workspace/b23-gpu
+install -m755 exit-prover-command.sh /usr/local/bin/pf-sol-exit-prove
+```
+
+The payout worker starts the withdrawal prover itself through `pf-sol-exit-prove`; by hand: `cd /workspace/exit/b23-withdraw-20261116 && HOME=/workspace/exit/home SP1_PROVER=cuda RAYON_NUM_THREADS=4 ./proof-host --cuda-device 3 withdrawal egress.elf exit-witness.json /tmp/w prove`.
+
+Check: `stat -c '%U %a' /etc/pf-sol-exit-prove.conf; cat /etc/pf-sol-exit-prove.conf; ls -l /tmp/sp1-cuda-*.sock; ss -xlp | grep sp1-cuda; for p in $(pgrep -x sp1-gpu-server); do echo "$p parent $(awk '{print $4}' /proc/$p/stat) $(tr '\0' '\n' </proc/$p/environ | grep CUDA_VISIBLE)"; done; nvidia-smi --query-compute-apps=pid,gpu_bus_id,used_memory --format=csv; nvidia-smi --query-gpu=index,pci.bus_id --format=csv`. Sockets 0 to 2 belong to the deposit servers, socket 3 only exists during a withdrawal proof.
+
+Moving to one machine also changes the payout worker's SSH target (`HOST`, `PORT` in `exit_proof.py`, `authorize-exit-prover.sh`, `exit-prover.fingerprint`) and, if the bundle ships the rebuilt binary, the pinned proof-host hash (`install-exit-user.sh`, `build-exit-bundle.py`). To go back to two machines: restore the SSH target, delete `/etc/pf-sol-exit-prove.conf` on the deposit machine, and restart the deposit prover; without the file it takes all four devices again.

@@ -1,0 +1,10 @@
+[Unit]
+Description=Tell a person that the Vast credit check failed without its own report
+
+[Service]
+Type=oneshot
+EnvironmentFile=-%h/.config/b24-tee-nav/notify.env
+# Standard library only and isolated (-I). Skips runs that already made their own report.
+ExecStart=/usr/bin/python3 -I %h/repos/postfiatl1v2-live/ops/b24-live/prover_credit.py --service-failed prover-credit-alert.service
+UMask=0077
+TimeoutStartSec=5min

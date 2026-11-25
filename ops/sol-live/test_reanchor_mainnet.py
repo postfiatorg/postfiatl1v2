@@ -169,6 +169,95 @@ class HealthTest(unittest.TestCase):
 
 
 
+class TwoProviderHealthTest(unittest.TestCase):
+    """A fallback provider never makes the watcher less strict (F5): the tip never goes below the
+    highest seen, a fallback that is behind is no answer, and providers that disagree close."""
+
+    check = HealthTest.check
+
+    def setUp(self):
+        HealthTest.setUp(self)
+        self.second = FakeSolana(self.sol.tip)
+        h = self.health
+
+        def post(url, json=None, timeout=None):
+            return (self.sol if url == h.URL else self.second).post(url, json=json, timeout=timeout)
+
+        patcher = mock.patch.object(h.requests, "post", post)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.assertTrue(self.check()["ok"])  # the watcher has seen the current tip
+
+    def test_first_down_and_second_current_stays_open(self):
+        self.sol.fail["getSlot"] = "down"
+        self.second.tip += 50
+        state = self.check()
+        self.assertTrue(state["ok"], state)
+        self.assertEqual(state["tip"], self.second.tip)
+
+    def test_first_down_and_second_lagging_is_no_answer(self):
+        self.sol.fail["getSlot"] = "down"
+        self.second.tip -= 100
+        state = self.check()
+        self.assertFalse(state["ok"])
+        self.assertIn("unavailable", state["message"])
+
+    def test_both_down_closes(self):
+        self.sol.fail["getSlot"] = self.second.fail["getSlot"] = "down"
+        self.assertFalse(self.check()["ok"])
+
+    def test_providers_that_disagree_beyond_the_limit_close(self):
+        self.second.tip = self.sol.tip - self.health.LIMIT - 1
+        state = self.check()
+        self.assertFalse(state["ok"])
+        self.assertIn("disagree", state["message"])
+        self.second.tip = self.sol.tip - self.health.LIMIT
+        self.assertTrue(self.check()["ok"])
+
+    def test_after_a_disagreement_the_lower_provider_alone_does_not_open(self):
+        top = self.sol.tip + 50
+        self.sol.tip = top
+        self.second.tip = top - self.health.LIMIT - 1
+        self.assertIn("disagree", self.check()["message"])
+        # The leading provider drops out; the one that was behind is no answer.
+        self.sol.fail["getSlot"] = "down"
+        state = self.check()
+        self.assertFalse(state["ok"], state)
+        self.assertIn("behind the highest finalized slot seen", state["message"])
+
+    def test_the_highest_seen_survives_a_restart(self):
+        seen = self.sol.tip
+        self.health.HIGHEST[0] = None  # a new process: nothing in memory
+        self.sol.fail["getSlot"] = "down"
+        self.second.tip = seen - 100
+        state = self.check()
+        self.assertFalse(state["ok"], state)
+        self.assertIn("behind the highest finalized slot seen", state["message"])
+
+    def test_an_unreadable_record_closes_until_it_is_repaired(self):
+        self.health.highest_file().write_text("{not json")
+        self.health.HIGHEST[0] = None
+        state = self.check()
+        self.assertFalse(state["ok"])
+        self.assertIn("highest-finalized-slot.json", state["message"])
+
+    def test_a_wild_answer_is_not_kept_as_the_highest(self):
+        seen = self.sol.tip
+        self.second.tip = seen + 10_000_000  # far beyond what the chain can have advanced
+        state = self.check()
+        self.assertTrue(state["ok"], state)
+        self.assertEqual(state["tip"], seen)
+        self.assertEqual(self.health.highest()[0], seen)
+
+    def test_the_tip_never_goes_below_the_highest_seen(self):
+        seen = self.sol.tip
+        self.sol.tip = self.second.tip = seen - 100  # both lag behind what was already seen
+        self.capture["observer_slot"] = lambda: seen - 200
+        state = self.check()
+        # Measured against the highest tip seen, the observer is 200 slots behind, not 100.
+        self.assertFalse(state["ok"])
+        self.assertIn("200 slots behind", state["message"])
+
 class Stop(Exception):
     """Ends a service loop after one pass."""
 
@@ -501,6 +590,30 @@ class FakeCluster:
         raise AssertionError(method)
 
 
+class ReplyTooLargeTest(unittest.TestCase):
+    """live.rpc names a reply over the node's frame limit instead of a generic failure."""
+
+    def test_a_reply_over_the_frame_limit_raises_reply_too_large(self):
+        import socket
+
+        server = socket.create_server(("127.0.0.1", 0))
+        message = "rpc response of 5000000 bytes exceeds the 4194304-byte frame limit; request less data"
+
+        def answer():
+            conn, _ = server.accept()
+            with conn:
+                request = json.loads(conn.makefile("rb").readline())
+                reply = {"version": "postfiat-local-rpc-v1", "id": request["id"], "ok": False,
+                         "error": {"code": "rpc_response_too_large", "message": message}, "events": []}
+                conn.sendall(json.dumps(reply).encode() + b"\n")
+
+        threading.Thread(target=answer, daemon=True).start()
+        with server, mock.patch.object(live, "PEERS", [("127.0.0.1", server.getsockname()[1])]):
+            with self.assertRaises(live.ReplyTooLarge) as error:
+                live.rpc(0, "vault_bridge_status", asset_id="a")
+        self.assertEqual(str(error.exception), f"0 vault_bridge_status: {message}")
+
+
 class ReanchorTest(unittest.TestCase):
     """reanchor-mainnet.py main() against a fake cluster, fake chain and fake systemd."""
 
@@ -547,6 +660,7 @@ class ReanchorTest(unittest.TestCase):
         self.rm.rpc = self.chain_rpc
         # The fake ledger: blocks by height, governance batches and receipts (oldest first).
         self.blocks = {}
+        self.tamper = None
         self.batches = {}
         self.receipts = []
         argv = mock.patch.object(sys, "argv", ["reanchor-mainnet.py"])
@@ -583,8 +697,13 @@ class ReanchorTest(unittest.TestCase):
                                  for a in self.batches.get(b["batch_id"], [])))
             return {"confirmed": True, "block": {"header": self.blocks[height]}}
         if method == "blocks":
-            heights = sorted(h for h in self.blocks if h >= params["from_height"])[: params["limit"]]
-            return [{"header": self.blocks[h]} for h in heights]
+            # Every height up to the tip, as the node serves them, each linked to its parent.
+            tip = max([1709, *self.blocks])
+            heights = range(params["from_height"], min(tip, params["from_height"] + params["limit"] - 1) + 1)
+            page = [{"header": {"height": h, "batch_kind": "transparent", "batch_id": f"E{h}",
+                                **self.blocks.get(h, {}), "block_hash": f"hash-{h}", "parent_hash": f"hash-{h - 1}"}}
+                    for h in heights]
+            return self.tamper(page) if self.tamper else page
         if method == "batch_archive":
             payload = {"vault_bridge_route_profile_activations": self.batches[params["batch_id"]]}
             return [{"batch_id": params["batch_id"], "payload_json": json.dumps(payload)}]
@@ -751,6 +870,76 @@ class ReanchorTest(unittest.TestCase):
         self.rm.main()
         self.assertEqual(self.governed, [])
         self.assertEqual(live.read(self.base / "activation.json")["tx_id"], "T6")
+
+    def test_the_chain_is_read_eight_blocks_at_a_time(self):
+        # 256 blocks per read no longer fit the node's 4 MB reply limit; the live checkout reads 8.
+        committed = route_profile(6, EPOCH + 1, NEXT + 1500, 1790)
+        for n in range(20):
+            self.blocks[1710 + n] = {"height": 1710 + n, "batch_kind": "transparent", "batch_id": f"B{n}"}
+        self.commit("T6", 1801, committed)
+        limits = []
+        chain_rpc = self.rm.rpc
+
+        def counting_rpc(i, method, **params):
+            if method == "blocks":
+                limits.append(params["limit"])
+            return chain_rpc(i, method, **params)
+
+        self.rm.rpc = counting_rpc
+        self.rm.main()
+        self.assertEqual(self.rm.BLOCK_PAGE, 8)
+        self.assertEqual(set(limits), {8})
+        # The fake chain now has every height, as the node does: 1709 (the current revision's
+        # block, which anchors the parent links) to 1801 is 93 blocks, 11 full pages and one of 5.
+        self.assertEqual(len(limits), 12)
+        self.assertEqual(live.read(self.base / "activation.json")["tx_id"], "T6")
+
+    def test_each_page_must_start_where_asked_and_run_on_without_gap_or_repeat(self):
+        committed = route_profile(6, EPOCH + 1, NEXT + 1500, 1790)
+        self.commit("T6", 1801, committed)
+        broken = {
+            "a page that starts at another height": lambda page: page[1:],
+            "a gap": lambda page: page[:3] + page[4:],
+            "a repeated block": lambda page: page[:4] + page[3:7],
+            "a block whose parent is not the block before it":
+                lambda page: page[:5] + [{"header": {**page[5]["header"], "parent_hash": "hash-other"}}] + page[6:],
+        }
+        for name, change in broken.items():
+            with self.subTest(name):
+                self.tamper = lambda page, change=change: change(page) if page[0]["header"]["height"] == 1717 else page
+                with self.assertRaises(RuntimeError):
+                    self.rm.chain_revision(live.read(self.base / "activation.json"))
+
+    def test_the_parent_link_holds_across_pages(self):
+        self.commit("T6", 1801, route_profile(6, EPOCH + 1, NEXT + 1500, 1790))
+
+        def other_chain(page):
+            # The second page comes from a chain whose block 1716 is not the one already read.
+            if page[0]["header"]["height"] == 1717:
+                page[0] = {"header": {**page[0]["header"], "parent_hash": "hash-1716-elsewhere"}}
+            return page
+
+        self.tamper = other_chain
+        with self.assertRaises(RuntimeError) as error:
+            self.rm.chain_revision(live.read(self.base / "activation.json"))
+        self.assertIn("1717", str(error.exception))
+
+    def test_a_tip_that_moves_between_pages_is_read_on(self):
+        committed = route_profile(6, EPOCH + 1, NEXT + 1500, 1790)
+        self.commit("T6", 1720, committed)
+        grown = []
+
+        def grow(page):
+            # After the first page the node commits more blocks; reading goes on by height.
+            if page[0]["header"]["height"] == 1709 and not grown:
+                grown.append(True)
+                for n in range(1721, 1740):
+                    self.blocks[n] = {"height": n, "batch_kind": "transparent", "batch_id": f"G{n}"}
+            return page
+
+        self.tamper = grow
+        found = self.rm.chain_revision(live.read(self.base / "activation.json"))
+        self.assertEqual(found[:2], ("T6", 1720))
 
     def test_gate_holds_while_a_deposit_is_retrying(self):
         # The relay is retrying D; the public RPC no longer lists it, so only its record shows it.

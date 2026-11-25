@@ -196,5 +196,19 @@ class ServiceTest(unittest.TestCase):
                     self.assertIn(shown["detail"], (svc.WAITING_ROTATION, svc.WAITING_BURN))
 
 
+class BurnHeaderReread(unittest.TestCase):
+    """F13: the burn's header checked before verify_endpoints is a fresh read, not the cached copy
+    the witness was built from."""
+
+    def test_the_header_is_read_again_and_its_height_checked(self):
+        header = dict(height=1899, block_hash="ab")
+        with patch.object(payout, "rpc_any", return_value=[dict(header=header)]) as read:
+            self.assertEqual(payout.burn_header(1899), header)
+        read.assert_called_once_with("blocks", from_height=1899, limit=1)
+        with patch.object(payout, "rpc_any", return_value=[dict(header=dict(header, height=1898))]):
+            with self.assertRaisesRegex(ValueError, "Unexpected burn height"):
+                payout.burn_header(1899)
+
+
 if __name__ == "__main__":
     unittest.main()

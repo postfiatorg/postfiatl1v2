@@ -33,7 +33,9 @@ def paid_fleet(**options):
     red = dict(burn_tx_id="a1" * 48, bucket_id=payout.BUCKET, amount_atoms=300000, state="pending",
                settled_atoms=0, settlement_receipt_hash="", owner=exit_canary.OWNER,
                destination_ref=exit_canary.DEST, withdrawal_packet_hash=PACKET)
-    return Fleet(dict(buckets=[bucket], redemptions=[red], allocations=[], receipts=[]), **options)
+    supply = dict(purpose="vault_bridge_supply", bucket_id=payout.BUCKET, amount_atoms=300000,
+                  remaining_atoms=300000)
+    return Fleet(dict(buckets=[bucket], redemptions=[red], allocations=[supply], receipts=[]), **options)
 
 
 def run_paid(fleet, d):

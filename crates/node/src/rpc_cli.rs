@@ -872,8 +872,28 @@ fn handle_rpc_serve_connection(
                 "rpc_read_error"
             };
             let response = rpc_serve_error_response(&id, error_code, &error);
-            let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
-            return rpc_serve_event(
+            let written = send_rpc_serve_reply(reader, &response);
+            return with_write_outcome(
+                rpc_serve_event(
+                    &context.node_id,
+                    request_index,
+                    &context.peer_addr,
+                    id,
+                    "invalid",
+                    None,
+                    None,
+                    &response,
+                ),
+                written,
+            );
+        }
+    };
+    if let Err(error) = validate_rpc_serve_request_line(&line) {
+        let id = format!("remote-{request_index}");
+        let response = rpc_serve_error_response(&id, "rpc_request_too_large", &error);
+        let written = send_rpc_serve_reply(reader, &response);
+        return with_write_outcome(
+            rpc_serve_event(
                 &context.node_id,
                 request_index,
                 &context.peer_addr,
@@ -882,22 +902,8 @@ fn handle_rpc_serve_connection(
                 None,
                 None,
                 &response,
-            );
-        }
-    };
-    if let Err(error) = validate_rpc_serve_request_line(&line) {
-        let id = format!("remote-{request_index}");
-        let response = rpc_serve_error_response(&id, "rpc_request_too_large", &error);
-        let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
-        return rpc_serve_event(
-            &context.node_id,
-            request_index,
-            &context.peer_addr,
-            id,
-            "invalid",
-            None,
-            None,
-            &response,
+            ),
+            written,
         );
     }
 
@@ -910,8 +916,38 @@ fn handle_rpc_serve_connection(
                 "rpc_parse_error",
                 &format!("rpc request parse failed: {error}"),
             );
-            let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
-            return rpc_serve_event(
+            let written = send_rpc_serve_reply(reader, &response);
+            return with_write_outcome(
+                rpc_serve_event(
+                    &context.node_id,
+                    request_index,
+                    &context.peer_addr,
+                    id,
+                    "invalid",
+                    None,
+                    None,
+                    &response,
+                ),
+                written,
+            );
+        }
+    };
+
+    if request.id.len() > MAX_RPC_ID_BYTES {
+        // Echoing an over-long id could make even this error reply too large
+        // to send, so it is answered under a placeholder id.
+        let id = format!("remote-{request_index}");
+        let response = rpc_serve_error_response(
+            &id,
+            "rpc_protocol_error",
+            &format!(
+                "rpc request id of {} bytes exceeds the {MAX_RPC_ID_BYTES}-byte limit",
+                request.id.len()
+            ),
+        );
+        let written = send_rpc_serve_reply(reader, &response);
+        return with_write_outcome(
+            rpc_serve_event(
                 &context.node_id,
                 request_index,
                 &context.peer_addr,
@@ -920,10 +956,10 @@ fn handle_rpc_serve_connection(
                 None,
                 None,
                 &response,
-            );
-        }
-    };
-
+            ),
+            written,
+        );
+    }
     let id = request.id.clone();
     let method = request.method.clone();
     let mut mempool_submit_counts = None;
@@ -1894,7 +1930,14 @@ fn handle_rpc_serve_connection(
             merge_rpc_serve_runtime_metrics(result, context.runtime_metrics.snapshot());
         }
     }
-    let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
+    let (response, written) =
+        write_rpc_serve_response(reader.get_mut().tcp_stream_mut(), response);
+    if !written {
+        let _ = reader
+            .get_mut()
+            .tcp_stream_mut()
+            .shutdown(std::net::Shutdown::Both);
+    }
     let mut event = rpc_serve_event(
         &context.node_id,
         request_index,
@@ -1915,7 +1958,83 @@ fn handle_rpc_serve_connection(
         "isolated_or_specialized".to_string()
     });
     event.handler_ms = Some(monotonic_elapsed_ms(handler_started));
+    with_write_outcome(event, written)
+}
+
+/// Writes one reply line in a single write. On failure the connection is shut
+/// in both directions, so no later reply can follow a partial line.
+fn send_rpc_serve_reply(
+    reader: &mut BufReader<RpcServeDeadlineStream>,
+    response: &RpcResponse,
+) -> bool {
+    let stream = reader.get_mut().tcp_stream_mut();
+    let written = write_rpc_serve_line(stream, response);
+    if !written {
+        let _ = stream.shutdown(std::net::Shutdown::Both);
+    }
+    written
+}
+
+fn write_rpc_serve_line<W: Write>(stream: &mut W, response: &RpcResponse) -> bool {
+    match serde_json::to_vec(response) {
+        Ok(mut line) if line.len() as u64 <= MAX_TRANSPORT_FRAME_BYTES => {
+            line.push(b'\n');
+            stream.write_all(&line).and_then(|_| stream.flush()).is_ok()
+        }
+        _ => false,
+    }
+}
+
+/// A reply that was not written whole is recorded as `rpc_write_error`, which
+/// ends the connection.
+fn with_write_outcome(mut event: RpcServeEventRecord, written: bool) -> RpcServeEventRecord {
+    if !written {
+        event.ok = false;
+        event.error_code = Some("rpc_write_error".to_string());
+    }
     event
+}
+
+/// After a failed read, a failed write or a handler panic the connection is
+/// closed rather than kept for the next request.
+fn rpc_serve_connection_must_close(event: &RpcServeEventRecord) -> bool {
+    matches!(
+        event.error_code.as_deref(),
+        Some("rpc_read_error" | "rpc_write_error" | "rpc_worker_panic")
+    )
+}
+
+/// Writes the reply. One larger than the frame limit is answered with
+/// `rpc_response_too_large` instead, naming the limit and the reply's size,
+/// so the caller reads an error rather than waiting for its idle timeout and
+/// the connection stays usable. Returns the response and whether its whole
+/// line was written.
+fn write_rpc_serve_response<W: Write>(stream: &mut W, response: RpcResponse) -> (RpcResponse, bool) {
+    let size = match serde_json::to_vec(&response) {
+        Ok(json) if json.len() as u64 <= MAX_TRANSPORT_FRAME_BYTES => {
+            let written = write_rpc_serve_line(stream, &response);
+            return (response, written);
+        }
+        Ok(json) => json.len(),
+        Err(error) => {
+            let response = rpc_serve_error_response(
+                &response.id,
+                "rpc_internal",
+                &format!("rpc response serialization failed: {error}"),
+            );
+            let written = write_rpc_serve_line(stream, &response);
+            return (response, written);
+        }
+    };
+    let response = rpc_serve_error_response(
+        &response.id,
+        "rpc_response_too_large",
+        &format!(
+            "rpc response of {size} bytes exceeds the {MAX_TRANSPORT_FRAME_BYTES}-byte frame limit; request less data"
+        ),
+    );
+    let written = write_rpc_serve_line(stream, &response);
+    (response, written)
 }
 
 fn merge_rpc_serve_runtime_metrics(
@@ -5827,6 +5946,230 @@ mod child_dispatch_limit_tests {
             error.contains("global concurrent child dispatch limit 2"),
             "{error}"
         );
+    }
+}
+
+#[cfg(test)]
+mod oversized_reply_tests {
+    use super::*;
+
+    fn status_with_revision(build_git_revision: String) -> StatusReport {
+        StatusReport {
+            chain_id: "oversized-reply-test".to_string(),
+            genesis_hash: "00".repeat(48),
+            protocol_version: 1,
+            rpc_schema: "postfiat-local-rpc-v1".to_string(),
+            build_git_revision,
+            build_profile: "test".to_string(),
+            active_nav_profiles: Vec::new(),
+            deployment_manifest_sha256: None,
+            deployment_manifest_verified: false,
+            deployment_validator_id: None,
+            deployment_service_artifacts: Vec::new(),
+            deployment_runtime_artifacts: None,
+            validator_count: 1,
+            node_id: "test-node".to_string(),
+            status: "ok".to_string(),
+            last_run_unix: 1,
+            state_root: "state-root".to_string(),
+            block_height: 1,
+            block_tip_hash: "tip".to_string(),
+            mempool_pending: 0,
+            storage: None,
+        }
+    }
+
+    fn cache_status(context: &RpcServeConnectionContext, report: StatusReport) {
+        let mut cache = context.health_cache.lock().expect("health cache");
+        cache.status = Some(report);
+        cache.status_checked_at = Some(Instant::now());
+    }
+
+    /// A reply over the frame limit is answered with an error the caller can
+    /// read, and the same connection then carries the next request's reply.
+    #[test]
+    fn a_reply_over_the_frame_limit_is_answered_with_an_error_and_the_connection_stays_usable() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let mut client = TcpStream::connect(listener.local_addr().expect("addr")).expect("connect");
+        client
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .expect("client read timeout");
+        let (server, _) = listener.accept().expect("accept");
+        for id in ["too-large", "fits"] {
+            write_json_line(&mut client, &RpcRequest::empty(id, "status")).expect("send request");
+        }
+        let mut context = child_dispatch_limit_tests::child_dispatch_test_context(8, 8);
+        let mut reader = BufReader::new(RpcServeDeadlineStream::new(server, 10_000));
+
+        cache_status(
+            &context,
+            status_with_revision("a".repeat(MAX_TRANSPORT_FRAME_BYTES as usize)),
+        );
+        let first_event = handle_rpc_serve_connection(&mut reader, 1, &mut context);
+        cache_status(&context, status_with_revision("test-revision".to_string()));
+        let second_event = handle_rpc_serve_connection(&mut reader, 2, &mut context);
+
+        let mut client_reader = BufReader::new(client);
+        let mut read_reply = || {
+            let line = read_transport_line_from(&mut client_reader);
+            serde_json::from_str::<RpcResponse>(&line).expect("reply json")
+        };
+        let first = read_reply();
+        assert_eq!(
+            first.id, "too-large",
+            "the oversized reply was not answered"
+        );
+        assert!(!first.ok);
+        let error = first.error.expect("error");
+        assert_eq!(error.code, "rpc_response_too_large");
+        let limit = MAX_TRANSPORT_FRAME_BYTES.to_string();
+        assert!(error.message.contains(&limit), "{}", error.message);
+        // The message also names the reply's size, which is over the limit.
+        assert!(
+            error
+                .message
+                .split(|character: char| !character.is_ascii_digit())
+                .filter_map(|number| number.parse::<u64>().ok())
+                .any(|number| number > MAX_TRANSPORT_FRAME_BYTES),
+            "{}",
+            error.message
+        );
+        assert_eq!(
+            first_event.error_code.as_deref(),
+            Some("rpc_response_too_large")
+        );
+
+        let second = read_reply();
+        assert_eq!(second.id, "fits");
+        assert!(second.ok, "{:?}", second.error);
+        assert!(second_event.ok);
+    }
+
+    fn connected_pair() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let client = TcpStream::connect(listener.local_addr().expect("addr")).expect("connect");
+        client
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .expect("client read timeout");
+        let (server, _) = listener.accept().expect("accept");
+        (client, server)
+    }
+
+    /// An id longer than the bound is refused when the request is parsed,
+    /// under a placeholder id, so the error reply always fits the frame; an
+    /// id at the bound is answered under its own id.
+    #[test]
+    fn a_request_id_over_the_bound_is_answered_under_a_placeholder_id() {
+        let (client, server) = connected_pair();
+        let long = "i".repeat(5_000_000);
+        let at_bound = at_bound_for_writer();
+        // Requests may be up to MAX_RPC_REQUEST_BYTES, larger than a reply frame,
+        // so the line is written directly.
+        let sender = client.try_clone().expect("clone client");
+        let writer = std::thread::spawn(move || {
+            let mut sender = sender;
+            for id in [long, at_bound_for_writer()] {
+                let mut line = serde_json::to_vec(&RpcRequest::empty(id, "status")).expect("json");
+                line.push(b'\n');
+                sender.write_all(&line).expect("send request");
+            }
+        });
+        let mut context = child_dispatch_limit_tests::child_dispatch_test_context(8, 8);
+        cache_status(&context, status_with_revision("test-revision".to_string()));
+        let mut reader = BufReader::new(RpcServeDeadlineStream::new(server, 10_000));
+        let first_event = handle_rpc_serve_connection(&mut reader, 1, &mut context);
+        let second_event = handle_rpc_serve_connection(&mut reader, 2, &mut context);
+        writer.join().expect("writer");
+
+        let mut client_reader = BufReader::new(client);
+        let first: RpcResponse =
+            serde_json::from_str(&read_transport_line_from(&mut client_reader)).expect("reply json");
+        assert_eq!(first.id, "remote-1");
+        let error = first.error.expect("error");
+        assert_eq!(error.code, "rpc_protocol_error");
+        assert!(error.message.contains("256"), "{}", error.message);
+        assert_eq!(first_event.error_code.as_deref(), Some("rpc_protocol_error"));
+        let second: RpcResponse =
+            serde_json::from_str(&read_transport_line_from(&mut client_reader)).expect("reply json");
+        assert_eq!(second.id, at_bound);
+        assert!(second.ok, "{:?}", second.error);
+        assert!(second_event.ok);
+    }
+
+    /// A writer that takes a few bytes and then fails, as a socket does when
+    /// the peer goes away half way through a reply.
+    struct FailsHalfWay(usize);
+
+    impl Write for FailsHalfWay {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if self.0 == 0 {
+                return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "peer gone"));
+            }
+            let taken = buf.len().min(self.0);
+            self.0 -= taken;
+            Ok(taken)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_write_that_fails_half_way_is_reported_and_closes_the_connection() {
+        let response = rpc_serve_error_response("half", "rpc_internal", "x");
+        let (_, written) = write_rpc_serve_response(&mut FailsHalfWay(10), response.clone());
+        assert!(!written);
+        let (_, written) = write_rpc_serve_response(&mut Vec::new(), response.clone());
+        assert!(written);
+        let event = |code: &str| {
+            let response = rpc_serve_error_response("e", code, "x");
+            rpc_serve_event("n", 1, "p", "e".to_string(), "status", None, None, &response)
+        };
+        for code in ["rpc_read_error", "rpc_worker_panic"] {
+            assert!(rpc_serve_connection_must_close(&event(code)), "{code}");
+        }
+        assert!(rpc_serve_connection_must_close(&with_write_outcome(event("rpc_internal"), false)));
+        assert!(!rpc_serve_connection_must_close(&with_write_outcome(event("rpc_internal"), true)));
+        assert!(!rpc_serve_connection_must_close(&event("rpc_response_too_large")));
+    }
+
+    fn at_bound_for_writer() -> String {
+        "b".repeat(256)
+    }
+
+    /// A reply that cannot be written ends the connection: the event says so
+    /// and the server stops reading from it, so no later reply follows a
+    /// partial line.
+    #[test]
+    fn a_reply_write_that_fails_closes_the_connection() {
+        let (mut client, server) = connected_pair();
+        for id in ["first", "second"] {
+            write_json_line(&mut client, &RpcRequest::empty(id, "status")).expect("send request");
+        }
+        server
+            .shutdown(std::net::Shutdown::Write)
+            .expect("shut the write side");
+        server
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("server read timeout");
+        let mut context = child_dispatch_limit_tests::child_dispatch_test_context(8, 8);
+        cache_status(&context, status_with_revision("test-revision".to_string()));
+        let mut reader = BufReader::new(RpcServeDeadlineStream::new(server, 10_000));
+        let event = handle_rpc_serve_connection(&mut reader, 1, &mut context);
+        assert_eq!(event.error_code.as_deref(), Some("rpc_write_error"));
+        // The read side is shut too: a read ends at once instead of waiting for
+        // the client, which still holds the connection open.
+        let mut byte = [0_u8; 1];
+        let read = reader.get_mut().tcp_stream_mut().read(&mut byte);
+        assert!(matches!(read, Ok(0)), "{read:?}");
+    }
+
+    fn read_transport_line_from(reader: &mut BufReader<TcpStream>) -> String {
+        let mut line = String::new();
+        reader.read_line(&mut line).expect("read reply");
+        assert!(!line.is_empty(), "connection closed without a reply");
+        line
     }
 }
 
