@@ -1757,11 +1757,18 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 postfiat_types::solana_exit::payout_fields(&kind)?;
                 kind
             };
-            let amendment = ratify_governance(RatifyGovernanceOptions {
+            // The validators that will sign; by default every declared validator.
+            let support = split_csv(flag_value(flags, "--support").unwrap_or(""));
+            let support = if support.is_empty() {
+                validators.clone()
+            } else {
+                support
+            };
+            let amendment = ratify_solana_exit_decision(RatifyGovernanceOptions {
                 data_dir: PathBuf::from(
                     flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR),
                 ),
-                support: validators.clone(),
+                support,
                 validators,
                 kind,
                 value: 1,
