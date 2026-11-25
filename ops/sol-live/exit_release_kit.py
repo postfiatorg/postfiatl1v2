@@ -9,10 +9,32 @@ import shutil
 import subprocess
 from exit_setup import ROOT, fleet, rpc, save, six
 
-# The release now live and the one it replaced. The first exit release rolled over main-r64.
-OLD = os.getenv("EXIT_OLD_RELEASE", "main-r64-20261121")
-OLDER = os.getenv("EXIT_OLDER_RELEASE", "sol-release6-4-20261119")
-KIT = Path.home() / "var" / OLD
+# Kits live in ~/var/<release id>.
+KIT_ROOT = Path.home() / "var"
+
+
+def predecessors(environ=None):
+    """The release now live (EXIT_OLD_RELEASE) and the one it replaced (EXIT_OLDER_RELEASE). Both
+    must be named and differ: there is no default, so a stale name cannot be used silently."""
+    environ = os.environ if environ is None else environ
+    names = []
+    for name in ("EXIT_OLD_RELEASE", "EXIT_OLDER_RELEASE"):
+        value = environ.get(name, "")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value):
+            raise ValueError(f"Set {name} to that release's id; there is no default.")
+        names.append(value)
+    if names[0] == names[1]:
+        raise ValueError("EXIT_OLD_RELEASE and EXIT_OLDER_RELEASE must differ.")
+    return tuple(names)
+
+
+def next_env(text, old, older, new):
+    """The predecessor's env with the live release renamed to `new` and the replaced one to the
+    live one. Both names must occur in it; a replace that finds nothing is refused."""
+    for name in (old, older):
+        if name not in text:
+            raise ValueError(f"{name} does not occur in the predecessor's env.")
+    return text.replace(old, new).replace(older, old)
 
 
 def main():
@@ -22,7 +44,9 @@ def main():
     args = p.parse_args()
     if not re.fullmatch(r"sol-exit-[a-z0-9-]+", args.release):
         p.error("use a fresh sol-exit-* release id")
-    dest = KIT.parent / args.release
+    OLD, OLDER = predecessors()
+    KIT = KIT_ROOT / OLD
+    dest = KIT_ROOT / args.release
     head = fleet()
     if (
         head["build_git_revision"]
@@ -51,12 +75,7 @@ def main():
             }
         ),
     )
-    env = (
-        (KIT / "env")
-        .read_text()
-        .replace(OLD, args.release)
-        .replace(OLDER, OLD)
-    )
+    env = next_env((KIT / "env").read_text(), OLD, OLDER, args.release)
     (dest / "env").write_text(env)
     for name in ("stage.sh", "roll-rest.sh", "deploy_host.sh", "restore-watchdog.sh"):
         script = (KIT / name).read_text().replace(str(KIT) + "/env", str(dest) + "/env")

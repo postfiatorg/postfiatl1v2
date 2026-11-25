@@ -50,7 +50,9 @@ oncall="$HOME/.config/postfiat/sol-exit-oncall.env"
 tmp=$(mktemp "${oncall}.XXXXXXXX")
 printf 'cd -- %q\nexport REV=%q H=%q KIT=%q\n' "$PWD" "$REV" "$H" "$KIT" > "$tmp"
 mv -T "$tmp" "$oncall"
-python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
+# Name the live release and the one it replaced; the kit has no defaults and refuses either missing.
+EXIT_OLD_RELEASE=<live release id> EXIT_OLDER_RELEASE=<release it replaced> \
+  python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
 export ARCHIVE="$KIT/anchor-replay" INTEGRITY="$EXIT_WORK/replay/source/.integrity.key"
 export FAUCET="$EXIT_WORK/replay/source/faucet_account.json"
 mkdir -m700 "$ARCHIVE"
