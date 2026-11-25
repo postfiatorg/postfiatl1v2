@@ -10,6 +10,7 @@ import exit_setup
 class VerifierCodeTest(unittest.TestCase):
     def test_cluster_refuses_while_the_rebuilt_verifier_is_unpinned(self):
         with (
+            patch.object(exit_setup, "VERIFIER_SHA256", None),
             patch.object(payout, "ExitCluster", return_value=Mock()),
             patch.object(payout, "check_payout_authorities"),
             patch.object(payout, "profile_code", return_value="0x" + "3b" * 32),

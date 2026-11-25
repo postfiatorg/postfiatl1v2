@@ -47,7 +47,7 @@ LIGHT = pda(VERIFIER, b"egress-light")
 # initialized with the custody route below. Set VERIFIER_SHA256 to the reviewed rebuild's
 # "0x<sha256>" after it is deployed; until then setup and rehearsal refuse.
 VERIFIER_UNPINNED = "the rebuilt verifier's hash is not pinned yet"
-VERIFIER_SHA256 = None
+VERIFIER_SHA256 = "0x3406becc6db7ba7c250f8db55dc43965656093bb4ceb3e330d2f452edd465fdf"
 
 
 def verifier_pin():
