@@ -1,6 +1,7 @@
 """Low-credit alert against a stubbed Vast CLI; no provider call, no hook call."""
 import importlib.util
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -176,5 +177,52 @@ class FixRoundTests(unittest.TestCase):
             self.assertTrue(prover_credit.service_failed('prover-credit-alert.service',self.state,self.send))
         self.assertEqual(len(self.sent),2)
         self.assertIn('prover-credit-alert.service failed',self.sent[1]);self.assertIn('timeout',self.sent[1])
+
+class ThirdRoundTests(unittest.TestCase):
+    setUp,send,run_check=CreditTests.setUp,CreditTests.send,CreditTests.run_check
+
+    def test_the_timeouts_fit_well_inside_the_unit_start_limit(self):
+        unit=(Path(__file__).with_name('prover-credit-alert.service')).read_text()
+        limit=re.search(r'^TimeoutStartSec=(\d+)min$',unit,re.M);self.assertIsNotNone(limit,'TimeoutStartSec in minutes')
+        hook=max(int(v) for v in re.findall(r'timeout=(\d+)',Path(__file__).with_name('reading_alert.py').read_text().split('def notify',1)[1].split('def ',1)[0]))
+        worst=2*prover_credit.VASTAI_TIMEOUT_SECONDS+hook
+        self.assertLessEqual(worst+120,int(limit.group(1))*60,(worst,limit.group(1)))
+
+    def test_a_delivered_report_is_written_before_anything_else(self):
+        order=[]
+        real_write=prover_credit.write
+        def send(line):order.append('send');return 'sent'
+        def write(path,value):order.append('write');real_write(path,value)
+        with patch.object(prover_credit,'write',write),patch('builtins.print',lambda *a,**k:order.append('print')):
+            prover_credit.check(24,6,self.state,api(10.0,1.0),send)
+        self.assertEqual(order[:2],['send','write'],order)
+
+    def test_an_undelivered_report_is_not_marked_handled_and_the_failure_unit_says_so(self):
+        with patch.dict('os.environ',INVOCATION_ID='run-7'):
+            result=self.run_check(api(10.0,1.0),send=lambda line:'hook exited 1')
+        self.assertFalse(result['ok'])
+        self.assertNotEqual(json.loads(self.state.read_text()).get('handled_invocation'),'run-7')
+        with patch.dict('os.environ',MONITOR_INVOCATION_ID='run-7',MONITOR_SERVICE_RESULT='exit-code'),patch('sys.stdout'),patch('sys.stderr'):
+            self.assertTrue(prover_credit.service_failed('prover-credit-alert.service',self.state,self.send))
+        self.assertEqual(len(self.sent),1)
+        self.assertNotIn('was not checked',self.sent[0]);self.assertIn('not delivered',self.sent[0])
+
+    def test_a_delivered_report_is_marked_handled(self):
+        with patch.dict('os.environ',INVOCATION_ID='run-8'):self.run_check(api(10.0,1.0))
+        self.assertEqual(json.loads(self.state.read_text()).get('handled_invocation'),'run-8')
+
+    def test_the_module_has_no_nested_same_quote_f_string(self):
+        """Python before 3.12 cannot parse an f-string that reuses its own quote inside braces."""
+        source=Path(__file__).with_name('prover_credit.py').read_text()
+        self.assertNotIn("{f'",source);self.assertNotIn('{f"',source)
+
+    def test_any_piece_of_the_key_of_16_characters_is_removed(self):
+        import secrets as random
+        key=random.token_hex(32)
+        for piece in (key[20:44],key[5:21],key[30:60]):
+            self.assertNotIn(piece,prover_credit.redact('e '+piece+' x',[key]))
+        wrapped='e '+key[:20]+' '+key[20:44]+' '+key[44:]
+        out=prover_credit.redact(wrapped,[key])
+        for piece in (key[:20],key[20:44],key[44:]):self.assertNotIn(piece,out)
 
 if __name__=='__main__':unittest.main()
