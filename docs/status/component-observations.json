@@ -32,6 +32,7 @@
     "conclusion": "failure",
     "evidence": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/45684553972",
     "comparison": "skipped",
-    "run_number": 211
+    "run_number": 211,
+    "job": "failure"
   }
 }

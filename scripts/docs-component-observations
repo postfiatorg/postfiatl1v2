@@ -6,7 +6,8 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGES = ("docs/index.md", "docs/status/network-status.md", "docs/runbooks/public-operator-runbook.md")
+PAGES = ("docs/index.md", "docs/status/network-status.md", "docs/status/chain-state-current.md",
+         "docs/runbooks/public-operator-runbook.md")
 START = "<!-- component-observations -->"
 END = "<!-- /component-observations -->"
 
@@ -17,8 +18,9 @@ def render(records):
     for key in ("fleet", "authority", "identity"):
         item = records[key]
         if key == "identity":
-            status = "Verified" if item["conclusion"] == "success" else "Unverified"
-            result = f"{status} (hosted comparison: {item['conclusion']})"
+            workflow, comparison = item["conclusion"], item.get("comparison", "unknown")
+            status = "Verified" if workflow == item.get("job") == comparison == "success" else "Unverified"
+            result = f"{status} (workflow {workflow}, comparison {comparison})"
         else:
             result = item["result"]
         height = item["height"] if item["height"] is not None else "n/a"
@@ -40,13 +42,9 @@ def identity_observation(run, jobs, previous):
              if step["name"] == "Compare with the committed identity"]
     comparison = steps[0]["conclusion"] if len(identity_jobs) == len(steps) == 1 else "missing"
     conclusion = run["conclusion"]
-    if conclusion == "success":
-        if len(identity_jobs) != 1 or comparison != "success":
-            conclusion = comparison
-        else:
-            conclusion = identity_jobs[0]["conclusion"]
+    job_result = identity_jobs[0]["conclusion"] if len(identity_jobs) == 1 else "missing"
     return dict(previous, source_revision=run["head_sha"], observed_at=run["updated_at"],
-                conclusion=conclusion, comparison=comparison, evidence=run["html_url"],
+                conclusion=conclusion, job=job_result, comparison=comparison, evidence=run["html_url"],
                 run_number=run["run_number"])
 
 
