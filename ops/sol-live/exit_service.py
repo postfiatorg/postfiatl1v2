@@ -215,9 +215,14 @@ class Journal:
             db.execute("DELETE FROM status_fault")
             db.execute("INSERT INTO status_fault(tries, since, until, alerted) VALUES(:tries, :since, :until, :alerted)",
                        self.status_fault)
-            # The burn's next try is the end of the pause, which its row then shows.
-            db.execute("UPDATE jobs SET detail=?, due=? WHERE burn_tx_id=? AND stage!='paid'",
-                       (STATUS_TOO_LARGE_DETAIL, self.status_fault["until"], burn))
+            # No queued burn is tried before the pause ends, so that is every queued burn's next try.
+            # A burn without a named wait shows the pause as its reason; a named wait keeps its own.
+            db.execute("UPDATE jobs SET due=MAX(COALESCE(due, 0), ?) WHERE stage!='paid' AND (stage='queued' OR burn_tx_id=?)",
+                       (self.status_fault["until"], burn))
+            db.execute(
+                "UPDATE jobs SET detail=? WHERE stage!='paid' AND (burn_tx_id=? OR (stage='queued' AND "
+                "(detail IS NULL OR detail IN (?, ?, ?))))",
+                (STATUS_TOO_LARGE_DETAIL, burn, "Retry scheduled.", TOO_LARGE_DETAIL, STATUS_TOO_LARGE_DETAIL))
         return alert
 
     def clear_status_fault(self):
