@@ -349,6 +349,56 @@ Path(flag["--authorization-file"]).write_text("auth")
 """
 
 
+
+class SignDoorTest(unittest.TestCase):
+    """`sign-door`: the node user signs what the settlement loop handed in through the restricted
+    door only from this host's own fresh review, and leaves the result for the door to return."""
+
+    def setUp(self):
+        SignCommandTest.setUp(self)
+        root = Path(self.tmp.name)
+        self.inbox, self.outbox = root / "inbox", root / "outbox"
+        self.inbox.mkdir()
+        self.outbox.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def hand_in(self, kind=PAID_KIND, **request):
+        import hashlib
+        sha = hashlib.sha256(kind.encode()).hexdigest()
+        body = dict(amendment=dict(kind=kind, value=1, activation_height=1901), proposal_slot=1901,
+                    expires_at_height=1931, **request)
+        (self.inbox / f"{sha}.json").write_text(json.dumps(body))
+        return sha
+
+    def result(self, sha):
+        return json.loads((self.outbox / f"{sha}.json").read_text())
+
+    def test_a_reviewed_decision_is_signed_and_its_signature_returned(self):
+        sha = self.hand_in()
+        rv.sign_door(self.cfg, self.inbox, self.outbox)
+        self.assertEqual(self.result(sha), dict(decision_sha256=sha, proposal_slot=1901, expires_at_height=1931,
+                                                authorization="auth"))
+        argv = json.loads(self.binary.with_name("argv.json").read_text())
+        self.assertEqual(argv[argv.index("--proposal-slot") + 1], "1901")
+        self.assertTrue(argv[argv.index("--amendment-file") + 1].startswith(str(self.data)))
+
+    def test_a_decision_this_host_did_not_review_is_refused_with_its_reason(self):
+        other = "solana_exit_r8_paid:" + "ee" * 48 + ":9:0:" + "ff" * 64
+        sha = self.hand_in(other)
+        rv.sign_door(self.cfg, self.inbox, self.outbox)
+        self.assertIn("no review of this decision on validator-3", self.result(sha)["refused"])
+        self.assertFalse(self.binary.with_name("argv.json").exists())
+
+    def test_an_entry_whose_name_is_not_its_decision_is_refused(self):
+        sha = self.hand_in()
+        (self.inbox / f"{sha}.json").rename(self.inbox / f"{'00' * 32}.json")
+        rv.sign_door(self.cfg, self.inbox, self.outbox)
+        self.assertIn("another decision", self.result("00" * 32)["refused"])
+        self.assertFalse(self.binary.with_name("argv.json").exists())
+
+
 class SignCommandTest(unittest.TestCase):
     """`sign` runs the node's own signing command for exactly the reviewed amendment file."""
 

@@ -2,7 +2,9 @@
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -28,6 +30,45 @@ def remote(i, args, data=None):
         check=True,
         timeout=150,
     ).stdout
+
+
+# The settlement loop's restricted path: its own key, the reviewer's user, a forced command that
+# accepts only "review" and "result" (exit_review_door.py). No root login and no command.
+DOOR_USER = "pf-sol-exit-review"
+DOOR_KEY = Path(os.environ.get("PFT_SETTLER_SSH_KEY", str(Path.home() / ".ssh/pft-sol-exit-settler")))
+DOOR_POLLS = 40
+DOOR_PAUSE = 3
+
+
+def door(i, request):
+    """One request through host i's restricted door; a named refusal raises ReviewRefused."""
+    out = subprocess.run(
+        ["ssh", "-T", "-oBatchMode=yes", "-oConnectTimeout=8", "-oIdentitiesOnly=yes",
+         "-i", str(DOOR_KEY), f"{DOOR_USER}@{HOSTS[i]}"],
+        input=json.dumps(request), text=True, capture_output=True, timeout=60,
+    )
+    if out.returncode == 2:
+        raise ReviewRefused(((out.stderr or "").strip().splitlines() or ["refused"])[-1])
+    if out.returncode != 0:
+        raise RuntimeError(f"validator-{i} door: exit {out.returncode}: {(out.stderr or '').strip()[-200:]}")
+    return json.loads(out.stdout)
+
+
+def door_sign(i, amend, h):
+    """Hand the drafted decision to host i's own reviewer and wait for its result: the host's
+    signature for this slot, or its refusal with the reason."""
+    sha = hashlib.sha256(amend["kind"].encode()).hexdigest()
+    door(i, dict(request="review", amendment=amend, proposal_slot=h, expires_at_height=h + 30))
+    for _ in range(DOOR_POLLS):
+        result = door(i, dict(request="result", decision_sha256=sha))
+        if result.get("proposal_slot") == h and result.get("expires_at_height") == h + 30:
+            if "refused" in result:
+                raise ReviewRefused(result["refused"])
+            if "error" in result:
+                raise RuntimeError(f"validator-{i}: {result['error']}")
+            return json.loads(result["authorization"])
+        time.sleep(DOOR_PAUSE)
+    raise RuntimeError(f"validator-{i}: no review result for this decision in time")
 
 
 REVIEW_READER = """import os, stat, sys
@@ -194,7 +235,9 @@ def read_quorum(kind, n=6, *, rules=None):
 
 
 def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout=None,
-           rules=None, refund=None):
+           rules=None, refund=None, restricted=False):
+    """`restricted`: the hosts' signatures come only through their restricted doors (`door_sign`),
+    never through a root login to the signing step."""
     need = read_quorum(kind, rules=rules)
     head = fleet(need)
     if head["build_git_revision"] != (compatible or R6):
@@ -377,7 +420,12 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
                 raise reviews[i]
         reviewed = set(reviews)
 
+    if restricted and not independent:
+        raise ValueError("The restricted path signs only paid and refund under the second release.")
+
     def sign(i):
+        if restricted:
+            return door_sign(i, amend, h)
         if i != lead:
             put(i, "amend", amend)
         if independent:

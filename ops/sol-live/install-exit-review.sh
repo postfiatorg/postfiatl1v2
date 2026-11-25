@@ -2,6 +2,10 @@
 # Install the per-host Solana exit settlement reviewer on ONE validator host, as root on that host:
 #   install-exit-review.sh VALIDATOR NODE_RPC_PORT SOLANA_RPC_URL ARCHIVE
 #   e.g. install-exit-review.sh validator-3 27653 https://<this host's own Solana endpoint> /root/exit-review.tar
+# Optionally add  --settler-key FILE  (the settlement loop's public key, printed by
+# install-exit-settler.sh) to open the loop's restricted door: one `restrict,command=` line in the
+# reviewer user's authorized_keys whose forced command (exit_review_door.py) accepts only "hand in
+# a decision for this host's review" and "return this host's result"; no shell, file or forwarding.
 # ARCHIVE is `git archive -o exit-review.tar <reviewed commit> ops/sol-live`, copied to the host
 # (RUNBOOK-LIVE.md, "Independent settlement reviews").
 # The reviewer runs as its own user, which alone can read its verdict key. The node user, which
@@ -11,10 +15,18 @@ set -euo pipefail
 umask 077
 root=${INSTALL_ROOT:-}
 fail() { echo "install-exit-review: $*" >&2; exit 1; }
-if [[ $# != 4 || ! $1 =~ ^validator-[0-5]$ || ! $2 =~ ^[0-9]+$ || ! $3 =~ ^https://[^\"\\[:space:]]+$ || ! -f $4 ]]; then
-    fail "usage: install-exit-review.sh validator-<0..5> NODE_RPC_PORT https://SOLANA_RPC_URL ARCHIVE"
+if [[ ! ( $# == 4 || ( $# == 6 && $5 == --settler-key && -f $6 ) ) || ! $1 =~ ^validator-[0-5]$ || ! $2 =~ ^[0-9]+$ \
+      || ! $3 =~ ^https://[^\"\\[:space:]]+$ || ! -f $4 ]]; then
+    fail "usage: install-exit-review.sh validator-<0..5> NODE_RPC_PORT https://SOLANA_RPC_URL ARCHIVE [--settler-key FILE]"
 fi
-validator=$1 port=$2 url=$3 archive=$4
+validator=$1 port=$2 url=$3 archive=$4 settler_key=${6:-}
+settler_line=
+if [[ -n $settler_key ]]; then
+    # Exactly one ed25519 public key, nothing else: options in the file would loosen the door.
+    settler_line=$(<"$settler_key")
+    [[ $(wc -l <"$settler_key") -le 1 && $settler_line =~ ^ssh-ed25519\ [A-Za-z0-9+/]+=*(\ [A-Za-z0-9@._-]+)?$ ]] \
+        || fail "$settler_key is not one ssh-ed25519 public key line"
+fi
 user=pf-sol-exit-review
 app=$root/opt/postfiat/sol-exit-review
 etc=$root/etc/postfiat
@@ -36,9 +48,12 @@ usermod -a -G "$user" postfiat || fail "cannot add postfiat to the group $user"
 
 tmp=$(mktemp -d) || fail "cannot create a temporary directory"
 trap 'rm -rf -- "$tmp"' EXIT
+door_files=()
+[[ -n $settler_key ]] && door_files=(ops/sol-live/exit_review_door.py ops/sol-live/pft-sol-exit-sign-door.path
+                                    ops/sol-live/pft-sol-exit-sign-door.service)
 tar -xf "$archive" -C "$tmp" --no-same-owner --no-same-permissions ops/sol-live/exit_review.py \
     ops/sol-live/pft-sol-exit-review.service ops/sol-live/pft-sol-exit-review.timer \
-    ops/sol-live/exit-requirements.lock || fail "cannot read the reviewer from $archive"
+    ops/sol-live/exit-requirements.lock "${door_files[@]}" || fail "cannot read the reviewer from $archive"
 
 install -d -m755 -o root -g root "$app" || fail "cannot create $app"
 install -m644 -o root -g root "$tmp/ops/sol-live/exit_review.py" "$app/exit_review.py" || fail "cannot install the reviewer"
@@ -85,4 +100,27 @@ systemctl daemon-reload || fail "systemctl daemon-reload failed"
 systemctl start pft-sol-exit-review.service \
     || fail "the first review failed; see /var/log/pf-sol-exit-review/review.log"
 systemctl enable --now pft-sol-exit-review.timer || fail "cannot enable the timer"
+
+if [[ -n $settler_key ]]; then
+    door="/opt/postfiat/sol-exit-review/venv/bin/python -I /opt/postfiat/sol-exit-review/exit_review_door.py"
+    home=$root/var/lib/pf-sol-exit-review-ssh
+    install -m644 -o root -g root "$tmp/ops/sol-live/exit_review_door.py" "$app/exit_review_door.py" \
+        || fail "cannot install the door"
+    # The door writes the inbox as the reviewer; the node user's signing step writes the outbox.
+    install -d -m750 -o "$user" -g "$user" "$reviews/inbox" || fail "cannot create the door's inbox"
+    install -d -m750 -o postfiat -g "$user" "$reviews/outbox" || fail "cannot create the door's outbox"
+    # Root owns the key file, so neither the reviewer nor the node user can widen it. sshd runs the
+    # forced command through the user's shell, so the shell is /bin/sh; the command= line is all it runs.
+    install -d -m755 -o root -g root "$home" "$home/.ssh" || fail "cannot create $home"
+    printf 'restrict,command="%s" %s\n' "$door" "$settler_line" >"$tmp/authorized_keys" \
+        || fail "cannot write the door's key line"
+    install -m644 -o root -g root "$tmp/authorized_keys" "$home/.ssh/authorized_keys" \
+        || fail "cannot install the door's key line"
+    usermod -d /var/lib/pf-sol-exit-review-ssh -s /bin/sh "$user" || fail "cannot give $user its door"
+    install -m644 "$tmp/ops/sol-live/pft-sol-exit-sign-door.path" "$tmp/ops/sol-live/pft-sol-exit-sign-door.service" \
+        "$units/" || fail "cannot install the door's signing units"
+    systemctl daemon-reload || fail "systemctl daemon-reload failed"
+    systemctl enable --now pft-sol-exit-sign-door.path || fail "cannot enable the door's signing step"
+    echo "Settlement loop's restricted door open for $validator (forced command: $door)"
+fi
 echo "Reviewer installed for $validator; verdicts in /var/lib/postfiat-exit-review, log /var/log/pf-sol-exit-review/review.log"

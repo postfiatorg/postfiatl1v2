@@ -589,6 +589,57 @@ def sign(cfg, amendment_file, proposal_slot, expires_at_height, output, run=subp
     return output
 
 
+DOOR_INBOX = Path("/var/lib/postfiat-exit-review/inbox")
+DOOR_OUTBOX = Path("/var/lib/postfiat-exit-review/outbox")
+
+
+def door_result(outbox, sha, request, **result):
+    body = dict(result, decision_sha256=sha, proposal_slot=request.get("proposal_slot"),
+                expires_at_height=request.get("expires_at_height"))
+    tmp = Path(outbox) / f"{sha}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
+    with os.fdopen(fd, "w") as stream:
+        json.dump(body, stream, sort_keys=True)
+    os.replace(tmp, Path(outbox) / f"{sha}.json")
+
+
+def sign_door(cfg, inbox=DOOR_INBOX, outbox=DOOR_OUTBOX, run=subprocess.run):
+    """The node user's step behind the restricted door (exit_review_door.py): sign each handed-in
+    decision only from this host's own fresh review (`sign`), and leave the signature or the refusal
+    for the door to return. An entry already answered for the same slot is not signed again."""
+    work = Path(cfg.data_dir) / "sol-exit-door"
+    work.mkdir(mode=0o700, exist_ok=True)
+    for entry in sorted(Path(inbox).glob("*.json")):
+        sha = entry.stem
+        try:
+            request = json.loads(read_regular(entry))
+        except (OSError, ValueError) as error:
+            print(f"sign-door: unreadable entry {entry.name}: {error}", file=sys.stderr)
+            continue
+        answered = Path(outbox) / f"{sha}.json"
+        if answered.exists():
+            done = json.loads(read_regular(answered))
+            if (done.get("proposal_slot"), done.get("expires_at_height")) == (
+                    request.get("proposal_slot"), request.get("expires_at_height")):
+                continue
+        try:
+            amendment = request["amendment"]
+            require(isinstance(amendment, dict) and re.fullmatch(r"[0-9a-f]{64}", sha)
+                    and hashlib.sha256(str(amendment.get("kind")).encode()).hexdigest() == sha,
+                    "door: the entry names another decision than its own")
+            amend, auth = work / f"{sha}.amend", work / f"{sha}.auth"
+            amend.write_text(json.dumps(amendment))
+            sign(cfg, amend, int(request["proposal_slot"]), int(request["expires_at_height"]), auth, run=run)
+            door_result(outbox, sha, request, authorization=auth.read_text())
+            print(f"sign-door: signed {sha}", file=sys.stderr)
+        except Refused as error:
+            door_result(outbox, sha, request, refused=str(error))
+            print(f"sign-door: refused {sha}: {error}", file=sys.stderr)
+        except (RpcError, KeyError, TypeError, ValueError, OSError) as error:
+            door_result(outbox, sha, request, error=f"{type(error).__name__}: {error}")
+            print(f"sign-door: error {sha}: {error}", file=sys.stderr)
+
+
 def root_only(path, owner=0):
     """`path` and its directory are owned by root and writable by no one else, so the signing
     user (the node user) cannot replace the public key or point the config elsewhere."""
@@ -669,6 +720,7 @@ def command(argv=None):
     sub.add_parser("show-clearance", help="print this host's own fresh clearance for its node's current tip")
     sub.add_parser("scan", help="review every pending burn whose marker is written (the timer's job)")
     sub.add_parser("endpoints", help="read six hosts' configs (JSON lines on stdin) and check their providers")
+    sub.add_parser("sign-door", help="sign the decisions handed in through the restricted door (node user)")
     s = sub.add_parser("sign", help="sign exactly a reviewed decision with this host's validator key")
     s.add_argument("--amendment-file", required=True, type=Path)
     s.add_argument("--proposal-slot", required=True, type=int)
@@ -677,7 +729,10 @@ def command(argv=None):
     args = parser.parse_args(argv)
     if args.command == "endpoints":
         return endpoints([json.loads(line) for line in sys.stdin if line.strip()])
-    cfg = load_config(reviewer=args.command not in ("sign", "show-clearance"))
+    cfg = load_config(reviewer=args.command not in ("sign", "sign-door", "show-clearance"))
+    if args.command == "sign-door":
+        sign_door(cfg)
+        return 0
     if args.command == "sign":
         try:
             sign(cfg, args.amendment_file, args.proposal_slot, args.expires_at_height, args.authorization_file)

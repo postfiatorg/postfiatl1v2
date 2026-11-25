@@ -1,0 +1,15 @@
+[Unit]
+Description=Sign handed-in Solana exit decisions only from this host's own fresh review
+
+[Service]
+Type=oneshot
+# The node user signs, as with `exit_review.py sign`: it reads only the reviewer's public key, the
+# config and the verdicts, and signs a handed-in decision only when this host's own reviewer approved
+# exactly it. The result (signature or refusal) goes to the outbox the door returns from.
+User=postfiat
+Group=postfiat
+ExecStart=/opt/postfiat/sol-exit-review/venv/bin/python -I /opt/postfiat/sol-exit-review/exit_review.py sign-door
+TimeoutStartSec=5min
+UMask=0027
+NoNewPrivileges=yes
+PrivateTmp=yes

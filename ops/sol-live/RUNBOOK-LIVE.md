@@ -544,6 +544,8 @@ The script needs Python 3.10 or newer and `setfacl` (the `acl` package). Any fai
 
 The script runs the first review and stops if it ends in an RPC or access error.
 
+**The settlement loop's restricted door.** Add `--settler-key FILE` (the loop's public key, printed by `install-exit-settler.sh`) to the install above. The script then writes one `restrict,command="…exit_review_door.py"` line into the reviewer user's `authorized_keys` and enables `pft-sol-exit-sign-door.path`. The door reads one JSON request on stdin. It accepts exactly two: hand in a drafted paid or refund decision for this host's own review, and return this host's result. The result is its signature, its refusal with the reason, or pending. It runs no command, names no file and gives no shell, transfer or forwarding. The node user signs a handed-in decision only from this host's own fresh verdict, as `exit_review.py sign` does (`exit_review.py sign-door`). What this changes: `exit_govern.py paid --restricted` collects every host's signature through the doors and never logs in as root to sign. With fewer than five signatures nothing is settled. Drafting, assembling and the proposer's batch submission still run through `govern.py`'s root login (see "What stays open").
+
 **Check the six providers.** Use at least three different Solana providers across the six hosts. With `HOSTS` set to the six hosts, this prints each host's provider (host name only) and warns when fewer than three differ:
 
 ```bash
@@ -551,10 +553,12 @@ for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; 
 ```
 
 **What stays open.**
-- **Root ssh from the relay.** The relay host still reaches every validator host as root over ssh (`govern.py`, `remote`). Root can run the node's signing command with the validator key directly, or replace the reviewer, so a compromised relay host can still sign on all six. Only the operators can close this:
-  - give the relay a non-root key whose forced command allows only `exit_review.py sign` with its four arguments;
-  - keep each validator key readable only by the node user;
-  - remove root ssh for settlement.
+- **Root ssh from the relay.** The relay host still reaches every validator host as root over ssh (`govern.py`, `remote`). Root can run the node's signing command with the validator key directly, or replace the reviewer, so a compromised relay host can still sign on all six. The restricted door removes root from the signatures (`--restricted`). It does not remove root from three other steps:
+  - the lead host drafts the decision with its node's data directory;
+  - the lead host assembles it the same way;
+  - the proposer submits the batch round with its validator key.
+  
+  Root ssh for settlement can go only once those three have a restricted way as well. Keep each validator key readable only by the node user.
 - **Shared providers.** Independence also needs each host's Solana endpoint to be a different provider; the check above only warns.
 
 **Order, so that no payout waits unsettled** (each payout blocks the next until it is settled):

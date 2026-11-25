@@ -42,7 +42,38 @@ class ReviewedFleet(Fleet):
         return super().remote(i, args, data)
 
 
-def paid(fleet, d):
+class DoorFleet(ReviewedFleet):
+    """The installed loop's restricted path: each host's door hands the decision to its own
+    reviewer and returns its signature or refusal; no root login reaches any signing step."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.handed, self.root_signs = [], 0
+
+    def door(self, i, request):
+        if i == LOST:
+            raise RuntimeError(f"validator-{i} unreachable")
+        if request["request"] == "review":
+            self.handed.append(i)
+            self.pending = request
+            return dict(state="handed in")
+        kind = self.pending["amendment"]["kind"]
+        approved = self.approved(i) if self.approved else {kind}
+        slot = dict(proposal_slot=self.pending["proposal_slot"], expires_at_height=self.pending["expires_at_height"])
+        if kind not in approved:
+            return dict(slot, refused=f"no review of this decision on validator-{i}")
+        return dict(slot, authorization=json.dumps(dict(v=i)))
+
+    def remote(self, i, args, data=None):
+        if any(str(a) == govern.REVIEWER for a in args) or "governance-authorization-sign" in map(str, args):
+            self.root_signs += 1
+        return super().remote(i, args, data)
+
+    def patches(self, state):
+        return super().patches(state) + [patch.object(govern, "door", self.door)]
+
+
+def paid(fleet, d, *extra):
     from test_exit_lost_validator import payout
 
     burn = "e7" * 48
@@ -70,8 +101,30 @@ def paid(fleet, d):
         patch.object(exit_canary, "signature", return_value="sig"),
     ):
         run(fleet, d, ["paid", "--revision", REV, "--release-height", "1", "--paid", str(Path(d, "paid.json")),
-                       "--output", str(Path(d, "out.json"))])
+                       "--output", str(Path(d, "out.json")), *extra])
     return ref["kind"]
+
+
+class RestrictedPathTest(unittest.TestCase):
+    def test_the_installed_loop_settles_through_the_hosts_doors_only(self):
+        fleet = DoorFleet()
+        with tempfile.TemporaryDirectory() as d:
+            paid(fleet, d, "--restricted")
+            self.assertEqual(len(read(Path(d, "out.json"))["signers"]), 5)
+        self.assertEqual(sorted(set(fleet.handed)), [0, 1, 2, 4, 5])
+        self.assertEqual(fleet.root_signs, 0)
+        self.assertEqual(fleet.status["redemptions"][0]["state"], "settled")
+
+    def test_fewer_than_five_signatures_through_the_doors_settle_nothing(self):
+        for approving in ((0, 1, 2), (0, 1, 2, 4)):
+            fleet = DoorFleet(approved=lambda i, a=approving: {fleet.kind} if i in a else set())
+            with self.subTest(approving=approving), tempfile.TemporaryDirectory() as d:
+                with self.assertRaisesRegex(RuntimeError, "required"):
+                    paid(fleet, d, "--restricted")
+                self.assertFalse(Path(d, "out.json").exists())
+                self.assertEqual(fleet.status["redemptions"][0]["state"], "pending")
+                self.assertFalse(list(Path(d).glob("governance/*/accepted.json")))
+                self.assertEqual(fleet.root_signs, 0)
 
 
 class IndependentSignTest(unittest.TestCase):

@@ -241,7 +241,7 @@ SETTLED_READS = 10
 SETTLED_PAUSE = 6
 
 
-def settle_paid(paid, need, rules, revision, parent, **expect):
+def settle_paid(paid, need, rules, revision, parent, restricted=False, **expect):
     """The one settlement path for every withdrawal: review the finalized payout against the
     agreed redemption record (`exit_canary.reviewed_payout`), propose the paid decision (each
     host's own reviewer decides whether it signs; the chain needs `need` signatures), then
@@ -250,7 +250,8 @@ def settle_paid(paid, need, rules, revision, parent, **expect):
     from exit_canary import check_settlement, agreed_redemption, reviewed_payout
 
     ref, before = reviewed_payout(paid, need, rules=rules, **expect)
-    result = govern("exit-paid", compatible=revision, qualified_parent=parent, payout=ref, rules=rules)
+    result = govern("exit-paid", compatible=revision, qualified_parent=parent, payout=ref, rules=rules,
+                    restricted=restricted)
     for attempt in range(SETTLED_READS):
         after = agreed_redemption(paid["burn_tx_id"], need, rules["covered"])
         if after["record"]["state"] != "pending":
@@ -274,6 +275,8 @@ def main():
             which = p.add_mutually_exclusive_group(required=True)
             which.add_argument("--burn")
             which.add_argument("--paid", type=Path)
+            # The installed settlement loop: signatures only through the hosts' restricted doors.
+            p.add_argument("--restricted", action="store_true")
         if name == "refund":
             p.add_argument("--burn", required=True)
         if name in ("close", "paid", "refund"):
@@ -384,7 +387,8 @@ def main():
 
         pins = dict(expect_owner=OWNER, expect_destination=DEST) if args.paid else {}
         paid = read(args.paid) if args.paid else dict(burn_tx_id=args.burn)
-        result = settle_paid(paid, need, rules, args.revision, parent_of(head), **pins)
+        result = settle_paid(paid, need, rules, args.revision, parent_of(head),
+                             restricted=args.restricted, **pins)
         save(args.output, result)
     elif args.action == "refund":
         # Only a pending, unsettled burn whose Solana marker reads cancelled at a finalized slot.
