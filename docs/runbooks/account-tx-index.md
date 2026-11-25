@@ -130,6 +130,66 @@ After it, status reports both indexes usable and reads return
 `index_used: true`. The build removes the old shard files. Rows for history
 pruned below the retained base are not rebuilt.
 
+### Rebuild and verify a validator generation
+
+Coordinate a quiet window between certified rounds. The account index build reads
+several snapshots and replaces derived cache files. The full logical scan holds
+the redb lease for its duration. Maintain one validator at a time while the other
+five can serve. Preserve the running validator binary. Build the separate
+maintenance executable from the reviewed storage source and record its revision
+and SHA-256 alongside the validator binary hash.
+
+```bash
+cargo build --locked --release -p postfiat-storage --bin postfiat-storage-verify
+sha256sum target/release/postfiat-storage-verify
+```
+
+On each validator, run as the service account with its existing data directory.
+Set `NODE` to the deployed validator executable, `VERIFY` to the maintenance
+executable and `DATA` to that validator's data directory. Set `EVIDENCE` to
+a fresh directory outside the live data. Set `CHAIN` and `GENESIS` from the
+agreed network identity and `VALIDATOR` to the expected node ID, for example
+`validator-0`. The network status records the controlled devnet pins.
+[Network identity](../status/network-status.md)
+
+```bash
+set -eu
+test -d "$DATA" && test -s "$DATA/genesis.json"
+mkdir -p "$EVIDENCE"
+date -u +%FT%TZ > "$EVIDENCE/start-utc"
+sha256sum "$NODE" "$VERIFY" > "$EVIDENCE/executables.sha256"
+"$NODE" status --data-dir "$DATA" > "$EVIDENCE/before.json"
+jq -e --arg c "$CHAIN" --arg g "$GENESIS" --arg n "$VALIDATOR" \
+  '.chain_id == $c and .genesis_hash == $g and .node_id == $n' "$EVIDENCE/before.json"
+"$NODE" account-tx-index-build --data-dir "$DATA" > "$EVIDENCE/index-build.json"
+"$NODE" account-tx-index-status --data-dir "$DATA" > "$EVIDENCE/index-status.json"
+"$VERIFY" --data-dir "$DATA" --chain-id "$CHAIN" --genesis-hash "$GENESIS" \
+  > "$EVIDENCE/integrity.json"
+"$NODE" status --data-dir "$DATA" > "$EVIDENCE/after.json"
+date -u +%FT%TZ > "$EVIDENCE/end-utc"
+
+jq -e '.schema == "postfiat-account-tx-index-v4"' "$DATA/account_tx_index.json"
+jq -e '.schema == "postfiat-account-tx-disk-index-v4"' "$DATA/account_tx_index_meta.json"
+jq -e -n --slurpfile before "$EVIDENCE/before.json" --slurpfile after "$EVIDENCE/after.json" \
+  --slurpfile i "$EVIDENCE/index-status.json" --slurpfile v "$EVIDENCE/integrity.json" '
+  $after[0] as $a | $i[0] as $i | $v[0] as $v |
+  ($before[0].block_tip_hash == $a.block_tip_hash) and
+  ($i.index_usable and $i.disk_index_usable and $i.index_lag_blocks == 0 and $i.disk_index_lag_blocks == 0) and
+  ($i.tip_hash == $a.block_tip_hash and $i.disk_tip_hash == $a.block_tip_hash) and
+  ($v.verification.finalized_height == $a.block_height and $v.metadata.finalized_block_hash == $a.block_tip_hash) and
+  ($v.metadata.last_full_verification_height == $a.block_height and $a.storage.last_full_verification_height == $a.block_height) and
+  ($before[0].storage.migration_packet_root == $v.metadata.migration_packet_root and
+   $before[0].storage.generation == $v.metadata.generation and $v.metadata.generation == $a.storage.generation)'
+```
+
+Confirm the validator's RPC `account_tx_index_status` also reports both indexes
+usable at its current tip. Save its response and the validator ID with the local
+reports. Continue to the next validator after the current host is serving and
+agrees with its peers. For a busy lease or a moved tip, retry this host in the
+next quiet window. For any integrity, chain or generation mismatch, retain the
+evidence and investigate before continuing. A historical verification marker
+records the scanned height even after the next block advances the tip.
+
 ## Build
 
 ```bash
