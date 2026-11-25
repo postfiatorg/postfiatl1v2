@@ -351,3 +351,19 @@ $OUT/
 Run the lane verifier only after all required records exist. It fails closed on
 missing proof/finality/replay/identity evidence, non-unique authorization, or
 any mismatch in cap, supply, recipient credit, epoch, or conservation.
+
+## Ethereum withdrawal worker recovery
+
+On the coordinator, query `GET /api/bridge/withdrawals/readiness` on loopback port 18084. `bucket_ready` describes the current ingress bucket. `payout_ready` checks the worker, local proof and signing files, the Ethereum vault and verifier binding, operator gas and outstanding job errors. `last_payment_recorded_at` gives the most recent payout recorded locally. A remote proof or payout can still fail after a successful preflight. Inspect `blocked_jobs` and `stalled_jobs` (an active stage unchanged for an hour) with `GET /api/bridge/withdrawals/<burn_tx_id>`.
+
+The worker resumes interrupted jobs on startup. Each Ethereum checkpoint or payout has a mode-0600 `*.intent.json` beside its receipt under `evidence/withdraw/jobs/<burn_tx_id>/`. It records the signed transaction, nonce and hash before the first broadcast. Recovery looks up that hash. It can retransmit the identical signed bytes when the nonce is unused. The sender records the mined block and its hash. The worker marks a payout paid only after its Ethereum RPC reports the block finalized, confirms the canonical block contains the transaction, and finds the mainnet vault's matching event for this burn ID, withdrawal ID, packet digest, recipient and amount. Checkpoint advancement checks the verifier's corresponding event and native heights. `awaiting_finality_jobs` lists receipts still being checked. The worker retries on startup and every five minutes. A historical paid row without finalized evidence is rechecked read-only using its original transaction identity.
+
+For `reconciliation_required`, inspect the job detail, transaction hash and receipt on chain 1. An occupied nonce with an unknown transaction, a mined revert, or a legacy send without a recorded identity needs operator review. Preserve the job directory and its journals. Reposting the same burn via `POST /api/bridge/withdrawals` rechecks the existing evidence. A reverted receipt continues to block that action. For multiple exits from one L1 block, each payout selects its own withdrawal ID and uses an Ethereum-accepted ancestor preceding that block.
+
+
+The coordinator obtains a one-block withdrawal witness through the validator's
+`pfusdc_egress_witness` RPC. For earlier ancestry or maintenance checkpoints it
+uses the existing validator-0 operator SSH route and executes
+`pfusdc-checkpoint-witness` locally as the service account, using the running
+RPC unit's release binary. The pinned `046008683` release contains both entry
+points. The coordinator needs operator SSH access to that host.

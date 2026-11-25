@@ -1,0 +1,48 @@
+{
+  "observer": "one best guess after conditioning on public observations",
+  "units": "basis points",
+  "examples": [
+    {
+      "weights": [
+        625,
+        625,
+        625,
+        625,
+        625,
+        625,
+        625,
+        625,
+        625,
+        625,
+        625,
+        625,
+        625,
+        625,
+        625,
+        625
+      ],
+      "best_guess": 625
+    },
+    {
+      "weights": [
+        4000,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400
+      ],
+      "best_guess": 4000
+    }
+  ]
+}

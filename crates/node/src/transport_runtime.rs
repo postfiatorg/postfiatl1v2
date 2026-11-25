@@ -892,6 +892,14 @@ pub(super) fn transport_validator_serve(
         }
         None => None,
     };
+    #[cfg(target_os = "linux")]
+    let _receipt_reader = match postfiat_node::validator_receipt_reader::Service::start(&data_dir) {
+        Ok(service) => Some(service),
+        Err(error) => {
+            eprintln!("validator receipt reader unavailable: {error}");
+            None
+        }
+    };
     transport_validator_serve_inner(
         data_dir,
         topology_file,

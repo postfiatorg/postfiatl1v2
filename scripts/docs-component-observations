@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""Generate the independently dated fleet, authority and proof-identity statements."""
+import argparse
+import json
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PAGES = ("docs/index.md", "docs/status/network-status.md", "docs/runbooks/public-operator-runbook.md")
+START = "<!-- component-observations -->"
+END = "<!-- /component-observations -->"
+
+
+def render(records):
+    rows = ["| Component and evidence | Chain / height | Last observed | Result |",
+            "| --- | --- | --- | --- |"]
+    for key in ("fleet", "authority", "identity"):
+        item = records[key]
+        if key == "identity":
+            status = "Verified" if item["conclusion"] == "success" else "Unverified"
+            result = f"{status} (hosted comparison: {item['conclusion']})"
+        else:
+            result = item["result"]
+        height = item["height"] if item["height"] is not None else "n/a"
+        rows.append(f"| [{item['component']}]({item['evidence']}) | {item['chain']} / {height} | "
+                    f"{item['observed_at']} | {result} |")
+    return "\n\n" + "\n".join(rows) + "\n\n"
+
+
+def identity_observation(run, jobs, previous):
+    if (run["name"], run["head_repository"]["full_name"], run["head_branch"], run["event"], run["status"]) != (
+        "pft-lane-export-identity", "postfiatorg/postfiatl1v2", "main", "push", "completed"
+    ):
+        raise ValueError("Choose a completed main push from the identity workflow")
+    if (run["run_number"] < previous.get("run_number", 0)
+            or run["updated_at"] < previous["observed_at"]):
+        raise ValueError("The observation already records a later hosted result")
+    identity_jobs = [job for job in jobs if job["name"] == "build-lane-export-identity"]
+    steps = [step for job in identity_jobs for step in job.get("steps", [])
+             if step["name"] == "Compare with the committed identity"]
+    comparison = steps[0]["conclusion"] if len(identity_jobs) == len(steps) == 1 else "missing"
+    conclusion = run["conclusion"]
+    if conclusion == "success":
+        if len(identity_jobs) != 1 or comparison != "success":
+            conclusion = comparison
+        else:
+            conclusion = identity_jobs[0]["conclusion"]
+    return dict(previous, source_revision=run["head_sha"], observed_at=run["updated_at"],
+                conclusion=conclusion, comparison=comparison, evidence=run["html_url"],
+                run_number=run["run_number"])
+
+
+def github(path):
+    result = subprocess.run(["gh", "api", f"repos/postfiatorg/postfiatl1v2/{path}"],
+                            text=True, capture_output=True, check=True)
+    return json.loads(result.stdout)
+
+
+def main():
+    args = argparse.ArgumentParser()
+    mode = args.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true")
+    mode.add_argument("--identity-run", type=int, help="record a completed identity run on main")
+    options = args.parse_args()
+    check = options.check
+    record_path = ROOT / "docs/status/component-observations.json"
+    records = json.loads(record_path.read_text())
+    if options.identity_run:
+        path = f"actions/runs/{options.identity_run}"
+        run = github(path)
+        jobs = github(f"{path}/attempts/{run['run_attempt']}/jobs")
+        records["identity"] = identity_observation(run, jobs["jobs"], records["identity"])
+        record_path.write_text(json.dumps(records, indent=2) + "\n")
+    for name in PAGES:
+        path = ROOT / name
+        s = path.read_text()
+        if s.count(START) != 1 or s.count(END) != 1:
+            raise SystemExit(f"Missing or duplicate observation markers in {name}")
+        a, b = s.index(START) + len(START), s.index(END)
+        updated = s[:a] + render(records) + s[b:]
+        if check and updated != s:
+            raise SystemExit(f"Stale observations in {name}")
+        if updated != s:
+            path.write_text(updated)
+
+
+if __name__ == "__main__":
+    main()

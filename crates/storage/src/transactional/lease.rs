@@ -126,7 +126,17 @@ pub(super) fn shared_transactional_store(
     data_dir: &Path,
     integrity_key: IntegrityKey,
 ) -> StorageResult<Arc<TransactionalStore>> {
-    fs::create_dir_all(data_dir).map_err(database_error)?;
+    acquire_transactional_store(data_dir, integrity_key, true)
+}
+
+pub(super) fn acquire_transactional_store(
+    data_dir: &Path,
+    integrity_key: IntegrityKey,
+    create: bool,
+) -> StorageResult<Arc<TransactionalStore>> {
+    if create {
+        fs::create_dir_all(data_dir).map_err(database_error)?;
+    }
     let canonical_dir = fs::canonicalize(data_dir).map_err(database_error)?;
     let database_path = canonical_dir.join(TRANSACTIONAL_DATABASE_FILE);
     let registry = SHARED_STORES.get_or_init(|| Mutex::new(HashMap::new()));
@@ -145,7 +155,7 @@ pub(super) fn shared_transactional_store(
             if let Some(store) = stores.get(&database_path).and_then(Weak::upgrade) {
                 return Ok(store);
             }
-            match TransactionalStore::open_with_integrity_key(&canonical_dir, integrity_key.clone())
+            match TransactionalStore::open_writable(&canonical_dir, integrity_key.clone(), create)
             {
                 Ok(store) => {
                     let store = Arc::new(store);
