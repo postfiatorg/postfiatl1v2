@@ -1335,6 +1335,16 @@ pub(super) fn execute_governance_batch_with_replay(
                 message,
             ));
         } else if amendment.kind == postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1
+            && (amendment.quorum < postfiat_types::pq_exit_freeze_quorum(amendment.validators.len())
+                || amendment.support.len()
+                    < postfiat_types::pq_exit_freeze_quorum(amendment.validators.len()))
+        {
+            receipts.push(Receipt::rejected(
+                amendment.amendment_id.clone(),
+                "pq_exit_freeze_threshold",
+                "Emergency PQ exit freeze requires elevated pq_exit_freeze_quorum",
+            ));
+        } else if amendment.kind == postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1
             && amendment.value != 0
             && u64::from(amendment.value)
                 > block_height.saturating_add(postfiat_types::MAX_PQ_EXIT_FREEZE_BLOCKS)

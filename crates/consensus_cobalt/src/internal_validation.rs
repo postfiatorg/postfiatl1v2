@@ -1544,6 +1544,17 @@ pub fn verify_governance_amendment(
     if amendment.support.len() < amendment.quorum {
         return Err("governance amendment support is below quorum".to_string());
     }
+    if amendment.kind == postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1 {
+        let required = postfiat_types::pq_exit_freeze_quorum(amendment.validators.len());
+        if amendment.quorum < required || amendment.support.len() < required {
+            return Err(format!(
+                "pq_exit_freeze_threshold: requires elevated quorum {required}/{} (got quorum={}, support={})",
+                amendment.validators.len(),
+                amendment.quorum,
+                amendment.support.len(),
+            ));
+        }
+    }
     // A release cap amendment or committee move needs the registry
     // threshold of its declared set (design sections 4.1 and 5.1);
     // admission and execution bind that set to the active registry and the
@@ -1957,7 +1968,10 @@ fn validate_amendment_value(kind: &str, value: u32) -> Result<(), String> {
             )),
         };
     }
-    if value == 0 && !postfiat_types::is_pq_rehearsal_kind(kind) {
+    if value == 0
+        && !postfiat_types::is_pq_rehearsal_kind(kind)
+        && kind != postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1
+    {
         return Err(format!(
             "governance amendment `{kind}` value must be nonzero"
         ));

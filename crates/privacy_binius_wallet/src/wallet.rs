@@ -159,6 +159,10 @@ pub struct Wallet {
     attempts: BTreeMap<String, Pending>,
     #[serde(default)]
     latest: Option<String>,
+    /// Next rotating offset within `[recovery.first .. recovery.first + recovery.count)`
+    /// for fresh per-note Shield and change outputs so spends do not reuse one static ML-DSA key.
+    #[serde(default)]
+    next_change_offset: u32,
 }
 impl Recovery {
     pub fn new(birthday: Point, account: u32, first: u32, count: u32) -> Result<Self> {
@@ -223,7 +227,14 @@ impl Wallet {
             quarantined: None,
             attempts: BTreeMap::new(),
             latest: None,
+            next_change_offset: 0,
         })
+    }
+    fn next_own_stealth_address(&mut self) -> Result<pft_binius_shielded::payment::StealthAddress> {
+        let count = self.recovery.count.max(1);
+        let offset = self.next_change_offset % count;
+        self.next_change_offset = offset.wrapping_add(1) % count;
+        Ok(self.recovery.key(self.recovery.first + offset)?.stealth_address())
     }
     pub fn address(&self, index: u32) -> Result<String> {
         Ok(keys::address(
@@ -372,6 +383,7 @@ impl Wallet {
                                     }),
                                 );
                             }
+                            break;
                         }
                     }
                     trial_time += start.elapsed();
@@ -628,19 +640,24 @@ impl Wallet {
         let public = o.mode == Mode::Shield;
         let public_fee = if issued && public { o.fee } else { 0 };
         let inner_fee = o.fee - public_fee;
+        let own = self.next_own_stealth_address()?;
+        let fallback_recipient = if o.mode == Mode::Internal {
+            None
+        } else {
+            Some(self.next_own_stealth_address()?)
+        };
         let net = &self.point.network;
         let chain = pq::Chain {
             id: &net.chain_id,
             genesis: net.genesis()?,
             protocol: net.protocol_version,
         };
-        let own = self.recovery.key(self.recovery.first)?.stealth_address();
         let recipient = match o.mode {
             Mode::Internal => keys::decode(
                 net,
                 o.recipient.as_deref().ok_or("missing receive address")?,
             )?,
-            _ => own.clone(),
+            _ => fallback_recipient.unwrap(),
         };
         let dest = if o.mode == Mode::Exit {
             pq::destination(o.recipient.as_deref().ok_or("missing public recipient")?)?
@@ -756,7 +773,12 @@ impl Wallet {
             total += u128::from(n.value);
         }
         let value = match o.mode {
-            Mode::Shield => mint.checked_sub(inner_fee).ok_or("mint below fee")?,
+            Mode::Shield => {
+                if mint <= inner_fee {
+                    return Err("mint must exceed network fee".into());
+                }
+                mint - inner_fee
+            }
             Mode::Internal => o.amount,
             Mode::Exit => 0,
         };
@@ -765,6 +787,11 @@ impl Wallet {
                 .checked_sub(u128::from(value) + u128::from(exit) + u128::from(inner_fee))
                 .ok_or("invalid payment balance")?,
         )?;
+        // Randomly shuffle both input slots and output slots so 1-input spends never
+        // leak real-vs-dummy slot positions on-chain.
+        if OsRng.next_u32() & 1 == 1 {
+            inputs.swap(0, 1);
+        }
         let mut outs = [(recipient, value), (own, change)];
         if OsRng.next_u32() & 1 == 1 {
             outs.swap(0, 1);

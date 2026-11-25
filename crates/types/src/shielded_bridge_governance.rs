@@ -1895,10 +1895,16 @@ impl GovernanceState {
         })
     }
 
-    /// A fee-carrying pause still authenticates the next PQ governance change.
+    /// Once any fee-carrying PQ schedule has taken effect at or before `height`,
+    /// a subsequent standard pause (including bare `PQ_REHEARSAL_V1` with `value == 0`)
+    /// keeps the fee schedule in force so governance quorum, atomic-batch rules, and
+    /// unconfigured-fee protections cannot be bypassed while paused.
     pub fn pq_fee_schedule_in_force(&self, height: u64) -> bool {
-        self.pq_schedule_at(height)
-            .is_some_and(|s| pq_rehearsal_fee(&s.kind).is_some())
+        self.amendments.iter().any(|a| {
+            pq_rehearsal_fee(&a.kind).is_some()
+                && height >= a.activation_height
+                && (a.value == 0 || height >= u64::from(a.value))
+        })
     }
 
     /// For the candidate height, after checking the network and pool activation.

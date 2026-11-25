@@ -368,6 +368,18 @@ fn pq_registry_threshold_applies_to_signed_schedule_and_withdrawal() {
                             "bare amendments governed by a fee kind need the registry floor",
                         );
                 assert!(error.to_string().contains("BFT threshold"), "{error}");
+                // Regression check (L1-CRIT-1): a subsequent bare pause MUST NOT reset
+                // `pq_fee_schedule_in_force` or allow a 1/6 bare amendment through.
+                let mut bare_pause = super::pq_payment_activation::amendment(&genesis, 0);
+                bare_pause.kind = postfiat_types::PQ_REHEARSAL_V1.into();
+                bare_pause.amendment_id = format!("bare-pause-{value}");
+                priced.apply(bare_pause);
+                let pause_err =
+                    verify_live_signed_governance_batch(&genesis, &priced, &registry, &batch, 1)
+                        .expect_err(
+                            "bare pause after a fee schedule must still enforce the BFT floor",
+                        );
+                assert!(pause_err.to_string().contains("BFT threshold"), "{pause_err}");
             }
             continue;
         }
@@ -754,8 +766,40 @@ fn two_tier_pq_pause_keeps_exits_open_and_emergency_freeze_auto_expires() {
         a
     };
 
-    // 5/6 BFT quorum is NOT enough to freeze exits (must be 6/6 on 6 validators).
-    let low_quorum = GovernanceActionBatch::new("low-q", vec![make_signed_freeze(5, 10, 1)]);
+    // 5/6 BFT quorum is NOT enough to freeze exits (must be 6/6 on 6 validators),
+    // rejected at consensus_cobalt, signing, AND consensus_artifacts layers!
+    let low_support = validators[..5].to_vec();
+    let low_freeze = postfiat_consensus_cobalt::ratify_governance_amendment_with_lifecycle(
+        &postfiat_consensus_cobalt::CobaltDomain {
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&genesis),
+            protocol_version: genesis.protocol_version,
+        },
+        &postfiat_consensus_cobalt::EssentialSubsetConfig {
+            validators: validators.clone(),
+            quorum: 5,
+        },
+        postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1,
+        10,
+        low_support,
+        postfiat_consensus_cobalt::GovernanceAmendmentLifecycle {
+            activation_height: 1,
+            veto_until_height: 0,
+            paused: false,
+        },
+    )
+    .unwrap();
+    let cobalt_err = postfiat_consensus_cobalt::verify_governance_amendment(
+        &postfiat_consensus_cobalt::CobaltDomain {
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&genesis),
+            protocol_version: genesis.protocol_version,
+        },
+        &low_freeze,
+    )
+    .unwrap_err();
+    assert!(cobalt_err.contains("pq_exit_freeze_threshold"), "{cobalt_err}");
+    let low_quorum = GovernanceActionBatch::new("low-q", vec![low_freeze]);
     let err = verify_live_signed_governance_batch(&genesis, &g, &registry, &low_quorum, 1)
         .unwrap_err()
         .to_string();
@@ -768,6 +812,13 @@ fn two_tier_pq_pause_keeps_exits_open_and_emergency_freeze_auto_expires() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("pq_exit_freeze_exceeds_cap"), "{err}");
+
+    // Standard bare PQ_REHEARSAL_V1 pause MUST NOT reset pq_fee_schedule_in_force
+    // or downgrade quorum requirements on subsequent bare amendments.
+    assert!(
+        g.pq_fee_schedule_in_force(8),
+        "bare standard pause must keep pq_fee_schedule_in_force true"
+    );
 
     // Valid 6/6 bounded freeze through height 10 passes admission, freezes exits at 6..=10,
     // and AUTO-EXPIRES at height 11 without any governance vote!
@@ -783,6 +834,15 @@ fn two_tier_pq_pause_keeps_exits_open_and_emergency_freeze_auto_expires() {
     );
     consensus_artifacts::check_pq_block(&genesis, &g, 11, [&exit_pft])
         .expect("emergency exit freeze must auto-expire at freeze_until + 1");
+
+    // Early lift (value = 0) MUST pass consensus_cobalt and live admission, immediately
+    // reopening exits even before height 10.
+    let early_lift = make_signed_freeze(6, 0, 1);
+    let lift_batch = GovernanceActionBatch::new("early-lift", vec![early_lift.clone()]);
+    verify_live_signed_governance_batch(&genesis, &g, &registry, &lift_batch, 1).unwrap();
+    g.apply(early_lift);
+    consensus_artifacts::check_pq_block(&genesis, &g, 9, [&exit_pft])
+        .expect("early lift value=0 must immediately unfreeze exits");
 
     fs::remove_dir_all(dir).unwrap();
 }

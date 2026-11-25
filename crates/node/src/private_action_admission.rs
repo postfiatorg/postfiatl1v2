@@ -1281,6 +1281,11 @@ where
             .is_err_and(|e| e.to_string() == "pq_settlement_inactive")
         {
             Some(("pq_settlement_inactive", "resubmit after activation"))
+        } else if verdict
+            .as_ref()
+            .is_err_and(|e| e.to_string() == "pq_exit_frozen")
+        {
+            Some(("pq_exit_frozen", "resubmit after emergency exit freeze expires"))
         } else {
             None
         };

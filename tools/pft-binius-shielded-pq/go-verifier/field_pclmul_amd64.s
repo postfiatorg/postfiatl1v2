@@ -3,13 +3,14 @@
 #include "textflag.h"
 
 // func hasPCLMULQDQ() bool
+// Requires both PCLMULQDQ (ECX[1]) and SSE4.1 (ECX[19], used by PEXTRQ).
 TEXT ·hasPCLMULQDQ(SB), NOSPLIT, $0-1
 	MOVL $1, AX
 	XORL CX, CX
 	CPUID
-	SHRL $1, CX
-	ANDL $1, CX
-	MOVB CX, ret+0(FP)
+	ANDL $0x80002, CX
+	CMPL CX, $0x80002
+	SETEQ ret+0(FP)
 	RET
 
 // func clmulVec54(a, b, lo, hi *uint64)
@@ -59,17 +60,23 @@ rs_loop:
 	LEAQ (DX)(DX*2), DX
 	SHLQ $4, DX
 	LEAQ (DI)(DX*1), BX
-	PXOR 0(BX), X0
-	PXOR 16(BX), X1
-	PXOR 32(BX), X2
+	MOVOU 0(BX), X3
+	PXOR X3, X0
+	MOVOU 16(BX), X3
+	PXOR X3, X1
+	MOVOU 32(BX), X3
+	PXOR X3, X2
 	// High nibble: offset = 768 + hi_nib * 48
 	SHRQ $4, AX
 	LEAQ (AX)(AX*2), AX
 	SHLQ $4, AX
 	LEAQ 768(DI)(AX*1), BX
-	PXOR 0(BX), X0
-	PXOR 16(BX), X1
-	PXOR 32(BX), X2
+	MOVOU 0(BX), X3
+	PXOR X3, X0
+	MOVOU 16(BX), X3
+	PXOR X3, X1
+	MOVOU 32(BX), X3
+	PXOR X3, X2
 rs_next:
 	ADDQ $1, SI
 	ADDQ $1536, DI

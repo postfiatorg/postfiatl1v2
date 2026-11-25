@@ -1774,6 +1774,49 @@ impl TransactionalStore {
                     .records_written
                     .fetch_add(1, Ordering::Relaxed);
             }
+            // Garbage-collect any PQ proof bodies no longer referenced by retained archive entries.
+            let mut retained_pq_ids = BTreeSet::<String>::new();
+            for item in archives.iter().map_err(database_error)? {
+                let (k, v) = item.map_err(database_error)?;
+                let raw = decode_authenticated_value(
+                    BATCH_ARCHIVE_TABLE,
+                    k.value(),
+                    v.value(),
+                    MAX_RECORD_BYTES,
+                    &self.integrity_key,
+                )?;
+                let entry: BatchArchiveEntry = decode_json(&raw)?;
+                if entry.has_binary_references() {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&entry.payload_json) {
+                        if let Some(actions) = val.get("actions").and_then(|a| a.as_array()) {
+                            for action in actions {
+                                if let Some(id) = action.get("pq_body_v1").and_then(|s| s.as_str()) {
+                                    retained_pq_ids.insert(id.to_owned());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let mut pq_bodies = transaction.open_table(PQ_BODIES).map_err(database_error)?;
+            let mut stale_pq_keys = Vec::<Vec<u8>>::new();
+            for item in pq_bodies.iter().map_err(database_error)? {
+                let (k, _) = item.map_err(database_error)?;
+                let key_bytes = k.value();
+                if std::str::from_utf8(key_bytes)
+                    .map(|id| !retained_pq_ids.contains(id))
+                    .unwrap_or(true)
+                {
+                    stale_pq_keys.push(key_bytes.to_vec());
+                }
+            }
+            for stale in stale_pq_keys {
+                pq_bodies.remove(stale.as_slice()).map_err(database_error)?;
+                self.counters.page_writes.fetch_add(1, Ordering::Relaxed);
+                self.counters
+                    .records_written
+                    .fetch_add(1, Ordering::Relaxed);
+            }
         }
 
         let receipt_ids = pruned_blocks

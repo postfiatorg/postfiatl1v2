@@ -528,8 +528,16 @@ pub(super) fn private_pool_snapshot_from(
     let genesis_digest = genesis_hash(&snapshot.genesis);
     let quoted_pool = options.pool_id == postfiat_types::pq_payment::POOL_ID
         && postfiat_types::pq_rehearsal_domain(&snapshot.genesis.chain_id, &genesis_digest)
-        && snapshot.governance.pq_rehearsal_active(
-            &snapshot.genesis.chain_id, &genesis_digest, snapshot.genesis.protocol_version, next_height)
+        && snapshot
+            .governance
+            .pq_rehearsal_mode_allowed(
+                &snapshot.genesis.chain_id,
+                &genesis_digest,
+                snapshot.genesis.protocol_version,
+                next_height,
+                postfiat_types::pq_payment::Mode::Exit,
+            )
+            .is_ok()
         && snapshot.governance.pq_fee_schedule_in_force(next_height);
     if quoted_pool && inclusion_height != next_height {
         return Err(invalid_input(
@@ -630,7 +638,13 @@ pub(super) fn private_pool_snapshot_from(
     }
     Ok(PrivatePoolSnapshotReport {
         pq_issued_fee: if quoted_pool {
-            snapshot.governance.pq_issued_fee(postfiat_types::PQ_REHEARSAL_ISSUE, inclusion_height)
+            snapshot
+                .governance
+                .pq_issued_fee_for_mode(
+                    postfiat_types::PQ_REHEARSAL_ISSUE,
+                    inclusion_height,
+                    postfiat_types::pq_payment::Mode::Exit,
+                )
                 .map(|fee| (postfiat_types::PQ_REHEARSAL_ISSUE.to_owned(), fee.to_string()))
         } else { None },
         pq_last_page: pq_read.then(|| pq_head.map_or(String::new(), |h| h.last_page.clone())),

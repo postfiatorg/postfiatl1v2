@@ -24,25 +24,45 @@ fn verified_cache() -> &'static std::sync::Mutex<std::collections::VecDeque<Veri
     VERIFIED.get_or_init(|| std::sync::Mutex::new(std::collections::VecDeque::new()))
 }
 
-// A local scheduling limit applies to all callers, including peer proposals
-// and archive replay. Waiting for a slot has no effect on the proof verdict.
-static ACTIVE_VERIFIERS: std::sync::Mutex<usize> = std::sync::Mutex::new(0);
-static SLOT_READY: std::sync::Condvar = std::sync::Condvar::new();
-struct VerificationSlot;
+// Separate verification semaphores so untrusted RPC admission traffic can never
+// starve consensus block verification / voting.
+static CONSENSUS_VERIFIERS: std::sync::Mutex<usize> = std::sync::Mutex::new(0);
+static CONSENSUS_SLOT_READY: std::sync::Condvar = std::sync::Condvar::new();
+static ADMISSION_VERIFIERS: std::sync::Mutex<usize> = std::sync::Mutex::new(0);
+static ADMISSION_SLOT_READY: std::sync::Condvar = std::sync::Condvar::new();
+
+struct VerificationSlot {
+    admission: bool,
+}
 impl VerificationSlot {
-    fn acquire() -> Self {
-        let active = ACTIVE_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner());
-        let mut active = SLOT_READY
+    fn acquire_consensus() -> Self {
+        let active = CONSENSUS_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner());
+        let mut active = CONSENSUS_SLOT_READY
             .wait_while(active, |n| *n >= postfiat_types::PQ_REHEARSAL_PROOFS)
             .unwrap_or_else(|e| e.into_inner());
         *active += 1;
-        Self
+        Self { admission: false }
+    }
+
+    fn acquire_admission() -> Self {
+        let limit = (postfiat_types::PQ_REHEARSAL_PROOFS / 2).max(1);
+        let active = ADMISSION_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner());
+        let mut active = ADMISSION_SLOT_READY
+            .wait_while(active, |n| *n >= limit)
+            .unwrap_or_else(|e| e.into_inner());
+        *active += 1;
+        Self { admission: true }
     }
 }
 impl Drop for VerificationSlot {
     fn drop(&mut self) {
-        *ACTIVE_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
-        SLOT_READY.notify_one();
+        if self.admission {
+            *ADMISSION_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+            ADMISSION_SLOT_READY.notify_one();
+        } else {
+            *CONSENSUS_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+            CONSENSUS_SLOT_READY.notify_one();
+        }
     }
 }
 
@@ -50,13 +70,22 @@ pub(super) fn verify_statement(
     payment: &PqPayment,
     chain: Chain,
 ) -> Result<postfiat_privacy_binius::PaymentStatement, postfiat_privacy_binius::VerifyError> {
-    verify_statement_abortable(payment, chain, None)
+    verify_statement_inner(payment, chain, None, true)
 }
 
 pub(super) fn verify_statement_abortable(
     payment: &PqPayment,
     chain: Chain,
     abort: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<postfiat_privacy_binius::PaymentStatement, postfiat_privacy_binius::VerifyError> {
+    verify_statement_inner(payment, chain, abort, false)
+}
+
+fn verify_statement_inner(
+    payment: &PqPayment,
+    chain: Chain,
+    abort: Option<&std::sync::atomic::AtomicBool>,
+    admission: bool,
 ) -> Result<postfiat_privacy_binius::PaymentStatement, postfiat_privacy_binius::VerifyError> {
     let digest = payment.digest();
     {
@@ -67,7 +96,11 @@ pub(super) fn verify_statement_abortable(
             return Ok(entry.4.clone());
         }
     }
-    let _slot = VerificationSlot::acquire();
+    let _slot = if admission {
+        VerificationSlot::acquire_admission()
+    } else {
+        VerificationSlot::acquire_consensus()
+    };
     #[cfg(test)]
     PROOF_VERIFICATIONS.with(|n| n.set(n.get() + 1));
     let statement = postfiat_privacy_binius::verify_l1_abortable(payment, chain, abort)?;

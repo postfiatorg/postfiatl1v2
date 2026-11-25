@@ -849,6 +849,9 @@ func evalVerifierIPLhs(
 }
 
 func verifyBiniusProof(stmt *PaymentStatement, proof *BiniusProof) error {
+	if stmt.VUnshield > ^uint64(0)-stmt.Fee || (stmt.VMint > 0 && stmt.VUnshield > 0) {
+		return errors.New("Rule R5: invalid public flow (overflow or simultaneous mint+unshield)")
+	}
 	if len(proof.VProxCoeffs) != DegBound || len(proof.VOpenCoeffs) != DegBound {
 		return errors.New("invalid v_prox/v_open degree bound")
 	}

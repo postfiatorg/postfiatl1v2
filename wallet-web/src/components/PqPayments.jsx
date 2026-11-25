@@ -189,7 +189,7 @@ export default function PqPayments() {
       </>}
     </section>}
     {review && <section aria-label="Signer review"><h2>Signer review</h2>
-      <Field label="Action">{modes[review.terms.mode]} {review.terms.amount ?? '(original private amount unknown)'} {review.terms.asset === NATIVE ? 'PFT' : 'pfUSDC'} atoms</Field>
+      <Field label="Action">{modes[review.terms.mode]} {review.terms.amount ?? '(original private amount unknown)'} {review.terms.asset === NATIVE ? 'PFT' : 'pfUSDC'} atoms{review.terms.mode === 'Shield' && review.terms.asset === NATIVE && review.terms.amount && review.terms.fee ? ` (net ${String(BigInt(review.terms.amount) - BigInt(review.terms.fee))} shielded)` : ''}</Field>
       <Field label="Asset / issue">{review.terms.asset === NATIVE ? 'PFT' : review.terms.asset}</Field>
       {review.terms.different_payment && <p>This is a different payment from the imported unresolved spend.</p>}
       {review.terms.replace && <Field label="Replaces payment">{review.terms.replace}</Field>}

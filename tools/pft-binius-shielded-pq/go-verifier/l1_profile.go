@@ -41,7 +41,7 @@ func verifyL1(b []byte, chain l1Chain) error {
 	var auth MintAuth
 	if needAuth {
 		end += 20 + 8 + mldsa65.PublicKeySize
-		if len(b) < end+mldsa65.SignatureSize || binary.LittleEndian.Uint64(b[92:100]) == 0 {
+		if len(b) < end+mldsa65.SignatureSize || binary.LittleEndian.Uint64(b[92:100]) == 0 || bytes.Equal(b[72:92], make([]byte, 20)) {
 			return bad
 		}
 		copy(auth.PublicKey[:], b[100:end])

@@ -1892,6 +1892,11 @@ pub fn verify_abortable(
     use std::sync::atomic::Ordering;
     let aborted = || abort.is_some_and(|flag| flag.load(Ordering::Relaxed));
 
+    if stmt.fee.checked_add(stmt.v_unshield).is_none()
+        || (stmt.v_mint > 0 && stmt.v_unshield > 0)
+    {
+        return Err("Rule R5: invalid public flow (overflow or simultaneous mint+unshield)".into());
+    }
     if proof.v_prox_coeffs.len() != DEG_BOUND || proof.v_open_coeffs.len() != DEG_BOUND {
         return Err("invalid v_prox/v_open degree bound".into());
     }

@@ -347,6 +347,10 @@ pub fn create_profiled_tx(
     let (is_dummy1, dirs1, sibs1, sk_in1, pk_in1, pk_hash1, r_pk1, v_in1, r_in1, sn1) =
         resolve_input(in1, rng)?;
 
+    if sn0 == sn1 {
+        return Err("Rule R2 violation: duplicate nullifiers sn0 == sn1 within transaction".into());
+    }
+
     if (v_in0 as u128) + (v_in1 as u128) + (v_mint as u128)
         != (out0_val as u128) + (out1_val as u128) + (pub_exit as u128)
     {

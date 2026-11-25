@@ -6,6 +6,7 @@ use aes_gcm::{
 };
 use rand::{rngs::OsRng, RngCore};
 use serde::{de::DeserializeOwned, Serialize};
+use zeroize::Zeroize;
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -52,15 +53,15 @@ impl Store {
             return Err("wrapping key must be 32 random bytes".into());
         }
         f.read_exact(&mut key)?;
-        Ok(Self {
-            cipher: Aes256Gcm::new((&key).into()),
-        })
+        let cipher = Aes256Gcm::new((&key).into());
+        key.zeroize();
+        Ok(Self { cipher })
     }
     pub fn load<T: DeserializeOwned>(&self, path: &Path, tag: &[u8]) -> Result<T> {
         let mut bytes = Vec::new();
         private_file(path)?.read_to_end(&mut bytes)?;
         let nonce = bytes.get(..12).ok_or("invalid wallet file")?;
-        let pt = self
+        let mut pt = self
             .cipher
             .decrypt(
                 Nonce::from_slice(nonce),
@@ -70,7 +71,9 @@ impl Store {
                 },
             )
             .map_err(|_| "wallet authentication failed")?;
-        serde_json::from_slice(&pt).map_err(|_| "invalid wallet record".into())
+        let parsed = serde_json::from_slice(&pt).map_err(|_| "invalid wallet record".into());
+        pt.zeroize();
+        parsed
     }
     pub fn save<T: Serialize>(
         &self,
@@ -81,16 +84,19 @@ impl Store {
     ) -> Result<()> {
         let mut nonce = [0; 12];
         OsRng.fill_bytes(&mut nonce);
-        let bytes = self
+        let mut pt = serde_json::to_vec(record)?;
+        let encrypted = self
             .cipher
             .encrypt(
                 (&nonce).into(),
                 Payload {
-                    msg: &serde_json::to_vec(record)?,
+                    msg: &pt,
                     aad: tag,
                 },
             )
-            .map_err(|_| "wallet encryption failed")?;
+            .map_err(|_| "wallet encryption failed");
+        pt.zeroize();
+        let bytes = encrypted?;
         let dir = path
             .parent()
             .filter(|p| !p.as_os_str().as_bytes().is_empty())

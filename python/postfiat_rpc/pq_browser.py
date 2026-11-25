@@ -142,10 +142,11 @@ class BrowserWallet:
             action = dict(kind=saved["action"]["kind"], body=saved["action"]["body"])
             check(private_action_hash(compact(action)) == key, "Daemon returned a different saved payment.")
             if row is None:
-                self.action_row(db, action, PQ_POOL_ID, saved["migration"], saved["statement_id"], saved["terms"])
+                self.action_row(db, action, PQ_POOL_ID, saved["migration"], saved["statement_id"], saved["terms"], phase=attempt["phase"])
             else:
-                db.execute("UPDATE payments SET terms=COALESCE(terms,?), statement_id=COALESCE(statement_id,?) "
-                           "WHERE intent=?", (compact(saved["terms"]), saved["statement_id"], row["intent"]))
+                db.execute("UPDATE payments SET terms=COALESCE(terms,?), statement_id=COALESCE(statement_id,?), "
+                           "phase=CASE WHEN phase='prepared' THEN ? ELSE phase END "
+                           "WHERE intent=?", (compact(saved["terms"]), saved["statement_id"], attempt["phase"], row["intent"]))
 
     def connection(self):
         conn = sqlite3.connect(self.db, isolation_level=None)
@@ -160,12 +161,12 @@ class BrowserWallet:
         check(row is not None, "Unknown wallet payment.")
         return row
 
-    def action_row(self, db, action, pool, migration=None, statement_id=None, terms=None):
+    def action_row(self, db, action, pool, migration=None, statement_id=None, terms=None, phase="prepared"):
         wire = compact(action)
         intent = private_action_intent_id(**self.net, action_json=wire)
         payerless = pool == PQ_POOL_ID and base64.b64decode(action["body"], validate=True)[71] == 0
         db.execute("INSERT INTO payments (intent,pool,wire,phase,migration,network,statement_id,capability,terms) "
-                   "VALUES (?,?,?,?,?,?,?,?,?)", (intent, pool, wire, "prepared", migration,
+                   "VALUES (?,?,?,?,?,?,?,?,?)", (intent, pool, wire, phase, migration,
                    compact(self.net), statement_id, secrets.token_hex(32) if payerless else None,
                    compact(terms) if terms else None))
         return self.row(db, intent)
@@ -342,7 +343,16 @@ class BrowserWallet:
             return self.receipt(db, body["intent"])
         if cmd == "exit":
             check(self.exit_action and body == {"intent":self.exit_id()}, "Changed Orchard exit.")
-            return self.send(db, self.action_row(db, self.exit_action, ORCHARD, self.exit_id()))
+            existing = db.execute("SELECT * FROM payments WHERE migration=? AND network=?",
+                                  (self.exit_id(), compact(self.net))).fetchone()
+            row = existing if existing is not None else self.action_row(db, self.exit_action, ORCHARD, self.exit_id())
+            try:
+                return self.send(db, row)
+            except Exception:
+                if existing is None:
+                    db.execute("DELETE FROM payments WHERE intent=? AND migration=? AND phase!='final'",
+                               (row["intent"], self.exit_id()))
+                raise
         if cmd == "review":
             self.reviewed = None
             state = self.overview(db, public=body.get("mode") == "Shield")

@@ -31,6 +31,14 @@ pub fn verify_payment(
     let statement = match context {
         VerificationContext::StandaloneFixture => tx.statement(),
     };
+    if tx.v_mint > 0 {
+        let Some(auth) = tx.mint_auth.as_ref() else {
+            return Err(VerifyError::InvalidProof);
+        };
+        if !auth.verify(&statement.tx_ctx) {
+            return Err(VerifyError::InvalidProof);
+        }
+    }
     tx.verify_spend_auth(&statement.tx_ctx)
         .map_err(|_| VerifyError::InvalidProof)?;
     binius_pcs::verify(&statement, &tx.proof).map_err(|_| VerifyError::InvalidProof)?;

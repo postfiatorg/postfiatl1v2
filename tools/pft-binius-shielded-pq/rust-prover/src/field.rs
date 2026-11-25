@@ -274,7 +274,7 @@ impl KTables {
                     let x0 = a[j];
                     let x1 = a[j + step];
                     let v = x0 ^ x1;
-                    let u = x0 ^ self.kmul_portable(tw, v);
+                    let u = x0 ^ self.kmul(tw, v);
                     a[j] = u;
                     a[j + step] = v;
                 }
@@ -345,7 +345,7 @@ impl KTables {
                 for j in off..off + step {
                     let u = out[j];
                     let v = out[j + step];
-                    let prod = self.kmul_portable(tw, v);
+                    let prod = self.kmul(tw, v);
                     let x0 = u ^ prod;
                     out[j] = x0;
                     out[j + step] = x0 ^ v;

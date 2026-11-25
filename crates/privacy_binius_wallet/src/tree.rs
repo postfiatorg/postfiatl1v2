@@ -5,6 +5,7 @@ use pft_binius_shielded::{
 };
 use postfiat_types::pq_payment::{PqEpoch, PQ_CAPACITY, PQ_DEPTH};
 use serde::{Deserialize, Serialize};
+use std::{cell::RefCell, collections::HashMap};
 
 type Node = [u8; 48];
 pub(crate) fn digest(s: &str) -> Result<Node, &'static str> {
@@ -29,19 +30,25 @@ impl History {
             history: self,
             root,
             empty: empty_hashes(),
+            cache: RefCell::new(HashMap::new()),
         }
     }
 }
 
 /// Only sibling subtrees for the selected inputs are needed. A depth-first
-/// fold uses a depth-24 stack, even when the input epoch is completely full.
+/// fold uses a depth-24 stack, memoizing internal nodes so 2-input witnesses
+/// never recompute shared subtrees.
 pub struct Tree<'a> {
     history: &'a History,
     root: Node,
     empty: [Node; 25],
+    cache: RefCell<HashMap<(usize, usize), Node>>,
 }
 impl Tree<'_> {
     fn subtree(&self, level: usize, pos: usize) -> Option<Node> {
+        if let Some(&cached) = self.cache.borrow().get(&(level, pos)) {
+            return Some(cached);
+        }
         let start = pos << level;
         let h = self.history;
         if start >= h.count() {
@@ -59,10 +66,12 @@ impl Tree<'_> {
         if level == 0 {
             return digest(h.leaves.get(start.checked_sub(birthday)?)?).ok();
         }
-        Some(merkle_node(
+        let node = merkle_node(
             &self.subtree(level - 1, pos * 2)?,
             &self.subtree(level - 1, pos * 2 + 1)?,
-        ))
+        );
+        self.cache.borrow_mut().insert((level, pos), node);
+        Some(node)
     }
 }
 impl PaymentTree for Tree<'_> {

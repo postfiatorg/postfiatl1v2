@@ -32,11 +32,8 @@ fn send(mut socket: impl Write, result: Value) -> Result<()> {
     Ok(())
 }
 fn worker(home: &Path, key: &Path) -> Result<()> {
-    let result = service::execute(
-        home,
-        &Store::new(key, home)?,
-        read_request(std::io::stdin())?,
-    );
+    let request = read_request(std::io::stdin())?;
+    let result = Store::new(key, home).and_then(|store| service::execute(home, &store, request));
     send(
         std::io::stdout(),
         match result {
@@ -69,8 +66,12 @@ fn serve(home: &Path, key: &Path) -> Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
     let mut active: Option<(Child, String, Instant)> = None;
     for stream in server.incoming() {
-        let mut socket = stream?;
-        socket.set_read_timeout(Some(Duration::from_secs(5)))?;
+        let Ok(mut socket) = stream else {
+            continue;
+        };
+        if socket.set_read_timeout(Some(Duration::from_secs(5))).is_err() {
+            continue;
+        }
         if active
             .as_mut()
             .is_some_and(|(c, _, _)| c.try_wait().ok().flatten().is_some())
@@ -89,7 +90,7 @@ fn serve(home: &Path, key: &Path) -> Result<()> {
             if op == "cancel" {
                 if let Some((mut child, _, _)) = active.take() {
                     let _ = child.kill();
-                    child.wait()?;
+                    let _ = child.wait();
                 }
             }
             let _ = send(
@@ -102,7 +103,11 @@ fn serve(home: &Path, key: &Path) -> Result<()> {
             let _ = send(socket, json!({"error":"wallet busy"}));
             continue;
         }
-        let output = OwnedFd::from(socket.try_clone()?);
+        let Ok(cloned) = socket.try_clone() else {
+            let _ = send(socket, json!({"error":"wallet socket clone failed"}));
+            continue;
+        };
+        let output = OwnedFd::from(cloned);
         let parent = std::process::id();
         let mut command = Command::new("/proc/self/exe");
         use std::os::unix::process::CommandExt;
@@ -117,15 +122,26 @@ fn serve(home: &Path, key: &Path) -> Result<()> {
                 Ok(())
             });
         }
-        let mut child = command
+        let Ok(mut child) = command
             .arg("worker")
             .arg(home)
             .arg(key)
             .stdin(Stdio::piped())
             .stdout(Stdio::from(output))
             .stderr(Stdio::null())
-            .spawn()?;
-        serde_json::to_writer(child.stdin.take().unwrap(), &cmd)?;
+            .spawn()
+        else {
+            let _ = send(socket, json!({"error":"wallet worker spawn failed"}));
+            continue;
+        };
+        if let Some(stdin) = child.stdin.take() {
+            if serde_json::to_writer(stdin, &cmd).is_err() {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = send(socket, json!({"error":"wallet worker dispatch failed"}));
+                continue;
+            }
+        }
         active = Some((child, op.into(), Instant::now()));
     }
     Ok(())
@@ -133,6 +149,7 @@ fn serve(home: &Path, key: &Path) -> Result<()> {
 fn main() {
     unsafe {
         libc::umask(0o077);
+        let _ = libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0);
     }
     let args: Vec<_> = env::args_os().skip(1).collect();
     let result = match args.as_slice() {
