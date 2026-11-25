@@ -10,6 +10,7 @@ It cannot pay anyone anything the proof does not bind. Operator key is used by p
 Listens on 127.0.0.1 only; the Task Node server is the only caller.
 """
 import json,os,re,shlex,subprocess,sys,threading,time,uuid,hashlib
+from web3 import Web3
 from datetime import datetime,timezone
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
@@ -20,6 +21,9 @@ from rpc import call
 from live import read_six,points
 import archive as arch
 import exit_profile
+from eth_journal import durable_json, ensure_directory, intent_path, read_eth_result, ReconciliationRequired
+from eth_send import RPC, VERIFIER, VAULT, OPERATOR, KEY
+from eth_finality import AwaitingFinality, confirm_action
 PY=sys.executable
 COORD=Path('/home/postfiat/repos/b23-coord');E=COORD/'evidence/withdraw';JOBS=E/'jobs'
 HOST_BIN=E/'bin/proof-host';ELF=E/'historical/egress.elf'
@@ -27,7 +31,15 @@ FAMILY='02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830b
 SERIES='541e451e6ae96b6680988655571a0feec59c7f1d073c9b5d29547254cab38a3be540f8767446d25baebc7081ce97aef7'
 VAST=['-p','20628','root@ssh8.vast.ai'];REMOTE='/workspace/b23-withdraw-20261116'
 PORT=18084;MAX_STEP=64
-queue_event=threading.Event();lock=threading.Lock()
+queue_event=threading.Event();lock=threading.RLock()
+worker_started=threading.Event()
+ACTIVE_STAGES = {'queued', 'reading', 'catching_up', 'proving', 'paying'}
+
+
+class IneligibleBurn(RuntimeError):
+    """This request cannot proceed, independently of payout infrastructure health."""
+
+
 
 def now():return datetime.now(timezone.utc).isoformat(timespec='seconds')
 def job_path(burn):return JOBS/burn/'job.json'
@@ -35,7 +47,7 @@ def read_job(burn):
     p=job_path(burn);return load(p) if p.exists() else None
 def write_job(job):
     with lock:
-        p=job_path(job['burn_tx_id']);p.parent.mkdir(parents=True,exist_ok=True);tmp=p.with_suffix('.tmp');tmp.write_text(json.dumps(job,indent=1));tmp.replace(p)
+        p=job_path(job['burn_tx_id']);ensure_directory(p.parent);durable_json(p,job)
 def stage(job,name,detail=''):
     job.update(stage=name,detail=detail,updated_at=now());job.setdefault('history',[]).append([now(),name,detail]);write_job(job);print(now(),job['burn_tx_id'][:12],name,detail,flush=True)
 
@@ -43,12 +55,50 @@ def run(args,**kw):return subprocess.run([str(a) for a in args],check=True,captu
 
 def bridge_status():
     return call('vault_bridge_status',{'asset_id':FAMILY})
+def payout_preflight():
+    if not worker_started.is_set():
+        return 'Withdrawal worker is stopped.'
+    if not os.access(HOST_BIN, os.X_OK) or not ELF.is_file():
+        return 'Local proving artifacts are unavailable.'
+    if not os.access(KEY, os.R_OK):
+        return 'Ethereum operator signing key is unavailable.'
+    abi = [{'type':'function', 'name':name, 'stateMutability':'view', 'inputs':[],
+            'outputs':[{'name':'', 'type':kind}]} for name, kind in
+           (('paused', 'bool'), ('finalityVerifier', 'address'))]
+    try:
+        client = Web3(Web3.HTTPProvider(RPC, request_kwargs={'timeout':5}))
+        vault = client.eth.contract(address=VAULT, abi=abi)
+        block = client.eth.block_number
+        if (client.eth.chain_id != 1 or vault.functions.paused().call(block_identifier=block) or
+                vault.functions.finalityVerifier().call(block_identifier=block).lower() != VERIFIER.lower()):
+            return 'Ethereum vault is paused or its network/verifier binding is unexpected.'
+        if not client.eth.get_balance(OPERATOR, block_identifier=block):
+            return 'Ethereum operator has no gas balance.'
+    except Exception as error:
+        return 'Ethereum route preflight failed: '+str(error)[:160]
+    return None
+
+
 def readiness():
     s=bridge_status();route=call('vault_bridge_route',{'asset_id':FAMILY})
     profile_hash=route['beacon_finality_anchor']['route_profile_hash']
     buckets=[b for b in s['buckets'] if b['policy_hash']==profile_hash and b.get('status','active')=='active']
-    if len(buckets)!=1:return dict(ok=True,ready=False,message='No single active deposit bucket for the current bridge setting.')
-    return dict(ok=True,ready=True,asset_id=FAMILY,series_asset_id=SERIES,bucket_id=buckets[0]['bucket_id'],issuer=s['issuer'],epoch=s['finalized_epoch'],
+    jobs = [load(path) for path in JOBS.glob('*/job.json')]
+    blocked = [j['burn_tx_id'] for j in jobs if j['stage'] in ('failed', 'reconciliation_required') and j.get('error_scope') != 'burn']
+    payments = [j['updated_at'] for j in jobs if j['stage'] == 'paid' and proven_paid(j)]
+    awaiting = [j['burn_tx_id'] for j in jobs if j['stage'] == 'awaiting_finality' or
+                (j['stage'] == 'paid' and not proven_paid(j))]
+    stalled = [j['burn_tx_id'] for j in jobs if j['stage'] in ACTIVE_STAGES and
+               (datetime.now(timezone.utc) - datetime.fromisoformat(j['updated_at'])).total_seconds() > 3600]
+    preflight_error = payout_preflight()
+    payout_ready = not (blocked or stalled or preflight_error)
+    health = dict(ok=True, bucket_ready=len(buckets)==1, payout_ready=payout_ready,
+                  payout_preflight_error=preflight_error, last_payment_recorded_at=max(payments, default=None),
+                  blocked_jobs=blocked, stalled_jobs=stalled, awaiting_finality_jobs=awaiting)
+    if len(buckets)!=1:return dict(**health,ready=False,message='No single active deposit bucket for the current bridge setting.')
+    if not payout_ready:
+        health['message'] = preflight_error or 'The withdrawal worker has blocked or stalled jobs.'
+    return dict(**health,ready=payout_ready,asset_id=FAMILY,series_asset_id=SERIES,bucket_id=buckets[0]['bucket_id'],issuer=s['issuer'],epoch=s['finalized_epoch'],
         reserve_packet_hash=s['finalized_reserve_packet_hash'],bucket_outstanding_atoms=str(buckets[0]['outstanding_vault_bridge_atoms']),
         destination_prefix='evm-erc20:1:',vault_address='0xe7a432a28b20621a70e845c7f202004cf98e7a2c',minutes_estimate=12,current_height=route['current_height'])
 
@@ -87,21 +137,6 @@ def prove(kind,witness,directory,name):
     for f in ('proof-report.json','public-values.bin','proof-calldata.bin'):run(['scp','-q','-P','20628',f'root@ssh8.vast.ai:{REMOTE}/jobs/{name}-proof/{f}',directory/f])
     assert (directory/'public-values.bin').read_bytes()==(directory/'native/native-public-values.bin').read_bytes()
     return directory
-def read_eth_result(mode, out):
-    """Only a mined, successful receipt for the requested action confirms the job."""
-    try:
-        receipt = load(out)
-    except (OSError, ValueError) as error:
-        raise RuntimeError(f'Cannot read Ethereum {mode} receipt in {out.name}; reconcile before retry.') from error
-    if (not isinstance(receipt, dict) or receipt.get('mode') != mode
-            or type(receipt.get('status')) is not int or receipt['status'] != 1
-            or not isinstance(receipt.get('tx'), str)
-            or not re.fullmatch(r'(?:0x)?[a-fA-F0-9]{64}', receipt['tx'])
-            or type(receipt.get('block')) is not int or receipt['block'] < 0):
-        raise RuntimeError(f'No successful Ethereum {mode} receipt in {out.name}; reconcile before retry.')
-    return receipt
-
-
 def eth_send(mode, proof_dir, out):
     result = subprocess.run(
         [PY, str(HERE / 'eth_send.py'), mode, str(proof_dir), str(out)],
@@ -109,72 +144,290 @@ def eth_send(mode, proof_dir, out):
     )
     if result.returncode:
         detail = (result.stderr.strip().splitlines() or ['unknown'])[-1][-300:]
+        if out.exists():
+            return read_eth_result(mode, out)
+        if intent_path(out).exists():
+            try:
+                tx = load(intent_path(out))['tx']
+            except (KeyError, OSError, ValueError, TypeError):
+                tx = 'unreadable transaction id'
+            raise ReconciliationRequired(f'Reconcile signed Ethereum {mode} {tx}: {detail}')
         raise RuntimeError('Ethereum transaction failed: ' + detail)
     return read_eth_result(mode, out)
 
 
+def historical_checkpoint(blocks, height, audit_record):
+    verifier = audit_record['contracts']['PFTLFinalityVerifierV1']
+    if verifier['address'].lower() != VERIFIER.lower():
+        raise ReconciliationRequired('Unexpected Ethereum verifier; reconcile the payout route.')
+    client = Web3(Web3.HTTPProvider(RPC, request_kwargs={'timeout':30}))
+    if client.eth.chain_id != 1:
+        raise ReconciliationRequired('Unexpected Ethereum network; reconcile the payout route.')
+    abi = [{'type':'function', 'name':'acceptedCheckpointCommitment', 'stateMutability':'view',
+            'inputs':[{'name':'commitment', 'type':'bytes32'}], 'outputs':[{'name':'', 'type':'bool'}]}]
+    contract = client.eth.contract(address=VERIFIER, abi=abi)
+    for candidate in range(height-1, max(-1, height-MAX_STEP-2), -1):
+        if candidate not in blocks:
+            continue
+        commitment = Web3.keccak(bytes.fromhex(blocks[candidate]['header']['block_hash']))
+        if contract.functions.acceptedCheckpointCommitment(commitment).call(block_identifier=audit_record['block']):
+            return candidate
+    raise ReconciliationRequired('No accepted Ethereum ancestor in the bounded proof window; reconcile the burn.')
+
+
+def operator_checkpoint(prior, target):
+    # The checkpoint method is local-only on the validator. Use the same operator
+    # SSH route as archive export and the binary currently running its RPC unit.
+    command = """set -eu
+pid=$(systemctl show -p MainPID --value postfiat-validator-0-rpc.service)
+exe=$(readlink -e "/proc/$pid/exe")
+case "$exe" in /opt/postfiat/releases/*/postfiat-node) ;; *) echo 'Unexpected validator executable' >&2; exit 1;; esac
+exec runuser -u postfiat -- "$exe" pfusdc-checkpoint-witness --data-dir /var/lib/postfiat/validator-0 """
+    command += shlex.join(['--prior-checkpoint', prior, '--target-block', target])
+    return json.loads(run(['ssh', '-o','BatchMode=yes',arch.HOST,command], timeout=180).stdout)
+
+
+def native_witness(blocks, prior, target, withdrawal_id=None):
+    """Get a bounded burn over the public reader and an unframed native checkpoint over operator SSH."""
+    prior_hash = blocks[prior]['header']['block_hash']
+    header = blocks[target]['header']
+    if withdrawal_id:
+        parent = header['parent_hash']
+        burn = call('pfusdc_egress_witness', {'prior_checkpoint':parent,'withdrawal_id':withdrawal_id})
+        if (burn['prior_checkpoint_block_id'] != parent or burn.get('finality_ancestry')
+                or burn['block']['header'] != header or burn['withdrawal_packet']['withdrawal_id'] != withdrawal_id):
+            raise ValueError('Native burn witness differs from the finalized archive.')
+        if parent == prior_hash:
+            return burn
+    segment = operator_checkpoint(prior_hash, header['block_hash'])
+    steps = segment.get('finality_ancestry', [])
+    if (segment['prior_checkpoint_block_id'] != prior_hash or segment['block']['header'] != header
+            or [step['block']['header']['block_hash'] for step in steps] !=
+               [blocks[h]['header']['block_hash'] for h in range(prior+1, target)]):
+        raise ValueError('Native checkpoint witness differs from the finalized archive.')
+    return dict(burn, prior_checkpoint_block_id=prior_hash, finality_ancestry=steps) if withdrawal_id else segment
+
+
+def ethereum_reader():
+    return Web3(Web3.HTTPProvider(RPC, request_kwargs={'timeout':20})).eth
+
+
+def finalized_result(mode, out, expected, known_tx=None):
+    cached = read_eth_result(mode, out) if out.exists() else {}
+    tx = cached.get('tx') or known_tx
+    if not tx or (known_tx and tx.removeprefix('0x').lower() != known_tx.removeprefix('0x').lower()):
+        raise ReconciliationRequired('Missing or inconsistent Ethereum transaction id; reconcile the job.')
+    try:
+        finalized = confirm_action(ethereum_reader(), mode, tx, expected)
+    except ReconciliationRequired:
+        raise
+    except Exception as error:
+        raise AwaitingFinality('Cannot verify Ethereum finality for '+tx+': '+str(error)[:160]) from error
+    result = dict(cached, mode=mode, status=1, tx=finalized['tx'], block=finalized['block'],
+                  block_hash=finalized['block_hash'], finality=finalized)
+    durable_json(out, result)
+    return result
+
+
+def withdrawal_terms(job, directory):
+    fields = ('withdrawal_id', 'burn_tx_id', 'recipient', 'amount_atoms')
+    terms = {key:job.get(key) for key in (*fields, 'packet_digest')}
+    witness_path = directory/'exit-witness.json'
+    if witness_path.exists():
+        witness = load(witness_path)
+        packet = witness['withdrawal_packet']
+        for key in fields:
+            if terms[key] is not None and str(terms[key]).lower() != str(packet[key]).lower():
+                raise ReconciliationRequired('Job differs from retained withdrawal packet; reconcile '+key)
+            terms[key] = packet[key]
+        digest = witness.get('withdrawal_packet_evm_digest')
+        if digest and terms['packet_digest'] and digest != terms['packet_digest']:
+            raise ReconciliationRequired('Job differs from retained withdrawal packet digest; reconcile the burn.')
+        terms['packet_digest'] = digest or terms['packet_digest']
+    if any(value is None for value in terms.values()):
+        raise ReconciliationRequired('Missing withdrawal packet terms; reconcile the retained burn evidence.')
+    return terms
+
+
+def finalized_checkpoint(directory):
+    out = directory/'eth-result.json'
+    read_eth_result('checkpoint', out)
+    try:
+        witness = load(directory/'witness.json')
+        header = witness['block']['header']
+        expected = dict(prior=witness['prior_checkpoint_block_id'], target=header['block_hash'], height=header['height'])
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        raise ReconciliationRequired('Missing checkpoint witness; reconcile the retained Ethereum receipt.') from error
+    return finalized_result('checkpoint', out, expected)
+
+
+def was_paid(job):
+    return job.get('reconcile_paid_only') or job.get('stage') == 'paid' or bool(job.get('ethereum_tx')) or any(
+        entry[1] == 'paid' for entry in job.get('history', []))
+
+
+def recover_payment(job, directory):
+    result = directory / 'eth-withdrawal.json'
+    historical = was_paid(job)
+    if not (result.exists() or intent_path(result).exists() or historical):
+        return False
+    if historical and not job.get('reconcile_paid_only'):
+        job['reconcile_paid_only'] = True
+        write_job(job)
+    try:
+        known_tx = job.get('ethereum_tx')
+        if result.exists():
+            read_eth_result('withdraw', result)
+        elif historical and intent_path(result).exists():
+            intent = load(intent_path(result))
+            if intent['mode'] != 'withdraw' or (known_tx and
+                    known_tx.removeprefix('0x').lower() != intent['tx'].removeprefix('0x').lower()):
+                raise ReconciliationRequired('Historical paid row differs from the signed withdrawal; reconcile the job.')
+            known_tx = intent['tx']
+        elif not historical:
+            eth_send('withdraw', directory/'proof', result)
+        # A legacy paid row can be recovered with just its original tx id and packet.
+        # This is always read-only on Ethereum, even when the old receipt file is absent.
+        terms = withdrawal_terms(job, directory)
+        done = finalized_result('withdraw', result, terms, known_tx)
+    except (ReconciliationRequired, OSError, ValueError, TypeError, KeyError) as error:
+        if not isinstance(error, ReconciliationRequired):
+            error = ReconciliationRequired('Unusable withdrawal evidence; reconcile '+str(error)[:160])
+        stage(job, 'awaiting_finality' if isinstance(error, AwaitingFinality) else 'reconciliation_required', str(error))
+        raise error
+    job.update(ethereum_tx=done['tx'], ethereum_block=done['block'], ethereum_finality=done['finality'], error=None)
+    stage(job, 'paid', 'USDC payout finalized on Ethereum.')
+    return True
+
+
+def proven_paid(job):
+    evidence = job.get('ethereum_finality') or {}
+    return (evidence.get('chain_id') == 1 and evidence.get('block_hash')
+            and evidence.get('expected', {}).get('burn_tx_id') == job['burn_tx_id'])
+
+
 def process(job):
     burn=job['burn_tx_id'];d=JOBS/burn
+    if recover_payment(job, d):
+        return
+    history = {entry[1] for entry in job.get('history', [])} | {job.get('stage')}
+    if job.get('journal_version') != 1:
+        legacy_checkpoint = any((folder/'proof-report.json').exists() and
+                                not (folder/'eth-result.json').exists()
+                                for folder in d.glob('checkpoint-*'))
+        if 'paying' in history or legacy_checkpoint:
+            raise ReconciliationRequired('Legacy send stage has no complete transaction journal; reconcile against Ethereum.')
+        job['journal_version'] = 1
+        write_job(job)
+    # An independently advanced verifier tip must never hide a failed or unresolved checkpoint.
+    for folder in sorted(d.glob('checkpoint-*')):
+        result = folder / 'eth-result.json'
+        if result.exists() or intent_path(result).exists():
+            stage(job, 'catching_up', 'Checking saved Ethereum checkpoint transaction.')
+            if not result.exists():
+                eth_send('checkpoint', folder, result)
+            finalized_checkpoint(folder)
     stage(job,'reading','Reading the finalized burn from all six validators.')
     bundle,A=export_bundle(d);blocks={b['header']['height']:b for b in A['blocks']['blocks']}
     red=[r for r in A['ledger']['vault_bridge_redemptions'] if r['withdrawal_packet']['burn_tx_id']==burn]
-    if len(red)!=1:raise RuntimeError('This burn is not finalized on the network.')
+    if len(red)!=1:raise IneligibleBurn('This burn is not finalized on the network.')
     red=red[0];p=red['withdrawal_packet'];h=red['created_at_height']
-    if p['source_chain_id']!=1 or p['vault_address'].lower()!='0xe7a432a28b20621a70e845c7f202004cf98e7a2c':raise RuntimeError('This burn is not for the Ethereum mainnet USDC vault.')
-    job.update(amount_atoms=str(p['amount_atoms']),recipient=p['recipient'],burn_height=h,withdrawal_id=p['withdrawal_id']);write_job(job)
+    if p['source_chain_id']!=1 or p['vault_address'].lower()!='0xe7a432a28b20621a70e845c7f202004cf98e7a2c':raise IneligibleBurn('This burn is not for the Ethereum mainnet USDC vault.')
+    job.update(amount_atoms=str(p['amount_atoms']),recipient=p['recipient'],burn_height=h,withdrawal_id=p['withdrawal_id'],packet_digest=red.get('withdrawal_packet_evm_digest'));write_job(job)
     six=read_six(burn);rs={json.dumps(x['receipts'],sort_keys=True) for x in six};assert len(six)==6 and len(rs)==1,'validators disagree on the burn receipt'
     receipt=[r for r in six[0]['receipts'] if r['tx_id']==burn];assert len(receipt)==1 and receipt[0]['accepted'],'burn receipt is not accepted'
-    if len(blocks[h]['receipt_ids'])!=1:raise RuntimeError('Burn shares its block with other transactions; this service handles single-burn blocks only for now.')
     a=audit(d/'audit');v=a['contracts']['PFTLFinalityVerifierV1']['reads'];L=v['latestFinalizedHeight']
-    withdrawal_result = d / 'eth-withdrawal.json'
-    if withdrawal_result.exists():
-        done = read_eth_result('withdraw', withdrawal_result)
-        job.update(ethereum_tx='0x' + done['tx'].removeprefix('0x'), ethereum_block=done['block'])
-        stage(job, 'paid', 'USDC paid on Ethereum.')
-        return
-    c=[dict(r,active=r.get('active',True)) for r in A['validator_registry']['validators']]
-    step=lambda b:dict(block=b,committee_epoch=b['header']['consensus_v2_commit']['proposal']['domain']['committee_epoch'],committee=c)
-    if L>=h:raise RuntimeError('Ethereum checker is already past this burn; it needs manual handling.')
-    n=0;total=max(0,-(-(h-L-MAX_STEP)//65))
-    while h-L>MAX_STEP:
+    if L >= h:
+        L = historical_checkpoint(blocks, h, a)
+    settle(job, d, a, A, blocks, L, h, receipt[0], p)
+    bundle.unlink(missing_ok=True)
+
+
+def settle(job, d, a, archive, blocks, L, h, receipt, packet):
+    burn = job['burn_tx_id']
+    n=0;total=max(0,-(-(h-L-MAX_STEP-1)//65))
+    while h-L>MAX_STEP+1:
         n+=1;end=min(L+65,h-1);stage(job,'catching_up',f'Bringing the Ethereum checker up to date, step {n} of {total}.')
-        w=dict(schema='postfiat.pfusdc.checkpoint_proof_witness.v1',chain_id=A['tip']['chain_id'],genesis_hash=A['tip']['genesis_hash'],protocol_version=A['tip']['protocol_version'],prior_checkpoint_block_id=blocks[L]['header']['block_hash'],finality_ancestry=[step(blocks[x]) for x in range(L+1,end)],**step(blocks[end]))
-        cd=d/f'checkpoint-{L}-{end}';cd.mkdir(exist_ok=True);save(cd/'witness.json',w)
+        w=native_witness(blocks, L, end)
+        cd=d/f'checkpoint-{L}-{end}';ensure_directory(cd);save(cd/'witness.json',w)
         checkpoint_result = cd / 'eth-result.json'
-        if checkpoint_result.exists():
-            read_eth_result('checkpoint', checkpoint_result)
-        else:
+        if not checkpoint_result.exists():
             prove('checkpoint',cd/'witness.json',cd,f'{burn[:16]}-cp-{end}')
             eth_send('checkpoint', cd, checkpoint_result)
+        finalized_checkpoint(cd)
         L=end
     stage(job,'proving','Building the withdrawal proof on the GPU.')
-    bucket=[b for b in A['ledger']['vault_bridge_bucket_states'] if b['bucket_id']==red['bucket_id']][0]
-    prof=[r for r in A['governance']['vault_bridge_route_profiles'] if r['profile_hash']==bucket['policy_hash']];assert len(prof)==1
-    leaf=dict(schema='postfiat.bridge_exit_leaf.v1',accepted_receipt_code='accepted',accepted_receipt_id=burn,amount_atoms=p['amount_atoms'],asset_id=p['vault_bridge_asset_id'],burn_tx_id=burn,destination_hash=p['destination_hash'],evidence_root=p['evidence_root'],finalized_height=p['finalized_height'],recipient=p['recipient'],route_epoch=prof[0]['profile']['route_epoch'],source_bucket_id=p['source_bucket_id'],withdrawal_id=p['withdrawal_id'],withdrawal_packet_evm_digest=red['withdrawal_packet_evm_digest'],withdrawal_packet_hash=red['withdrawal_packet_hash'])
-    w=dict(schema='postfiat.pfusdc.egress_proof_witness.v1',chain_id=A['tip']['chain_id'],genesis_hash=A['tip']['genesis_hash'],protocol_version=A['tip']['protocol_version'],bridge_exit_root_activation_height=1,prior_checkpoint_block_id=blocks[L]['header']['block_hash'],finality_ancestry=[step(blocks[x]) for x in range(L+1,h)],route_profile=prof[0],receipt=receipt[0],merkle_proof=dict(leaf=leaf,leaf_count=1,leaf_index=0,siblings=[]),withdrawal_packet=p,withdrawal_packet_evm_digest=red['withdrawal_packet_evm_digest'],withdrawal_packet_hash=red['withdrawal_packet_hash'],**step(blocks[h]))
-    a=audit(d/'audit')
-    if prof[0]['profile']['route_epoch']!=a['contracts']['PFTLFinalityVerifierV1']['reads']['routeEpoch']:w=exit_profile.select(w,A,a)
-    save(d/'exit-witness.json',w);bundle.unlink(missing_ok=True)
+    w=native_witness(blocks, L, h, packet['withdrawal_id'])
+    if (w['receipt'] != receipt or w['withdrawal_packet'] != packet or
+            w['block']['header']['block_hash'] != blocks[h]['header']['block_hash']):
+        raise ValueError('Native witness differs from the finalized withdrawal.')
+    if w['route_profile']['profile']['route_epoch']!=a['contracts']['PFTLFinalityVerifierV1']['reads']['routeEpoch']:
+        w=exit_profile.select(w,archive,a)
+    save(d/'exit-witness.json',w)
     prove('withdrawal',d/'exit-witness.json',d/'proof',f'{burn[:16]}-wd')
     stage(job,'paying','Sending the payout transaction on Ethereum.')
-    done=eth_send('withdraw',d/'proof',withdrawal_result)
-    job.update(ethereum_tx='0x'+done['tx'].removeprefix('0x'),ethereum_block=done['block']);stage(job,'paid','USDC paid on Ethereum.')
+    eth_send('withdraw',d/'proof',d/'eth-withdrawal.json')
+    recover_payment(job,d)
+
+
+def reconciliation_due(job, directory, startup):
+    if job.get('stage') == 'paid':
+        return not proven_paid(job)
+    if job.get('stage') not in ('awaiting_finality', 'reconciliation_required'):
+        return False
+    elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(job['updated_at'])).total_seconds()
+    if not startup and elapsed < 300:
+        return False
+    if job.get('stage') == 'awaiting_finality':
+        return True
+    results = [directory/'eth-withdrawal.json',
+               *(folder/'eth-result.json' for folder in directory.glob('checkpoint-*'))]
+    return any(intent_path(result).exists() and not result.exists() for result in results)
+
+
+def run_jobs(startup=False):
+    for path in sorted(JOBS.glob('*/job.json'),key=lambda p:p.stat().st_mtime):
+        try:
+            job=load(path)
+            if job.get('stage') not in ACTIVE_STAGES and not reconciliation_due(job, path.parent, startup):
+                continue
+            try:
+                process(job)
+            except Exception as error:
+                detail = str(error)[:400]
+                job['error'] = detail
+                job['error_scope'] = 'burn' if isinstance(error, IneligibleBurn) else 'route'
+                new_stage = ('awaiting_finality' if isinstance(error, AwaitingFinality) else
+                             'reconciliation_required' if isinstance(error, ReconciliationRequired) else 'failed')
+                if job.get('stage') != new_stage or job.get('detail') != detail:
+                    stage(job, new_stage, detail)
+        except (ValueError, OSError) as error:
+            print(now(), path, error, file=sys.stderr, flush=True)
+
 
 def worker():
-    while True:
-        queue_event.wait(15);queue_event.clear()
-        for path in sorted(JOBS.glob('*/job.json'),key=lambda p:p.stat().st_mtime):
-            job=load(path)
-            if job.get('stage') not in ('queued',):continue
-            try:process(job)
-            except Exception as error:
-                job['error']=str(error)[:400];stage(job,'failed',str(error)[:400])
+    worker_started.set()
+    try:
+        startup = True
+        while True:
+            run_jobs(startup)
+            startup = False
+            queue_event.wait(15)
+            queue_event.clear()
+    finally:
+        worker_started.clear()
+
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*a):pass
     def reply(self,code,value):
         body=json.dumps(value).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body)
-    def public(self,job):return {k:job.get(k) for k in ('burn_tx_id','stage','detail','amount_atoms','recipient','ethereum_tx','error','created_at','updated_at')}
+    def public(self,job):
+        value = {k:job.get(k) for k in ('burn_tx_id','stage','detail','amount_atoms','recipient',
+                 'ethereum_tx','ethereum_finality','error','created_at','updated_at')}
+        if job.get('stage') == 'paid' and not proven_paid(job):
+            value.update(stage='awaiting_finality', detail='Checking the historical payout against finalized Ethereum.')
+        return value
     def do_GET(self):
         try:
             if self.path=='/api/bridge/withdrawals/readiness':return self.reply(200,readiness())
@@ -188,13 +441,15 @@ class Handler(BaseHTTPRequestHandler):
             if self.path!='/api/bridge/withdrawals':return self.reply(404,dict(ok=False,code='not_found'))
             body=json.loads(self.rfile.read(min(int(self.headers.get('Content-Length','0')),4096)) or b'{}');burn=body.get('burn_tx_id','')
             if not isinstance(burn,str) or not re.fullmatch(r'[0-9a-f]{96}',burn):return self.reply(400,dict(ok=False,code='invalid_withdrawal_request',message='Invalid burn transaction id.'))
-            job=read_job(burn)
-            if job is None or job.get('stage')=='failed':
-                job=dict(job or {},burn_tx_id=burn,created_at=(job or {}).get('created_at',now()),error=None);stage(job,'queued','Waiting for the withdrawal worker.')
+            with lock:
+                job=read_job(burn)
+                if job is None or job.get('stage') in ('failed','reconciliation_required'):
+                    job=dict(job or {},burn_tx_id=burn,created_at=(job or {}).get('created_at',now()),error=None)
+                    stage(job,'queued','Waiting for the withdrawal worker.')
             queue_event.set();self.reply(200,dict(ok=True,**self.public(job)))
         except Exception as error:self.reply(503,dict(ok=False,code='withdrawal_service_error',message=str(error)[:200]))
 
 if __name__=='__main__':
-    JOBS.mkdir(parents=True,exist_ok=True)
+    ensure_directory(JOBS)
     threading.Thread(target=worker,daemon=True).start()
     print(now(),'withdrawal service on 127.0.0.1:%d'%PORT,flush=True);ThreadingHTTPServer(('127.0.0.1',PORT),Handler).serve_forever()
