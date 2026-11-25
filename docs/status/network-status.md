@@ -1,6 +1,6 @@
 # Network Status
 
-**Guidance reviewed 2026-11-06; latest fleet observation 2026-11-19.**
+**Guidance reviewed 2026-11-25; latest fleet observation 2026-11-25.**
 This page summarizes recorded observations and separately labels newer source
 work. It is not a live query. The full, dated operating log is
 [Current State](chain-state-current.md); when the two disagree, the log wins.
@@ -30,31 +30,62 @@ position.
 
 ## Last recorded release and height
 
-The 2026-10-30 deployment is the last one with a deployment receipt in
-[Current State](chain-state-current.md); the 2026-11-19 read found release 6.1
-running, rolled out by the operators on 2026-11-19 after release 6 and not from
-`main`, for which no receipt is recorded.
-The [November 6 handoff](../handoffs/2026-11-06___dravlic__first_real_base_sepolia_lock_released_and_bridge_phase_2_complete.md)
-reports read-only probes of all six hosts with the same executable, height, tip
-and state root. This documentation refresh made no new fleet probe; the handoff
-does not re-certify every October deployment check.
+On 2026-11-25 a read-only `status` read of all six validators found the second
+Solana exit release running, with one tip and one state root
+([Current State](chain-state-current.md)). The 2026-10-30 deployment is still
+the last one with a deployment receipt on that page. Since 21 November `main`
+is the only long-lived branch and releases are cut from it
+([Master State](master-state.md)).
 
 | Item | Value |
 | --- | --- |
-| Running deployment | Release 6.1: build revision `6123e64f` on all six validators, complete at height 1469, after release 6 (`cdc98a49`, 2026-11-19 02:45–03:08 UTC, one host at a time); source on private branches, not `main`; `deployment_manifest_verified` false; no deployment receipt recorded |
-| Previous release (last deployment receipt) | `vote-records-20261030` (source `ae70d66d`, branch `release/vote-records-20261030`) |
-| Its node executable SHA-256 | `87cfe797af8c8c1c98e08b4794473bd25acb58ce0b7f57f0ea1b1f0fe98023c7` |
-| Its rollout | One validator at a time with `scripts/postfiat-safe-rollout apply-next`, 2026-10-30 10:31–11:14 UTC; no rollback needed |
-| Height | 1513 on all six validators (state root `133f1e28…`) |
-| Latest fleet observation | 2026-11-19 05:56:01–05:56:16 UTC, read-only `status` on all six: one tip and one state root. A new deposit route activated at 1461 and was revised at 1470 (revision 2). Height 1453 stalled for 15 min 31 s on 18–19 November; nothing forked or was lost, and the fix is not deployed. Neither release 6 nor 6.1 carries `main`'s fixes `d9260e937` (account history) and `569f5f73b` (redelivery) |
+| Running deployment | Second Solana exit release: build revision `04600868` on all six validators, rolled one host at a time on 2026-11-24, rules active from block 1890. `04600868` is `main` at `e5c4f6ceb` plus the release height and two small fixes, on the branch `release/sol-exit-r2`; it is not on `main` yet. `deployment_manifest_verified` reads true |
+| Its node binary SHA-256 | `6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b` (all six, 2026-11-25 read) |
+| Earlier releases this week | `sol-exit-r1` (`71dbc9b3`, 2026-11-23, rules from block 1841) and `main-r64-20261121` (`674dbb18a`, 2026-11-21); both are on `main` |
+| Last deployment receipt | `vote-records-20261030` (source `ae70d66d`), 2026-10-30, with `scripts/postfiat-safe-rollout apply-next` |
+| Height | 1897 on all six validators (state root `53265992…`) |
+| Latest fleet observation | 2026-11-25 10:16:21–10:16:36 UTC, read-only `status` on all six: one tip, one state root, empty mempools |
 
-Changes merged after that release are not evidence of deployment. The
-[next-release plan](../plans/active/next-validator-release-plan-20261115.md)
-separates source changes from the candidate cut and its qualification.
+Changes merged to `main` after `e5c4f6ceb` are not evidence of deployment. A
+`main` commit runs on the devnet only once the validators report a build that
+contains it.
 
 The chain makes blocks only when there are transactions to order, so height
 does not advance with wall-clock time. A height that has not moved for days is
 normal on this devnet.
+
+## USDC bridges
+
+Both routes are part of this controlled devnet. The Solana route runs with
+small caps, and its withdrawals have not been announced publicly.
+
+- **Solana USDC, both directions.** Deposits mint pfUSDC through the Task Node;
+  withdrawals burn pfUSDC and pay USDC on Solana. Withdrawals have run since the
+  first exit release (rules from block 1841, 2026-11-23); since the second
+  (block 1890, 2026-11-24) every Solana deposit batch can be withdrawn, a burn
+  that cannot be paid has a refund path, and each validator reviews a
+  settlement itself before it signs. Real withdrawals of 0.30, 0.30 and 4.00
+  USDC were paid and settled on 24 November.
+  Limits today: one withdrawal spends one deposit batch; withdrawals below 0.30
+  USDC are refused; the vault accepts 25 USDC more; a withdrawal takes about
+  four minutes; cancel is refused while the route is paused. Not yet run on the
+  live chain: a cancel and refund, and a settlement with one validator down. The
+  services read Solana through free public endpoints.
+- **Ethereum USDC.** The deposit bridge, wallet proxy and payout service were
+  up at the 23 November handoff. Two deposits stuck since 19 November were
+  credited at heights 1741–1745 after the 21 November move. No real Ethereum deposit or withdrawal is
+  recorded since then.
+- **Where the services run.** On 21 November every bridge service was moved to
+  one checkout of `main` ([Master State](master-state.md#where-the-bridges-run)).
+  At the 25 November handoff (state of 24 November, 22:30 UTC) the relay host
+  ran local edits recorded on the branch `ops/relay-host-live-edits-20261125`
+  and in #229 and #230 (not merged), and the payout service ran a bundle of
+  the second release plus a speed-up (`c033278b`, on `ops/sol-exit-r2-speed`).
+  Moving both back to unmodified `main` is open.
+
+Sources: the [25 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-25.md),
+the [23 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-23.md),
+[Master State](master-state.md) and the [Bridge Audit Map](bridge-audit-map.md).
 
 ## Other running components
 
@@ -64,8 +95,9 @@ normal on this devnet.
   binary `eea96ba6…`. G6 remains open; this packet does not automatically
   qualify later binaries. See [State And Storage](../architecture/state-and-storage.md).
 - **FastPay and FastSwap.** FastPay's epoch-2 recovery committee was installed
-  at height 1123 (2026-10-12). The FastSwap service runs at committee epoch 2
-  on all six validators since 2026-10-21. These are certificate lanes beside
+  at height 1123 (2026-10-12). The FastSwap service ran at committee epoch 2
+  on all six validators from 2026-10-21; it was not re-read for this review.
+  These are certificate lanes beside
   block consensus; see [Settlement Lanes](../architecture/settlement-lanes.md).
 - **Validator keys.** The recorded fleet uses software key files. Main now
   implements a separate signer process with a Unix socket, peer-UID checks and
@@ -76,9 +108,9 @@ normal on this devnet.
   File-signer mode needs `--unsafe-devnet-file-signer`. Services on JSON/JSONL
   or not-yet-activated storage need `--unsafe-devnet-json-storage`; that flag
   bypasses the startup check and does not select JSON storage.
-- **Private wallet path.** Present in the recorded release, but admission was
-  off and pricing/egress governance incomplete at the last observation. Source
-  and local tests do not establish a live private-wallet service. See the
+- **Private wallet path.** Public submission of shielded actions is off on
+  every validator (23 November handoff). Source and local tests do not
+  establish a live private-wallet service. See the
   [readiness milestone](../plans/active/user-proven-shielded-actions-milestone.md).
 
 ## Newer implementation on main
@@ -91,8 +123,9 @@ first real Base Sepolia Lock was released into native PFT on a local
 six-validator fleet, refused on resubmission, and the watcher reported it
 backed ([record](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/listings/coinbase/pft-erc20-release-path-qualification-20261103.md#base-sepolia-rehearsal-2026-11-06-part-2-the-release-on-a-local-fleet)). The
 native half of the reverse route is implemented behind the genesis switch
-`exports_enabled`, default off. The Base verifier deployment, export prover
-and relay remain open. These are source/test results, not a Base mainnet
+`exports_enabled`, default off. The lane export proof program and its relay
+were merged into `main` by 2026-11-11; the Base verifier deployment and any
+deployment of the export prover and relay remain open. These are source/test results, not a Base mainnet
 deployment or activation on `postfiat-wan-devnet-2`.
 
 The [listing milestone](../plans/active/pft-erc20-base-listing-milestone.md)

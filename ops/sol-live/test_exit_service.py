@@ -42,17 +42,17 @@ class JobsTest(unittest.TestCase):
         row = dict(
             burn_tx_id=tx,
             bucket_id=BUCKET,
-            destination_ref=PREFIX + "12" * 32,
+            destination_ref=PREFIX + "ce" * 32,
             amount_atoms=20000,
         )
-        self.assertTrue(validate_burn(row, tx))
+        self.assertTrue(validate_burn(row, tx, {BUCKET: {}}))
         for field, value in [
             ("bucket_id", "ff" * 48),
             ("destination_ref", "evm-erc20:1:0x12"),
             ("burn_tx_id", "33" * 48),
         ]:
             with self.assertRaises(ValueError):
-                validate_burn(dict(row, **{field: value}), tx)
+                validate_burn(dict(row, **{field: value}), tx, {BUCKET: {}})
 
     def test_failed_job_can_retry_and_queue_has_a_limit(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -77,7 +77,7 @@ class JobsTest(unittest.TestCase):
             burn_tx_id=burn,
             bucket_id=BUCKET,
             amount_atoms=20000,
-            destination_ref=PREFIX + "88" * 32,
+            destination_ref=PREFIX + "ce" * 32,
             created_at_height=7,
         )
         c = Mock()
@@ -85,7 +85,20 @@ class JobsTest(unittest.TestCase):
         c.call.return_value = {"value": payout.FLOOR - 1}
         with (
             patch.object(payout, "cluster", return_value=c),
-            patch.object(payout, "rpc", return_value={"redemptions": [row]}),
+            patch.object(
+                payout,
+                "rpc",
+                return_value={
+                    "redemptions": [row],
+                    "buckets": [
+                        dict(
+                            bucket_id=BUCKET,
+                            policy_hash=payout.POLICY,
+                            source_domain=payout.SOURCE_DOMAIN,
+                        )
+                    ],
+                },
+            ),
             patch.object(payout, "prove") as proof,
         ):
             with self.assertRaisesRegex(ValueError, "floor"):
@@ -105,6 +118,7 @@ class JobsTest(unittest.TestCase):
                         destination_ref=DEST,
                     ),
                     "ab" * 48,
+                    {BUCKET: {}},
                 )
             ),
             str(PHANTOM),
@@ -128,14 +142,17 @@ class JobsTest(unittest.TestCase):
             ) as ready,
             patch(
                 "exit_service.redemptions",
-                return_value=[
-                    dict(
-                        burn_tx_id=burn,
-                        bucket_id=BUCKET,
-                        amount_atoms=20000,
-                        destination_ref=PREFIX + "00" * 32,
-                    )
-                ],
+                return_value=(
+                    [
+                        dict(
+                            burn_tx_id=burn,
+                            bucket_id=BUCKET,
+                            amount_atoms=20000,
+                            destination_ref=PREFIX + "00" * 32,
+                        )
+                    ],
+                    {BUCKET: {}},
+                ),
             ),
         ):
             server.journal = Journal(Path(directory) / "jobs.sqlite")
@@ -176,7 +193,7 @@ class JobsTest(unittest.TestCase):
                     raw,
                     dict(hdr, **{"Content-Length": str(len(raw))}),
                 )
-                with patch("exit_service.redemptions", return_value=[]):
+                with patch("exit_service.redemptions", return_value=([], {BUCKET: {}})):
                     self.assertEqual(request(*post_args)[0], 404)
                     self.assertIsNone(server.journal.get(burn))
                 code, row = request(
@@ -190,7 +207,7 @@ class JobsTest(unittest.TestCase):
             finally:
                 server.shutdown()
 
-    def test_readiness_requires_the_governed_series_and_vault_coverage(self):
+    def test_readiness_stays_ready_with_one_validator_lost(self):
         from unittest.mock import Mock, patch
         import exit_payout as payout
 
@@ -201,7 +218,7 @@ class JobsTest(unittest.TestCase):
             source_series_id=payout.SERIES,
             status="active",
             outstanding_vault_bridge_atoms=40000,
-            source_domain="shared",
+            source_domain=payout.SOURCE_DOMAIN,
             redeemable_at_par=True,
             impairment_factor_bps=10000,
             redemption_queue_atoms=0,
@@ -223,9 +240,87 @@ class JobsTest(unittest.TestCase):
                                 series_supply_atoms=40000, outstanding_vault_bridge_atoms=40000),
             current_height=1755,
             burns_open=True,
+            min_withdrawal_atoms=300000,
+            covered_bucket_ids=[BUCKET],
+            decision_signatures=dict(open=6, close=5, paid=5, min_withdrawal=5, retire=6),
         )
 
-        def rpc(index, method, asset_id):
+        def rpc(index, method, asset_id, timeout=None):
+            if index == 3:
+                raise RuntimeError("validator-3 unreachable")
+            if method == "vault_bridge_route":
+                self.assertEqual(asset_id, payout.SERIES)
+                return route
+            self.assertEqual((method, asset_id), ("vault_bridge_status", payout.ASSET))
+            return live_status
+
+        account = dict(
+            owner=str(payout.TOKEN),
+            data=bytes(payout.MINT) + bytes(32) + (40000).to_bytes(8, "little"),
+        )
+        c.account.return_value = account
+        with (
+            patch.object(payout, "cluster", return_value=c),
+            patch.object(payout, "light", return_value=(1753, "anchor")),
+            patch.object(
+                payout, "inspect_vault", return_value={"custody_atoms": 40000}
+            ),
+            patch.object(payout, "payout_budget", return_value=1000),
+            patch.object(payout, "balance", return_value=payout.FLOOR + 10000000),
+            patch.object(payout, "available"),
+            patch.object(
+                payout,
+                "fleet",
+                return_value=dict(
+                    block_height=1755, block_tip_hash="tip", state_root="root"
+                ),
+            ),
+            patch.object(payout, "check_light_path"),
+            patch.object(payout.FINALIZED_PATH, "check", side_effect=payout.parent_of),
+            patch.object(payout, "rpc", side_effect=rpc),
+        ):
+            value = payout.readiness()
+            self.assertTrue(value["ready"], value)
+
+    def test_readiness_requires_the_governed_series_and_vault_coverage(self):
+        from unittest.mock import Mock, patch
+        import exit_payout as payout
+
+        c = Mock()
+        b = dict(
+            bucket_id=BUCKET,
+            policy_hash=payout.POLICY,
+            source_series_id=payout.SERIES,
+            status="active",
+            outstanding_vault_bridge_atoms=40000,
+            source_domain=payout.SOURCE_DOMAIN,
+            redeemable_at_par=True,
+            impairment_factor_bps=10000,
+            redemption_queue_atoms=0,
+            other_allocations_atoms=0,
+            nav_subscription_allocations_atoms=0,
+            counted_value_atoms=40000,
+        )
+        live_status = dict(
+            buckets=[b],
+            issuer="issuer",
+            finalized_epoch=7,
+            finalized_reserve_packet_hash="15" * 48,
+        )
+        route = dict(
+            active=True,
+            profile_hash=payout.EXIT,
+            profile={"route_epoch": 8},
+            source_backing=dict(revision=8, bucket_id=BUCKET, policy_hash=payout.POLICY,
+                                series_supply_atoms=40000, outstanding_vault_bridge_atoms=40000),
+            current_height=1755,
+            burns_open=True,
+            min_withdrawal_atoms=300000,
+            covered_bucket_ids=[BUCKET],
+            decision_signatures=dict(open=6, close=5, paid=5, min_withdrawal=5, retire=6),
+        )
+
+        def rpc(index, method, asset_id, timeout=None):
             if method == "vault_bridge_route":
                 self.assertEqual(asset_id, payout.SERIES)
                 return route
@@ -261,11 +356,22 @@ class JobsTest(unittest.TestCase):
             self.assertTrue(value["ready"], value)
             self.assertEqual(
                 (
-                    value["series_asset_id"],
-                    value["bucket_id"],
+                    value["source_domain"],
+                    value["buckets"],
                     value["destination_prefix"],
                 ),
-                (payout.SERIES, BUCKET, PREFIX),
+                (
+                    payout.SOURCE_DOMAIN,
+                    [
+                        dict(
+                            bucket_id=BUCKET,
+                            series_asset_id=payout.SERIES,
+                            outstanding_atoms="40000",
+                            series_supply_atoms="40000",
+                        )
+                    ],
+                    PREFIX,
+                ),
             )
             route["source_backing"]["series_supply_atoms"] += 20000
             value = payout.readiness()

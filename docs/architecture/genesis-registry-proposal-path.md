@@ -4,6 +4,8 @@
 
 **Date:** 2026-09-01
 
+**Review note (25 November 2026):** statements about the fork or "today" are as of 1 September 2026 and come from read-only clones of external repositories; they were not re-checked.
+
 **Author:** Domagoj Ravlić (`dravlic`)
 
 **Decision owner:** Post Fiat

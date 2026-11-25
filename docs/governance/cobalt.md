@@ -30,6 +30,16 @@ block-finality protocol.
 
 ## Current Controlled-Devnet State
 
+!!! note "Dated observation"
+    The paragraphs below are the observation of 26 August 2026 at height 924.
+    On 25 November 2026 all six validators were at height 1897 with one state
+    root, and the `validators` read on validator 0 listed six ML-DSA-65
+    validators (registry root `08a451e0…`). No read-only RPC on `main` reports
+    the Cobalt authority state, so whether Cobalt is still the active
+    validator-trust authority was not re-read. `python3 -m postfiat_rpc.cobalt
+    scenario`, `readiness` and `adversarial` still verify their packets on
+    `main` (run on 25 November 2026).
+
 The final authenticated E5 observation ran from
 `2026-08-26T06:34:55Z` through `06:35:50Z` on
 `postfiat-wan-devnet-2`. All six validators converged at height 924, Cobalt

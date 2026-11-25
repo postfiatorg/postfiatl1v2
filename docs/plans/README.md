@@ -5,6 +5,12 @@
 
 Only current execution plans and completed plans belong here.
 
+Checked on 25 November 2026: every plan listed below exists. The four
+validator release plans are dated 5 October to 15 November 2026, before the
+releases of 21 to 24 November ([Master State](../status/master-state.md) and
+the [handoff of 25 November](../status/handoff-2026-11-25.md)); whether they
+are still active is the owner's decision.
+
 ## Active
 
 - [PFT as an ERC-20 on Base: the Coinbase listing path](active/pft-erc20-base-listing-milestone.md): this lane's priority from 2026-10-26

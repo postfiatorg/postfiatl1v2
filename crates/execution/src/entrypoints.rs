@@ -940,7 +940,7 @@ pub fn execute_asset_orchard_ingress_burn(
 ) -> Receipt {
     let paired_credit = match &transaction.unsigned.operation {
         AssetTransactionOperation::AssetBurn(burn)
-            if burn.asset_id == postfiat_types::solana_exit::SERIES =>
+            if solana_exit_series_bucket_at(genesis, ledger, &burn.asset_id, height).is_some() =>
         {
             burn.amount
         }
@@ -1175,17 +1175,17 @@ fn execute_asset_transaction_with_checked_preimage(
         {
             // Orchard is unchanged during transparent execution, so it cancels
             // in the delta. The paired ingress credits its signed burn amount.
-            let before = SolanaExitAccounting::read(ledger, &[])?;
-            let mut after = SolanaExitAccounting::read(&next_ledger, &[])?;
-            after.supply = after
-                .supply
-                .checked_add(paired_orchard_credit)
-                .ok_or_else(|| {
-                    (
-                        "issued_supply_overflow",
-                        "revision-8 ingress supply overflows".into(),
-                    )
-                })?;
+            let second = postfiat_types::solana_exit::second_release_active(
+                &genesis.chain_id,
+                &transaction.unsigned.genesis_hash,
+                block_height,
+            );
+            let before = SolanaExitAccounting::read(&genesis.chain_id, ledger, &[], second)?;
+            let mut after =
+                SolanaExitAccounting::read(&genesis.chain_id, &next_ledger, &[], second)?;
+            if let AssetTransactionOperation::AssetBurn(burn) = &transaction.unsigned.operation {
+                after.credit(&burn.asset_id, paired_orchard_credit)?;
+            }
             before.verify_change(&after)?;
         }
         Ok(())

@@ -110,7 +110,14 @@ pub fn pfusdc_egress_witness(
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "withdrawal bucket is absent"))?;
     let route_profile = if redemption.withdrawal_packet.source_chain_id
         == postfiat_types::SOLANA_EGRESS_PACKET_CHAIN
-        && postfiat_types::solana_exit::matches_bucket(bucket)
+        && postfiat_types::solana_exit::matches_bucket(
+            bucket,
+            postfiat_types::solana_exit::second_release_active(
+                &genesis.chain_id,
+                &genesis_hash(&genesis),
+                block.header.height,
+            ),
+        )
         && postfiat_types::solana_exit::release_height(&genesis.chain_id, &genesis_hash(&genesis))
             .is_some_and(|h| h <= block.header.height)
     {

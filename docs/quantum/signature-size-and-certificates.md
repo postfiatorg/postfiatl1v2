@@ -17,6 +17,6 @@ and explicit performance evidence.
 
 ## Evidence
 
-- `reports/testnet-ml-dsa-performance/`
+- `reports/testnet-ml-dsa-performance/` *(archived outside this repository; see `reports/README.md`)*
 - `docs/status/controlled-testnet-burndown.md`
 - `docs/runbooks/validator-history-retention.md`

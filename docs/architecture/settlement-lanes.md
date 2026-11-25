@@ -14,7 +14,7 @@ semantics. They do not share one interchangeable finality rule.
 | W6 atomic swap | Two account/issued-asset legs | Two distinct ML-DSA-65 owner authorizations over one exact intent | Consensus certificate plus accepted atomic-swap receipt | Implemented and covered by six-validator both-or-neither/conservation tests. |
 | FastPay | Prefunded single-owner PFT objects | Owner-signed order plus distinct-validator certificate | Durable certified apply under the active FastPay policy | Implemented in source with ordered consume-or-cancel recovery; production activation and custody remain deployment gates. |
 | FastSwap | Prefunded two-owner asset objects | Two owner signatures plus phase-specific distinct-validator certificates | Terminal Confirm EffectsQC, or terminal Cancel decision | Implemented in source with exact-six catch-up/restart evidence; shared-network activation is separate from source availability. |
-| Asset-Orchard | Shielded PFT/issued-asset notes | RedPallas action authorization plus Halo2 proof; block inclusion is validator-certified | Accepted shielded receipt, new commitments/nullifiers, and public turnstile accounting | Implemented private ingress, transfer/swap, recovery, and egress; boundary metadata remains public. |
+| Asset-Orchard | Shielded PFT/issued-asset notes | RedPallas action authorization plus Halo2 proof; block inclusion is validator-certified | Accepted shielded receipt, new commitments/nullifiers, and public turnstile accounting | Implemented private ingress, transfer/swap, recovery, and egress; boundary metadata remains public. On the live devnet, public submission of shielded actions is off on every validator, as recorded in the [handoff of 23 November 2026](../status/handoff-2026-11-23.md). |
 
 ## W6 consensus atomic swap
 
@@ -85,6 +85,45 @@ egress deliberately reveal their public boundary asset/value/destination data;
 the internal note openings and supported private-swap terms remain hidden.
 Legacy cleartext note actions are accepted only under authenticated historical
 replay predicates.
+
+## Solana USDC route
+
+Checked against `main` and the live devnet on 25 November 2026. Both
+directions are consensus transactions; the Solana side is a vault program and
+an exit verifier on Solana mainnet. It runs on a controlled devnet with small
+caps.
+
+- **Deposit.** A holder deposits USDC into the vault program on Solana
+  (`solana/pfusdc-vault`). A proof of the finalized deposit is submitted to
+  Post Fiat as `solana_bridge_proof_v1`; execution verifies it and credits
+  pfUSDC in the series and backing bucket of the ingress route revision that
+  verified it (each revision has its own bucket and series; the handoffs call
+  one such bucket a deposit batch)
+  (`apply_proof` and `credit_verified` in `crates/execution/src/solana_bridge.rs`).
+- **Withdrawal.** The holder burns pfUSDC with `vault_bridge_burn_to_redeem` and
+  a `solana-spl:` destination; the burn opens a pending redemption
+  (`crates/execution/src/nav_vault_asset_execution.rs`). A payout worker proves
+  the finalized burn to the exit verifier (`solana/pfusdc-egress-verifier`),
+  which pays USDC from the vault and writes the burn's one-use marker account.
+  A validator decision then settles the redemption on Post Fiat
+  (`crates/node/src/solana_exit_governance.rs`).
+- **Refund.** A burn that cannot be paid can be cancelled on Solana by its
+  destination owner or the verifier's pause authority. Payout and cancel create
+  the same marker account, as paid or as cancelled, and both refuse a marker
+  that exists (`release_burn` and `cancel_burn` in
+  `solana/pfusdc-egress-verifier/src/lib.rs`). A validator decision then
+  credits the burner back
+  ([design note](../specs/solana-exit-refund-design-20261124.md)). A cancel
+  and refund has not been run on the live chain.
+- **Releases.** The first withdrawal rules are active from block 1841 and the
+  second from block 1890 (every bucket of the shared custody can exit, refund path). The
+  second release's height is the `SECOND_RELEASES` entry in
+  `crates/types/src/solana_exit.rs`; the live build `04600868` is cut from the
+  release branch `release/sol-exit-r2`, which sets it.
+- **Limits on 24 November** ([handoff of 25 November](../status/handoff-2026-11-25.md)):
+  one withdrawal burns from one bucket and its series; withdrawals below 0.30 USDC are
+  refused; the vault accepted 25 USDC more; a withdrawal takes about four
+  minutes; cancel is refused while the route is paused.
 
 ## Source anchors
 

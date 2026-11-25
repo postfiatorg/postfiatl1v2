@@ -23,6 +23,11 @@ crates/
   ethereum-contracts/ Ethereum bridge/controller contracts
 ```
 
+Outside `crates/`: `programs/` holds the SP1 proof programs (guests), `solana/`
+the Solana vault, recorder and egress-verifier programs, and `ops/` the operator
+scripts and service units for the live bridges, the payout service and the NAV
+reading jobs (`ops/sol-live`, `ops/withdraw`, `ops/b24-live`).
+
 ## Clients and external-lane tooling
 
 | Path | Role | Guide |
@@ -40,13 +45,14 @@ for dated deployment records and the existing milestones for qualification gaps.
 
 Script names are intentionally descriptive:
 
-- `testnet-cobalt-*` for Cobalt gates and adversarial packets;
-- `testnet-orchard-*` for privacy and Orchard evidence;
-- `testnet-live-*` for live controlled network evidence;
 - `testnet-rpc-*` and `postfiat-rpc-*` for RPC tooling;
 - `testnet-validator-doctor*` and `testnet-monitor-snapshot*` for operator
   checks;
 - `devnet-*` for local development.
+
+The `testnet-cobalt-*`, `testnet-orchard-*` and `testnet-live-*` families were
+archived outside the repository during the open-source cleanup;
+`scripts/README.md` lists the retained scripts.
 
 ## Docs
 
@@ -55,8 +61,9 @@ configured in `mkdocs.yml`; source-only archives, runbooks, specs, and status
 logs remain in the same tree but are excluded from the hosted site when needed.
 
 - `docs/whitepaper.md`: the protocol design.
-- `docs/status/network-status.md` and `docs/status/chain-state-current.md`: the
-  running network (summary and full log).
+- `docs/status/network-status.md`, `docs/status/master-state.md` and
+  `docs/status/chain-state-current.md`: the running network (summary, what runs
+  and which branch, full log).
 - `docs/integrate/`: exchange and wallet integration.
 - `docs/runbooks/`: operator procedures.
 - `docs/specs/`: specifications; the site publishes the ones listed under
