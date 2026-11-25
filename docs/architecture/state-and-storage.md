@@ -96,11 +96,11 @@ releases: `vote-records-20261030` (binary `87cfe797…`, source `ae70d66d`) on
 ([Master State](../status/master-state.md)), and the Solana exit releases of
 23 and 24 November. On 25 November all six validators were at height 1897
 with one state root on build `04600868`. Validator 0's `status` reported
-`storage.backend` `redb` (4.2.0), `storage_format` `postfiat-redb-v1`,
-`scheduled_activation_height` 930 and `integrity_status`
-`verification_stale_or_missing`: its last full verification was at height 927
-(`reason_code` `storage_full_verification_stale`). The other five were not read
-for these fields.
+`storage.backend` `redb` (4.2.0), `storage_format` `postfiat-redb-v1` and
+`scheduled_activation_height` 930. At height 1900 all six reported
+`transactional_active` true and `integrity_status`
+`verification_stale_or_missing`, with the last full verification at height 927
+(`reason_code` `storage_full_verification_stale` on validator 0).
 
 **Qualification: `OFFLINE QUALIFIED` (2026-10-23).** The packet for
 `store-handle-20261021`, binary `eea96ba6…`, source `86706699`, covers

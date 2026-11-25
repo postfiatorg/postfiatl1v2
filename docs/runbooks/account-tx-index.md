@@ -1,6 +1,6 @@
 # Account Tx Index
 
-Status: v3 retained-history index (rows in bounded per-account chunks, metadata-only aggregate); block commits extend it
+Status: v4 retained-history index on `main` since 9 November 2026 (rows in bounded per-account chunks, metadata-only aggregate); block commits extend it
 Date: 2026-10-26
 
 `account_tx` is a read-only public RPC method for account history: transparent
@@ -13,6 +13,16 @@ stale, or unreadable, the aggregate `account_tx_index.json` (the same counts and
 ranges, written last) can vouch for the same chunk files; if that is also
 absent or stale, the node falls back to the existing bounded retained-history
 scan instead of failing the public read.
+
+## Live state (25 November 2026)
+
+At height 1900 `account_tx_index_status` on all six validators reported
+`index_usable: false` and `disk_index_usable: false` with
+`unsupported account_tx index schema postfiat-account-tx-index-v3`: their
+indexes stop at height 1193 and were not rebuilt for v4 (see
+[Upgrade Backfill](#upgrade-backfill)). Until the build is run, `account_tx`
+answers through the bounded archive scan; an `account_tx` read on validator 0
+returned `index_used: false`.
 
 ## Layout
 
