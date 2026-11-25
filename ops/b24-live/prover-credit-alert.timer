@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the Vast proving credit every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00/15:00 UTC
+AccuracySec=1min
+Persistent=false
+Unit=prover-credit-alert.service
+
+[Install]
+WantedBy=timers.target
