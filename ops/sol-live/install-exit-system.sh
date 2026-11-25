@@ -1,92 +1,580 @@
 #!/bin/bash
-# Run only from the owner's digest-verified private stage.
+# Run only from the owner's digest-verified private stage:
+#   install-exit-system.sh [--allow-downgrade]   install or upgrade to the bundle's revision
+#   install-exit-system.sh --rollback            put the previous tree and its unit files back
+#   install-exit-system.sh --prune               remove trees other than the live and previous ones
 set -euo pipefail
 umask 022
-[[ $EUID == 0 && $# == 0 ]]
-bundle=$(cd -- "$(dirname -- "$0")" && pwd -P)
-[[ $(stat -c '%u:%a' "$bundle") == 0:700 && $bundle == /var/lib/pf-sol-install.* ]]
-cd /
-exec 9>/run/pf-sol-exit-install.lock
-flock -n 9
 operator=postfiat
-operator_uid=$(id -u "$operator")
-operator_home=$(getent passwd "$operator" | cut -d: -f6)
 account=pf-sol-exit
+# The worker's own user and group ID, set here only. 0-1000 hold system and distribution
+# accounts and the users of container images (databases run as 999, 70, 27, 101 or 1000), and
+# 60000 up holds systemd's homed and dynamic users and nobody.
+account_id=59900
 svc=/var/lib/pf-sol-exit
-app=/opt/postfiat/sol-exit
+base=/opt/postfiat
+# The live tree is the symlink $app; each installed revision has its own tree under $trees, and
+# $previous names the tree before the last switch. $history lists revisions in first-install order.
+app=$base/sol-exit
+trees=$base/sol-exit.d
+previous=$base/sol-exit.previous
+history=$base/sol-exit.history
 ops=$app/ops/sol-live
+# Bash ignores `set -e` inside a condition (`if`, `!`, `&&`, `||`) and in every function called
+# from one, and a command substitution inside `[[ ]]` or an argument loses its status. Every step
+# below therefore tests its own result, so a function is safe in any context.
 unit=pft-sol-mainnet-withdraw.service
 test_unit=pft-sol-exit-self-test.service
-rev=$(cat "$bundle/revision")
-[[ $rev =~ ^[0-9a-f]{40}$ ]]
-for dir in /opt/postfiat "$app" "$svc" /var/log/pf-sol-exit; do
-    [[ ! -L "$dir" ]]
-    if [[ -e "$dir" ]]; then
-        [[ -d "$dir" && $(stat -c %u "$dir") == 0 && -z $(find "$dir" -maxdepth 0 -perm /022 -print) ]]
+# The self-test unit records the revision it passed on; the worker starts only on that revision.
+passed=/var/lib/pf-sol-exit-install/self-test-passed
+unit_dir=/etc/systemd/system
+# Masks here override unit files in /etc/systemd/system; `systemctl mask --runtime` writes to
+# /run/systemd/system, which /etc overrides, so its mask would not hold for these units.
+mask_dir=/run/systemd/system.control
+# Written in $mask_dir with the masks: they belong to a run of this installer. Like them, it goes at a reboot.
+mask_marker=.pf-sol-exit-install.mask
+masked=0
+mountinfo=/proc/self/mountinfo
+
+# A unit counts as stopped only when inactive or failed: activating, deactivating or reloading
+# units still run code from the live tree.
+require_stopped() {
+    local current state
+    for current in "$@"; do
+        state=$(systemctl show -p ActiveState --value -- "$current") || {
+            echo "Cannot read the state of $current." >&2; return 1; }
+        case $state in
+            inactive|failed) ;;
+            *) echo "Stop $current before installing: it is ${state:-unknown}." >&2; return 1 ;;
+        esac
+    done
+}
+
+# A bundle is a downgrade when the installed tree names its revision as an ancestor (the tree's
+# `ancestry` file, one revision per line, when the bundle carries one), or when this host first
+# installed it before the installed revision.
+check_not_downgrade() {
+    local rev=$1 installed=$2 allow=$3 ancestry=$4 order=$5 at_rev="" at_installed=""
+    if [[ -z $installed || $rev == "$installed" || $allow == 1 ]]; then return 0; fi
+    if [[ -f $ancestry ]]; then
+        at_rev=$(line_of "$rev" "$ancestry") || return 1
+        if [[ -n $at_rev ]]; then
+            echo "Refusing downgrade: $rev is an ancestor of the installed $installed. Pass --allow-downgrade to install it." >&2
+            return 1
+        fi
     fi
-done
-# A different revision is an upgrade. It is allowed only with both units stopped (checked
-# below). The self-test log is reset, so the self-test must pass again before the worker starts.
-if [[ -f "$app/revision" && $(cat "$app/revision") != "$rev" ]]; then
-    echo "Upgrading installed worker from $(cat "$app/revision") to $rev."
-fi
-state=$(systemctl list-unit-files --type=service --no-legend --no-pager | awk -v unit="$unit" '$1 == unit {print $2}')
-[[ -z "$state" || $state == disabled ]]
-for current in "$unit" "$test_unit"; do
-    if systemctl is-active --quiet "$current"; then echo "Stop $current before installing." >&2; exit 1; fi
-done
+    if [[ -f $order ]]; then
+        at_rev=$(line_of "$rev" "$order") || return 1
+        at_installed=$(line_of "$installed" "$order") || return 1
+        if [[ -n $at_rev && -n $at_installed ]] && (( at_rev < at_installed )); then
+            echo "Refusing downgrade: $rev was installed here before $installed. Pass --allow-downgrade to install it." >&2
+            return 1
+        fi
+    fi
+    return 0
+}
+
+# The number of the first line of file $2 equal to $1, empty when there is none; fails when the
+# file cannot be read, so a read error never counts as "not listed".
+line_of() {
+    awk -v want="$1" '$0 == want { print NR; exit }' "$2" || { echo "Cannot read $2." >&2; return 1; }
+}
+
+# Point $1 at $3 in one rename; $2 then names the tree $1 named before.
+switch_tree() {
+    local link=$1 before=$2 tree=$3 old=""
+    if [[ -L $link ]]; then old=$(readlink -- "$link") || return 1; fi
+    ln -sfnT -- "$tree" "$link.next" || return 1
+    mv -T -- "$link.next" "$link" || return 1
+    if [[ -n $old && $old != "$tree" ]]; then
+        ln -sfnT -- "$old" "$before.next" || return 1
+        mv -T -- "$before.next" "$before" || return 1
+    fi
+    return 0
+}
+
+# Swap the live and previous trees, each in one rename.
+rollback_tree() {
+    local link=$1 before=$2 current earlier
+    [[ -L $link && -L $before ]] || { echo "No previous tree to roll back to." >&2; return 1; }
+    current=$(readlink -- "$link") || return 1
+    earlier=$(readlink -- "$before") || return 1
+    [[ -f $earlier/revision ]] || { echo "The previous tree has no recorded revision." >&2; return 1; }
+    ln -sfnT -- "$earlier" "$link.next" || return 1
+    mv -T -- "$link.next" "$link" || return 1
+    ln -sfnT -- "$current" "$before.next" || return 1
+    mv -T -- "$before.next" "$before" || return 1
+}
+
+# Roll back: the previous tree's own unit files and the gates are loaded first, then the trees
+# swap; the self-test must pass again before the worker starts.
+rollback_install() {
+    local earlier
+    [[ -L $app && -L $previous ]] || { echo "No previous tree to roll back to." >&2; return 1; }
+    earlier=$(readlink -- "$previous") || return 1
+    rm -f -- "$passed" || return 1
+    install_units "$earlier" || return 1
+    rollback_tree "$app" "$previous" || return 1
+}
+
+# Today's installs keep the tree as a plain directory at $app. Its revision is added to the
+# history first, then it is moved to $trees/<revision>.legacy, then $app links to it. A run cut
+# short after the move finds $app missing and the one legacy tree, and finishes the link, so the
+# downgrade check and the rollback target survive.
+adopt_legacy_tree() {
+    local installed="" legacy found
+    if [[ -d $app && ! -L $app ]]; then
+        if [[ -f $app/revision ]]; then installed=$(cat -- "$app/revision") || return 1; fi
+        if [[ -n $installed ]]; then add_history "$installed" "$history" || return 1; fi
+        install -d -m755 -o root -g root "$trees" || return 1
+        legacy="$trees/${installed:-legacy}.legacy"
+        [[ ! -e $legacy ]] || { echo "$legacy already exists; move it aside before installing." >&2; return 1; }
+        mv -T -- "$app" "$legacy" || return 1
+    fi
+    if [[ -e $app || -L $app ]]; then return 0; fi
+    [[ -d $trees ]] || return 0
+    found=$(find "$trees" -mindepth 1 -maxdepth 1 -type d -name '*.legacy') || return 1
+    [[ -n $found ]] || return 0
+    if [[ $found == *$'\n'* ]]; then
+        echo "$app is missing and $trees holds more than one legacy tree; link the right one by hand." >&2
+        return 1
+    fi
+    ln -sfnT -- "$found" "$app.next" || return 1
+    mv -T -- "$app.next" "$app" || return 1
+}
+
+add_history() {
+    local rev=$1 order=$2 at=""
+    if [[ -f $order ]]; then at=$(line_of "$rev" "$order") || return 1; fi
+    if [[ -z $at ]]; then printf '%s\n' "$rev" >> "$order" || return 1; fi
+    return 0
+}
+
+# The trees $app and $previous point at.
+kept_trees() {
+    local link
+    for link in "$app" "$previous"; do
+        if [[ -L $link ]]; then readlink -- "$link" || return 1; fi
+    done
+}
+
+# A staged tree that never went live has no revision file: a run cut short left it. Remove those.
+clean_stages() {
+    local kept tree
+    [[ -d $trees ]] || return 0
+    kept=$(kept_trees) || return 1
+    for tree in "$trees"/*/; do
+        tree=${tree%/}
+        [[ -d $tree && $tree != *.legacy && ! -e $tree/revision ]] || continue
+        if grep -qxF -- "$tree" <<<"$kept"; then continue; fi
+        echo "Removing $tree, left by an interrupted install."
+        rm -rf -- "$tree" || return 1
+    done
+}
+
+# Only with --prune: remove every tree but the live and the previous one.
+prune_trees() {
+    local kept tree
+    kept=$(kept_trees) || return 1
+    for tree in "$trees"/*/; do
+        tree=${tree%/}
+        [[ -d $tree ]] || continue
+        if grep -qxF -- "$tree" <<<"$kept"; then continue; fi
+        echo "Removing $tree."
+        rm -rf -- "$tree" || return 1
+    done
+}
+
+# The ID move re-owns files with `find -xdev`, which does not cross into another filesystem; a
+# mount under $1 would keep the old IDs unnoticed, so it is refused instead.
+refuse_submounts() {
+    local mounts
+    mounts=$(awk -v top="$1/" 'index($5, top) == 1 { print $5 }' "$mountinfo") ||
+        { echo "Cannot read $mountinfo." >&2; return 1; }
+    if [[ -n $mounts ]]; then
+        echo "A filesystem is mounted under $1 ($mounts); the ID move would not reach its files. Unmount it first." >&2
+        return 1
+    fi
+}
+
+# Record the revision of the live tree, only after the switch, and its first-install order.
+record_revision() {
+    local link=$1 rev=$2 order=$3
+    printf '%s\n' "$rev" > "$link/revision.next" || return 1
+    mv -T -- "$link/revision.next" "$link/revision" || return 1
+    add_history "$rev" "$order" || return 1
+}
+
+# Install the bundle: build and check a staged tree beside the live one, then put its unit files
+# and the self-test gate in place and load them, and only then switch the tree in. A failed build
+# or check removes the staged tree and leaves the live tree, its revision, the units and the
+# earlier self-test pass as they were. A failure after the new units are loaded puts the live
+# tree's links and its own unit files back (restore_live); the self-test must pass again. Both
+# units stay masked throughout (mask_units).
+install_tree() {
+    local bundle=$1 rev=$2 payer=${3:-$svc/fee-payer.json} live="" before=""
+    stage_tree "$bundle" "$rev" "$payer" || return 1
+    live=$(link_target "$app") || return 1
+    before=$(link_target "$previous") || return 1
+    rm -f -- "$passed" || return 1
+    if install_units "$staged" && switch_in "$staged" "$rev"; then return 0; fi
+    echo "Installing $rev failed after its unit files were loaded; putting back the live tree and its own unit files." >&2
+    if ! restore_live "$live" "$before"; then
+        echo "Putting back the live tree's unit files failed: keep both units stopped and run --rollback or this installer again." >&2
+    fi
+    return 1
+}
+
+# The target of link $1, empty when there is none.
+link_target() {
+    if [[ -L $1 ]]; then readlink -- "$1" || return 1; fi
+    return 0
+}
+
+# Point link $1 at $2 again (remove it when $2 is empty), in one rename.
+put_link() {
+    local link=$1 target=$2 now
+    now=$(link_target "$link") || return 1
+    if [[ $now == "$target" ]]; then return 0; fi
+    if [[ -z $target ]]; then rm -f -- "$link" || return 1; return 0; fi
+    ln -sfnT -- "$target" "$link.next" || return 1
+    mv -T -- "$link.next" "$link" || return 1
+}
+
+# After a failure between loading the new units and completing the switch: the live and previous
+# links as they were, and the live tree's own unit files and gates loaded, as --rollback loads
+# them. On a first install there was no live tree: its unit files and gates are removed.
+restore_live() {
+    local live=$1 before=$2 name
+    put_link "$app" "$live" || return 1
+    put_link "$previous" "$before" || return 1
+    if [[ -n $live ]]; then
+        install_units "$live" || return 1
+        return 0
+    fi
+    for name in "$unit" "$test_unit"; do
+        rm -f -- "$unit_dir/$name" "$unit_dir/$name.next" || return 1
+    done
+    rm -f -- "$unit_dir/$unit.d/self-test-gate.conf" "$unit_dir/$test_unit.d/record-pass.conf" || return 1
+    systemctl daemon-reload || return 1
+}
+
+# Build and check a tree under $trees; its path is left in $staged.
+stage_tree() {
+    local bundle=$1 rev=$2 payer=$3 stage ok=0
+    staged=""
+    install -d -m755 -o root -g root "$trees" || return 1
+    stage=$(mktemp -d "$trees/$rev.XXXXXXXX") || return 1
+    # Each step is run on its own and its status kept; the switch needs all of them to succeed.
+    chmod 0755 "$stage" && ok=1
+    if (( ok )); then ok=0; build_tree "$bundle" "$stage" && ok=1; fi
+    if (( ok )); then ok=0; self_test_tree "$stage" "$payer" && ok=1; fi
+    if (( ! ok )); then
+        rm -rf -- "$stage"
+        echo "The new tree failed to build or its self-test failed; the installed tree is unchanged." >&2
+        return 1
+    fi
+    staged=$stage
+}
+
+# The unit files that belong to tree $1, and the gates, in place and loaded before $1 goes live,
+# so the worker never runs a tree without its gate.
+install_units() {
+    local tree=$1 name
+    install -d -m755 "$unit_dir" || return 1
+    for name in "$unit" "$test_unit"; do
+        cp -- "$tree/ops/sol-live/$name" "$unit_dir/$name.next" || return 1
+        chmod 0644 "$unit_dir/$name.next" || return 1
+        mv -T -- "$unit_dir/$name.next" "$unit_dir/$name" || return 1
+    done
+    write_gates "$unit_dir" || return 1
+    systemctl daemon-reload || return 1
+}
+
+# Switch the checked tree in, checking again that both units are stopped, then record its revision.
+switch_in() {
+    local tree=$1 rev=$2
+    require_stopped "$unit" "$test_unit" || return 1
+    switch_tree "$app" "$previous" "$tree" || return 1
+    record_revision "$app" "$rev" "$history" || return 1
+}
+
+# Nothing can start either unit while masked: an install and an ID move run with both masked.
+mask_units() {
+    local name
+    install -d -m755 "$mask_dir" || return 1
+    printf 'run %s started %s\n' "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$mask_dir/$mask_marker" || return 1
+    for name in "$unit" "$test_unit"; do
+        ln -sfnT /dev/null "$mask_dir/$name" || return 1
+        masked=1
+    done
+    systemctl daemon-reload || return 1
+}
+
+unmask_units() {
+    local name status=0
+    for name in "$unit" "$test_unit"; do
+        rm -f -- "$mask_dir/$name" || status=1
+    done
+    if (( status == 0 )); then rm -f -- "$mask_dir/$mask_marker" || status=1; fi
+    systemctl daemon-reload || status=1
+    if (( status == 0 )); then masked=0; fi
+    return $status
+}
+
+# Called holding the install lock, so no other run of this installer is alive. Masks next to this
+# installer's marker were left by a run that was killed (SIGKILL skips the exit trap): remove them.
+# A mask without the marker was set by someone else and is left alone.
+clear_stale_mask() {
+    local name found=0
+    for name in "$unit" "$test_unit"; do
+        if [[ -L $mask_dir/$name ]]; then found=1; fi
+    done
+    if (( ! found )); then
+        rm -f -- "$mask_dir/$mask_marker" || return 1
+        return 0
+    fi
+    if [[ ! -f $mask_dir/$mask_marker ]]; then
+        echo "$unit or $test_unit is masked by something other than this installer (in $mask_dir); find out why before installing." >&2
+        return 1
+    fi
+    echo "Removing the masks left by an earlier run of this installer that did not finish ($(cat -- "$mask_dir/$mask_marker"))."
+    unmask_units || { echo "Removing the stale masks failed: rm $mask_dir/$unit $mask_dir/$test_unit $mask_dir/$mask_marker; systemctl daemon-reload" >&2; return 1; }
+}
+
+build_tree() {
+    local bundle=$1 tree=$2
+    cp -R "$bundle/runtime/." "$tree/" || { echo "Copying the bundle into $tree failed." >&2; return 1; }
+    python3 -I -m venv "$tree/venv" || { echo "Creating the venv in $tree failed." >&2; return 1; }
+    PIP_CONFIG_FILE=/dev/null "$tree/venv/bin/python" -I -m pip --isolated --disable-pip-version-check install \
+        --no-cache-dir --no-index --only-binary=:all: --require-hashes --find-links "$bundle/wheels" \
+        -r "$tree/ops/sol-live/exit-requirements.lock" || { echo "Installing the wheels into $tree failed." >&2; return 1; }
+}
+
+as_worker() {
+    local tree=$1
+    shift
+    runuser -u "$account" -- env -i PATH=/usr/bin:/bin HOME="$svc" PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONPATH="$tree/ops/sol-live" EXIT_PROOF_HOME="$tree/proof" "$tree/venv/bin/python" "$@"
+}
+
+self_test_tree() {
+    local tree=$1 payer=${2:-$svc/fee-payer.json}
+    as_worker "$tree" -c 'import exit_service; from exit_proof import verify_local_host; verify_local_host()' ||
+        { echo "The local proof host check failed on $tree." >&2; return 1; }
+    if [[ -f $payer ]]; then
+        validate_payer "$tree" "$payer" || { echo "The payer check failed on $tree." >&2; return 1; }
+    fi
+    return 0
+}
+
+validate_payer() {
+    as_worker "$1" -c 'from exit_setup import FEE_PAYER, load, require; import sys; require(load(sys.argv[1]).pubkey()==FEE_PAYER, "Wrong installed payer")' "$2"
+}
+
+# The service ID must be outside the reserved ranges and used by no other user or group.
+check_account_id() {
+    local id=$1 name=$2 user group
+    if ! [[ $id =~ ^[1-9][0-9]*$ ]] || (( id <= 1000 || id >= 60000 )); then
+        echo "Service ID $id is in a reserved range (system and container users up to 1000, systemd and nobody from 60000)." >&2
+        return 1
+    fi
+    user=$(id_owner passwd "$id") || return 1
+    group=$(id_owner group "$id") || return 1
+    if [[ -n $user && $user != "$name" ]] || [[ -n $group && $group != "$name" ]]; then
+        echo "Service ID $id already belongs to ${user:-$group}." >&2
+        return 1
+    fi
+}
+
+# The name that owns numeric ID $2 in database $1, empty when none; a lookup error fails.
+id_owner() {
+    local entry status=0
+    entry=$(getent "$1" "$2") || status=$?
+    case $status in
+        0) printf '%s\n' "${entry%%:*}" ;;
+        2) ;;
+        *) echo "Looking up $1 ID $2 failed." >&2; return 1 ;;
+    esac
+}
+
+# Move an existing account to its own ID, all units stopped: group ID, then user ID (usermod
+# re-owns the files it owns in its home, $svc), then every file under $svc that still has the
+# old group or user. Modes, including 600 on the key files, do not change.
+migrate_account_id() {
+    local name=$1 id=$2 home=$3 old_uid old_gid
+    local left
+    old_uid=$(id -u "$name") || return 1
+    old_gid=$(getent group "$name" | cut -d: -f3) || return 1
+    [[ $old_uid =~ ^[0-9]+$ && $old_gid =~ ^[0-9]+$ ]] || { echo "Cannot read the IDs of $name." >&2; return 1; }
+    if [[ $old_uid == "$id" && $old_gid == "$id" ]]; then return 0; fi
+    check_account_id "$id" "$name" || return 1
+    refuse_submounts "$home" || return 1
+    echo "Moving $name from user ID $old_uid and group ID $old_gid to $id."
+    groupmod -g "$id" "$name" || return 1
+    usermod -u "$id" "$name" || return 1
+    find "$home" -xdev -gid "$old_gid" -exec chgrp -h "$id" {} + || return 1
+    find "$home" -xdev -uid "$old_uid" -exec chown -h "$id" {} + || return 1
+    left=$(ids_left "$home" "$old_uid" "$old_gid") || { echo "Cannot check the IDs under $home." >&2; return 1; }
+    if [[ -n $left ]]; then
+        echo "Files under $home still have the old IDs." >&2
+        return 1
+    fi
+}
+
+ids_left() { find "$1" -xdev \( -uid "$2" -o -gid "$3" \) -print -quit; }
+
+create_account() {
+    local name=$1 id=$2 home=$3
+    check_account_id "$id" "$name" || return 1
+    groupadd --system --gid "$id" "$name" || return 1
+    useradd --system --uid "$id" --gid "$id" --no-create-home --home-dir "$home" --shell /usr/sbin/nologin "$name" || return 1
+}
+
+# The pass names the tree the self-test ran on (its directory under $trees) and that tree's
+# revision; the worker starts only when the live tree is that same tree. A self-test that saw the
+# link move while it ran records nothing.
+write_gates() {
+    local dir=$1 state=${passed%/*}
+    install -d -m755 "$dir/$unit.d" "$dir/$test_unit.d" || return 1
+    cat > "$dir/$unit.d/self-test-gate.conf" <<GATE || return 1
+[Service]
+ExecStartPre=+/bin/sh -c 'tree=\$\$(readlink -e $app) && test -s $passed && test "\$\$(cat $passed)" = "\$\$tree \$\$(cat \$\$tree/revision)"'
+GATE
+    cat > "$dir/$test_unit.d/record-pass.conf" <<PASS || return 1
+[Service]
+ExecStartPre=+/bin/sh -c 'install -d -m755 $state && rm -f $passed && readlink -e $app > $state/self-test-tree'
+ExecStartPost=+/bin/sh -c 'tree=\$\$(readlink -e $app) && test "\$\$tree" = "\$\$(cat $state/self-test-tree)" && echo "\$\$tree \$\$(cat \$\$tree/revision)" > $passed'
+PASS
+    chmod 0644 "$dir/$unit.d/self-test-gate.conf" "$dir/$test_unit.d/record-pass.conf" || return 1
+}
+
 check_port() {
     local listeners
     listeners=$(ss -H -ltn 'sport = :18089') || return 1
     [[ -z "$listeners" ]]
 }
+
+# The exit trap: removes the private staging directory and an unfinished sudoers file, and
+# unmasks both units, on success and on any failure.
+cleanup() {
+    local status=$?
+    # The staging folder can hold a copy of a key file: a failed removal is reported, not ignored.
+    if [[ -n ${tmp:-} ]] && ! rm -rf -- "$tmp"; then
+        echo "$tmp could not be removed and may hold a key file; remove it by hand." >&2
+        status=1
+    fi
+    if [[ -n ${sudoers:-} ]] && ! rm -f -- "$sudoers"; then
+        echo "$sudoers could not be removed; remove it by hand." >&2
+        status=1
+    fi
+    if (( masked )) && ! unmask_units; then
+        echo "Unmask by hand: rm $mask_dir/$unit $mask_dir/$test_unit; systemctl daemon-reload" >&2
+        status=1
+    fi
+    exit "$status"
+}
+
+# Tests source this file for the functions above.
+if [[ ${BASH_SOURCE[0]} != "$0" ]]; then return 0; fi
+
+allow_downgrade=0 rollback=0 prune=0
+for arg in "$@"; do
+    case $arg in
+        --allow-downgrade) allow_downgrade=1 ;;
+        --rollback) rollback=1 ;;
+        --prune) prune=1 ;;
+        *) echo "Unknown argument $arg." >&2; exit 2 ;;
+    esac
+done
+[[ $EUID == 0 ]]
+bundle=$(cd -- "$(dirname -- "$0")" && pwd -P)
+owner_mode=$(stat -c '%u:%a' "$bundle")
+[[ $owner_mode == 0:700 && $bundle == /var/lib/pf-sol-install.* ]]
+cd /
+exec 9>/run/pf-sol-exit-install.lock
+flock -n 9 || { echo "Another run of this installer holds /run/pf-sol-exit-install.lock." >&2; exit 1; }
+clear_stale_mask
+operator_uid=$(id -u "$operator")
+operator_home=$(getent passwd "$operator" | cut -d: -f6)
+rev=$(cat "$bundle/revision")
+[[ $rev =~ ^[0-9a-f]{40}$ ]]
+for dir in "$base" "$trees" "$svc" /var/log/pf-sol-exit; do
+    [[ ! -L "$dir" ]]
+    if [[ -e "$dir" ]]; then
+        dir_owner=$(stat -c %u "$dir")
+        writable=$(find "$dir" -maxdepth 0 -perm /022 -print)
+        [[ -d "$dir" && $dir_owner == 0 && -z $writable ]]
+    fi
+done
+# The live tree is a root-owned symlink into $trees, or a directory from an installer before it.
+if [[ -L $app ]]; then [[ $(readlink -- "$app") == "$trees"/* ]]; fi
+state=$(systemctl list-unit-files --type=service --no-legend --no-pager | awk -v unit="$unit" '$1 == unit {print $2}')
+if ! [[ -z $state || $state == disabled ]]; then
+    echo "$unit is $state; it must be disabled or absent before installing." >&2
+    exit 1
+fi
+require_stopped "$unit" "$test_unit"
+# From here to the end both units are masked; the exit trap unmasks them on success and on any failure.
+trap cleanup EXIT
+mask_units
+require_stopped "$unit" "$test_unit"
+adopt_legacy_tree
+clean_stages
+if (( prune )); then
+    prune_trees
+    exit 0
+fi
+if (( rollback )); then
+    rollback_install
+    restored=$(cat "$app/revision")
+    echo "Rolled back to $restored. Run the archive self-test before starting the worker."
+    exit 0
+fi
+installed=""
+if [[ -f "$app/revision" ]]; then installed=$(cat "$app/revision"); fi
+check_not_downgrade "$rev" "$installed" "$allow_downgrade" "$app/ancestry" "$history"
+if [[ -n $installed && $installed != "$rev" ]]; then
+    echo "Upgrading installed worker from $installed to $rev."
+fi
 check_port
 # Installation begins here. A failed preflight preserves the existing proof.
 install -d -m755 -o root -g root /var/log/pf-sol-exit
 install -m644 /dev/null /var/log/pf-sol-exit/self-test.log
-if ! id "$account" >/dev/null 2>&1; then
-    useradd --system --user-group --no-create-home --home-dir "$svc" --shell /usr/sbin/nologin "$account"
+require_stopped "$unit" "$test_unit"
+if id "$account" >/dev/null 2>&1; then
+    migrate_account_id "$account" "$account_id" "$svc"
+else
+    create_account "$account" "$account_id" "$svc"
 fi
 [[ $(getent passwd "$account" | cut -d: -f6,7) == "$svc:/usr/sbin/nologin" ]]
-[[ $(id -Gn "$account") == "$account" && $(id -u "$account") -ne 0 ]]
-install -d -m755 -o root -g root "$app"
+[[ $(id -Gn "$account") == "$account" && $(id -u "$account") == "$account_id" ]]
 install -d -m750 -o root -g "$account" "$svc"
 install -d -m700 -o "$account" -g "$account" "$svc/jobs"
-cp -R "$bundle/runtime/." "$app/"
 install -m640 -o root -g "$account" "$bundle/known_hosts" "$svc/known_hosts"
-bash "$ops/check-prover-host.sh" "$svc/known_hosts"
-python3 -I -m venv "$app/venv"
-PIP_CONFIG_FILE=/dev/null "$app/venv/bin/python" -I -m pip --isolated --disable-pip-version-check install \
-    --no-cache-dir --no-index --only-binary=:all: --require-hashes --find-links "$bundle/wheels" -r "$ops/exit-requirements.lock"
-as_worker=(runuser -u "$account" -- env -i PATH=/usr/bin:/bin HOME="$svc" PYTHONDONTWRITEBYTECODE=1
-           PYTHONPATH="$ops" EXIT_PROOF_HOME="$app/proof" "$app/venv/bin/python")
-"${as_worker[@]}" -c 'import exit_service; from exit_proof import verify_local_host; verify_local_host()'
+bash "$bundle/runtime/ops/sol-live/check-prover-host.sh" "$svc/known_hosts"
+# Credentials go through a private directory in $svc (root and the worker's group only), never
+# through a world-readable place, and end at mode 600 owned by the worker.
 tmp=$(mktemp -d "$svc/.install.XXXXXXXX")
-trap 'rm -rf -- "$tmp"; if [[ -n ${sudoers:-} ]]; then rm -f -- "$sudoers"; fi' EXIT
 chgrp "$account" "$tmp"
 chmod 0710 "$tmp"
 secrets=$operator_home/.config/postfiat/sol-bridge
 stage_credential() {
-    python3 -I "$bundle/exit_install_credential.py" "$secrets/$1" "$tmp/$2" "$operator_uid"
-    chown "$account:$account" "$tmp/$2"
+    python3 -I "$bundle/exit_install_credential.py" "$secrets/$1" "$tmp/$2" "$operator_uid" || return 1
+    chown "$account:$account" "$tmp/$2" || return 1
 }
 stage_credential exit-prover-ssh prover
-runuser -u "$account" -- bash "$ops/check-prover-identity.sh" "$tmp/prover" "$(cat "$ops/exit-prover.fingerprint")"
+fingerprint=$(cat "$bundle/runtime/ops/sol-live/exit-prover.fingerprint")
+[[ -n $fingerprint ]]
+runuser -u "$account" -- bash "$bundle/runtime/ops/sol-live/check-prover-identity.sh" "$tmp/prover" "$fingerprint"
 mv -T "$tmp/prover" "$svc/prover"
 check_port
-validate_payer() {
-    "${as_worker[@]}" -c 'from exit_setup import FEE_PAYER, load, require; import sys; require(load(sys.argv[1]).pubkey()==FEE_PAYER, "Wrong installed payer")' "$1"
-}
 if [[ -f "$svc/fee-payer.json" ]]; then
-    [[ ! -L "$svc/fee-payer.json" && $(stat -c '%u:%a:%h' "$svc/fee-payer.json") == "$(id -u "$account"):600:1" ]]
-    validate_payer "$svc/fee-payer.json"
+    [[ ! -L "$svc/fee-payer.json" && $(stat -c '%u:%a:%h' "$svc/fee-payer.json") == "$account_id:600:1" ]]
 else
     [[ ! -e "$svc/fee-payer.json" && ! -L "$svc/fee-payer.json" ]]
     stage_credential exit-fee-payer.json fee-payer.json
-    validate_payer "$tmp/fee-payer.json"
-    mv -T "$tmp/fee-payer.json" "$svc/fee-payer.json"
 fi
-install -m644 "$ops/$unit" "$ops/$test_unit" /etc/systemd/system/
 sudoers=$(mktemp /etc/sudoers.d/.pf-sol-exit.XXXXXXXX)
 cat > "$sudoers" <<RULES
 $operator ALL=(root) NOPASSWD: /usr/bin/systemctl start pft-sol-exit-self-test.service, /usr/bin/systemctl start $unit, /usr/bin/systemctl stop $unit, /usr/bin/systemctl --no-pager status $unit
@@ -94,7 +582,21 @@ RULES
 chmod 0440 "$sudoers"
 visudo -cf "$sudoers"
 mv -T "$sudoers" /etc/sudoers.d/pf-sol-exit
-systemctl daemon-reload
-[[ $(systemctl is-enabled "$unit") == disabled ]]
-printf '%s\n' "$rev" > "$app/revision"
-echo "Installed disabled worker at $rev. Run the archive self-test."
+sudoers=""
+# The new tree is built and checked beside the live one, its units and gate are loaded, and only
+# then is it switched in.
+payer=$svc/fee-payer.json
+if [[ -f "$tmp/fee-payer.json" ]]; then payer=$tmp/fee-payer.json; fi
+install_tree "$bundle" "$rev" "$payer"
+if [[ -f "$tmp/fee-payer.json" ]]; then
+    mv -T "$tmp/fee-payer.json" "$svc/fee-payer.json"
+fi
+# The install is complete: unmask both units, then check the worker's real state, which a mask
+# would hide (`masked-runtime`). The exit trap still unmasks on every other way out.
+unmask_units
+enabled=$(systemctl is-enabled "$unit" || true)
+if [[ $enabled != disabled ]]; then
+    echo "The worker unit is $enabled after the install, not disabled; check it before starting anything." >&2
+    exit 1
+fi
+echo "Installed disabled worker at $rev. Run the archive self-test; the worker starts only after it passed on $rev."

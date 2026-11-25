@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Relay finished checkpoint proofs to Ethereum, then prove and send the withdrawal. Operator key by path only.
 set -euo pipefail
-E=/home/postfiat/repos/b23-coord/evidence/withdraw; L=$E/live-burn-1; PY=/home/postfiat/repos/navstrategies-b23-tee-nav/.venv/bin/python
+E=/home/postfiat/repos/b23-coord/evidence/withdraw; L=$E/live-burn-1; PY=/home/postfiat/repos/postfiatl1v2-live/.venv-ops/bin/python
 R="ssh -o BatchMode=yes -o ConnectTimeout=20 -p 20628 root@ssh8.vast.ai"; W=/workspace/b23-withdraw-20261116
 cd /home/postfiat/repos/postfiatl1v2-withdraw/ops/withdraw
 for S in 1136-1201 1201-1266 1266-1331; do

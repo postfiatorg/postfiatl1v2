@@ -7,7 +7,7 @@ BOB=pf5c266a1bdb18320e140961411a8c4d8383eaafb2
 S=541e451e6ae96b6680988655571a0feec59c7f1d073c9b5d29547254cab38a3be540f8767446d25baebc7081ce97aef7
 BIND=0x95f0dcbf204825b0789384769dddfa12e4be09aa1af8e841fe4a56bec423927d
 bal() { python3 - "$1" <<'PY'
-import sys,json; sys.path.insert(0,'/home/postfiat/repos/postfiatl1v2-navcoin-proof-b2.2/.scratch-deposit'); import pftl
+import sys,json; sys.path.insert(0,'/home/postfiat/repos/postfiatl1v2-live/.scratch-deposit'); import pftl
 S='541e451e6ae96b6680988655571a0feec59c7f1d073c9b5d29547254cab38a3be540f8767446d25baebc7081ce97aef7'
 out={}
 for p in pftl.PEERS:

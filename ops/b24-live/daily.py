@@ -21,7 +21,7 @@ from release_pin import Refusal
 import common,live,release_pin,sign,snapshot
 from reading_alert import record_failure
 ROOT=Path(__file__).resolve().parents[2]
-NAV=Path('/home/postfiat/repos/navstrategies-now')
+NAV=ROOT/'tools/nav-reserve-proof/schwab-tee'
 DEPLOYMENT=COORD/'evidence/now/deployment'
 SEED=DEPLOYMENT/'capture'
 BASE=COORD/'evidence/tee/phase5'
@@ -132,7 +132,7 @@ def collect(now,on_demand,d,mode,stamp,p):
     cost=runner.cost_preflight(aws,plan);p.stage='budget';budget=reserve_lane(plan['runId'],cost['resource_time_bound_usd'],now.strftime('%Y-%m'));save(d/'budget.json',budget);p.stage='oauth-baseline';helpers.oauth_baseline(d/'oauth-baseline.json')
     p.stage='capture';capture=d/'capture';runner.execute(plan,manifest,capture,aws,profile_operation=load(DEPLOYMENT/'profile-template.json'),profile_cli=NATIVE,on_demand=on_demand);assert load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']
     manifest=load(capture/'manifest.json')
-    p.stage='archive-verification';helpers.command([sys.executable,NAV/'containers/yolo-nitro/aws/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
+    p.stage='archive-verification';helpers.command([sys.executable,NAV/'operator/verify_nav_archive.py','--capture',capture,'--recovery-key',helpers.RECOVERY,'--oauth-baseline',d/'oauth-baseline.json','--output',d/'archive-verification.json'])
     p.stage='cleanup-timer';helpers.command(['systemctl','--user','disable','--now',plan['cleanupTimer']])
     p.stage='reading-qualification';helpers.command([sys.executable,TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,'--native-cli',NATIVE,'--root-der',COORD/'evidence/tee/aws-nitro-root.der','--output',d/'negative-reading'])
     p.stage='proof';helpers.command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',helpers.ELF,'--native-cli',NATIVE,'--prover-cli',GPU_NATIVE,'--output',d/'proof'])

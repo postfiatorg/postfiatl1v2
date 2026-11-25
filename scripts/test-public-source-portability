@@ -24,6 +24,9 @@ SUPPORTED_TRACKED_PREFIXES = (
 )
 FORBIDDEN = b"/home/" + b"postfiat"
 IPV4 = re.compile(rb"(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])")
+# Object identifiers of X.509 certificate extensions (id-ce, RFC 5280) have four arcs
+# and read as addresses. A certificate verifier names them; they are not hosts.
+X509_EXTENSION_ARC = b"2.5.29."
 # Legacy deployed SP1 guest ELF artifacts embed cargo-registry/source build paths as
 # panic-location strings inside the RISC-V program image. They are include_bytes!
 # dependencies pinned to deployed verifying keys and therefore remain explicit exceptions.
@@ -65,6 +68,8 @@ def main() -> int:
             try:
                 address = ipaddress.ip_address(match.decode("ascii"))
             except ValueError:
+                continue
+            if match.startswith(X509_EXTENSION_ARC):
                 continue
             if address.is_global:
                 findings.append(f"{relative} (public IPv4 literal)")

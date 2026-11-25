@@ -142,6 +142,26 @@ The source for each deployed contract, Solana program and proof key is mapped in
   recorded up to 25 November. Real Solana withdrawals ran on 23 and 24 November
   ([Current State](chain-state-current.md)).
 
+## B24 Schwab reading
+
+Recorded 2026-11-23 from a live read of all six validators.
+
+- **Fleet observed.** All six ran `sol-exit-r1`: binary `d46376ff131e941cd271632d79eb5cfe4a22269d31588bd24caddda962d3e39e`,
+  source `71dbc9b3`, which is on `main`. This supersedes the table above for the binary. Its
+  own record belongs to the Solana exit release.
+- **Last reading.** B24 epoch 9, NAV 1.006419, finalized at height 1844 (submit 1842, finalize
+  1843, pricing 1844, each accepted on all six).
+- **Where the code is.** The TEE Schwab reader moved from the `navstrategies` repository into
+  `tools/nav-reserve-proof/schwab-tee/`, and the pipeline in `ops/` uses only this repository
+  ([PR #220](https://github.com/postfiatorg/postfiatl1v2/pull/220), not merged on 2026-11-23).
+  Operating guide: [B24 Schwab NAV Reading](../runbooks/b24-schwab-nav-reading.md).
+- **Still on the old path.** Until PR #220 is merged and a new proof profile for the moved
+  enclave is qualified, the 17:55 UTC timer captures from the `navstrategies-now` checkout.
+- **Validator outboxes.** Five validators had `certified-send-outbox` entries owned by `root`
+  since 21 November 13:30, which blocked proposals through them. Ownership was corrected on
+  2026-11-23; the cause is not established.
+- Details: [handoff 2026-11-23](../handoffs/2026-11-23___claude__b24_schwab_reading_restored_and_reader_moved_into_l1.md).
+
 ## Keeping it true
 
 Before a release, check that the commit being built is on `main`:

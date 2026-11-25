@@ -22,7 +22,7 @@ import sys
 
 REPO=Path(__file__).resolve().parents[2]
 COORD=Path('/home/postfiat/repos/b23-coord')
-NAV=Path('/home/postfiat/repos/navstrategies-b23-tee-nav')
+NAV=REPO/'tools/nav-reserve-proof/schwab-tee'
 SEED=COORD/'evidence/tee/phase2/opening3-run'
 EVIDENCE=COORD/'evidence/tee/daily'
 RECOVERY=Path('/home/postfiat/.local/state/b23-tee-nav/recovery-20261113.pem')
@@ -100,8 +100,8 @@ def reserve_budget(path,month,run_id,reservation,run_cap=RUN_CAP,month_cap=MONTH
     return {'run_reserved_usd':str(reservation),'month_reserved_usd':str(total),'run_cap_usd':str(run_cap),'month_cap_usd':str(month_cap)}
 
 def runner_module():
-    sys.path.insert(0,str(NAV/'containers/yolo-nitro/aws'));sys.path.insert(0,str(NAV))
-    spec=importlib.util.spec_from_file_location('daily_capture_runner',NAV/'containers/yolo-nitro/aws/nav_reading_run.py')
+    sys.path.insert(0,str(NAV/'operator'));sys.path.insert(0,str(NAV))
+    spec=importlib.util.spec_from_file_location('daily_capture_runner',NAV/'operator/nav_reading_run.py')
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
 def command(args):subprocess.run([str(x) for x in args],check=True)
@@ -151,9 +151,9 @@ def execute(now,run_cap,month_cap):
             capture=directory/'capture'
             runner.execute(plan,manifest,capture,aws,profile_operation=load(COORD/'evidence/tee/phase2/profile-template.json'),profile_cli=NATIVE)
             if not load(capture/'final-inventory.json')['noOwnedBillableComputeRemaining']:raise ValueError('collector inventory not clear')
-            command([NAV/'.venv/bin/python',NAV/'containers/yolo-nitro/aws/verify_nav_archive.py','--capture',capture,
+            command([sys.executable,NAV/'operator/verify_nav_archive.py','--capture',capture,
                 '--recovery-key',RECOVERY,'--oauth-baseline',directory/'oauth-baseline.json','--output',directory/'archive-verification.json'])
-            command([NAV/'.venv/bin/python',TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,
+            command([sys.executable,TOOLS/'qualify_reading.py','--capture',capture,'--collector-repo',NAV,
                 '--native-cli',NATIVE,'--root-der',COORD/'evidence/tee/aws-nitro-root.der','--output',directory/'negative-reading'])
             command([sys.executable,TOOLS/'prove_remote.py','--capture',capture,'--elf',ELF,'--native-cli',NATIVE,'--output',directory/'proof'])
             export_snapshot(CANARY,directory/'before-submit-state.json')

@@ -424,4 +424,20 @@ class ResumeTests(unittest.TestCase):
         self.sent_step();rows=self.six([[]]*6);rows[2]['server']['mempool']['pending']=1
         with patch.object(daily,'read_six',return_value=rows),self.assertRaises(RuntimeError):self.resume()
 
+class ReadRetryTests(unittest.TestCase):
+    def test_a_status_read_that_fails_once_after_a_block_is_read_again(self):
+        import rpc
+        replies=[RuntimeError('status: {"code": "rpc_status_failed", "message": "status query failed"}'),dict(block_height=1903)]
+        def call(method,params,node):
+            r=replies.pop(0)
+            if isinstance(r,Exception):raise r
+            return r
+        with patch.object(rpc,'call',call),patch.object(rpc.time,'sleep'):self.assertEqual(rpc.read('status',{},5),dict(block_height=1903))
+    def test_an_unknown_error_is_not_retried_and_names_the_validator(self):
+        import rpc
+        calls=[]
+        def call(method,params,node):calls.append(1);raise RuntimeError('status: {"code": "something_else"}')
+        with patch.object(rpc,'call',call),patch.object(rpc.time,'sleep'),self.assertRaisesRegex(RuntimeError,'^validator-5: '):rpc.read('status',{},5)
+        self.assertEqual(len(calls),1)
+
 if __name__=='__main__':unittest.main()

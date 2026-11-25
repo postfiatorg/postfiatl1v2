@@ -52,6 +52,12 @@ verifier commitments, observation interval, amounts, both quantity and
 valuation evidence commitments, and disclosure commitment. Evidence from two
 different observations cannot be mixed into one valid witness.
 
+## Schwab TEE reader (B24)
+
+The AWS Nitro enclave reader that produces B24's attested Schwab account value,
+its image recipe and its operator runner are in [`schwab-tee/`](schwab-tee/README.md).
+Operating guide: `docs/runbooks/b24-schwab-nav-reading.md`.
+
 ## Pinned toolchain
 
 - Rust 1.95.0 (rust-toolchain.toml)

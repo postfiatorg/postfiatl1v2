@@ -40,7 +40,7 @@ spec.loader.exec_module(pftl)
 # ---- the broker read happens on the credential host, read-only ----
 CRED_HOST = "pfrpc@100.85.116.26"
 CRED_DIR = "pftl-deposit-readonly"
-CRED_PY = "~/repos/navstrategies/.venv/bin/python"
+CRED_PY = "python3"  # mint reader is stdlib-only (tools/nav-reserve-proof/schwab-tee/mint_reader)
 
 # ---- chain identities. Keys are referenced by path and never read here. ----
 ISSUER = "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"

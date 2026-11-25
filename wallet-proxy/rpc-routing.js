@@ -1619,7 +1619,20 @@ wss } = runtime;
             // objects, totals and cursors. height and state_root are
             // dropped: they do not identify the view (FastPay effects change
             // it without a block), and equal views at two heights agree.
-            const { height: _height, state_root: _stateRoot, ...copy } = result;
+            // node_id and inventory_revision are dropped too: node_id differs
+            // on every validator, fastpay_sequence can differ between honest
+            // ones, and the incarnation is per data directory.
+            // readFleetRpcMajority returns them beside the answer
+            // (fleetRevisions). inventory_revision_unavailable follows each
+            // server's owned-lane configuration, so it is dropped as well.
+            const {
+                height: _height,
+                state_root: _stateRoot,
+                node_id: _nodeId,
+                inventory_revision: _inventoryRevision,
+                inventory_revision_unavailable: _inventoryRevisionUnavailable,
+                ...copy
+            } = result;
             if (Array.isArray(copy.objects)) {
                 copy.objects = [...copy.objects].sort((a, b) => {
                     const aKey = `${a?.id || ''}:${a?.version ?? ''}`;
@@ -1634,6 +1647,60 @@ wss } = runtime;
 
     function readGroupKey(method, result) {
         return JSON.stringify(canonicalReadResult(method, result));
+    }
+
+    // A u64 the parsed JSON carries exactly; above 2^53 - 1 JSON.parse may
+    // have rounded it, and a rounded revision is an invented one.
+    function exactUnsignedInteger(value) {
+        return Number.isSafeInteger(value) && value >= 0;
+    }
+
+    // Like the Rust validator's clean string: nonempty, no surrounding
+    // whitespace, no control characters.
+    function cleanNodeId(value) {
+        return typeof value === 'string'
+            && value.length > 0
+            && value === value.trim()
+            && !/[\u0000-\u001f\u007f-\u009f]/.test(value);
+    }
+
+    // Each agreeing validator's well-formed pair, in fleet order:
+    // endpoint_validator_id is the gateway's configured id for the endpoint
+    // it asked; node_id is what the node says about itself (not
+    // authenticated). A node that sends no pair, or a malformed one (unclean
+    // id, a revision that is not {finalized_height, fastpay_sequence} as
+    // exact unsigned integers, a finalized_height other than the page's
+    // height, or an incarnation that is not 32 lowercase hex digits), has no
+    // entry. A present incarnation passes on: revisions compare only within
+    // one (node_id, incarnation).
+    function fleetRevisions(group) {
+        const revisions = [];
+        for (const entry of group) {
+            const result = entry.result;
+            const revision = result?.inventory_revision;
+            if (!cleanNodeId(result?.node_id)
+                || !revision || typeof revision !== 'object' || Array.isArray(revision)) continue;
+            const {
+                finalized_height: finalizedHeight,
+                fastpay_sequence: fastpaySequence,
+                incarnation,
+            } = revision;
+            if (!exactUnsignedInteger(finalizedHeight)
+                || !exactUnsignedInteger(fastpaySequence)
+                || result.height !== finalizedHeight
+                || (incarnation !== undefined
+                    && !(typeof incarnation === 'string' && /^[0-9a-f]{32}$/.test(incarnation)))) continue;
+            revisions.push({
+                endpoint_validator_id: entry.validator_id,
+                node_id: result.node_id,
+                inventory_revision: {
+                    finalized_height: finalizedHeight,
+                    fastpay_sequence: fastpaySequence,
+                    ...(incarnation !== undefined ? { incarnation } : {}),
+                },
+            });
+        }
+        return revisions;
     }
 
     function conciseRpcError(error, fallback = 'RPC request failed') {
@@ -1708,6 +1775,7 @@ wss } = runtime;
                 consensus_count: group.length,
                 fleet_count: RPC_FLEET.length,
                 validators: group.map((entry) => entry.validator_id),
+                ...(method === 'owned_objects' ? { fleet_revisions: fleetRevisions(group) } : {}),
             },
             error: null,
         };
@@ -1877,6 +1945,9 @@ wss } = runtime;
                     owner_public_key_hex: ownerPublicKeyHex,
                     asset,
                     limit: ownedLimit,
+                    // Nodes send node_id and inventory_revision only when
+                    // asked; older nodes ignore the parameter.
+                    include_inventory_revision: true,
                 })
                 : Promise.resolve({ ok: false, result: null, error: null, source: null }),
             includeAssets && address
@@ -1909,6 +1980,9 @@ wss } = runtime;
     }
 
     function walletSnapshotDigest(snapshot) {
+        // The validated revisions count too: a newer revision with identical
+        // objects is news to a wallet. Feeds without them digest as before.
+        const revisions = snapshot.sources?.owned?.fleet_revisions;
         return crypto.createHash('sha256').update(JSON.stringify({
             account: snapshot.account,
             account_error: snapshot.account_error,
@@ -1916,6 +1990,7 @@ wss } = runtime;
             owned_error: snapshot.owned_error,
             assets: snapshot.assets,
             assets_error: snapshot.assets_error,
+            ...(Array.isArray(revisions) && revisions.length > 0 ? { owned_revisions: revisions } : {}),
         })).digest('hex');
     }
 
@@ -2133,6 +2208,15 @@ wss } = runtime;
         return { accepted: false, idempotent: false };
     }
 
+    function fastpayCertificateLockId(record) {
+        try {
+            const lockId = JSON.parse(record.request.params.cert_json)?.order?.recovery?.lock_id;
+            return typeof lockId === 'string' && lockId.length > 0 ? lockId : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
     function launchFastpayCertificateReplication(record, majority, quorum) {
         const existing = fastpayCertificateReplicationInFlight.get(record.certificate_id);
         if (existing) return existing;
@@ -2215,6 +2299,32 @@ wss } = runtime;
                 const signedAcknowledgement = structured?.schema === 'postfiat-fastpay-apply-ack-v1'
                     && structured.validator_id === entry.endpoint.validatorId
                     ? structured : null;
+                // A registered validator that is not a signer of this FastPay
+                // committee (its key was rotated after the committee was recorded)
+                // verifies and journals the certificate and answers with an unsigned
+                // held-effect receipt. That is its final answer: the delivery to it
+                // is done. It never counts toward the signed quorum.
+                const heldEffect = !signedAcknowledgement
+                    && structured?.schema === 'postfiat-fastpay-held-effect-v1'
+                    && structured.signed === false
+                    && structured.validator_id === entry.endpoint.validatorId
+                    && typeof structured.lock_id === 'string'
+                    && structured.lock_id === fastpayCertificateLockId(record);
+                if (requiresSignedQuorum && response?.ok === true && heldEffect) {
+                    fastpayCertificateOutbox.markApplied(
+                        record.certificate_id,
+                        entry.endpoint.validatorId,
+                        null,
+                    );
+                    return {
+                        validator_id: entry.endpoint.validatorId,
+                        ok: true,
+                        held: true,
+                        signed: false,
+                        duration_ms: Date.now() - started,
+                        result: structured,
+                    };
+                }
                 if (requiresSignedQuorum && response?.ok === true && !signedAcknowledgement) {
                     return {
                         validator_id: entry.endpoint.validatorId,
