@@ -5,7 +5,7 @@ requires its line in known-releases.txt, which names the rehearsal tool's hash.
 `rehearsal_tool.sh` builds that tool after a validator release and prints the line.
 Every refusal is one sentence: what is wrong, then the one command that fixes it.
 """
-import hashlib,json,shlex,subprocess
+import hashlib,json,re,shlex,subprocess
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 KNOWN=HERE/'known-releases.txt'
@@ -53,8 +53,20 @@ def same(a,b):
     """Two spellings of one git revision (the node reports 8 hex digits)."""
     return len(a)>=7 and len(b)>=7 and (a.startswith(b) or b.startswith(a))
 
+PLACED=re.compile(r'\+placed:((?:Cargo\.lock|build\.rs|src/main\.rs)=[0-9a-f]{16})(,(?:Cargo\.lock|build\.rs|src/main\.rs)=[0-9a-f]{16}){0,2}')
+SOURCE=re.compile(r'([0-9a-f]{7,40})((?:\+placed:.*)?)')
+
+def source_commit(recorded):
+    """The commit of a recorded source text, or None: an unchanged tree (`<commit>`) or one whose only
+    differences are files rehearsal_tool.sh put in place and named (`<commit>+placed:name=hash,...`).
+    `+modified` and any other form give None."""
+    m=SOURCE.fullmatch(recorded or '')
+    if not m or (m.group(2) and not PLACED.fullmatch(m.group(2))):return None
+    names=[part.split('=')[0] for part in m.group(2)[len('+placed:'):].split(',')] if m.group(2) else []
+    return m.group(1) if len(names)==len(set(names)) else None
+
 def tool_revision(tool):
-    """The revision the tool records, or None for a tool built before it recorded one."""
+    """The source text the tool records, or None when it does not answer build-info."""
     result=subprocess.run([str(tool),'build-info'],capture_output=True,text=True,timeout=30)
     if result.returncode:return None
     try:return json.loads(result.stdout)['build_git_revision']
@@ -66,7 +78,7 @@ def release(found,coord,path=None):
     rows=[r for r in known(path) if same(r['commit'],revision)]
     if not rows:
         for tool in sorted(Path(coord).glob('artifacts/*/'+TOOL)):
-            if same(tool_revision(tool) or '',revision):
+            if same(source_commit(tool_revision(tool)) or '',revision):
                 line=f'{tool.parent.name} {revision} {node} {hashlib.sha256(tool.read_bytes()).hexdigest()}'
                 raise Refusal(f'The six validators run {revision} (node {node}), which {rel} does not list, and {tool} was built from it; add its line with: echo {shlex.quote(line)} >> {rel}')
         raise Refusal(f'The six validators run {revision} (node {node}), which {rel} does not list; build its rehearsal tool and print the line to add with: {build_command(revision,node)}')
@@ -77,5 +89,8 @@ def release(found,coord,path=None):
     digest=hashlib.sha256(tool.read_bytes()).hexdigest()
     if digest!=row['tool_sha256']:raise Refusal(f'The rehearsal tool at {tool} has sha256 {digest}, not the {row["tool_sha256"]} that {rel}:{row["line"]} lists for {row["name"]}; rebuild it from {revision} with: {fix}')
     recorded=tool_revision(tool)
-    if recorded is not None and not same(recorded,revision):raise Refusal(f'The rehearsal tool at {tool} was built from {recorded}, not the fleet\'s {revision}; rebuild it with: {fix}')
-    return dict(name=row['name'],commit=row['commit'],revision=revision,node_sha256=node,tool=str(tool),tool_sha256=digest,tool_revision=recorded or f'{row["commit"]} (from {rel}:{row["line"]})')
+    if recorded is None:raise Refusal(f'The rehearsal tool at {tool} does not record its source (no build-info); rebuild it with: {fix}')
+    commit=source_commit(recorded)
+    if commit is None:raise Refusal(f'The rehearsal tool at {tool} records {recorded}, a tree modified from its commit; rebuild it with: {fix}')
+    if not same(commit,revision):raise Refusal(f'The rehearsal tool at {tool} was built from {recorded}, not the fleet\'s {revision}; rebuild it with: {fix}')
+    return dict(name=row['name'],commit=row['commit'],revision=revision,node_sha256=node,tool=str(tool),tool_sha256=digest,tool_revision=recorded)
