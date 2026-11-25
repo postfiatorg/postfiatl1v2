@@ -20,6 +20,11 @@ with one line in his next handoff. The recommendations below are pre-filled so
 | Whether the next validator release carries merged, default-disabled PR #38 YOLO target-receipt code | [A — Carry it in the next routine release; leave activation unscheduled](yolo-deploy-decision-20260907.md) | PR #38 merge `1412b4dc`; [YOLO target receipt v1](../yolo/target-receipt-v1.md); release and rollback guidance summarized in the decision sheet | **A recorded 2026-09-07:** carry in the next qualified routine release; activation unscheduled. Composition decision only, no deployment authority. |
 | Deploy a release carrying consensus signing fix `bbb291ce` to the six controlled-devnet validators | [C — Hold for a fuller release-lineage and deployment-exact campaign](signing-fix-deploy-decision-20260909.md) | Current `main` omits deployed A666 runtime lineage, clean-build hashes differ, validator-0 RPC state is unknown, and no current all-six clone or exact local rollback binary is available | — |
 
+Fact check of 25 November 2026: the signing fix `bbb291ce` and the YOLO
+target-receipt code `1412b4dc` are both ancestors of every release the
+validators have run since 21 November 2026 (`main-r64-20261121` and the build
+`04600868`). The two rows above are left for the operator to close.
+
 When every row is answered, the deferred Dynamic UNL milestone can be activated
 at the G7 boundary without further preparation.
 

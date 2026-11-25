@@ -10,6 +10,13 @@ validator or fleet.
 
 This follows the operator's instruction to proceed with the recommended next steps. It chooses release composition only; it does not authorize deployment or assert a green release candidate.
 
+!!! note "Later state (checked on 25 November 2026)"
+    "Today" below means 7 September 2026. The merged code (`1412b4dc`) is an
+    ancestor of the build `04600868` that the six validators run on 25 November
+    2026 (`git merge-base --is-ancestor`). Whether a
+    `yolo_target_activation_height` is scheduled on the chain was not read; the
+    `status` reply carries no such field.
+
 ## What is true today
 
 - PR #38 is merged into `main` at `1412b4dc`. The last deployment handoff
