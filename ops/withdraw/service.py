@@ -35,6 +35,11 @@ worker_started=threading.Event()
 ACTIVE_STAGES = {'queued', 'reading', 'catching_up', 'proving', 'paying'}
 
 
+class IneligibleBurn(RuntimeError):
+    """This request cannot proceed, independently of payout infrastructure health."""
+
+
+
 def now():return datetime.now(timezone.utc).isoformat(timespec='seconds')
 def job_path(burn):return JOBS/burn/'job.json'
 def read_job(burn):
@@ -78,7 +83,7 @@ def readiness():
     profile_hash=route['beacon_finality_anchor']['route_profile_hash']
     buckets=[b for b in s['buckets'] if b['policy_hash']==profile_hash and b.get('status','active')=='active']
     jobs = [load(path) for path in JOBS.glob('*/job.json')]
-    blocked = [j['burn_tx_id'] for j in jobs if j['stage'] in ('failed', 'reconciliation_required')]
+    blocked = [j['burn_tx_id'] for j in jobs if j['stage'] in ('failed', 'reconciliation_required') and j.get('error_scope') != 'burn']
     payments = [j['updated_at'] for j in jobs if j['stage'] == 'paid']
     stalled = [j['burn_tx_id'] for j in jobs if j['stage'] in ACTIVE_STAGES and
                (datetime.now(timezone.utc) - datetime.fromisoformat(j['updated_at'])).total_seconds() > 3600]
@@ -88,6 +93,8 @@ def readiness():
                   payout_preflight_error=preflight_error, last_payment_recorded_at=max(payments, default=None),
                   blocked_jobs=blocked, stalled_jobs=stalled)
     if len(buckets)!=1:return dict(**health,ready=False,message='No single active deposit bucket for the current bridge setting.')
+    if not payout_ready:
+        health['message'] = preflight_error or 'The withdrawal worker has blocked or stalled jobs.'
     return dict(**health,ready=payout_ready,asset_id=FAMILY,series_asset_id=SERIES,bucket_id=buckets[0]['bucket_id'],issuer=s['issuer'],epoch=s['finalized_epoch'],
         reserve_packet_hash=s['finalized_reserve_packet_hash'],bucket_outstanding_atoms=str(buckets[0]['outstanding_vault_bridge_atoms']),
         destination_prefix='evm-erc20:1:',vault_address='0xe7a432a28b20621a70e845c7f202004cf98e7a2c',minutes_estimate=12,current_height=route['current_height'])
@@ -243,9 +250,9 @@ def process(job):
     stage(job,'reading','Reading the finalized burn from all six validators.')
     bundle,A=export_bundle(d);blocks={b['header']['height']:b for b in A['blocks']['blocks']}
     red=[r for r in A['ledger']['vault_bridge_redemptions'] if r['withdrawal_packet']['burn_tx_id']==burn]
-    if len(red)!=1:raise RuntimeError('This burn is not finalized on the network.')
+    if len(red)!=1:raise IneligibleBurn('This burn is not finalized on the network.')
     red=red[0];p=red['withdrawal_packet'];h=red['created_at_height']
-    if p['source_chain_id']!=1 or p['vault_address'].lower()!='0xe7a432a28b20621a70e845c7f202004cf98e7a2c':raise RuntimeError('This burn is not for the Ethereum mainnet USDC vault.')
+    if p['source_chain_id']!=1 or p['vault_address'].lower()!='0xe7a432a28b20621a70e845c7f202004cf98e7a2c':raise IneligibleBurn('This burn is not for the Ethereum mainnet USDC vault.')
     job.update(amount_atoms=str(p['amount_atoms']),recipient=p['recipient'],burn_height=h,withdrawal_id=p['withdrawal_id']);write_job(job)
     six=read_six(burn);rs={json.dumps(x['receipts'],sort_keys=True) for x in six};assert len(six)==6 and len(rs)==1,'validators disagree on the burn receipt'
     receipt=[r for r in six[0]['receipts'] if r['tx_id']==burn];assert len(receipt)==1 and receipt[0]['accepted'],'burn receipt is not accepted'
@@ -306,6 +313,7 @@ def run_jobs(startup=False):
             except Exception as error:
                 detail = str(error)[:400]
                 job['error'] = detail
+                job['error_scope'] = 'burn' if isinstance(error, IneligibleBurn) else 'route'
                 new_stage = 'reconciliation_required' if isinstance(error, ReconciliationRequired) else 'failed'
                 if job.get('stage') != new_stage or job.get('detail') != detail:
                     stage(job, new_stage, detail)

@@ -159,6 +159,7 @@ class RestartTests(unittest.TestCase):
             stale['updated_at'] = '2000-01-01T00:00:00+00:00'
             service.write_job(stale)
             service.stage(dict(burn_tx_id='unknown'), 'reconciliation_required')
+            service.stage(dict(burn_tx_id='unfinalized', error_scope='burn'), 'failed')
             bucket = {'policy_hash':'p', 'bucket_id':'b', 'outstanding_vault_bridge_atoms':5}
             status = dict(buckets=[bucket], issuer='i', finalized_epoch=2, finalized_reserve_packet_hash='r')
             route = dict(beacon_finality_anchor={'route_profile_hash':'p'}, current_height=1)
