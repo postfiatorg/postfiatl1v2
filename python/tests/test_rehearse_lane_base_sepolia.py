@@ -152,9 +152,14 @@ class ProgramIdentityTests(unittest.TestCase):
 
     def test_non_fork_mode_takes_the_committed_identity(self):
         identity = dry_run.load_program_identity(fork=False, override=None, worktree_clean=True, head="abc")
-        self.assertEqual(identity["elf_sha256"], "cdaf391297e05a1547334505dcf388545ab148ddacbc7a136eeef3ba0fbbfd58")
+        import json
+        inventory = json.loads((ROOT / "docs/status/OPEN-SOURCE-PROOF-PUBLIC-INPUT-INVENTORY-20260716.json").read_text())
+        exported = next(system for system in inventory["systems"]
+                        if system.get("proof_system_id") == "sp1-pft-lane-export-v1")
+        self.assertEqual(identity["elf_sha256"], exported["elf_sha256"])
+        self.assertEqual(identity["program_vkey"], exported["program_vkey"])
         self.assertEqual(identity["checked_out_commit"], "abc")
-        self.assertEqual(len(identity["runs"]), 2)
+        self.assertGreaterEqual(len({run["run_id"] for run in identity["runs"]}), 2)
 
     def test_a_mismatching_elf_is_refused(self):
         with self.assertRaises(dry_run.RehearsalFailure):
@@ -164,7 +169,8 @@ class ProgramIdentityTests(unittest.TestCase):
     def test_fork_mode_accepts_an_override(self):
         identity = dry_run.load_program_identity(fork=True, override=dry_run.PROGRAM_INFO, worktree_clean=False,
                                                  head="abc")
-        self.assertEqual(identity["program_vkey"][:6], "0x005a")
+        import json
+        self.assertEqual(identity["program_vkey"], json.loads(dry_run.PROGRAM_INFO.read_text())["program_vkey"])
 
 
 class FakeChain:

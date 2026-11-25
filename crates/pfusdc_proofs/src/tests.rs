@@ -410,6 +410,78 @@ fn fixture() -> PfUsdcEgressProofWitnessV1 {
 }
 
 #[test]
+fn ordinary_batch_proves_each_exit_against_the_same_signed_block() {
+    let first = fixture();
+    let mut second = first.clone();
+    let packet = &mut second.withdrawal_packet;
+    packet.burn_tx_id = "31".repeat(48);
+    packet.withdrawal_id = "32".repeat(48);
+    packet.amount_atoms = 77;
+    second.withdrawal_packet_hash = vault_bridge_withdrawal_packet_hash(packet).unwrap();
+    second.withdrawal_packet_evm_digest =
+        vault_bridge_withdrawal_packet_evm_digest(packet).unwrap();
+    second.receipt = Receipt::accepted(packet.burn_tx_id.clone(), "second burn");
+    let leaf = &mut second.merkle_proof.leaf;
+    leaf.burn_tx_id = packet.burn_tx_id.clone();
+    leaf.accepted_receipt_id = packet.burn_tx_id.clone();
+    leaf.withdrawal_id = packet.withdrawal_id.clone();
+    leaf.amount_atoms = packet.amount_atoms;
+    leaf.withdrawal_packet_hash = second.withdrawal_packet_hash.clone();
+    leaf.withdrawal_packet_evm_digest = second.withdrawal_packet_evm_digest.clone();
+    let (validators, keys) = committee();
+    let domain = first
+        .block
+        .header
+        .consensus_v2_commit
+        .as_ref()
+        .unwrap()
+        .proposal
+        .domain
+        .clone();
+
+    for mut burns in [vec![first.clone()], vec![first.clone(), second]] {
+        let leaves: Vec<_> = burns
+            .iter()
+            .rev()
+            .map(|w| w.merkle_proof.leaf.clone())
+            .collect();
+        let root = bridge_exit_merkle_root_v1(&leaves).unwrap();
+        let mut receipts = vec!["ff".repeat(48)]; // Ordinary transfer has no exit leaf.
+        receipts.extend(burns.iter().rev().map(|w| w.receipt.tx_id.clone()));
+        let block = signed_block_record(
+            &domain,
+            &validators,
+            &keys,
+            10,
+            first.prior_checkpoint_block_id.clone(),
+            "bb".repeat(48),
+            "cc".repeat(48),
+            Some(root.clone()),
+            "transactions",
+            "bb".repeat(48),
+            receipts,
+        );
+        let mut nullifiers = std::collections::BTreeSet::new();
+        for witness in &mut burns {
+            let index = leaves
+                .iter()
+                .position(|leaf| leaf.withdrawal_id == witness.withdrawal_packet.withdrawal_id)
+                .unwrap();
+            witness.block = block.clone();
+            witness.merkle_proof = bridge_exit_merkle_proof_v1(&leaves, index).unwrap();
+            let values = verify_egress_witness_v1(witness).expect("batched egress statement");
+            assert_eq!(values.bridge_exit_root, root);
+            assert_eq!(values.finalized_block_id, block.header.block_hash);
+            assert_eq!(
+                values.withdrawal_id,
+                witness.withdrawal_packet.withdrawal_id
+            );
+            assert!(nullifiers.insert(values.proof_nullifier));
+        }
+    }
+}
+
+#[test]
 fn exact_finalized_egress_witness_accepts_and_binds_every_boundary() {
     let witness = fixture();
     let values = verify_egress_witness_v1(&witness).expect("valid egress witness");

@@ -888,6 +888,7 @@ fn print_usage() {
   postfiat-node certify-batch [--data-dir PATH] [--batch-kind transparent|governance|shielded|bridge] --batch-file PATH --validator-key-dir PATH --proposal-file PATH --vote-dir PATH --certificate-file PATH [--height N] [--view N] [--timeout-certificate-file PATH] [--skip-block-log-verify]
   postfiat-node batch-archive [--data-dir PATH] [--batch-kind KIND] [--batch-id ID] [--limit N]
   postfiat-node verify-state [--data-dir PATH]
+  postfiat-node verify-payment-finality --data-dir PATH --chain-id ID --genesis-hash HASH --genesis-registry-root HASH [--historical-committee-pins PATH] (--tx-id ID | --signed-payment FILE)
   postfiat-node verify-blocks [--data-dir PATH]
   postfiat-node verify-governance [--data-dir PATH] [--cobalt-mode canonical|non-uniform] [--trust-graph-root HASH]
   postfiat-node verify-bridge [--data-dir PATH]

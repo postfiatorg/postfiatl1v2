@@ -15,6 +15,7 @@ from .address import AddressError, checksum_address, parse_address
 from .client import PostFiatRpcClient
 from .wallet import (
     FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
+    FinalityTrust,
     load_wallet,
     request_faucet_pft,
     send_pft,
@@ -137,6 +138,8 @@ def finality_warning(report: dict[str, Any]) -> str | None:
         return None
     # Escape control characters so an RPC-supplied tx_id cannot split the line.
     shown = tx_id.encode("unicode_escape").decode("ascii")
+    if body.get("confirmation") == "rejected":
+        return f"warning: the independently verified receipt rejected payment {shown}"
     return (
         "warning: finality not observed before --poll-timeout-seconds; "
         f"transaction {shown} may still finalize - poll it, do not resubmit"
@@ -211,6 +214,14 @@ def run_send(args: argparse.Namespace) -> dict[str, Any]:
     endpoint = args.endpoint or os.environ.get("PFTL_RPC_ENDPOINT")
     wallet_dir = args.wallet_dir or os.environ.get("PFTL_WALLET_DIR")
     chain_id = args.chain_id or os.environ.get("PFTL_CHAIN_ID") or "postfiat-local"
+    trust = None
+    verification = (args.verification_archive, args.trusted_genesis_hash, args.trusted_genesis_registry_root)
+    if any(verification) or args.historical_committee_pins:
+        if not all(verification) or not args.poll_finality or args.finalize_data_dir:
+            raise ValueError("verified finality requires --poll-finality, --verification-archive, "
+                             "--trusted-genesis-hash and --trusted-genesis-registry-root together")
+        trust = FinalityTrust(Path(args.verification_archive), chain_id, args.trusted_genesis_hash,
+                              args.trusted_genesis_registry_root, path_arg(args.historical_committee_pins))
     if not endpoint:
         raise ValueError("--endpoint or PFTL_RPC_ENDPOINT is required for send")
     if not wallet_dir:
@@ -256,6 +267,7 @@ def run_send(args: argparse.Namespace) -> dict[str, Any]:
             memo_format=args.memo_format,
             memo_data=args.memo_data,
             max_fee_atoms=args.max_fee_atoms,
+            finality_trust=trust,
             poll_timeout_seconds=args.poll_timeout_seconds,
             poll_interval_seconds=args.poll_interval_seconds,
         )
@@ -364,6 +376,10 @@ def build_parser() -> argparse.ArgumentParser:
     send.add_argument("--finalize-data-dir", help="Optional local data dir for mempool-batch finalization (local harness only)")
     send.add_argument("--validator-data-dirs", help="Comma-separated local validator dirs for finalization (local harness only)")
     send.add_argument("--poll-finality", action="store_true", help="Submit to RPC and poll for finality (WAN/testnet mode)")
+    send.add_argument("--verification-archive", help="Immutable local full-history archive for independent verification")
+    send.add_argument("--historical-committee-pins", help="Custodian-provisioned file of exact historical committee exceptions")
+    send.add_argument("--trusted-genesis-hash", help="Independently provisioned genesis hash")
+    send.add_argument("--trusted-genesis-registry-root", help="Independently provisioned genesis committee root")
     send.add_argument("--poll-timeout-seconds", type=float, default=120.0, help="Finality poll timeout in seconds")
     send.add_argument("--poll-interval-seconds", type=float, default=2.0, help="Finality poll interval in seconds")
     send.add_argument("--timeout-seconds", type=float, default=8.0)

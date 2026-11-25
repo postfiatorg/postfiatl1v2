@@ -126,25 +126,78 @@ confirmation depth: waiting for more blocks does not add safety. Note that all
 six validators are administered by one organization today, so the fault
 assumption rests on that organization.
 
-A committed block can contain a **rejected** transaction. Credit a deposit or
-mark a withdrawal complete only when both hold
-([Finality](../architecture/finality.md#client-finality),
-[RPC Overview](../rpc/overview.md)):
+A committed block can contain a **rejected** transaction. The Python wallet's
+default `confirmation == "rpc_confirmed"` means the submission server
+returned a matching accepted receipt inline, or the query server later
+reported it through `tx`. Both paths trust that server. The compatibility
+field `finalized` is also true for this RPC-only outcome.
 
-1. `tx` returns a finality report with `confirmed: true`; the report also
-   carries `proof_id`, the `block` record with its certificate, `tip_hash` and
-   `tip_state_root` (`TxFinalityReport` in `crates/node/src/node_types.rs`);
-   and
-2. the report's `receipt` has `accepted: true` and an accepted `code`.
+For independently verified exchange credit, provision a full, immutable
+archive copy from your own node and pin the chain ID, genesis hash and
+genesis validator registry root through your trusted deployment records.
+Use a local, trusted `postfiat-node` build. The verifier follows ordered
+committee changes, checks quorum signatures and chain linkage, replays
+archived transactions and receipts, and resolves the signed native payment
+at its certified receipt index. Pruned archives and committee changes
+that require unauthenticated historical keys cannot supply this result.
+This is full-history replay per observed payment. Budget for archive size
+and replay time before enabling it on a deposit processor.
 
-Store the evidence with the credit: finality proof ID, block hash, certificate
-ID, registry root, receipt code and message
-([Wallet Exchange Custody Model](../specs/wallet-exchange-custody-model.md)).
-Consider querying more than one validator RPC and comparing the results.
+```python
+from pathlib import Path
+from postfiat_rpc import FinalityTrust, verify_payment_finality
 
-If a finality poll times out, the transaction may still finalize. Poll again by
-transaction ID; do not sign a replacement (`finality_warning` in
-`python/postfiat_rpc/pftl_transfer.py`).
+trust = FinalityTrust(Path(archive_path), chain_id, genesis_hash, genesis_registry_root)
+evidence = verify_payment_finality(trust, deposit_tx_id)
+if evidence["confirmation"] == "independently_verified":
+    payment = evidence["report"]["transaction_rows"][0]
+    # Match the expected deposit address, amount in atoms and customer memo.
+    # Record evidence and credit once, keyed by (chain_id, genesis_hash, tx_id).
+```
+
+Some devnet recovery blocks followed a different signing committee from the
+one reconstructed by applying all ordered updates. Genesis-only verification
+refuses this history. A custodian that independently authenticated the recovery
+decision and its block can provide a local JSON array of exception records.
+Each record contains the exact `chain_id`, `genesis_hash`, positive `height`,
+`block_hash`, `ordered_registry_root` (the full committee after applying the
+due updates) and `signing_registry_root` (the full committee authorized for that
+block). Hashes and roots are 96 lowercase hexadecimal characters. List records
+in strictly increasing height order.
+
+Obtain these values from independently authenticated recovery records, verify
+the signers’ authority through the custodian’s deployment records, then retain
+the approved file with its provenance outside the archive. The payment RPC,
+archive and certificate alone cannot establish a recovery decision. Set
+`historical_committee_pins=Path("/custody/trust/recovery.json")` on
+`FinalityTrust`, or supply `--historical-committee-pins PATH` to either transfer
+or native verification CLI. Certificate and execution replay both check the
+pinned block and committee roots. The verifier checks the block quorum, the
+signed authority for effective committee changes, and the payment receipt. A
+legacy unsigned Foundation drill record can only preserve the already-active
+signers at an independently pinned recovery block. The result records the
+pins used. Independent credit on the affected devnet history
+remains unverified until the custodian provisions this evidence and successfully
+replays its own archive.
+
+Pass the same `finality_trust=trust` to `send_pft_and_poll_finality` to
+require this verification for withdrawals. Both the inline-submit and
+submit-then-poll paths derive the transaction ID from the locally signed
+payment. The transfer CLI accepts `--poll-finality --verification-archive PATH
+--trusted-genesis-hash HASH --trusted-genesis-registry-root ROOT` together
+with `--chain-id ID`. Save the result's `finality_evidence` with the
+withdrawal or the complete deposit evidence returned above. It contains the
+trust pins, transaction ID, replay tip, proof ID, signed block certificate,
+decoded payment and matching receipt. An independently verified payment has
+`accepted: true` and the literal receipt code `accepted`. Retain the
+corresponding full archive for later replay.
+
+A `pending` result means this archive has no receipt yet. Publish a new
+complete archive version by atomically switching the verifier's path to the
+new immutable directory, then query the same transaction ID. A `rejected`
+result records the certified unsuccessful receipt. Archive errors fail the
+verification. A polling timeout can precede finality, so continue looking
+up the existing ID before considering a replacement payment.
 
 ## Deposits
 

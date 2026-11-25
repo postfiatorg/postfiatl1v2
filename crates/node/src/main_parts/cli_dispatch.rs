@@ -701,6 +701,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "vault-bridge-withdrawal-relay-bundle"
         | "vault-bridge-export-reserve-packet"
         | "vault-bridge-replay-reserve-packet"
+        | "verify-payment-finality"
         | "verify-blocks"
         | "verify-state"
         | "verify-governance"
