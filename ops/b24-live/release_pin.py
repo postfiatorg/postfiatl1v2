@@ -36,17 +36,27 @@ def fleet(statuses):
     revision,node=rows[VALIDATORS[0]]
     return dict(revision=revision,node_sha256=node)
 
+def short(value,size=16):
+    """A hash or value shortened for a refusal, which must fit the alert hook."""
+    text=str(value);return text if len(text)<=size else text[:size]+'…'
+
 def relative(path):
     path=Path(path);return path.relative_to(HERE.parents[1]) if path.is_relative_to(HERE.parents[1]) else path
 
 def known(path=None):
-    """Lines `release-name source-commit node-sha256 tool-sha256`; # starts a comment."""
-    rows=[];path=Path(path or KNOWN)
+    """Lines `release-name source-commit node-sha256 tool-sha256`; # starts a comment. A release name
+    or a commit given twice is refused: the job would not know which line holds."""
+    rows=[];path=Path(path or KNOWN);rel=relative(path)
     for number,line in enumerate(path.read_text().splitlines(),1):
         fields=line.split('#')[0].split()
-        if fields:
-            if len(fields)!=4:raise Refusal(f'{relative(path)}:{number} needs four fields (release, commit, node sha256, tool sha256); fix that line, then run: {CHECK}')
-            rows.append(dict(zip(('name','commit','node_sha256','tool_sha256'),fields),line=number))
+        if not fields:continue
+        if len(fields)!=4 or not re.fullmatch(r'[0-9a-f]{7,40}',fields[1]) or not all(re.fullmatch(r'[0-9a-f]{64}',f) for f in fields[2:]):
+            raise Refusal(f'{CHECK} after fixing {rel}:{number}: a line is release, commit (7 to 40 hex), node sha256, tool sha256')
+        row=dict(zip(('name','commit','node_sha256','tool_sha256'),fields),line=number)
+        for other in rows:
+            if other['name']==row['name'] or same(other['commit'],row['commit']):
+                raise Refusal(f'{CHECK} after removing one of {rel}:{other["line"]} and {rel}:{number}: both name {short(row["name"],24) if other["name"]==row["name"] else "commit "+row["commit"]}')
+        rows.append(row)
     return rows
 
 def same(a,b):
@@ -82,7 +92,7 @@ def release(found,coord,path=None):
                 line=f'{tool.parent.name} {revision} {node} {hashlib.sha256(tool.read_bytes()).hexdigest()}'
                 raise Refusal(f'The six validators run {revision} (node {node}), which {rel} does not list, and {tool} was built from it; add its line with: echo {shlex.quote(line)} >> {rel}')
         raise Refusal(f'The six validators run {revision} (node {node}), which {rel} does not list; build its rehearsal tool and print the line to add with: {build_command(revision,node)}')
-    row=rows[-1]
+    row=rows[0]
     if row['node_sha256']!=node:raise Refusal(f'{rel}:{row["line"]} gives {row["name"]} the node {row["node_sha256"]}, but the six run {node}; rebuild its rehearsal tool and replace that line with the one printed by: {build_command(revision,node).replace("<release-name>",row["name"])}')
     tool=Path(coord)/'artifacts'/row['name']/TOOL;fix=build_command(revision,node).replace('<release-name>',row['name'])
     if not tool.is_file():raise Refusal(f'The rehearsal tool for {row["name"]} is missing at {tool}; build and install it with: {fix}')
