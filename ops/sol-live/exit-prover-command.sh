@@ -21,9 +21,12 @@ if [[ -e $conf ]]; then
     while IFS='=' read -r key value || [[ -n $key ]]; do
         case "$key=$value" in
             =|'#'*) ;;
-            EXIT_CUDA_DEVICE=[0-9]|EXIT_CUDA_DEVICE=[0-9][0-9]) device=$value;;
-            DEPOSIT_CUDA_DEVICES=*) [[ $value =~ ^[0-9]{1,2}(,[0-9]{1,2})*$ ]] ||
-                { echo "pf-sol-exit-prove: bad line in $conf: $key" >&2; exit 78; }
+            # One written form per device (no leading zero), so the overlap checks compare like with like.
+            EXIT_CUDA_DEVICE=*) [[ $value =~ ^(0|[1-9][0-9]?)$ ]] ||
+                { echo "pf-sol-exit-prove: bad line in $conf: $key=$value (a device is 0 to 99, no leading zero)" >&2; exit 78; }
+                device=$value;;
+            DEPOSIT_CUDA_DEVICES=*) [[ $value =~ ^(0|[1-9][0-9]?)(,(0|[1-9][0-9]?))*$ ]] ||
+                { echo "pf-sol-exit-prove: bad line in $conf: $key=$value (devices are 0 to 99, no leading zero)" >&2; exit 78; }
                 deposit=$value;;
             EXIT_WORK_DIR=/*) work=$value;;
             EXIT_LOCK=/*) lock=$value;;

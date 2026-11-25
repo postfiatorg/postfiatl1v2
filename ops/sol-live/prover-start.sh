@@ -20,6 +20,8 @@ if [[ -e $conf ]]; then
             DEPOSIT_CUDA_DEVICES) deposit=$value ;;
         esac
     done < "$conf"
+    # The same written form as the forced command accepts, so both compare like with like.
+    [[ $withdraw =~ ^(0|[1-9][0-9]?)$ ]] || refuse "EXIT_CUDA_DEVICE=$withdraw in $conf: a device is 0 to 99, no leading zero"
     [[ -n $deposit ]] || refuse "$conf names no DEPOSIT_CUDA_DEVICES"
     gpus=$(( $(tr -cd , <<<"$deposit" | wc -c) + 1 ))
     # serve.py takes a count and uses devices 0 to count-1, so the list must be exactly those.
