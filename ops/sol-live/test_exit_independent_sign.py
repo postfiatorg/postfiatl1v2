@@ -54,7 +54,9 @@ def paid(fleet, d):
         other_allocations_atoms=0, nav_subscription_allocations_atoms=0, counted_value_atoms=300000,
     )
     fleet.status = dict(
-        buckets=[bucket], allocations=[], receipts=[],
+        buckets=[bucket], receipts=[],
+        allocations=[dict(purpose="vault_bridge_supply", bucket_id=payout.BUCKET, amount_atoms=300000,
+                          remaining_atoms=300000)],
         redemptions=[dict(burn_tx_id=burn, bucket_id=payout.BUCKET, amount_atoms=300000, state="pending",
                           settled_atoms=0, settlement_receipt_hash="", owner=exit_canary.OWNER,
                           destination_ref=exit_canary.DEST, withdrawal_packet_hash=packet)])
