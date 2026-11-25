@@ -737,7 +737,7 @@ Result:
   `806fbb22ef07b55ee058956b0f6848ced03fbcf4376784dc998b6e9b16db3a83e77ad415f266ac7a2f7ff91c80f6752a`;
 - bound root:
   `0799e5536a40bb053f19d1d95c5e2cd0bca6c341610c23ca97b1181299762c3046f6e278fff81f219a395d3e57c8aec9`;
-- derives single-channel posterior as `ceil(10000 / candidate_count)` basis
+- estimates the single-channel posterior under equal candidate weights as `ceil(10000 / candidate_count)` basis
   points and requires maximum single-channel posterior <= 1,250 bps, joint
   metadata posterior <= 625 bps, and a 16-candidate joint metadata cohort;
 - negative controls cover root/hash mismatch, joint shortfall, batch/timing
