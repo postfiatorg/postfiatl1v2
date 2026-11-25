@@ -1221,6 +1221,14 @@ def bind_witness(w, red, burn):
     )
 
 
+def burn_header(h):
+    """The burn block's header read again from a validator, not from this attempt's cache, so the
+    check before verify_endpoints compares the witness with a second read."""
+    target = rpc_any("blocks", from_height=h, limit=1)[0]["header"]
+    require(target["height"] == h, "Unexpected burn height.")
+    return target
+
+
 class BlockReads:
     """Read each finalized block once per payout. One read costs the node seconds.
     Reads fall back across validators like `rpc_any`."""
@@ -1420,9 +1428,7 @@ def process(burn, work, update, *, attempt=None, before_send=None):
         raise CheckpointAdvanced()
     w = egress_witness(c, red, prior, h, work, fetch)
     bind_witness(w, red, burn)
-    target = fetch(0, "blocks", from_height=h, limit=1)[0]["header"]
-    require(target["height"] == h, "Unexpected burn height.")
-    verify_endpoints(c, w, prior, target)
+    verify_endpoints(c, w, prior, burn_header(h))
     sig = signature(c, burn)
     if not sig:
 
