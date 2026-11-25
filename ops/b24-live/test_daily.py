@@ -200,6 +200,59 @@ class ReleasePinTests(unittest.TestCase):
             ssh.return_value.returncode=1;ssh.return_value.stdout=''
             with self.assertRaisesRegex(release_pin.Refusal,'^validator-0 has no copy of the rehearsal tool at /tmp/b23-tee-nav-canary-abababababababab; copy it with: scp -p /x/tool '):daily.remote_copy('/x/tool','ab'*32)
 
+class RefusalFormTests(unittest.TestCase):
+    """Every refusal starts with the command that fixes it and fits the alert hook (280 characters)."""
+    REV,setUp,tool_at,sha,pick=ReleasePinTests.REV,ReleasePinTests.setUp,ReleasePinTests.tool_at,ReleasePinTests.sha,ReleasePinTests.pick
+    FIXES=('python3 ops/b24-live/daily.py --check','ops/b24-live/rehearsal_tool.sh','echo ','scp ')
+    def refusal(self,action):
+        with self.assertRaises(release_pin.Refusal) as refused:action()
+        text=str(refused.exception)
+        self.assertLessEqual(len(text),280,text);self.assertTrue(text.startswith(self.FIXES),text)
+        return text
+    def test_every_refusal_is_short_and_starts_with_its_fix(self):
+        long_coord=self.tmp/('c'*60);(long_coord/'artifacts/sol-exit-r2').mkdir(parents=True)
+        cases=[]
+        def status(**change):
+            statuses=json.loads(json.dumps(self.statuses));statuses['validator-3'].update(change);return statuses
+        cases.append(lambda:release_pin.fleet(dict(self.statuses,**{'validator-3':RuntimeError('x'*400)})))
+        cases.append(lambda:release_pin.fleet(dict(self.statuses,**{'validator-3':dict(node_id='validator-3')})))
+        cases.append(lambda:release_pin.fleet(status(deployment_manifest_verified=False)))
+        cases.append(lambda:release_pin.fleet(status(build_git_revision=None)))
+        mixed={f'validator-{i}':dict(build_git_revision=f'{i}'*8,deployment_manifest_verified=True,deployment_runtime_artifacts=dict(binary_sha256=f'{i}'*64)) for i in range(6)}
+        cases.append(lambda:release_pin.fleet(mixed))
+        self.known.write_text('a b c\n');cases.append(self.pick)
+        for case in cases:self.refusal(case)
+        self.known.write_text('# none\n')
+        self.refusal(lambda:release_pin.release(release_pin.fleet(self.statuses),long_coord,self.known))
+        self.refusal(lambda:release_pin.release(release_pin.fleet(self.statuses),self.coord,self.known))
+        self.known.write_text(f'sol-exit-r2 046008683 {"ee"*32} {self.sha(self.tool)}\n');self.refusal(self.pick)
+        self.known.write_text(f'sol-exit-r2 046008683 {NODE} {"ab"*32}\n');self.refusal(self.pick)
+        for recorded in (None,'046008683+modified','71dbc9b3'):
+            self.tool=self.tool_at('sol-exit-r2',recorded);self.known.write_text(f'sol-exit-r2 046008683 {NODE} {self.sha(self.tool)}\n');self.refusal(self.pick)
+        self.tool.unlink();self.refusal(self.pick)
+        with patch.object(daily.subprocess,'run') as ssh:
+            ssh.return_value.returncode=1;ssh.return_value.stdout=''
+            self.refusal(lambda:daily.remote_copy('/home/postfiat/repos/b23-coord/artifacts/sol-exit-r2/'+release_pin.TOOL,'ab'*32))
+
+    def test_a_duplicated_release_name_or_commit_is_refused_with_the_file_and_line(self):
+        line=f'sol-exit-r2 046008683 {NODE} {self.sha(self.tool)}'
+        self.known.write_text(f'{line}\n# again\n{line}\n')
+        self.assertIn(f'{self.known}:3',self.refusal(self.pick))
+        self.known.write_text(f'{line}\nsol-exit-r3 046008683 {NODE} {self.sha(self.tool)}\n')
+        self.assertIn(f'{self.known}:2',self.refusal(self.pick))
+
+    def test_a_malformed_line_is_refused_with_the_file_and_line(self):
+        self.known.write_text(f'# c\nsol-exit-r2 046008683 {NODE}\n')
+        self.assertIn(f'{self.known}:2',self.refusal(self.pick))
+        self.known.write_text(f'sol-exit-r2 0460 {NODE} {self.sha(self.tool)}\n')
+        self.assertIn(f'{self.known}:1',self.refusal(self.pick))
+
+    def test_a_null_or_missing_revision_is_a_refusal(self):
+        for value in (None,'',7):
+            with self.subTest(value):
+                self.statuses['validator-5']['build_git_revision']=value
+                self.assertIn('validator-5',self.refusal(self.pick))
+
 class ToolSourceTests(unittest.TestCase):
     """The source text rehearsal_tool.sh records, on a scratch git repository."""
     def setUp(self):
