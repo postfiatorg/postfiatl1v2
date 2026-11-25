@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import sys
 import tempfile
 import threading
 import time
@@ -1101,9 +1102,25 @@ def submit(c, kind, witness, work, owner=None, on_pay=None, before_send=None):
     vals = public_values(kind, witness, work)
     require(0 < len(vals) <= 2048, "Invalid proof size.")
     balance(c)
+    # The attempt's deadline is thread-local: the upload thread runs under the same one.
+    deadline = getattr(_attempt, "deadline", None)
+
+    def bounded_upload():
+        with attempt_deadline(deadline):
+            return upload(c, vals, work)
+
     with ThreadPoolExecutor(1) as pool:
-        uploading = pool.submit(upload, c, vals, work)
-        proved, proof = prove(kind, witness, work)
+        uploading = pool.submit(bounded_upload)
+        proved = None
+        try:
+            proved, proof = prove(kind, witness, work)
+        finally:
+            if proved is None:
+                # Proving failed: wait for the upload and log its failure, never drop it unread.
+                error = uploading.exception()
+                if error is not None:
+                    print(f"payout upload also failed: {type(error).__name__}: {error}", file=sys.stderr,
+                          flush=True)
         signer = uploading.result()
     require(proved == vals and len(proof) == 356, "Invalid proof size.")
     balance(c)
