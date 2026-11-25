@@ -37,7 +37,9 @@ mod lease;
 
 pub use canonical_export::CanonicalExportReceiptV1;
 pub use export::CanonicalHistoryIndexEntryV1;
-pub use generation::TransactionalGenerationPointerV1;
+pub use generation::{
+    verify_existing_generation, GenerationVerificationReport, TransactionalGenerationPointerV1,
+};
 use lease::shared_transactional_store;
 pub use lease::{
     release_inactive_shared_transactional_stores, transactional_open_counts,
@@ -532,9 +534,22 @@ impl TransactionalStore {
         data_dir: &Path,
         integrity_key: IntegrityKey,
     ) -> StorageResult<Self> {
-        fs::create_dir_all(data_dir).map_err(database_error)?;
+        Self::open_writable(data_dir, integrity_key, true)
+    }
+
+    fn open_writable(
+        data_dir: &Path,
+        integrity_key: IntegrityKey,
+        create: bool,
+    ) -> StorageResult<Self> {
         let database_path = data_dir.join(TRANSACTIONAL_DATABASE_FILE);
-        let database = Database::create(&database_path).map_err(database_error)?;
+        let database = if create {
+            fs::create_dir_all(data_dir).map_err(database_error)?;
+            Database::create(&database_path)
+        } else {
+            Database::open(&database_path)
+        }
+        .map_err(database_error)?;
         let _open_record = lease::record_open(&database_path);
         Ok(Self {
             database_path,
@@ -4240,6 +4255,117 @@ mod tests {
             })
             .expect("commit fixture block");
         (dir, store)
+    }
+
+    #[test]
+    fn maintenance_verifies_only_the_selected_generation_and_preserves_its_binding() {
+        let node_dir = TestDir::new("maintenance-node");
+        let generation = TestDir::new("maintenance-generation");
+        let node = NodeStore::new(&node_dir.0);
+        let genesis = postfiat_types::Genesis::new("maintenance-test");
+        node.write_genesis(&genesis).unwrap();
+        let hash = crate::integrity::to_hex(&crate::integrity::legacy_checksum(
+            b"postfiat.genesis.v1",
+            genesis.to_json().unwrap().as_bytes(),
+        ));
+        let old = ChainTipState {
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: hash.clone(),
+            protocol_version: genesis.protocol_version,
+            ..genesis_tip()
+        };
+        let root = "11".repeat(48);
+        let commitment =
+            OrderedHistoryCommitment::genesis(&genesis.chain_id, &hash, genesis.protocol_version)
+                .unwrap();
+        let target = node.open_transactional_store_at(&generation.0).unwrap();
+        target
+            .initialize(&old, &commitment, CurrentStateUpdate::default())
+            .unwrap();
+        target.verify_and_bind_migration(&root).unwrap();
+        drop(target);
+        let pointer = node
+            .publish_transactional_generation(&generation.0, &root)
+            .unwrap();
+        let target = node.transactional_store().unwrap();
+        let receipt = receipt("tx-1", true);
+        let tip = ChainTipState {
+            chain_id: old.chain_id.clone(),
+            genesis_hash: hash.clone(),
+            protocol_version: genesis.protocol_version,
+            ..next_tip(1)
+        };
+        target
+            .commit_finalized_block(CommitFinalizedBlock {
+                expected_tip: &old,
+                new_tip: &tip,
+                block: &block(vec![receipt.tx_id.clone()]),
+                receipts: &[receipt],
+                archive_entry: &archive(),
+                batch_id: "batch-1",
+                ordered_history: &commitment.append("batch-1").unwrap(),
+                current_state: CurrentStateUpdate::default(),
+                scheduled_activation_height: None,
+                allow_legacy_receipt_id_mismatch: false,
+            })
+            .unwrap();
+        assert_eq!(
+            target.meta().unwrap().last_full_verification_height,
+            Some(0)
+        );
+        drop(target);
+        assert!(verify_existing_generation(&node_dir.0, "different-chain", &hash).is_err());
+        assert!(
+            verify_existing_generation(&node_dir.0, &genesis.chain_id, &"22".repeat(48)).is_err()
+        );
+        assert_eq!(
+            node.transactional_store()
+                .unwrap()
+                .meta()
+                .unwrap()
+                .last_full_verification_height,
+            Some(0)
+        );
+        let report = verify_existing_generation(&node_dir.0, &genesis.chain_id, &hash).unwrap();
+        assert_eq!(report.previous_full_verification_height, Some(0));
+        assert_eq!(report.metadata.last_full_verification_height, Some(1));
+        assert_eq!(
+            report.metadata.migration_packet_root.as_deref(),
+            Some(root.as_str())
+        );
+        assert_eq!(report.verification.block_count, 1);
+        assert_eq!(report.verification.receipt_count, 1);
+        assert_eq!(report.verification.archive_count, 1);
+        assert_eq!(
+            node.transactional_generation_pointer().unwrap(),
+            Some(pointer.clone())
+        );
+        let mut substituted = pointer;
+        substituted.migration_packet_root = "22".repeat(48);
+        node.write_json(node_dir.0.join(TRANSACTIONAL_GENERATION_POINTER_FILE), &substituted)
+            .unwrap();
+        assert!(verify_existing_generation(&node_dir.0, &genesis.chain_id, &hash).is_err());
+        assert!(!node_dir.0.join(TRANSACTIONAL_DATABASE_FILE).exists());
+    }
+
+    #[test]
+    fn maintenance_cannot_initialize_an_empty_or_wrong_directory() {
+        let empty = TestDir::new("maintenance-missing-key");
+        let absent = empty.0.join("absent");
+        assert!(verify_existing_generation(&absent, "chain", "").is_err());
+        assert!(!absent.exists());
+        assert!(verify_existing_generation(&empty.0, "chain", "").is_err());
+        assert!(fs::read_dir(&empty.0).unwrap().next().is_none());
+
+        let node = NodeStore::new(&empty.0);
+        let genesis = postfiat_types::Genesis::new("chain");
+        let hash = crate::integrity::to_hex(&crate::integrity::legacy_checksum(
+            b"postfiat.genesis.v1",
+            genesis.to_json().unwrap().as_bytes(),
+        ));
+        node.write_genesis(&genesis).unwrap();
+        assert!(verify_existing_generation(&empty.0, "chain", &hash).is_err());
+        assert!(!empty.0.join(TRANSACTIONAL_DATABASE_FILE).exists());
     }
 
     fn committed_two_blocks(label: &str) -> (TestDir, TransactionalStore) {
