@@ -1,5 +1,11 @@
 # RPC And Wallet Evidence
 
+!!! note "Recorded evidence"
+    The `reports/` files named on this page are archived outside this repository
+    (see `reports/README.md`); most are from May 2026, when the network had five
+    validators. Paths under `benchmarks/` and `docs/` are in the repository.
+    Checked on 25 November 2026.
+
 RPC and wallet evidence proves integration surfaces, not just node internals.
 
 ## Evidence Paths
