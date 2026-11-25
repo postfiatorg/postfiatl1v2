@@ -90,6 +90,38 @@
       "program_vkey": "0x005a9f57832e55110036d86cebd66e1c6714b3dddca916580efae1913ae07829",
       "cargo_lock_sha256": "d34ce6ca28550ab6caa959a0827c30587ead1614ec73026476a35103724938f7",
       "expected": "programs/pft-lane-export/program-info.json"
+    },
+    {
+      "id": "pft-lane-export-v1-20261125",
+      "build_mode": "docker",
+      "build_command": "cargo prove build --docker --tag v6.3.1 --locked --workspace-directory <checkout> --output-directory elf",
+      "source_commit": "8d457ce8cae7c32ebd89122ac7fe0f82f05bafb5",
+      "workflow": ".github/workflows/pft-lane-export-identity.yml",
+      "reason": "The synchronized Solana changes updated linked types and governance code. Both dependency lockfiles were refreshed for this source tree.",
+      "runs": [
+        {
+          "run_id": 45697413500,
+          "attempt": 1,
+          "builds": 2,
+          "clean_source_trees": 2,
+          "source_commit": "8d457ce8cae7c32ebd89122ac7fe0f82f05bafb5",
+          "artifact_id": 15063115735,
+          "artifact_digest": "sha256:75a3f56036a155aa18527b5783df7a9040486924579748fdfce12c2c2d15a673"
+        },
+        {
+          "run_id": 45697995032,
+          "attempt": 1,
+          "builds": 2,
+          "clean_source_trees": 2,
+          "source_commit": "c786ca8f55ebd4564559bf4cfbd99c5ca3a2f00c",
+          "artifact_id": 15063216394,
+          "artifact_digest": "sha256:d02f03a0998c898ef5cdc083ef6d2aefa09752f77348a4c873a7d8b9bb9c5de6"
+        }
+      ],
+      "elf_sha256": "d9354039fbab503e4b404ab2f0f223365804c19881337d140a4e2ec3dd9c8abd",
+      "program_vkey": "0x008e3070879d6dc1f4a49f97b300767ea0f847abc33f2aa338e56225549e7416",
+      "cargo_lock_sha256": "5860d55d8cddbb717733f7d121eb7582510f3897025e239b05af8bcd4848dbe8",
+      "expected": "programs/pft-lane-export/program-info.json"
     }
   ]
 }
