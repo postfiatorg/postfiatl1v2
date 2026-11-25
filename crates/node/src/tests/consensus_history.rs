@@ -3123,6 +3123,7 @@ fn every_live_governance_amendment_kind_uses_the_signed_authorization_boundary()
         (GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT, 1006),
         (GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT, 1002),
         (GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT, 1003),
+        (GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT, 1007),
         (GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT, 1005),
         (GOVERNANCE_KIND_CRYPTO_POLICY, 3),
         (GOVERNANCE_KIND_CRYPTO_POLICY, 2),
@@ -3207,6 +3208,7 @@ fn every_live_governance_amendment_kind_uses_the_signed_authorization_boundary()
     assert!(!governance.orchard_pool_paused);
     assert!(!governance.atomic_swap_paused);
     assert_eq!(governance.bridge_verification_activation_height(), Some(1000));
+    assert_eq!(governance.asset_orchard_transfer_activation_height(), Some(1007));
     assert_eq!(
         governance.orchard_aware_bridge_claim_activation_height(),
         Some(1004)

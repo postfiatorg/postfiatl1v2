@@ -1,3 +1,74 @@
+    fn transfer_activation(genesis: &Genesis, height: u32) -> GovernanceAmendment {
+        let mut amendment = pricing_enforcement_amendment(
+            GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT, height,
+        );
+        amendment.chain_id = genesis.chain_id.clone();
+        amendment.genesis_hash = genesis_hash(genesis);
+        amendment
+    }
+
+    #[test]
+    fn asset_orchard_transfer_activation_controls_admission_execution_and_replay() {
+        let fixture = private_action_fixture("transfer-governance-boundary");
+        let store = NodeStore::new(&fixture.data_dir);
+        let mut governance = store.read_governance().unwrap();
+        let height = store.read_chain_tip().unwrap().height + 1;
+        let fields = postfiat_types::PRIVATE_TRANSFER_JSON_FIELDS
+            .iter()
+            .map(|field| (field.to_string(), serde_json::Value::Null))
+            .collect::<serde_json::Map<_, _>>();
+        // An admissible envelope, deliberately invalid as a transfer. At activation
+        // it must reach normal decoding; before activation it must stop at the gate.
+        let action = ShieldedAction::AssetOrchardTransferV1(AssetOrchardTransferActionPayload {
+            transfer_json: serde_json::to_string(&fields).unwrap(),
+            burn_transaction: None,
+        });
+        let request = private_submit_request(&fixture, &serde_json::to_string(&action).unwrap());
+        let batch = build_shielded_action_batch(&fixture.genesis, vec![action]).unwrap();
+        let ledger = store.read_ledger().unwrap();
+        let shielded = store.read_shielded().unwrap();
+        for (schedule, expected) in [
+            (None, "asset_orchard_transfer_not_active"),
+            (Some(height + 1), "asset_orchard_transfer_not_active"),
+            (Some(height), "asset_orchard_transfer_bad_payload"),
+        ] {
+            if let Some(at) = schedule {
+                governance.apply(transfer_activation(&fixture.genesis, at.try_into().unwrap()));
+            }
+            store.write_governance(&governance).unwrap();
+            assert_refused(private_action_submit(&fixture.data_dir, &request).unwrap_err(), expected);
+            for replay in [false, true] {
+                let rules = if replay {
+                    asset_execution_compatibility_with_chain_activation(
+                        AssetExecutionCompatibility::wan_devnet_legacy_strict_domain_validation(),
+                        &fixture.genesis, &governance,
+                    )
+                } else {
+                    asset_execution_compatibility_for_genesis_and_governance(&fixture.genesis, &governance)
+                };
+                let mut next_ledger = ledger.clone();
+                let mut next_shielded = shielded.clone();
+                let receipts = execute_shielded_batch(
+                    &fixture.genesis, &mut next_ledger, &mut next_shielded, &batch, height, rules,
+                    governance.orchard_pool_paused, governance.shielded_atomic_batch_activation_height(),
+                    &governance.asset_orchard_egress_policy_registry(), replay,
+                );
+                assert_eq!(receipts[0].code, expected);
+                assert_eq!(next_ledger, ledger);
+                assert_eq!(next_shielded, shielded);
+            }
+        }
+        let height32 = u32::try_from(height).unwrap();
+        assert!(governance_amendment_lifecycle_rejection(&transfer_activation(&fixture.genesis, height32), height).is_some());
+        assert!(governance_amendment_lifecycle_rejection(&transfer_activation(&fixture.genesis, height32 + 1), height).is_none());
+        let mut paused = transfer_activation(&fixture.genesis, height32 - 1);
+        paused.paused = true;
+        governance.apply(paused);
+        governance.apply(transfer_activation(&fixture.genesis, height32 + 100));
+        assert_eq!(governance.asset_orchard_transfer_activation_height(), Some(height));
+        fs::remove_dir_all(&fixture.data_dir).unwrap();
+    }
+
     /// A private payment between two wallets on a real ledger, end to end: shield, pay with
     /// change, the recipient finds the payment with its own keys, then takes part of it out
     /// in public. Each step is applied through the same batch path a validator uses.
@@ -14,6 +85,9 @@
         .expect("init node");
         let store = NodeStore::new(&data_dir);
         let genesis = store.read_genesis().expect("genesis");
+        let mut governance = store.read_governance().expect("governance");
+        governance.apply(transfer_activation(&genesis, 1));
+        store.write_governance(&governance).expect("enable local transfer rehearsal");
         let faucet_key = read_transfer_key_file(&data_dir, None).expect("faucet key");
         let holder_key_file = data_dir.join("asset-holder.key.json");
         let holder_key = write_test_master_key(&holder_key_file, [17u8; 32]);

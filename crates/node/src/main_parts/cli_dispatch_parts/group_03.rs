@@ -1992,6 +1992,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
         | "ratify-bridge-exit-root-activation-height"
         | "ratify-external-lane-export-root-activation-height"
         | "ratify-shielded-atomic-batch-activation-height"
+        | "ratify-asset-orchard-transfer-activation-height"
         | "ratify-recipient-format-activation-height"
         | "ratify-asset-orchard-pricing-enforcement-activation-height"
         | "ratify-asset-orchard-pricing-max-nav-age-blocks"
@@ -2058,6 +2059,10 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 "ratify-shielded-atomic-batch-activation-height" => (
                     GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
                     "--shielded-atomic-batch-activation-height",
+                ),
+                "ratify-asset-orchard-transfer-activation-height" => (
+                    GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT,
+                    "--asset-orchard-transfer-activation-height",
                 ),
                 "ratify-recipient-format-activation-height" => (
                     GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT,

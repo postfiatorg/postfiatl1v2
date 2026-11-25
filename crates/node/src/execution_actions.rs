@@ -482,32 +482,9 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
     genesis: &Genesis,
     governance: &GovernanceState,
 ) -> AssetExecutionCompatibility {
-    AssetExecutionCompatibility::strict()
-        .with_bridge_verification_activation_height(
-            bridge_verification_activation_height_for_chain(genesis, governance),
-        )
-        .with_orchard_aware_bridge_claim_activation_height(
-            orchard_aware_bridge_claim_activation_height_for_chain(genesis, governance),
-        )
-        .with_pfusdc_source_series_activation_height(
-            pfusdc_source_series_activation_height_for_chain(genesis, governance),
-        )
-        .with_atomic_swap_activation_height(atomic_swap_activation_height_for_chain(
-            genesis, governance,
-        ))
-        .with_yolo_target_activation_height(governance.yolo_target_activation_height())
-        .with_atomic_swap_paused(governance.atomic_swap_paused)
-        .with_recipient_format_activation_height(governance.recipient_format_v2_activation_height())
-        .with_require_memo_activation_height(governance.require_memo_v2_activation_height())
-        .with_asset_orchard_pricing_enforcement(
-            governance.asset_orchard_pricing_enforcement_activation_height(),
-            governance.asset_orchard_pricing_max_nav_age_blocks(),
-        )
-        .with_external_lane_release_caps(governance.external_lane_release_caps(genesis))
-        .with_external_lane_committees(governance.external_lane_committees(genesis))
-        .with_external_lane_export_root_activation_height(
-            postfiat_types::external_lane_export_root_activation_height(genesis, governance),
-        )
+    asset_execution_compatibility_with_chain_activation(
+        AssetExecutionCompatibility::strict(), genesis, governance,
+    )
 }
 
 pub(super) fn asset_execution_compatibility_with_chain_activation(
@@ -528,6 +505,9 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
         .with_atomic_swap_activation_height(atomic_swap_activation_height_for_chain(
             genesis, governance,
         ))
+        .with_asset_orchard_transfer_activation_height(
+            governance.asset_orchard_transfer_activation_height(),
+        )
         .with_yolo_target_activation_height(governance.yolo_target_activation_height())
         .with_atomic_swap_paused(governance.atomic_swap_paused)
         .with_recipient_format_activation_height(governance.recipient_format_v2_activation_height())
@@ -2239,6 +2219,15 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 .to_string(),
         ));
     }
+    if amendment.kind == GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_asset_orchard_transfer_activation_height",
+            "Asset-Orchard transfer activation must be scheduled strictly after the amendment block"
+                .to_string(),
+        ));
+    }
     if amendment.kind == GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT
         && u64::from(amendment.value) <= block_height
     {
@@ -2524,6 +2513,10 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .shielded_atomic_batch_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
+        GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT => governance
+            .asset_orchard_transfer_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
         GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT => governance
             .recipient_format_activation_height()
             .and_then(|height| u32::try_from(height).ok())
@@ -2563,6 +2556,7 @@ fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
             | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
             | postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS

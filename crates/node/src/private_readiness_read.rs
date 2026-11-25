@@ -249,6 +249,8 @@ pub struct PrivateReadinessReport {
     pub swap_verifier: PrivateVerifierReadiness,
     pub private_egress_verifier: PrivateVerifierReadiness,
     pub atomic_shielded_batches: PrivateActivationReadiness,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asset_orchard_transfers: Option<PrivateActivationReadiness>,
     pub pricing_enforcement: PrivateActivationReadiness,
     pub pricing_max_nav_age_blocks: Option<u64>,
     pub governed_routes: Vec<PrivateGovernedRoute>,
@@ -581,6 +583,11 @@ fn readiness_report(
         governance.shielded_atomic_batch_activation_height(),
         next_height,
     );
+    let asset_orchard_transfers = activation(
+        GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT,
+        governance.asset_orchard_transfer_activation_height(),
+        next_height,
+    );
     let pricing_enforcement = activation(
         GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT,
         governance.asset_orchard_pricing_enforcement_activation_height(),
@@ -665,6 +672,7 @@ fn readiness_report(
         swap_verifier,
         private_egress_verifier,
         atomic_shielded_batches,
+        asset_orchard_transfers: Some(asset_orchard_transfers),
         pricing_enforcement,
         pricing_max_nav_age_blocks: governance.asset_orchard_pricing_max_nav_age_blocks(),
         governed_routes: routes,

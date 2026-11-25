@@ -69,6 +69,9 @@ pub const GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT: &str =
     "external_lane_export_root_activation_height";
 pub const GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT: &str =
     "shielded_atomic_batch_activation_height";
+/// First height at which governed asset-pool transfers may execute. Absent by default.
+pub const GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT: &str =
+    "asset_orchard_transfer_activation_height";
 /// First block height at which an at-NAV Asset-Orchard swap pricing claim
 /// must be fresh, priced against the base NAV asset's governed settlement
 /// asset and labelled with the validator policy's mode. `value` is the
@@ -1796,6 +1799,17 @@ impl GovernanceState {
             .iter()
             .filter(|amendment| {
                 amendment.kind == GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
+                    && !amendment.paused
+            })
+            .map(|amendment| u64::from(amendment.value))
+            .min()
+    }
+
+    pub fn asset_orchard_transfer_activation_height(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .filter(|amendment| {
+                amendment.kind == GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT
                     && !amendment.paused
             })
             .map(|amendment| u64::from(amendment.value))
