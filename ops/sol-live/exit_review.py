@@ -500,7 +500,9 @@ def load_review(cfg, decision, now=None):
 def authorize(cfg, amendment, now=None):
     """Sign only a plain exit decision this host itself reviewed and approved."""
     # The node omits `paused` from an amendment when it is false.
-    require(amendment.get("value") == 1 and amendment.get("paused", False) is False,
+    require(isinstance(amendment, dict) and isinstance(amendment.get("kind"), str)
+            and type(amendment.get("value")) is int and amendment["value"] == 1
+            and amendment.get("paused", False) is False,
             "not a plain Solana exit decision")
     return load_review(cfg, amendment["kind"], now)
 
