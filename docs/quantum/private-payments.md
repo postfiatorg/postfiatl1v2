@@ -1,12 +1,11 @@
 # Quantum-Safe Private Payments
 
-Post Fiat L1 is building private payments designed to stay private and sound against a large quantum computer. The
-system is called **Peel-Binius-Shielded**, and its transaction format is **PFSH02**. This page says what it does,
-what works today, what is still missing and how to check it yourself.
+Peel-Binius-Shielded is Post Fiat L1's proposed quantum-safe private payment system.
+The release candidate uses **PFSH03**, which adds an ML-DSA-65 spend authorization
+for each input note. Public-chain activation requires a signed governance amendment.
+[Release candidate](https://github.com/postfiatorg/postfiatl1v2/pull/232) · [Protocol specification](../security/peel-binius-shielded-pq-payments.md)
 
-**Format on `main`: PFSH03.** The code now uses PFSH03, which adds an ML-DSA-65 spend authorization for each
-input note ([specification](../security/peel-binius-shielded-pq-payments.md)). The measurements, sizes and
-milestone results on this page were taken on PFSH02 and have not been re-measured for PFSH03.
+The benchmark figures and milestone rehearsals below were measured on **PFSH02**.
 
 ## Why a new system
 
@@ -47,18 +46,24 @@ ML-DSA-65 deposit signatures, which come from Cloudflare's CIRCL library (Go's s
 Four sample transactions cover a deposit, a two-input payment, a one-input payment and a payment that spends a note created 25 deposits earlier and
 exits part of it to a public account.
 
-| Measure | Budget | Measured |
+| Measure | Budget | Measured on PFSH02 |
 | --- | --- | --- |
-| Size of one payment | 149,130 bytes | 138,268 to 139,036 bytes; a signed deposit 143,337 bytes (145,737 worst case) |
-| Verification, one core, Rust | under 50 ms | about 22 ms |
-| Verification, one core, Go | under 50 ms | about 32 ms (with the CPU's carry-less multiply instruction) |
-| Spending the last note of a full tree (16,777,216 notes) | under 50 ms | 20.3 ms Rust, 30.4 to 35.3 ms Go; 138,364 bytes |
-| Making a payment (proving) | — | 2.9 s on 16 cores (32 threads), 26.7 s on one core, 562 MiB memory |
-| Wallet scanning other people's outputs | — | 4,722 to 6,073 outputs per second per core |
+| Size of the three non-mint fixtures | 149,130 bytes | 138,268 to 139,036 bytes. The signed deposit was 143,337 bytes (145,737 worst case). |
+| Single-core Rust verification of the four fixtures | under 50 ms | 21.44 to 21.88 ms |
+| Single-core Go verification of the four fixtures | under 50 ms | 32.29 to 36.92 ms with carry-less multiplication |
+| Spending the last note of a full tree (16,777,216 notes) | under 50 ms | 20.58 ms Rust, 30.61 ms Go, 138,364 bytes |
+| Proving a payment | — | 2.89 s median with 32 threads, 26.73 s median with one thread. Peak RSS for the 32-thread run was 562 MiB. |
+| Wallet scanning nonmatching outputs | — | 4,722 outputs per second per core |
 
-Timings were measured on an AMD EPYC host, one core pinned with no other load on it. The branch's CI workflow
-repeats the checks and a one-core benchmark on GitHub's public runners. The Go verifier without that instruction
-takes about 59 to 72 ms, over budget.
+For comparison, the PFSH03 candidate's three non-mint fixture files contain
+148,598 to 149,174 bytes, and its signed mint contains 154,387 bytes.
+These are byte counts for the four checked-in files. [PFSH03 fixtures](https://github.com/postfiatorg/postfiatl1v2/tree/9428258f09140a846f455fd3f5553826d8a45517/tools/pft-binius-shielded-pq/payments)
+
+The AMD EPYC replay timed each verifier on one pinned core. The proving medians come
+from separate runs. A separate portable Go run measured a 58.87 ms median against the
+50 ms budget. See the [PFSH02 fixture replay](https://github.com/postfiatorg/postfiatl1v2/blob/8ab36a13919ceb1d67a4e052a47f7b92b532508e/tools/pft-binius-shielded-pq/README.md#host-replay-on-2026-11-22),
+[32-thread log](https://github.com/postfiatorg/postfiatl1v2/blob/8ab36a13919ceb1d67a4e052a47f7b92b532508e/tools/pft-binius-shielded-pq/bench_results.json), [peak memory log](https://github.com/postfiatorg/postfiatl1v2/blob/8ab36a13919ceb1d67a4e052a47f7b92b532508e/tools/pft-binius-shielded-pq/rust_bench_rss.log), [one-thread log](https://github.com/postfiatorg/postfiatl1v2/blob/8ab36a13919ceb1d67a4e052a47f7b92b532508e/tools/pft-binius-shielded-pq/rust_1core_bench.json)
+and [wallet scan measurement](https://github.com/postfiatorg/postfiatl1v2/blob/8ab36a13919ceb1d67a4e052a47f7b92b532508e/docs/specs/pq-private-payments-integration.md#L375).
 
 `./verify.sh` replays everything in seven steps: Rust unit tests, Rust verification of the four payments and of a
 spend from a full-size tree, 35 named attacks and 150 random corruptions that must all be rejected, forged deposit
