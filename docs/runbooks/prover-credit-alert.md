@@ -34,7 +34,8 @@ unless lingering is on; check once with `loginctl show-user postfiat -p Linger` 
 `no`, ask root for `sudo loginctl enable-linger postfiat`.
 
 A failed run shows in `systemctl --user --failed`. `prover-credit-alert-failed.service` (started by
-`OnFailure=`) also reports a run that ended without its own report, such as a crash or a timeout.
+`OnFailure=`) also reports a run whose own report was not delivered: a crash, a timeout or a
+failed alert hook.
 
 The unit needs:
 

@@ -101,7 +101,7 @@ def delivered(result):
     return not result.startswith(('hook failed','hook exited'))
 
 def handled(state):
-    """Name the systemd run that made its own report, so its OnFailure= unit does not repeat it."""
+    """Name the systemd run whose report was delivered, so its OnFailure= unit does not repeat it."""
     if os.environ.get('INVOCATION_ID'):state['handled_invocation']=os.environ['INVOCATION_ID']
 
 def check(warn=24.0,urgent=6.0,state_path=STATE,run=vastai,send=notify):
@@ -114,21 +114,24 @@ def check(warn=24.0,urgent=6.0,state_path=STATE,run=vastai,send=notify):
         if not state['unreadable'] or time.time()-state.get('reported_at',0)>REPEAT_SECONDS:
             result=send(line)
             # A delivered report is recorded at once, before anything else can fail or time out.
-            if delivered(result):state.update(unreadable=True,reported_at=time.time());write(state_path,state)
+            if delivered(result):state.update(unreadable=True,reported_at=time.time());handled(state);write(state_path,state)
             print(line+f'; notification {result}',file=sys.stderr)
-        else:print(line+'; already reported',file=sys.stderr)
-        handled(state);write(state_path,state);return dict(state,ok=False)
+        else:handled(state);print(line+'; already reported',file=sys.stderr)
+        write(state_path,state);return dict(state,ok=False)
     state['unreadable']=False;state.pop('reported_at',None)
     hours=0.0 if credit<=0 else float('inf') if spend<=0 else credit/spend
     now=level(hours,warn,urgent);summary=f'credit {credit:.2f} USD, spend {spend:.2f} USD/h, {count} running, {stored} stopped billed for storage, {hours:.1f} h left, level {now}'
     ok=True
     if LEVELS.index(now)>LEVELS.index(state['level']):
         result=send(message(now,credit,spend,count,hours,warn,urgent,stored=stored))
-        if delivered(result):state['level']=now;write(state_path,state)
+        if delivered(result):state['level']=now;handled(state);write(state_path,state)
         else:now,ok=state['level'],False
         summary+=f'; notification {result}'
     print(summary)
-    state['level']=now;handled(state);write(state_path,state);return dict(state,ok=ok,hours=hours)
+    # Handled only when nothing was left unreported, so the failure unit reports an undelivered one.
+    state['level']=now
+    if ok:handled(state)
+    write(state_path,state);return dict(state,ok=ok,hours=hours)
 
 def service_failed(unit,state_path=STATE,send=notify):
     """OnFailure= entry: report a failed run that ended without its own report (a crash, a timeout)."""
@@ -141,7 +144,7 @@ def service_failed(unit,state_path=STATE,send=notify):
     if invocation and isinstance(state,dict) and state.get('handled_invocation')==invocation:
         print(f'{unit} failed after its own report; nothing more to send');return True
     result=os.environ.get('MONITOR_SERVICE_RESULT','unknown')
-    line=redact(f'{unit} failed (result {result}) without its own report: the Vast credit was not checked. See journalctl --user -u {unit} ({utc_now()})')
+    line=redact(f'{unit} failed (result {result}) and its report was not delivered: a crash, a timeout or a failed alert hook. Check the Vast credit by hand and see journalctl --user -u {unit} ({utc_now()})')
     sent=send(line);print(line+f'; notification {sent}',file=sys.stderr)
     return delivered(sent)
 
