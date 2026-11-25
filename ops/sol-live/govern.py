@@ -229,6 +229,23 @@ def independent_review(kind, rules):
 EXIT_DECISIONS = ("exit-open", "exit-close", "exit-paid", "exit-refund")
 
 
+# A re-draft for the signers may change only these: its supporters, their votes and the
+# certificate and amendment ids derived from them.
+REDRAFT_FIELDS = {"support", "votes", "certificate_id", "amendment_id"}
+
+
+def check_redraft(first, again, signers):
+    """The re-drafted decision names exactly the signers and otherwise is the signed draft."""
+    if again.get("support") != signers:
+        raise ValueError(
+            f"The re-drafted decision's supporters {again.get('support')} are not its signers {signers}; "
+            "the drafting node must know ratify-solana-exit --support."
+        )
+    changed = sorted(k for k in set(first) | set(again) if first.get(k) != again.get(k))
+    if not set(changed) <= REDRAFT_FIELDS:
+        raise ValueError(f"The re-drafted decision differs from the signed draft in {changed}.")
+
+
 def read_quorum(kind, n=6, *, rules=None):
     """Validators whose agreeing reads suffice: the signatures the chain requires."""
     return required_signatures(kind, n, rules=rules)
@@ -340,19 +357,26 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
                 "--signature-hex",
                 refund["signature_hex"],
             ]
-        tool(
-            lead,
-            "ratify-solana-" + kind,
-            *extra,
-            "--data-dir",
-            dirs[lead],
-            "--validators",
-            ",".join(names),
-            "--height",
-            h,
-            "--amendment-file",
-            work[lead] + "/amend",
-        )
+
+        def draft_exit(name, support=None):
+            # `support`: the validators whose authorizations the decision carries; by default
+            # the node lists all six, as before.
+            tool(
+                lead,
+                "ratify-solana-" + kind,
+                *extra,
+                "--data-dir",
+                dirs[lead],
+                "--validators",
+                ",".join(names),
+                *(["--support", ",".join(support)] if support else []),
+                "--height",
+                h,
+                "--amendment-file",
+                work[lead] + "/" + name,
+            )
+
+        draft_exit("amend")
     elif kind == "activation":
         tool(
             lead,
@@ -474,6 +498,20 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         + ", ".join(names[i] for i in signers),
         flush=True,
     )
+    signed_by = [names[i] for i in signers]
+    final = "amend"
+    if kind in EXIT_DECISIONS and len(signers) < len(names):
+        # The node assembles one authorization per supporter, and the draft names all six. A
+        # signature does not cover the supporters, so the signers' authorizations stay valid
+        # for a re-draft that names exactly them (node test
+        # solana_exit_paid_and_refund_assemble_with_any_five_of_six).
+        draft_exit("amend-signers", signed_by)
+        again = get(lead, "amend-signers")
+        check_redraft(amend, again, signed_by)
+        save(local / "amendment-signers.json", again)
+        final = "amend-signers"
+    elif amend.get("support", signed_by) != signed_by:
+        raise ValueError(f"Signed by {signed_by}, but the decision's supporters are {amend['support']}.")
     for i, a in auth.items():
         put(lead, f"auth-{i}", a)
     tool(
@@ -482,7 +520,7 @@ def govern(kind, profile=None, compatible=None, *, qualified_parent=None, payout
         "--data-dir",
         dirs[lead],
         "--amendment-file",
-        work[lead] + "/amend",
+        work[lead] + "/" + final,
         "--authorization-files",
         ",".join(f"{work[lead]}/auth-{i}" for i in signers),
         "--proposal-slot",

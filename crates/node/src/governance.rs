@@ -34,24 +34,14 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
     {
         config.quorum = postfiat_types::external_lane_amendment_threshold(config.validators.len());
     }
-    // From the second release, closing Solana burns, settling a payout, setting the
-    // minimum and re-opening after a close need the same threshold; the first opening
-    // stays unanimous. Before it every decision stays unanimous.
-    let second = postfiat_types::solana_exit::second_release_active(
-        &genesis.chain_id,
-        &genesis_hash(&genesis),
+    if let Some(quorum) = solana_exit_draft_quorum(
+        &store,
+        &genesis,
+        &options.kind,
+        config.validators.len(),
         options.activation_height,
-    );
-    if second && postfiat_types::solana_exit::is_decision(&options.kind, true) {
-        let reopening = postfiat_types::solana_exit::closed_since_registration(
-            &store.read_governance()?,
-        );
-        config.quorum = postfiat_types::solana_exit::required_quorum(
-            &options.kind,
-            reopening,
-            config.validators.len(),
-            true,
-        );
+    )? {
+        config.quorum = quorum;
     }
     let lifecycle = GovernanceAmendmentLifecycle {
         activation_height: options.activation_height,
@@ -105,6 +95,71 @@ pub fn ratify_governance(options: RatifyGovernanceOptions) -> io::Result<Governa
     }
     write_amendment_file(&options.amendment_file, &amendment)?;
     Ok(amendment)
+}
+
+/// The quorum a Solana exit decision is drafted with under the second release, or `None` when
+/// the kind keeps the declared set's unanimity.
+fn solana_exit_draft_quorum(
+    store: &NodeStore,
+    genesis: &Genesis,
+    kind: &str,
+    validators: usize,
+    activation_height: u64,
+) -> io::Result<Option<usize>> {
+    // From the second release, closing Solana burns, settling a payout, setting the
+    // minimum and re-opening after a close need the same threshold; the first opening
+    // stays unanimous. Before it every decision stays unanimous.
+    let second = postfiat_types::solana_exit::second_release_active(
+        &genesis.chain_id,
+        &genesis_hash(genesis),
+        activation_height,
+    );
+    if !(second && postfiat_types::solana_exit::is_decision(kind, true)) {
+        return Ok(None);
+    }
+    let reopening =
+        postfiat_types::solana_exit::closed_since_registration(&store.read_governance()?);
+    Ok(Some(postfiat_types::solana_exit::required_quorum(
+        kind, reopening, validators, true,
+    )))
+}
+
+/// Draft a Solana exit decision (`ratify-solana-exit-*`) carrying the authorizations of
+/// `options.support`: the validators that will sign, by default all of `options.validators`.
+/// A drafting option only: the declared set and quorum are as before, and the chain checks
+/// the signatures as before. The supporters must be listed validators, each once, and reach
+/// the decision's quorum.
+pub fn ratify_solana_exit_decision(
+    options: RatifyGovernanceOptions,
+) -> io::Result<GovernanceAmendment> {
+    let refuse = |message: String| Err(io::Error::new(io::ErrorKind::InvalidInput, message));
+    let mut seen = std::collections::BTreeSet::new();
+    for validator in &options.support {
+        if !options.validators.contains(validator) {
+            return refuse(format!(
+                "supporter {validator} is not one of the declared validators"
+            ));
+        }
+        if !seen.insert(validator.as_str()) {
+            return refuse(format!("supporter {validator} is listed twice"));
+        }
+    }
+    let store = NodeStore::new(&options.data_dir);
+    let quorum = solana_exit_draft_quorum(
+        &store,
+        &store.read_genesis()?,
+        &options.kind,
+        options.validators.len(),
+        options.activation_height,
+    )?
+    .unwrap_or(options.validators.len());
+    if options.support.len() < quorum {
+        return refuse(format!(
+            "{} supporters are fewer than this decision's quorum of {quorum}",
+            options.support.len()
+        ));
+    }
+    ratify_governance(options)
 }
 
 pub fn sign_governance_amendment_authorization(
