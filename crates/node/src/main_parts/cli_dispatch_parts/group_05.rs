@@ -1135,12 +1135,21 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 }
                 _ => return Err("pass exactly one of --tx-id or --signed-payment".into()),
             };
-            let evidence = postfiat_node::verify_payment_finality(
+            let pins: Vec<postfiat_node::PaymentCommitteePin> =
+                match flag_value(flags, "--historical-committee-pins") {
+                    Some(path) => serde_json::from_reader(
+                        std::fs::File::open(path).map_err(|e| e.to_string())?,
+                    )
+                    .map_err(|e| format!("invalid historical committee pin file: {e}"))?,
+                    None => Vec::new(),
+                };
+            let evidence = postfiat_node::verify_payment_finality_with_pins(
                 std::path::Path::new(dir),
                 chain,
                 genesis,
                 root,
                 tx_id,
+                &pins,
             )
             .map_err(|error| format!("payment finality verification failed: {error}"))?;
             println!(

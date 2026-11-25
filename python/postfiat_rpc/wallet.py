@@ -112,6 +112,7 @@ class FinalityTrust:
     chain_id: str
     genesis_hash: str
     genesis_registry_root: str
+    historical_committee_pins: Path | None = None
 
     def __post_init__(self) -> None:
         if not self.chain_id:
@@ -126,6 +127,8 @@ def _local_payment_evidence(trust: FinalityTrust, selector: str, value: str) -> 
         *_node_bin(), "verify-payment-finality",
         "--data-dir", str(trust.data_dir), "--chain-id", trust.chain_id,
         "--genesis-hash", trust.genesis_hash, "--genesis-registry-root", trust.genesis_registry_root,
+        *(["--historical-committee-pins", str(trust.historical_committee_pins)]
+          if trust.historical_committee_pins is not None else []),
         selector, value,
     ])
 

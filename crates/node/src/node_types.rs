@@ -3905,6 +3905,18 @@ pub enum PaymentConfirmation {
     IndependentlyVerified,
 }
 
+/// An operator's independent record of one exact historical committee exception.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaymentCommitteePin {
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub height: u64,
+    pub block_hash: String,
+    pub ordered_registry_root: String,
+    pub signing_registry_root: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaymentFinalityEvidence {
     pub schema: String,
@@ -3913,6 +3925,8 @@ pub struct PaymentFinalityEvidence {
     pub chain_id: String,
     pub genesis_hash: String,
     pub genesis_registry_root: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub historical_committee_pins: Vec<PaymentCommitteePin>,
     pub report: Option<TxFinalityReport>,
 }
 

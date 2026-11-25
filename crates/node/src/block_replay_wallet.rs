@@ -1,18 +1,76 @@
 use super::*;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum RegistryReplayPolicy<'a> {
+    Historical,
+    PinnedOrdered(&'a [PaymentCommitteePin]),
+}
+
+impl<'a> RegistryReplayPolicy<'a> {
+    fn pin_at(self, height: u64) -> Option<&'a PaymentCommitteePin> {
+        let Self::PinnedOrdered(pins) = self else {
+            return None;
+        };
+        pins.binary_search_by_key(&height, |pin| pin.height)
+            .ok()
+            .map(|i| &pins[i])
+    }
+
+    fn requires_committee_authorization(
+        self,
+        governance: &GovernanceState,
+        registry: &ValidatorRegistry,
+        batch: &GovernanceActionBatch,
+    ) -> io::Result<bool> {
+        if self == Self::Historical
+            || (batch.validator_registry_updates.is_empty()
+                && batch.cobalt_authority_transitions.is_empty())
+        {
+            return Ok(false);
+        }
+        // Only an independently pinned, superseded legacy record may lack
+        // action signatures. It must leave the current signing committee in
+        // force. Every effective rotation and every Cobalt handoff takes the
+        // normal signed-governance path.
+        let [update] = batch.validator_registry_updates.as_slice() else {
+            return Ok(true);
+        };
+        if crate::cobalt_handoff::governance_batch_action_count(batch) != 1
+            || governance.authority_mode != postfiat_types::GOVERNANCE_AUTHORITY_MODE_FOUNDATION
+            || !update.signed_authorizations.is_empty()
+            || !update.cobalt_authorizations.is_empty()
+            || update.cobalt_decision_certificate.is_some()
+        {
+            return Ok(true);
+        }
+        let Some(pin) = update
+            .activation_height
+            .checked_add(1)
+            .and_then(|height| self.pin_at(height))
+        else {
+            return Ok(true);
+        };
+        let validators = active_validator_ids(governance)?;
+        let retained = pin.signing_registry_root == validator_registry_root(registry, &validators)?
+            && (validator_registry_update_previous_validators(update) != validators
+                || validator_registry_update_effect_already_reflected(registry, update));
+        Ok(!retained)
+    }
+}
+
 pub fn verify_blocks(options: NodeOptions) -> io::Result<BlockVerificationReport> {
     let store = NodeStore::try_new(&options.data_dir)?;
     recover_ordered_commit_journal(&store)?;
-    verify_blocks_from_store(&store, false)
+    verify_blocks_from_store(&store, RegistryReplayPolicy::Historical)
 }
 
 pub(super) fn verify_blocks_read_only(store: &NodeStore) -> io::Result<BlockVerificationReport> {
-    verify_blocks_from_store(store, false)
+    verify_blocks_from_store(store, RegistryReplayPolicy::Historical)
 }
 
 pub(super) fn verify_blocks_from_store(
     store: &NodeStore,
-    require_ordered_registry_keys: bool,
+    policy: RegistryReplayPolicy<'_>,
 ) -> io::Result<BlockVerificationReport> {
     let genesis = store.read_genesis()?;
     let blocks = store.read_blocks()?;
@@ -29,12 +87,14 @@ pub(super) fn verify_blocks_from_store(
         .as_ref()
         .map(|checkpoint| checkpoint.ordered_batches.len())
         .unwrap_or(0);
-    let live_validator_registry =
-        read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
-    validate_validator_registry_for_count(
-        &live_validator_registry,
-        governance.active_validator_count,
-    )?;
+    let live_validator_registry = if policy == RegistryReplayPolicy::Historical {
+        let registry =
+            read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
+        validate_validator_registry_for_count(&registry, governance.active_validator_count)?;
+        Some(registry)
+    } else {
+        None
+    };
     let certificate_validator_registry = read_validator_registry_replay_base(&store)?;
     validate_validator_registry_for_count(
         &certificate_validator_registry,
@@ -50,6 +110,12 @@ pub(super) fn verify_blocks_from_store(
     let current_height = history_base_height
         .checked_add(blocks.blocks.len() as u64)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
+    let policy = match policy {
+        RegistryReplayPolicy::PinnedOrdered(pins) => RegistryReplayPolicy::PinnedOrdered(
+            &pins[..pins.partition_point(|pin| pin.height <= current_height)],
+        ),
+        RegistryReplayPolicy::Historical => RegistryReplayPolicy::Historical,
+    };
     let current_state_root =
         if effective_storage_commitment_activation_height(&genesis, &governance)
             .is_some_and(|activation_height| current_height >= activation_height)
@@ -197,17 +263,17 @@ pub(super) fn verify_blocks_from_store(
             &mut certificate_validator_registry,
             &mut certificate_governance,
             &mut certificate_registry_update_ids,
-            block.header.height,
-            &block.header.certificate.registry_root,
+            block,
+            policy,
         )?;
         let certificate_validators = active_validator_ids(&certificate_governance)?;
         // Independent verification only admits keys from the pinned genesis
         // committee or ordered registry updates. Legacy replay can recover
         // missing historic keys from the node's current registry.
-        if !require_ordered_registry_keys {
+        if let Some(live_registry) = &live_validator_registry {
             backfill_legacy_validator_registry_records(
                 &mut certificate_validator_registry,
-                &live_validator_registry,
+                live_registry,
                 &certificate_validators,
                 &format!("block {} certificate replay", block.header.height),
             )?;
@@ -384,7 +450,8 @@ pub(super) fn verify_blocks_from_store(
         }
     }
 
-    let replay_state_root = verify_replayed_blocks(&store, &genesis, &blocks, &archive, &receipts)?;
+    let replay_state_root =
+        verify_replayed_blocks(&store, &genesis, &blocks, &archive, &receipts, policy)?;
 
     if let Some(tip) = blocks.blocks.last() {
         if tip.header.state_root != current_state_root && replay_state_root != current_state_root {
@@ -1350,9 +1417,24 @@ pub(super) fn activate_validator_registry_updates_for_height(
     registry: &mut ValidatorRegistry,
     governance: &mut GovernanceState,
     applied_update_ids: &mut HashSet<String>,
-    block_height: u64,
-    certificate_registry_root: &str,
+    block: &BlockRecord,
+    policy: RegistryReplayPolicy<'_>,
 ) -> io::Result<()> {
+    let block_height = block.header.height;
+    let certificate_registry_root = block.header.certificate.registry_root.as_str();
+    let pin = policy.pin_at(block_height);
+    if let Some(pin) = pin {
+        if block.header.block_hash != pin.block_hash
+            || certificate_registry_root != pin.signing_registry_root
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "block {block_height} differs from the independent historical committee pin"
+                ),
+            ));
+        }
+    }
     let due_updates = governance
         .validator_registry_updates
         .iter()
@@ -1363,31 +1445,79 @@ pub(super) fn activate_validator_registry_updates_for_height(
         .cloned()
         .collect::<Vec<_>>();
     if due_updates.is_empty() {
+        if pin.is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("block {block_height} historical committee pin has no ordered transition"),
+            ));
+        }
         return Ok(());
     }
     let mut lineage_states = vec![(registry.clone(), active_validator_ids(governance)?)];
     for update in due_updates {
-        let new_validators =
-            if validator_registry_update_effect_already_reflected(registry, &update) {
+        let context = format!(
+            "block {} replay update `{}`",
+            block_height, update.update_id
+        );
+        let new_validators = if matches!(policy, RegistryReplayPolicy::PinnedOrdered(_)) {
+            // The predecessor is the independently derived full committee.
+            // A subject-scoped drill or a restore requires a separate trust
+            // anchor and cannot authorize a custodian's payment confirmation.
+            if pin.is_none()
+                && validator_registry_update_previous_validators(&update)
+                    != active_validator_ids(governance)?
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("{context} predecessor differs from the pinned active committee"),
+                ));
+            }
+            if pin.is_some()
+                && validator_registry_update_effect_already_reflected(registry, &update)
+            {
+                // A recorded restore may already agree with the selected
+                // predecessor. Still verify the update in the pinned domain.
+                verify_cobalt_validator_registry_update(&cobalt_domain(genesis), &update)
+                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
                 validator_registry_update_new_validators(&update)
             } else {
-                let context = format!(
-                    "block {} replay update `{}`",
-                    block_height, update.update_id
-                );
-                apply_historical_validator_registry_update_to_registry(
+                apply_verified_validator_registry_update_to_registry(
                     genesis,
                     registry,
                     &update,
                     block_height,
                     &context,
                 )?
-            };
+            }
+        } else if validator_registry_update_effect_already_reflected(registry, &update) {
+            validator_registry_update_new_validators(&update)
+        } else {
+            apply_historical_validator_registry_update_to_registry(
+                genesis,
+                registry,
+                &update,
+                block_height,
+                &context,
+            )?
+        };
         if update.operation != VALIDATOR_REGISTRY_OP_ROTATE_KEY {
             set_active_validator_ids(governance, new_validators)?;
         }
         applied_update_ids.insert(update.update_id);
-        lineage_states.push((registry.clone(), active_validator_ids(governance)?));
+        if policy == RegistryReplayPolicy::Historical || pin.is_some() {
+            lineage_states.push((registry.clone(), active_validator_ids(governance)?));
+        }
+    }
+    if let Some(pin) = pin {
+        let ordered_root = validator_registry_root(registry, &active_validator_ids(governance)?)?;
+        if ordered_root != pin.ordered_registry_root {
+            return Err(io::Error::new(io::ErrorKind::InvalidData,
+                format!("block {block_height} ordered registry differs from the independent historical committee pin")));
+        }
+    } else if matches!(policy, RegistryReplayPolicy::PinnedOrdered(_)) {
+        // The certificate is checked against the committee that was due. It
+        // has no authority to choose a predecessor of that committee.
+        return Ok(());
     }
     if certificate_registry_root.is_empty() {
         return Ok(());
@@ -1399,6 +1529,12 @@ pub(super) fn activate_validator_registry_updates_for_height(
     });
     // Without a matching lineage state the fully applied history stands and
     // certificate verification fails closed against it.
+    if pin.is_some() && anchored_state_index.is_none() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("block {block_height} pinned signing committee is outside the ordered lineage"),
+        ));
+    }
     if let Some(index) = anchored_state_index {
         let (anchored_registry, anchored_validators) = lineage_states.swap_remove(index);
         *registry = anchored_registry;
@@ -1796,6 +1932,7 @@ pub(super) fn verify_replayed_blocks(
     blocks: &BlockLog,
     archive: &BatchArchive,
     persisted_receipts: &[Receipt],
+    policy: RegistryReplayPolicy<'_>,
 ) -> io::Result<String> {
     verify_replayed_blocks_with_exports(
         store,
@@ -1803,6 +1940,7 @@ pub(super) fn verify_replayed_blocks(
         blocks,
         archive,
         persisted_receipts,
+        policy,
         &mut |_, _| {},
     )
 }
@@ -1815,6 +1953,7 @@ pub(super) fn verify_replayed_blocks_with_exports(
     blocks: &BlockLog,
     archive: &BatchArchive,
     persisted_receipts: &[Receipt],
+    policy: RegistryReplayPolicy<'_>,
     on_exports: &mut dyn FnMut(u64, Vec<postfiat_types::ExternalLaneExportPacket>),
 ) -> io::Result<String> {
     let mut persisted_receipts_by_id = BTreeMap::<&str, Vec<&Receipt>>::new();
@@ -1825,8 +1964,13 @@ pub(super) fn verify_replayed_blocks_with_exports(
             .push(receipt);
     }
     let mut consumed_persisted_receipts = HashMap::<&str, usize>::new();
-    let live_validator_registry =
-        read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
+    let live_validator_registry = if policy == RegistryReplayPolicy::Historical {
+        Some(read_validator_registry_file(
+            &store.data_dir().join(VALIDATOR_REGISTRY_FILE),
+        )?)
+    } else {
+        None
+    };
     let checkpoint = read_history_checkpoint_state_optional(store)?;
     let has_history_checkpoint = checkpoint.is_some();
     let mut validator_registry;
@@ -1951,20 +2095,23 @@ pub(super) fn verify_replayed_blocks_with_exports(
             &mut validator_registry,
             &mut governance,
             &mut registry_update_ids,
-            block.header.height,
-            &block.header.certificate.registry_root,
+            block,
+            policy,
         )?;
         let replay_validators = active_validator_ids(&governance)?;
-        backfill_legacy_validator_registry_records(
-            &mut validator_registry,
-            &live_validator_registry,
-            &replay_validators,
-            &format!("block {} state replay", block.header.height),
-        )?;
+        if let Some(live_registry) = &live_validator_registry {
+            backfill_legacy_validator_registry_records(
+                &mut validator_registry,
+                live_registry,
+                &replay_validators,
+                &format!("block {} state replay", block.header.height),
+            )?;
+        }
         let receipts = replay_archived_payload(
             genesis,
             block,
             archive_entry,
+            policy,
             ArchivedReplayState {
                 parent_numbered_count,
                 governance: &mut governance,
@@ -3081,6 +3228,7 @@ pub(super) fn replay_archived_payload(
     genesis: &Genesis,
     block: &BlockRecord,
     archive_entry: &BatchArchiveEntry,
+    policy: RegistryReplayPolicy<'_>,
     state: ArchivedReplayState<'_>,
 ) -> io::Result<Vec<Receipt>> {
     crate::solana_exit_governance::verify_checker_activation(
@@ -3136,7 +3284,11 @@ pub(super) fn replay_archived_payload(
                     .vault_bridge_route_profile_activations
                     .iter()
                     .any(|activation| !activation.amendment.signed_authorizations.is_empty());
-            if has_v2_authorization
+            if policy.requires_committee_authorization(
+                state.governance,
+                state.validator_registry,
+                &batch,
+            )? || has_v2_authorization
                 || crate::solana_exit_governance::needs_signatures(
                     genesis,
                     &batch,

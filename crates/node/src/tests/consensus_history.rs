@@ -4081,6 +4081,30 @@ fn verify_blocks_replays_historical_registry_after_live_key_rotation() {
         new_root
     );
 
+    // The certificate cannot use its registry-root field to select the
+    // outgoing committee for a payment after the ordered rotation. Reject
+    // the root itself, before verification considers any signature.
+    let store = NodeStore::new(&data_dir);
+    let mut blocks = store.read_blocks().unwrap();
+    let payment = blocks.blocks.last_mut().unwrap();
+    assert_eq!(payment.header.height, 4);
+    payment.header.certificate.registry_root = previous_root.clone();
+    store.write_blocks(&blocks).unwrap();
+    let error = verify_payment_finality(
+        &data_dir,
+        &genesis.chain_id,
+        &genesis_hash(&genesis),
+        &previous_root,
+        receipts[0].tx_id.clone(),
+    )
+    .expect_err("obsolete committee root after the activation boundary");
+    assert!(
+        error
+            .to_string()
+            .contains("block 4 certificate registry root mismatch"),
+        "{error}"
+    );
+
     std::fs::remove_dir_all(data_dir).expect("cleanup registry replay test");
 
 }

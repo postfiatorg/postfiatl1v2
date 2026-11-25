@@ -162,6 +162,52 @@ pub fn verify_payment_finality(
     genesis_registry_root: &str,
     tx_id: String,
 ) -> io::Result<PaymentFinalityEvidence> {
+    verify_payment_finality_with_pins(
+        data_dir,
+        chain_id,
+        expected_genesis,
+        genesis_registry_root,
+        tx_id,
+        &[],
+    )
+}
+
+pub fn verify_payment_finality_with_pins(
+    data_dir: &Path,
+    chain_id: &str,
+    expected_genesis: &str,
+    genesis_registry_root: &str,
+    tx_id: String,
+    pins: &[PaymentCommitteePin],
+) -> io::Result<PaymentFinalityEvidence> {
+    // Unique, ordered heights make both independent replay passes resolve
+    // the same operator record. The RPC never contributes to this list.
+    let mut last_height = 0;
+    for pin in pins {
+        if pin.chain_id != chain_id
+            || pin.genesis_hash != expected_genesis
+            || pin.height <= last_height
+        {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "historical committee pins require the pinned chain and strictly increasing positive heights"));
+        }
+        for digest in [
+            &pin.block_hash,
+            &pin.ordered_registry_root,
+            &pin.signing_registry_root,
+        ] {
+            if digest.len() != 96
+                || !digest
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "invalid historical committee pin digest",
+                ));
+            }
+        }
+        last_height = pin.height;
+    }
     validate_finality_tx_id(&tx_id)?;
     // A custodian may atomically point a symlink at a newer immutable
     // archive. Keep every read in this invocation on the chosen version.
@@ -206,13 +252,24 @@ pub fn verify_payment_finality(
         match tx_finality_from_store(
             &store,
             tx_id.clone(),
-            Some(|| block_replay_wallet::verify_blocks_from_store(&store, true)),
+            Some(|| {
+                block_replay_wallet::verify_blocks_from_store(
+                    &store,
+                    block_replay_wallet::RegistryReplayPolicy::PinnedOrdered(pins),
+                )
+            }),
         ) {
             Err(error) if tx_finality_error_is_transaction_not_found(&error) => None,
             other => Some(other?),
         }
     };
     let confirmation = if let Some(report) = &report {
+        if !report.block_log_verified {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "payment archive replay did not verify",
+            ));
+        }
         match report.transaction_rows.as_slice() {
             [row]
                 if matches!(
@@ -241,6 +298,15 @@ pub fn verify_payment_finality(
         chain_id: chain_id.into(),
         genesis_hash: expected_genesis.into(),
         genesis_registry_root: genesis_registry_root.into(),
+        historical_committee_pins: pins
+            .iter()
+            .filter(|pin| {
+                report
+                    .as_ref()
+                    .is_some_and(|report| pin.height <= report.block_count)
+            })
+            .cloned()
+            .collect(),
         report,
     })
 }

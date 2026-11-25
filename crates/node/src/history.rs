@@ -1751,8 +1751,8 @@ fn build_history_checkpoint_state_from_sources(
             &mut validator_registry,
             &mut governance,
             &mut registry_update_ids,
-            block.header.height,
-            &block.header.certificate.registry_root,
+            block,
+            crate::block_replay_wallet::RegistryReplayPolicy::Historical,
         )?;
         let replay_validators = active_validator_ids(&governance)?;
         backfill_legacy_validator_registry_records(
@@ -1765,6 +1765,7 @@ fn build_history_checkpoint_state_from_sources(
             &genesis,
             block,
             archive_entry,
+            crate::block_replay_wallet::RegistryReplayPolicy::Historical,
             ArchivedReplayState {
                 parent_numbered_count,
                 governance: &mut governance,

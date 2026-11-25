@@ -137,6 +137,31 @@ if evidence["confirmation"] == "independently_verified":
     # Record evidence and credit once, keyed by (chain_id, genesis_hash, tx_id).
 ```
 
+Some devnet recovery blocks followed a different signing committee from the
+one reconstructed by applying all ordered updates. Genesis-only verification
+refuses this history. A custodian that independently authenticated the recovery
+decision and its block can provide a local JSON array of exception records.
+Each record contains the exact `chain_id`, `genesis_hash`, positive `height`,
+`block_hash`, `ordered_registry_root` (the full committee after applying the
+due updates) and `signing_registry_root` (the full committee authorized for that
+block). Hashes and roots are 96 lowercase hexadecimal characters. List records
+in strictly increasing height order.
+
+Obtain these values from independently authenticated recovery records, verify
+the signers’ authority through the custodian’s deployment records, then retain
+the approved file with its provenance outside the archive. The payment RPC,
+archive and certificate alone cannot establish a recovery decision. Set
+`historical_committee_pins=Path("/custody/trust/recovery.json")` on
+`FinalityTrust`, or supply `--historical-committee-pins PATH` to either transfer
+or native verification CLI. Certificate and execution replay both check the
+pinned block and committee roots. The verifier checks the block quorum, the
+signed authority for effective committee changes, and the payment receipt. A
+legacy unsigned Foundation drill record can only preserve the already-active
+signers at an independently pinned recovery block. The result records the
+pins used. Independent credit on the affected devnet history
+remains unverified until the custodian provisions this evidence and successfully
+replays its own archive.
+
 Pass the same `finality_trust=trust` to `send_pft_and_poll_finality` to
 require this verification for withdrawals. Both the inline-submit and
 submit-then-poll paths derive the transaction ID from the locally signed

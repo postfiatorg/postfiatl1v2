@@ -2590,6 +2590,18 @@ class WalletHelperTests(unittest.TestCase):
                 self.assertTrue(result.finality_timeout)
                 receipts.assert_not_called()
 
+    def test_payment_verifier_only_uses_explicit_local_committee_pin_file(self) -> None:
+        for path in (None, Path("custody/recovery.json")):
+            with self.subTest(path=path):
+                trust = wallet_module.FinalityTrust(Path("archive"), "chain", "01" * 48, "02" * 48, path)
+                with mock.patch.object(wallet_module, "_run_json", return_value={}) as run:
+                    wallet_module.verify_payment_finality(trust, "ab" * 48)
+                command, = run.call_args.args
+                if path is None:
+                    self.assertNotIn("--historical-committee-pins", command)
+                else:
+                    self.assertEqual(command[command.index("--historical-committee-pins") + 1], str(path))
+
     def test_verified_finality_uses_signed_payment_for_both_submit_modes(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")
         wallet = TransparentWallet("test", 0, "pf-from", "00", Path("key"), Path("backup"), {})
