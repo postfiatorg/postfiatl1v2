@@ -61,7 +61,8 @@ pub(crate) fn execute_asset_orchard_transfer_action(
             message,
         )
     };
-    if !asset_execution_compatibility.asset_orchard_transfer_activation_height
+    if !asset_execution_compatibility
+        .asset_orchard_transfer_activation_height
         .is_some_and(|activation| block_height >= activation)
     {
         return reject(

@@ -152,7 +152,9 @@ The draft implementation of `asset_orchard_transfer_v1` requires a finalized
 `asset_orchard_transfer_activation_height` governance amendment. Every network
 starts with the transfer disabled. The amendment value must be strictly after
 its block height. Admission checks the next block, and validators check the
-executed block height during proposal and replay. The earliest unpaused value
+executed block height during proposal and replay. Certified block import and
+archive replay require the activation amendment’s validator authorizations.
+The earliest unpaused value
 applies. The private readiness report exposes the scheduled height under
 `asset_orchard_transfers`.
 

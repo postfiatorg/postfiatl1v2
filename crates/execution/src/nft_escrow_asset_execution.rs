@@ -699,7 +699,10 @@ impl AssetExecutionCompatibility {
         self
     }
 
-    pub const fn with_asset_orchard_transfer_activation_height(mut self, height: Option<u64>) -> Self {
+    pub const fn with_asset_orchard_transfer_activation_height(
+        mut self,
+        height: Option<u64>,
+    ) -> Self {
         self.asset_orchard_transfer_activation_height = height;
         self
     }

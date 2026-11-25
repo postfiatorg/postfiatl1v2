@@ -3122,8 +3122,14 @@ fn every_live_governance_amendment_kind_uses_the_signed_authorization_boundary()
         (GOVERNANCE_KIND_REJECTED_TX_FEE_ACTIVATION_HEIGHT, 1005),
         (GOVERNANCE_KIND_REQUIRE_MEMO_ACTIVATION_HEIGHT, 1006),
         (GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT, 1002),
-        (GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT, 1003),
-        (GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT, 1007),
+        (
+            GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
+            1003,
+        ),
+        (
+            GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT,
+            1007,
+        ),
         (GOVERNANCE_KIND_RECIPIENT_FORMAT_ACTIVATION_HEIGHT, 1005),
         (GOVERNANCE_KIND_CRYPTO_POLICY, 3),
         (GOVERNANCE_KIND_CRYPTO_POLICY, 2),
@@ -3133,7 +3139,7 @@ fn every_live_governance_amendment_kind_uses_the_signed_authorization_boundary()
         let is_explicit_rollback = index + 1 == cases.len();
         let unsigned_amendment_file =
             data_dir.join(format!("{proposal_slot}-{kind}.unsigned.json"));
-        ratify_governance(RatifyGovernanceOptions {
+        let unsigned = ratify_governance(RatifyGovernanceOptions {
             data_dir: data_dir.clone(),
             validators: validators.clone(),
             support: validators.clone(),
@@ -3153,6 +3159,54 @@ fn every_live_governance_amendment_kind_uses_the_signed_authorization_boundary()
             amendment_file: unsigned_amendment_file.clone(),
         })
         .expect("create governance kind proposal");
+        if *kind == GOVERNANCE_KIND_ASSET_ORCHARD_TRANSFER_ACTIVATION_HEIGHT {
+            let store = NodeStore::new(&data_dir);
+            let genesis = store.read_genesis().unwrap();
+            let mut governance = store.read_governance().unwrap();
+            let batch = build_governance_action_batch(&genesis, vec![unsigned], vec![]).unwrap();
+            let file = data_dir.join("unsigned-transfer-activation.batch.json");
+            write_governance_action_batch_file(&file, &batch).unwrap();
+            let error = apply_unsigned_governance_fixture_for_test(ApplyBatchOptions {
+                data_dir: data_dir.clone(),
+                batch_file: file,
+                certificate_file: None,
+            })
+            .expect_err("even a legacy importer cannot install an unsigned transfer gate");
+            assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+            let mut block = dummy_block_record(proposal_slot);
+            block.header.batch_kind = BATCH_KIND_GOVERNANCE.into();
+            block.header.batch_id = batch.batch_id.clone();
+            let entry = BatchArchiveEntry {
+                batch_kind: block.header.batch_kind.clone(),
+                batch_id: block.header.batch_id.clone(),
+                payload_hash: String::new(),
+                payload_json: serde_json::to_string(&batch).unwrap(),
+            };
+            let error = crate::block_replay_wallet::replay_archived_payload(
+                &genesis,
+                &block,
+                &entry,
+                crate::block_replay_wallet::ArchivedReplayState {
+                    governance: &mut governance,
+                    ledger: &mut store.read_ledger().unwrap(),
+                    shielded: &mut store.read_shielded().unwrap(),
+                    bridge: &mut store.read_bridge().unwrap(),
+                    validator_registry: &read_validator_registry_file(
+                        &data_dir.join(VALIDATOR_REGISTRY_FILE),
+                    )
+                    .unwrap(),
+                },
+            )
+            .expect_err("archive replay requires signatures before scheduling Orchard transfers");
+            assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+            assert!(
+                error
+                    .to_string()
+                    .contains("signed governance authorization"),
+                "{error}"
+            );
+            assert_eq!(governance.asset_orchard_transfer_activation_height(), None);
+        }
         let authorization_files = split_key_files
             .iter()
             .map(|(validator, key_file)| {
@@ -3207,8 +3261,14 @@ fn every_live_governance_amendment_kind_uses_the_signed_authorization_boundary()
     assert_eq!(governance.authority_mode, 0);
     assert!(!governance.orchard_pool_paused);
     assert!(!governance.atomic_swap_paused);
-    assert_eq!(governance.bridge_verification_activation_height(), Some(1000));
-    assert_eq!(governance.asset_orchard_transfer_activation_height(), Some(1007));
+    assert_eq!(
+        governance.bridge_verification_activation_height(),
+        Some(1000)
+    );
+    assert_eq!(
+        governance.asset_orchard_transfer_activation_height(),
+        Some(1007)
+    );
     assert_eq!(
         governance.orchard_aware_bridge_claim_activation_height(),
         Some(1004)

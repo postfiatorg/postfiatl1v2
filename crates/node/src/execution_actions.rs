@@ -483,7 +483,9 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
     governance: &GovernanceState,
 ) -> AssetExecutionCompatibility {
     asset_execution_compatibility_with_chain_activation(
-        AssetExecutionCompatibility::strict(), genesis, governance,
+        AssetExecutionCompatibility::strict(),
+        genesis,
+        governance,
     )
 }
 

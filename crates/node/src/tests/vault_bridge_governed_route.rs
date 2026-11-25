@@ -57,7 +57,7 @@ fn amendment(kind: &str, value: u32, activation_height: u64) -> GovernanceAmendm
     }
 }
 
-fn sign_single_validator_amendment(
+pub(super) fn sign_single_validator_amendment(
     data_dir: &Path,
     amendment_file: &Path,
     proposal_slot: u64,
