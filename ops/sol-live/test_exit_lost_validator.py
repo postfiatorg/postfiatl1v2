@@ -1,6 +1,7 @@
 """With one validator lost, close and paid run end to end and payouts keep flowing."""
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -26,8 +27,18 @@ SUPPLY = 40000
 class Fleet:
     """Six fake validators; validator `LOST` refuses every RPC and SSH call."""
 
-    def __init__(self, status=None, closed=False, second=True):
+    def __init__(self, status=None, closed=False, second=True, down=None, refusing=None,
+                 ignore_support=False):
         self.files = {}
+        # Hosts that answer nothing (by default validator `LOST`), a host whose reviewer refuses
+        # to sign, and a drafting node too old to know `--support`.
+        self.down = down
+        self.refusing = refusing
+        self.ignore_support = ignore_support
+        # Every draft's supporters, the signers of the assembled decision, submitted rounds.
+        self.drafts = []
+        self.assembled = None
+        self.submitted = 0
         self.closed = closed
         # `second`: the chain reports the second release's rules; else the first release's.
         self.second = second
@@ -43,8 +54,23 @@ class Fleet:
             build_git_revision=REV,
         )
 
+    def lost(self):
+        return {LOST} if self.down is None else set(self.down)
+
+    def draft(self, i, value, kind, quorum):
+        """The node's draft: the declared validators, and as supporters `--support` (by
+        default every declared validator), each with a vote."""
+        validators = value["--validators"].split(",")
+        support = validators if self.ignore_support else value.get("--support", ",".join(validators)).split(",")
+        self.drafts.append(support)
+        amend = dict(kind=kind, activation_height=int(value["--height"]), value=1, paused=False,
+                     quorum=quorum, validators=validators, support=support,
+                     votes=[f"vote-{v}" for v in support], certificate_id="cert-" + ",".join(support),
+                     amendment_id="amend-" + kind[-8:] + "-" + str(len(support)))
+        self.files[(i, value["--amendment-file"])] = json.dumps(amend)
+
     def rpc(self, i, method, **params):
-        if i == LOST:
+        if i in self.lost():
             raise RuntimeError(f"validator-{i} unreachable")
         if method == "status":
             return dict(self.head, node_id=f"validator-{i}")
@@ -76,7 +102,7 @@ class Fleet:
         raise AssertionError(method)
 
     def remote(self, i, args, data=None):
-        if i == LOST:
+        if i in self.lost():
             raise OSError(f"validator-{i} unreachable")
         args = [str(a) for a in args]
         if args[0] == "pgrep":
@@ -102,6 +128,8 @@ class Fleet:
         if args[0] == "cat":
             return self.files[(i, args[1])]
         rest = args[4:]
+        if rest[:4] == [govern.REVIEWER_PYTHON, "-I", govern.REVIEWER, "sign"] and i == self.refusing:
+            raise subprocess.CalledProcessError(2, args, stderr="refused: marker does not read 1 at finalized")
         if rest[:4] == [govern.REVIEWER_PYTHON, "-I", govern.REVIEWER, "sign"]:
             # The host's own reviewer approved this decision and runs the node's signing command
             # itself, with its own data directory, validator name and key file.
@@ -130,22 +158,24 @@ class Fleet:
                 )
             else:
                 self.kind = "solana_exit_r8_" + tool.rsplit("-", 1)[1]
-            amend = dict(
-                kind=self.kind, activation_height=int(value["--height"]), value=1,
-                paused=False, quorum=6 if self.kind.endswith("_open") and not self.closed else 5,
-                validators=value["--validators"].split(","),
-            )
-            self.files[(i, value["--amendment-file"])] = json.dumps(amend)
+            self.draft(i, value, self.kind, 6 if self.kind.endswith("_open") and not self.closed else 5)
         elif tool == "governance-authorization-sign":
             self.files[(i, value["--authorization-file"])] = json.dumps(dict(v=i))
         elif tool == "governance-amendment-assemble":
-            used = value["--authorization-files"].split(",")
-            assert len(used) == 5 and not any(f.endswith(f"auth-{LOST}") for f in used)
-            self.files[(i, value["--output"])] = json.dumps(dict(amendment_id="amend-" + self.kind[-8:]))
+            # As the node: one authorization for every supporter, at least the quorum.
+            amend = json.loads(self.files[(i, value["--amendment-file"])])
+            signers = [f"validator-{f.rsplit('-', 1)[1]}" for f in value["--authorization-files"].split(",")]
+            if signers != amend["support"] or len(signers) < amend["quorum"]:
+                raise subprocess.CalledProcessError(1, args, stderr=(
+                    "governance-amendment-assemble failed: governance amendment requires one "
+                    "signed governance authorization for every support vote"))
+            self.assembled = signers
+            self.files[(i, value["--output"])] = json.dumps(dict(amendment_id=amend["amendment_id"]))
         elif tool == "governance-batch":
             self.files[(i, value["--batch-file"])] = json.dumps(dict(batch=True))
-        elif tool == "transport-peer-certified-batch-round" and self.kind.endswith("_open"):
-            self.opened = True
+        elif tool == "transport-peer-certified-batch-round":
+            self.submitted += 1
+            self.opened = self.opened or self.kind.endswith("_open")
         return ""
 
     def patches(self, state):
