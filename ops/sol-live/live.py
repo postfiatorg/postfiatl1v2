@@ -12,7 +12,7 @@ import socket
 import requests
 
 ROOT = Path(__file__).resolve().parents[2]
-STATE = Path("/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-live")
+STATE = Path(os.environ.get("SOL_LIVE_STATE", "/mnt/HC_Volume_106212907/stakehub-hyperliquid/sol-live"))
 INSTANCE = os.environ.get("PFT_SOL_INSTANCE", "local")
 if INSTANCE not in ("local", "devnet"):
     raise ValueError("unknown Solana test cluster")

@@ -567,6 +567,36 @@ for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; 
 3. Just before the second release height, let the settler settle every paid burn, then stop it.
 4. From the height, the relay runs `exit_govern.py paid` (and `refund`). It only drafts and collects signatures; each host signs from its own review.
 
+### Settlement loop as a service
+
+Today the relay's settlement loop is the tmux session `settler`, running `oncall/settler.sh` every 90 s. That loop settles through `exit_govern.py paid --burn` and the root login. The installed loop is `pft-sol-exit-settler.timer`. It runs one pass of `exit_settler.py` every 90 s, as its own user `pft-sol-exit-settler`. A pass works like this:
+- It holds a lock, so two passes never run at once.
+- It finds burns to settle through any answering validator.
+- It proposes each one with `exit_govern.py paid --burn B --restricted`, bounded to 900 s.
+- A burn that keeps failing waits from 90 s, doubling up to an hour. It raises one `ALERT` line when it starts failing and one when the loop gives up after 12 attempts; after that, settle it by hand.
+- Every failure is a journal line: `journalctl -u pft-sol-exit-settler`.
+
+The loop only proposes. Each host's reviewer signs through its door, and with fewer than five signatures nothing settles.
+
+**Install on the relay machine, as root there:**
+
+```bash
+git archive -o exit-settler.tar "$COMMIT" ops/sol-live solana/deploy
+bash ops/sol-live/install-exit-settler.sh exit-settler.tar /home/postfiat/.ssh/known_hosts
+```
+
+The script:
+- creates the user and its SSH key (mode 0600, never printed) and `/etc/postfiat/sol-exit-settler.env`, where the Solana RPC URL goes;
+- prints the public key and the line each validator's `install-exit-review.sh … --settler-key FILE` writes;
+- then asks all six doors a read-only request.
+
+It enables nothing while a host does not answer; it names that host and exits 3. It also enables nothing while drafting, assembling and submitting still need a root login; it says so and exits 4. Until it enables the timer, keep the tmux loop. When it does, stop the tmux loop first, then start the timer:
+
+```bash
+tmux send-keys -t settler C-c && tmux kill-session -t settler   # as the relay's on-call login
+systemctl enable --now pft-sol-exit-settler.timer
+```
+
 ### Upgrade the initialised Solana verifier
 
 The deployed verifier (`0x3b16fc30…`, byte-identical to `solana/deploy/build.sh` of `main`) stores in its light account a route that also binds the revision-8 bucket. The new program computes the custody route without it, so the light's `route` (bytes 136–168 of 289) must change once. Instruction tag 9 does this. Its arguments must rebuild the stored route, so the new route is fixed by the account. It runs once and leaves the checkpoint, the pause state, the checkpoint accounts and every paid marker unchanged. `solana/pfusdc-egress-verifier/tests/upgrade_rehearsal.py` rehearses these steps on the dumped mainnet state. The same build adds tag 10, `cancel` ([refund design](../../docs/specs/solana-exit-refund-design-20261124.md)). It changes no stored data and needs no step of its own. At 122,976 bytes, the image still fits in the 10,240-byte extension.
