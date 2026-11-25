@@ -27,6 +27,16 @@ Validator changes must be:
 Cobalt trust-graph and transition checks describe the stronger target
 ratification path. They do not replace the implemented signature boundary.
 
+Since the Solana withdrawal release, `main` also refuses a committee change
+that the frozen Solana payout checker cannot follow while the Solana exit is
+registered and not retired. Such a change is accepted only after burns were
+opened once and then closed, with no Solana redemption pending, no outstanding
+claim in any custody bucket, and no route that can still receive deposits;
+otherwise it is refused with the reason. A batch with one registry update in the form the
+checker accepts, at its own activation height, is not refused
+(`verify_rotation_interlock` and `require_change_allowed` in
+`crates/node/src/solana_exit_governance.rs`; checked on 25 November 2026).
+
 ## Validator Lifecycle
 
 ```mermaid
