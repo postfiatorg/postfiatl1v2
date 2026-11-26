@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+import unittest.mock
 from unittest.mock import patch
 
 import service
@@ -205,6 +206,37 @@ class SettingTest(WindowTest):
         self.mode.unlink()
         self.mode.mkdir()
         self.assertTrue(self.ready()['proving_window_file_state'].startswith('unreadable'))
+
+
+class ProbeTest(unittest.TestCase):
+    """Concurrent readiness requests share one prover probe per interval (B04)."""
+
+    def test_concurrent_callers_start_one_probe(self):
+        import threading
+        import time as clock
+        service._probe.clear()
+        calls, start = [], threading.Barrier(8)
+
+        def slow(*args, **kwargs):
+            calls.append(1)
+            clock.sleep(0.3)
+            return unittest.mock.Mock(returncode=0)
+
+        results = []
+        with patch.object(service.subprocess, 'run', side_effect=slow):
+            def ask():
+                start.wait()
+                results.append(service.prover_answers())
+            threads = [threading.Thread(target=ask) for _ in range(8)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(5)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(results), 8)
+            self.assertIn(True, results)
+            service.prover_answers()
+            self.assertEqual(len(calls), 1, 'one refresh per interval')
 
 if __name__ == '__main__':
     unittest.main()

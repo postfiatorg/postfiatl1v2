@@ -156,17 +156,30 @@ def proving_window():
     return dict(open=is_open, opens_at=opens, file_state=file_state, error=error)
 
 
+_probe_lock = threading.Lock()
+
+
 def prover_answers():
-    """A cheap probe of the proving machine (its proof host is there), at most once a minute."""
-    if _probe.get('at', 0) + PROBE_SECONDS > time.time():
+    """A cheap probe of the proving machine (its proof host is there): one in flight at a time and
+    one refresh per PROBE_SECONDS (monotonic). A caller arriving while a probe runs gets the last
+    result, or False ("unavailable") before the first one has ended."""
+    now = time.monotonic()
+    if 'at' in _probe and now - _probe['at'] < PROBE_SECONDS:
         return _probe['ok']
+    if not _probe_lock.acquire(blocking=False):
+        return _probe.get('ok', False)
     try:
-        ok = subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8'] + VAST
-                            + [f'test -x {REMOTE}/proof-host'], capture_output=True, timeout=20).returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        ok = False
-    _probe.update(at=time.time(), ok=ok)
-    return ok
+        if 'at' in _probe and time.monotonic() - _probe['at'] < PROBE_SECONDS:
+            return _probe['ok']
+        try:
+            ok = subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8'] + VAST
+                                + [f'test -x {REMOTE}/proof-host'], capture_output=True, timeout=20).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            ok = False
+        _probe.update(at=time.monotonic(), ok=ok)
+        return ok
+    finally:
+        _probe_lock.release()
 
 
 def window_refusal(window):
