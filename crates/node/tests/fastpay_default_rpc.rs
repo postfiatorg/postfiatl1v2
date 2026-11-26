@@ -535,3 +535,76 @@ fn isolated_receipts_and_status_answer_during_a_validator_commit() {
     drop(_reader);
     fs::remove_dir_all(root).unwrap();
 }
+
+/// One committed transfer in a transactional consensus-v2 node, as in the commit-window test.
+#[cfg(target_os = "linux")]
+fn committed_transactional_node(chain_id: &str) -> (PathBuf, PathBuf) {
+    use postfiat_node::{
+        apply_batch, create_transfer_batch, init_consensus_v2, ApplyBatchOptions,
+        BatchTransferOptions, InitConsensusV2Options,
+    };
+    let root = unique_root();
+    let data_dir = root.join("node");
+    init_consensus_v2(InitConsensusV2Options {
+        data_dir: data_dir.clone(),
+        chain_id: chain_id.into(),
+        node_id: "validator-0".into(),
+        validator_count: 1,
+        activation_height: 1000,
+        storage_activation_height: Some(1),
+    })
+    .unwrap();
+    let backup =
+        postfiat_rpc_sdk::wallet_backup_from_master_seed(chain_id, "ab".repeat(32), 0).unwrap();
+    let key = postfiat_rpc_sdk::derive_wallet_key_pair(&backup).unwrap();
+    let batch_file = root.join("transfer.batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: postfiat_crypto_provider::address_from_public_key(&key.public_key),
+        amount: 250_000,
+        batch_file: batch_file.clone(),
+    })
+    .unwrap();
+    let rows = apply_batch(ApplyBatchOptions {
+        data_dir: data_dir.clone(),
+        batch_file,
+        certificate_file: None,
+    })
+    .unwrap();
+    assert!(rows[0].accepted);
+    (root, data_dir)
+}
+
+/// The receipt reader takes its snapshot from the validator's handle. If the
+/// validator's operation ends during that read, the database must stay open
+/// until the snapshot is dropped, or redb releases the file lock under it.
+#[cfg(target_os = "linux")]
+#[test]
+fn held_receipt_snapshot_keeps_the_store_open_after_the_validator_releases_it() {
+    use postfiat_storage::transactional::transactional_open_counts_for;
+    let (root, data_dir) = committed_transactional_node("snapshot-hold");
+    let store = postfiat_storage::NodeStore::new(&data_dir);
+    let validator_handle = store.transactional_store_lease().unwrap().unwrap();
+    let snapshot = store
+        .held_transactional_read_snapshot()
+        .unwrap()
+        .expect("the validator holds the store");
+    let before = transactional_open_counts_for(&data_dir);
+    drop(validator_handle);
+    assert_eq!(
+        transactional_open_counts_for(&data_dir).database_closes,
+        before.database_closes,
+        "the database closed while a snapshot read was in progress"
+    );
+    let rows = snapshot
+        .receipts_tail(None, 1, 1 << 20, Instant::now() + Duration::from_secs(5))
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    drop(snapshot);
+    assert_eq!(
+        transactional_open_counts_for(&data_dir).database_closes,
+        before.database_closes + 1
+    );
+    fs::remove_dir_all(root).unwrap();
+}

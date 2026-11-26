@@ -511,6 +511,10 @@ pub struct TransactionalReadSnapshot {
     meta: TransactionalStoreMetaV1,
     integrity_key: IntegrityKey,
     counters: Arc<WorkCounterState>,
+    /// Keeps a shared handle, and so the database file and its lock, open
+    /// until the read ends. redb defers its close only for a live write
+    /// transaction. Declared last: dropped after `transaction`.
+    _store: Option<Arc<TransactionalStore>>,
 }
 
 impl fmt::Debug for TransactionalStore {
@@ -834,7 +838,15 @@ impl TransactionalStore {
             meta,
             integrity_key: self.integrity_key.clone(),
             counters: Arc::clone(&self.counters),
+            _store: None,
         })
+    }
+
+    /// A read snapshot that holds this shared handle open until it is dropped.
+    pub fn read_snapshot_holding(self: &Arc<Self>) -> StorageResult<TransactionalReadSnapshot> {
+        let mut snapshot = self.read_snapshot()?;
+        snapshot._store = Some(Arc::clone(self));
+        Ok(snapshot)
     }
 
     pub fn meta(&self) -> StorageResult<TransactionalStoreMetaV1> {
