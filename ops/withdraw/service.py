@@ -92,6 +92,48 @@ def run(args,**kw):return subprocess.run([str(a) for a in args],check=True,captu
 
 def bridge_status():
     return call('vault_bridge_status',{'asset_id':FAMILY})
+# An optional proving window, at the door only. WITHDRAW_PROVING_WINDOW_HOURS (UTC, `17:00-19:00`;
+# a window may cross midnight) is read once at start. Outside it readiness is not ready, so the
+# screens, which ask readiness first, start no new withdrawal; a job already underway, or a request
+# posted anyway, is handled exactly as without the setting. Unset: readiness is as before.
+def parse_window_hours(value):
+    """None when unset; else (start, end) minutes and their text, or an error naming the setting."""
+    if value is None:
+        return None
+    m = re.fullmatch(r'([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)', value)
+    if not m or m.group(1, 2) == m.group(3, 4):
+        return dict(error=f'WITHDRAW_PROVING_WINDOW_HOURS={value!r} is invalid: it must be HH:MM-HH:MM in UTC '
+                          'with two different times')
+    return dict(start=int(m[1]) * 60 + int(m[2]), end=int(m[3]) * 60 + int(m[4]),
+                text=f'{m[1]}:{m[2]} to {m[3]}:{m[4]} UTC')
+
+
+WINDOW = parse_window_hours(os.environ.get('WITHDRAW_PROVING_WINDOW_HOURS'))
+
+
+def window_now():
+    """The window's clock, one function a test can replace."""
+    return datetime.now(timezone.utc)
+
+
+def proving_window_answer():
+    """(refusal or None, fields for readiness) for the configured window; (None, {}) when unset."""
+    if WINDOW is None:
+        return None, {}
+    if 'error' in WINDOW:
+        return 'Ethereum withdrawals are closed: ' + WINDOW['error'] + '.', dict(proving_window_open=False)
+    now = window_now()
+    minute, start, end = now.hour * 60 + now.minute, WINDOW['start'], WINDOW['end']
+    if (start <= minute < end) if start < end else (minute >= start or minute < end):
+        return None, dict(proving_window_open=True)
+    opens = now.replace(hour=start // 60, minute=start % 60, second=0, microsecond=0)
+    if opens <= now:
+        opens += timedelta(days=1)
+    opens = opens.strftime('%Y-%m-%dT%H:%M:%SZ')
+    return (f"Ethereum withdrawals are closed: the proving window is {WINDOW['text']}; it next opens at {opens}",
+            dict(proving_window_open=False, next_window_opens_at=opens))
+
+
 def payout_preflight():
     if not worker_started.is_set():
         return 'Withdrawal worker is stopped.'
@@ -129,11 +171,13 @@ def readiness():
                 (j['stage'] == 'paid' and not proven_paid(j))]
     stalled = [j['burn_tx_id'] for j in jobs if j['stage'] in ACTIVE_STAGES and
                (datetime.now(timezone.utc) - datetime.fromisoformat(j['updated_at'])).total_seconds() > 3600]
-    preflight_error = payout_preflight()
+    window_refusal, window_fields = proving_window_answer()
+    preflight_error = window_refusal or payout_preflight()
     payout_ready = not (blocked or stalled or preflight_error)
     health = dict(ok=True, bucket_ready=len(buckets)==1, payout_ready=payout_ready,
                   payout_preflight_error=preflight_error, last_payment_recorded_at=max(payments, default=None),
-                  blocked_jobs=blocked, stalled_jobs=stalled, awaiting_finality_jobs=awaiting, exhausted_jobs=exhausted)
+                  blocked_jobs=blocked, stalled_jobs=stalled, awaiting_finality_jobs=awaiting, exhausted_jobs=exhausted,
+                  **window_fields)
     if len(buckets)!=1:return dict(**health,ready=False,message='No single active deposit bucket for the current bridge setting.')
     if not payout_ready:
         health['message'] = preflight_error or 'The withdrawal worker has blocked or stalled jobs.'
