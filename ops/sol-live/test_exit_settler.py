@@ -112,14 +112,23 @@ class Pass(unittest.TestCase):
             self.assertEqual(s.discover(), [OTHER])
         self.assertIn(f"ALERT discovery of {BURN} failed", out.getvalue())
 
+    def test_a_settlement_past_its_bound_stops_everything_it_started(self):
+        done = self.state / "grandchild-finished"
+        command = ["bash", "-c", f"(sleep 1; touch {done}) & sleep 5"]
+        with self.assertRaises(s.subprocess.TimeoutExpired):
+            s.run_bounded(command, 0.3)
+        import time
+        time.sleep(1.5)
+        self.assertFalse(done.exists(), "a process the settlement started went on after its bound")
+
     def test_each_settlement_is_the_reviewed_restricted_path_and_bounded(self):
-        with patch.object(s, "STATE", self.state), patch.object(s.subprocess, "run") as run:
+        with patch.object(s, "STATE", self.state), patch.object(s, "run_bounded") as run:
             run.return_value.returncode, run.return_value.stdout, run.return_value.stderr = 0, "signed by 5 of 6\n", ""
             self.assertEqual(s.settle(BURN), (True, "signed by 5 of 6"))
             command = run.call_args.args[0]
             self.assertEqual(command[1:5], [str(s.HERE / "exit_govern.py"), "paid", "--burn", BURN])
             self.assertIn("--restricted", command)
-            self.assertEqual(run.call_args.kwargs["timeout"], s.ATTEMPT_SECONDS)
+            self.assertEqual(run.call_args.args[1], s.ATTEMPT_SECONDS)
             run.side_effect = s.subprocess.TimeoutExpired(command, 1)
             self.assertEqual(s.settle(BURN), (False, f"stopped after {s.ATTEMPT_SECONDS} s"))
 

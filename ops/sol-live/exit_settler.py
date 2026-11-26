@@ -15,6 +15,7 @@ line on stdout, which is the journal.
 import fcntl
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -55,6 +56,23 @@ def discover():
     return found
 
 
+def run_bounded(command, timeout, **options):
+    """Run `command` in a session of its own; past `timeout` every process it started is killed
+    and reaped, then TimeoutExpired is raised. Returns the completed process otherwise."""
+    child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                             start_new_session=True, **options)
+    try:
+        out, err = child.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        child.communicate()
+        raise
+    return subprocess.CompletedProcess(command, child.returncode, out, err)
+
+
 def settle(burn):
     """Propose one settlement through the reviewed path, bounded; returns (ok, last output line)."""
     out = STATE / "settled" / f"{burn}.json"
@@ -62,7 +80,7 @@ def settle(burn):
     command = [sys.executable, str(HERE / "exit_govern.py"), "paid", "--burn", burn, "--restricted",
                "--revision", REVISION, "--release-height", RELEASE_HEIGHT, "--output", str(out)]
     try:
-        done = subprocess.run(command, capture_output=True, text=True, timeout=ATTEMPT_SECONDS, cwd=HERE)
+        done = run_bounded(command, ATTEMPT_SECONDS, cwd=HERE)
     except subprocess.TimeoutExpired:
         return False, f"stopped after {ATTEMPT_SECONDS} s"
     text = ((done.stdout or "") + (done.stderr or "")).strip().splitlines()
