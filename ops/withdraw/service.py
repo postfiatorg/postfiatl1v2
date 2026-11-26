@@ -101,32 +101,59 @@ PROBE_SECONDS = 60
 _probe = {}
 
 
+HOURS_PATTERN = re.compile(r'([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)')
+
+
 def window_hours():
+    """(start, end) minutes of WITHDRAW_PROVING_WINDOW_HOURS, None when unset; ValueError when
+    the supplied value is not HH:MM-HH:MM with two different times."""
     hours = os.environ.get('WITHDRAW_PROVING_WINDOW_HOURS')
-    m = re.fullmatch(r'([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)', hours or '')
-    return (int(m[1]) * 60 + int(m[2]), int(m[3]) * 60 + int(m[4])) if m else None
+    if not hours:
+        return None
+    m = HOURS_PATTERN.fullmatch(hours)
+    span = (int(m[1]) * 60 + int(m[2]), int(m[3]) * 60 + int(m[4])) if m else None
+    if span is None or span[0] == span[1]:
+        raise ValueError(f'WITHDRAW_PROVING_WINDOW_HOURS={hours!r} is not HH:MM-HH:MM (UTC) with two different times')
+    return span
+
+
+def window_file_state(path):
+    """'open', 'missing', 'invalid content' or 'unreadable: <reason>' for the launcher's state file."""
+    try:
+        content = Path(path).read_text().strip()
+    except FileNotFoundError:
+        return 'missing'
+    except OSError as error:
+        return f'unreadable: {type(error).__name__}'
+    return 'open' if content in WINDOW_MODES else 'invalid content'
 
 
 def proving_window():
-    """None without a configured window; else whether it is open and, when known, its next opening."""
+    """None without a configured window; else whether it is open, when known its next opening,
+    the state file's condition, and a configuration error (which keeps it closed)."""
     path, hours = os.environ.get('WITHDRAW_PROVING_WINDOW_FILE'), os.environ.get('WITHDRAW_PROVING_WINDOW_HOURS')
     if not path and not hours:
         return None
-    now, span = utcnow(), window_hours()
-    if path:
-        try:
-            is_open = Path(path).read_text().strip() in WINDOW_MODES
-        except OSError:
-            is_open = False
+    now, error, span = utcnow(), None, None
+    try:
+        span = window_hours()
+    except ValueError as invalid:
+        error = str(invalid)
+    file_state = window_file_state(path) if path else None
+    if file_state not in (None, 'open', 'missing'):
+        error = error or f'WITHDRAW_PROVING_WINDOW_FILE {path} is {file_state}'
+    if error:
+        is_open = False
+    elif path:
+        is_open = file_state == 'open'
     else:
         minute = now.hour * 60 + now.minute
-        is_open = span is not None and (span[0] <= minute < span[1] if span[0] <= span[1]
-                                        else minute >= span[0] or minute < span[1])
+        is_open = (span[0] <= minute < span[1] if span[0] < span[1] else minute >= span[0] or minute < span[1])
     opens = None
-    if not is_open and span is not None:
+    if not is_open and span is not None and not error:
         start = now.replace(hour=span[0] // 60, minute=span[0] % 60, second=0, microsecond=0)
         opens = (start if start > now else start + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    return dict(open=is_open, opens_at=opens)
+    return dict(open=is_open, opens_at=opens, file_state=file_state, error=error)
 
 
 def prover_answers():
@@ -146,6 +173,8 @@ def window_refusal(window):
     """Why payouts cannot be proved now, or None. Only with a configured window."""
     if window is None:
         return None
+    if window['error']:
+        return f"Ethereum withdrawals are closed: the proving window setting is invalid: {window['error']}."
     if not window['open']:
         return 'Ethereum withdrawals are closed: proving window closed' + (
             f"; it next opens at {window['opens_at']}." if window['opens_at'] else '.')
@@ -215,6 +244,7 @@ def readiness():
                   blocked_jobs=blocked, stalled_jobs=stalled, awaiting_finality_jobs=awaiting, exhausted_jobs=exhausted)
     if window is not None:
         health.update(proving_window_open=window['open'], next_window_opens_at=window['opens_at'],
+                      proving_window_file_state=window['file_state'], proving_window_error=window['error'],
                       waiting_for_window_jobs=waiting)
     if len(buckets)!=1:return dict(**health,ready=False,message='No single active deposit bucket for the current bridge setting.')
     if not payout_ready:
@@ -645,6 +675,10 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as error:self.reply(503,dict(ok=False,code='withdrawal_service_error',message=str(error)[:200]))
 
 if __name__=='__main__':
+    # The window's settings are checked at start; an invalid one keeps withdrawals closed with its reason.
+    _window = proving_window()
+    if _window is not None:
+        print(now(), 'proving window:', json.dumps(_window, sort_keys=True), flush=True)
     ensure_directory(JOBS)
     threading.Thread(target=worker,daemon=True).start()
     print(now(),'withdrawal service on 127.0.0.1:%d'%PORT,flush=True);ThreadingHTTPServer(('127.0.0.1',PORT),Handler).serve_forever()

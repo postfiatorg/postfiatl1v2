@@ -174,5 +174,37 @@ class UnsentWorkTest(WindowTest):
         self.assertEqual(job['stage'], 'waiting_for_window')
         self.assertNotIn('route_attempts', job)
 
+
+class SettingTest(WindowTest):
+    """A supplied setting that is invalid fails closed with its own reason (B03)."""
+
+    def refusal(self, **env):
+        with patch.dict(os.environ, env):
+            return self.ready()
+
+    def test_invalid_hours_fail_closed_naming_the_setting(self):
+        for hours in ('garbage', '17:00-17:00'):
+            with self.subTest(hours=hours):
+                ready = self.refusal(WITHDRAW_PROVING_WINDOW_HOURS=hours)
+                self.assertFalse(ready['ready'])
+                self.assertIn('WITHDRAW_PROVING_WINDOW_HOURS', ready['message'])
+                self.assertNotIn('proving window closed', ready['message'])
+
+    def test_invalid_hours_are_not_bypassed_by_an_open_state_file(self):
+        self.mode.write_text('none\n')
+        ready = self.refusal(WITHDRAW_PROVING_WINDOW_HOURS='garbage')
+        self.assertFalse(ready['ready'])
+        self.assertIn('WITHDRAW_PROVING_WINDOW_HOURS', ready['message'])
+
+    def test_readiness_reports_the_state_files_condition(self):
+        self.assertEqual(self.ready()['proving_window_file_state'], 'missing')
+        self.mode.write_text('bogus\n')
+        ready = self.ready()
+        self.assertEqual(ready['proving_window_file_state'], 'invalid content')
+        self.assertIn('WITHDRAW_PROVING_WINDOW_FILE', ready['message'])
+        self.mode.unlink()
+        self.mode.mkdir()
+        self.assertTrue(self.ready()['proving_window_file_state'].startswith('unreadable'))
+
 if __name__ == '__main__':
     unittest.main()
