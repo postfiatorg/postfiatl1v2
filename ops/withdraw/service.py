@@ -23,7 +23,7 @@ import archive as arch
 import exit_profile
 from eth_journal import durable_json, ensure_directory, intent_path, read_eth_result, ReconciliationRequired
 from eth_send import RPC, VERIFIER, VAULT, OPERATOR, KEY
-from eth_finality import AwaitingFinality, confirm_action
+from eth_finality import AwaitingFinality, TransactionUnknown, confirm_action
 PY=sys.executable
 COORD=Path('/home/postfiat/repos/b23-coord');E=COORD/'evidence/withdraw';JOBS=E/'jobs'
 HOST_BIN=E/'bin/proof-host';ELF=E/'historical/egress.elf'
@@ -194,6 +194,17 @@ def eth_send(mode, proof_dir, out):
     return read_eth_result(mode, out)
 
 
+def rebroadcast(mode, proof_dir, out):
+    """Ask eth_send.py to resend the journaled bytes of a recorded transaction the chain no longer knows."""
+    result = subprocess.run(
+        [PY, str(HERE / 'eth_send.py'), mode, str(proof_dir), str(out)],
+        capture_output=True, text=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'),
+    )
+    if result.returncode:
+        detail = (result.stderr.strip().splitlines() or ['unknown'])[-1][-300:]
+        raise ReconciliationRequired(f'Reconcile dropped Ethereum {mode}: {detail}')
+
+
 def historical_checkpoint(blocks, height, audit_record):
     verifier = audit_record['contracts']['PFTLFinalityVerifierV1']
     if verifier['address'].lower() != VERIFIER.lower():
@@ -327,7 +338,16 @@ def recover_payment(job, directory):
         # A legacy paid row can be recovered with just its original tx id and packet.
         # This is always read-only on Ethereum, even when the old receipt file is absent.
         terms = withdrawal_terms(job, directory)
-        done = finalized_result('withdraw', result, terms, known_tx)
+        try:
+            done = finalized_result('withdraw', result, terms, known_tx)
+        except TransactionUnknown as unknown:
+            if not historical and result.exists() and intent_path(result).exists():
+                # A lagging RPC can also answer "unknown"; a refused resend keeps the job waiting.
+                try:
+                    rebroadcast('withdraw', directory/'proof', result)
+                except ReconciliationRequired as refused:
+                    raise AwaitingFinality(f'{unknown}; resend refused: {refused}'[:400]) from refused
+            raise
     except (ReconciliationRequired, OSError, ValueError, TypeError, KeyError) as error:
         if not isinstance(error, ReconciliationRequired):
             error = ReconciliationRequired('Unusable withdrawal evidence; reconcile '+str(error)[:160])

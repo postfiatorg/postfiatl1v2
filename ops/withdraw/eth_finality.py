@@ -12,6 +12,10 @@ class AwaitingFinality(ReconciliationRequired):
     """Ethereum has not yet supplied a canonical, finalized receipt for this identity."""
 
 
+class TransactionUnknown(AwaitingFinality):
+    """The RPC has no receipt for this transaction: pending, or dropped by a reorganisation."""
+
+
 ACCEPTED_CHECKPOINT_ABI = [{'type':'function', 'name':'acceptedCheckpointCommitment', 'stateMutability':'view',
                             'inputs':[{'name':'commitment', 'type':'bytes32'}], 'outputs':[{'name':'', 'type':'bool'}]}]
 
@@ -32,7 +36,7 @@ def confirm_action(eth, mode, tx, expected):
     try:
         receipt = eth.get_transaction_receipt(tx_hash)
     except TransactionNotFound as error:
-        raise AwaitingFinality('Ethereum has no canonical receipt yet for '+Web3.to_hex(tx_hash)) from error
+        raise TransactionUnknown('Ethereum has no canonical receipt yet for '+Web3.to_hex(tx_hash)) from error
 
     height = receipt['blockNumber']
     block_hash = receipt['blockHash']
