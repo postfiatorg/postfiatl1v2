@@ -94,6 +94,24 @@ class Pass(unittest.TestCase):
         backoff = json.loads((self.state / "backoff.json").read_text())
         self.assertEqual(backoff[BURN]["failures"], 4)
 
+    def test_one_unreadable_marker_does_not_hide_the_other_burns(self):
+        import exit_payout
+
+        rows = [dict(burn_tx_id=b, bucket_id="k", state="pending", settled_atoms=0) for b in (BURN, OTHER)]
+
+        def marker(c, burn, known):
+            if burn == BURN:
+                raise ValueError("Unexpected burn marker.")
+            return "sig"
+
+        out = io.StringIO()
+        with patch.object(exit_payout, "cluster"), patch.object(exit_payout, "chain_rules", return_value={"covered": None}), \
+             patch.object(exit_payout, "rpc_any", return_value=dict(buckets=[], redemptions=rows)), \
+             patch.object(exit_payout, "covered_buckets", return_value={"k": {}}), \
+             patch.object(exit_payout, "signature", side_effect=marker), contextlib.redirect_stdout(out):
+            self.assertEqual(s.discover(), [OTHER])
+        self.assertIn(f"ALERT discovery of {BURN} failed", out.getvalue())
+
     def test_each_settlement_is_the_reviewed_restricted_path_and_bounded(self):
         with patch.object(s, "STATE", self.state), patch.object(s.subprocess, "run") as run:
             run.return_value.returncode, run.return_value.stdout, run.return_value.stderr = 0, "signed by 5 of 6\n", ""

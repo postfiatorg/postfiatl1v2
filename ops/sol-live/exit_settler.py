@@ -50,6 +50,8 @@ def discover():
                     found.append(r["burn_tx_id"])
             except BurnCancelled:
                 continue  # a refund, not a settlement
+            except Exception as error:  # one unreadable marker must not hide the other burns
+                log(f"ALERT discovery of {r['burn_tx_id']} failed: {type(error).__name__}: {error}")
     return found
 
 
