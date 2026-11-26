@@ -1,0 +1,8 @@
+[Unit]
+Description=Keep the Colab proving window's local port and socket connected
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/var/colab-prover/colab-prover.sh ensure
+TimeoutStartSec=2min

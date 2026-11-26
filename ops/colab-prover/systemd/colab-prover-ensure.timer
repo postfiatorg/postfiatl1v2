@@ -1,0 +1,9 @@
+[Unit]
+Description=Check the Colab proving window every two minutes
+
+[Timer]
+OnCalendar=*:0/2
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,107 @@
+#!/bin/bash
+# One Colab GPU session that stands in for the two Vast provers during a proving window.
+#   colab-prover.sh up [deposits]   start a session, set it up, warm it, point the services at it
+#   colab-prover.sh down            point the services away and stop the session
+#   colab-prover.sh ensure          put back the local port and socket if the connection was lost
+#   colab-prover.sh status
+# The services keep their own commands (ssh/scp to root@ssh8.vast.ai): while a window is open an
+# ssh_config stanza sends that name through one multiplexed connection to the Colab VM, because
+# Colab allows one SSH connection per runtime. Removing the stanza is the rollback.
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")" && pwd)
+COLAB="$HOME/.local/bin/colab --auth=adc"
+NAME=${COLAB_PROVER_SESSION:-pft-prover}
+STANZA=$HOME/.ssh/config.d/colab-prover.conf
+CM=$HOME/.ssh/cm-colab-prover
+KNOWN=$HOME/.ssh/known_hosts.colab-prover
+SOCK=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pft-sol-prover/prover.sock
+LOG=$ROOT/window.log
+log() { echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"; }
+# Before the stanza exists, and for the first connection, talk to the VM directly.
+direct() { ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile="$KNOWN" -o LogLevel=ERROR \
+  -o ControlMaster=auto -o ControlPath="$CM" -o ControlPersist=yes -o ServerAliveInterval=20 \
+  -o ProxyCommand="$COLAB ssh --proxy-mode -s $NAME" root@colab-prover "$@"; }
+
+# The local ends of the window: the withdrawal door's port and the deposit prover's socket. Both ride
+# on the one connection; if it was lost they are put back. Safe to run at any time in a window.
+ensure() {
+  [ -f "$STANZA" ] || return 0
+  ssh -O check -o ControlPath="$CM" root@colab-prover 2>/dev/null || direct true
+  if ! ss -ltn | grep -q "127.0.0.1:20628 "; then
+    ssh -O forward -o ControlPath="$CM" -L 127.0.0.1:20628:127.0.0.1:2223 root@colab-prover
+    log "withdrawal door forwarded"
+  fi
+  ssh -F /dev/null -oIdentitiesOnly=yes -i "$ROOT/solexit/testkey" -oStrictHostKeyChecking=yes -oGlobalKnownHostsFile=/dev/null \
+    -oUserKnownHostsFile="$ROOT/solexit/known_hosts.colab" -oBatchMode=yes -oConnectTimeout=8 -oHostKeyAlias='[ssh8.vast.ai]:20628' \
+    -p 20628 root@127.0.0.1 pf-sol-exit-check
+  if [ "$(cat "$ROOT/window.mode" 2>/dev/null)" = deposits ]; then
+    systemctl --user stop pft-sol-prover-tunnel.service 2>/dev/null || true
+    if ! python3 -c "import socket,sys;s=socket.socket(socket.AF_UNIX);s.settimeout(8);s.connect(sys.argv[1])" "$SOCK" 2>/dev/null; then
+      mkdir -p -m 700 "$(dirname "$SOCK")"; rm -f "$SOCK"
+      ssh -O forward -o ControlPath="$CM" -L "$SOCK:/workspace/sol-ingress/speed-i2/prover.sock" root@colab-prover
+      log "deposit prover socket forwarded"
+    fi
+  fi
+}
+
+up() {
+  local deposits=${1:-}
+  trap 'log "window failed to open"; "$HOME/.local/bin/b24-alert" "Colab proving window failed to open; deposits and withdrawals stay closed. See $LOG" || true' ERR
+  if $COLAB sessions 2>/dev/null | grep -q "^\[$NAME\]"; then log "session $NAME already exists"; else
+    local got=
+    # G4 first: 48 cores and 96 GB of GPU memory (measured 2026-11-25). Deposit proving is limited by
+    # CPU on the 12-core A100 shapes, and the deposit prover and a withdrawal prover fit together
+    # only on a GPU with more than 60 GB.
+    for shape in "G4" "A100 --high-mem" "A100" "H100"; do
+      for try in 1 2 3; do
+        if timeout 240 $COLAB new -s "$NAME" --gpu $shape 2>&1 | grep -q "Session READY"; then got=$shape; break 2; fi
+        sleep 20
+      done
+    done
+    [ -n "$got" ] || { log "no GPU available from Colab"; exit 75; }
+    log "session $NAME on $got"
+  fi
+  rm -f "$KNOWN"; ssh -O exit -o ControlPath="$CM" root@colab-prover 2>/dev/null || true
+  tar -C "$ROOT" -cf - bundle provision.sh warm.sh solexit/hostkey solexit/authorized_keys solexit/pf-sol-exit-prove | direct 'mkdir -p /content && tar -C /content -xf - && bash /content/provision.sh' 2>&1 | tail -3 | tee -a "$LOG"
+  local vram; vram=$(direct 'nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits')
+  # Under 60 GB the deposit prover (24.5 GB) leaves no room for a withdrawal prover (23 GB).
+  if [ "$deposits" = deposits ] && [ "$vram" -lt 60000 ]; then log "GPU has ${vram} MiB: deposits stay closed this window"; deposits=; fi
+  direct "bash /content/warm.sh $deposits" 2>&1 | tail -3 | tee -a "$LOG"
+  if [ -n "${COLAB_PROVER_NO_SWITCH:-}" ]; then log "set up and warm; services not switched"; return; fi
+  mkdir -p "$(dirname "$STANZA")"
+  cat > "$STANZA" <<EOF
+# Written by colab-prover.sh up; removed by down. Sends the Vast prover's name to the Colab session.
+Host ssh8.vast.ai
+    HostKeyAlias colab-prover
+    UserKnownHostsFile $KNOWN
+    StrictHostKeyChecking yes
+    ProxyCommand $COLAB ssh --proxy-mode -s $NAME
+    ControlMaster auto
+    ControlPath $CM
+    ControlPersist yes
+    ServerAliveInterval 20
+EOF
+  chmod 600 "$STANZA"
+  grep -q "^Include config.d/\*" "$HOME/.ssh/config" 2>/dev/null || { printf 'Include config.d/*\n\n' | cat - "$HOME/.ssh/config" 2>/dev/null > "$HOME/.ssh/config.new"; mv "$HOME/.ssh/config.new" "$HOME/.ssh/config"; chmod 600 "$HOME/.ssh/config"; }
+  ssh -o BatchMode=yes -p 20628 root@ssh8.vast.ai 'test -x /workspace/b23-withdraw-20261116/proof-host && echo services-reach-colab' | tee -a "$LOG"
+  echo "${deposits:-none}" > "$ROOT/window.mode"
+  ensure
+  log "window open"
+}
+
+down() {
+  rm -f "$ROOT/window.mode"
+  ssh -O exit -o ControlPath="$CM" root@colab-prover 2>/dev/null || true
+  rm -f "$STANZA" "$SOCK"
+  timeout 180 $COLAB stop -s "$NAME" 2>&1 | tail -1 | tee -a "$LOG" || true
+  $COLAB sessions 2>&1 | tail -2 | tee -a "$LOG"
+  log "window closed"
+}
+
+case ${1:-} in
+  up) shift; up "$@";;
+  down) down;;
+  ensure) ensure;;
+  status) $COLAB sessions 2>&1 | tail -3; $COLAB usage 2>&1 | head -3; ls -la "$STANZA" "$SOCK" 2>&1 | cut -c1-120;;
+  *) sed -n 2,5p "$0"; exit 2;;
+esac

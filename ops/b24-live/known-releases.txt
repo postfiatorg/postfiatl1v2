@@ -6,3 +6,4 @@
 # The tool hash is the one the build gives on the machine that runs the job: the build repeats
 # on one machine and differs between machines (a711c0fe… on the work server for sol-exit-r2).
 sol-exit-r2 046008683 6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b 5b4cefd475972df9de951eba0265109de90f86e10a36077722c834f1b3989d1b
+sol-exit-r3 2356caf16 5e3a5e9862fdac81894dc013225d5947ef407f5338e14be8e92ec6a3dc6c83fb 8c4643d7cca2e0a25275306be4be8b2c31916e8bee159dd398c15d83e9ed3769

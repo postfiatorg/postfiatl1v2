@@ -1,0 +1,8 @@
+[Unit]
+Description=Close the daily Colab proving window and stop the session
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/var/colab-prover/colab-prover.sh down
+TimeoutStartSec=10min
