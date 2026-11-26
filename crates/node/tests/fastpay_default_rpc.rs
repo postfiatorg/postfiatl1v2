@@ -535,3 +535,177 @@ fn isolated_receipts_and_status_answer_during_a_validator_commit() {
     drop(_reader);
     fs::remove_dir_all(root).unwrap();
 }
+
+/// One committed transfer in a transactional consensus-v2 node, as in the commit-window test.
+#[cfg(target_os = "linux")]
+fn committed_transactional_node(chain_id: &str) -> (PathBuf, PathBuf) {
+    use postfiat_node::{
+        apply_batch, create_transfer_batch, init_consensus_v2, ApplyBatchOptions,
+        BatchTransferOptions, InitConsensusV2Options,
+    };
+    let root = unique_root();
+    let data_dir = root.join("node");
+    init_consensus_v2(InitConsensusV2Options {
+        data_dir: data_dir.clone(),
+        chain_id: chain_id.into(),
+        node_id: "validator-0".into(),
+        validator_count: 1,
+        activation_height: 1000,
+        storage_activation_height: Some(1),
+    })
+    .unwrap();
+    let backup =
+        postfiat_rpc_sdk::wallet_backup_from_master_seed(chain_id, "ab".repeat(32), 0).unwrap();
+    let key = postfiat_rpc_sdk::derive_wallet_key_pair(&backup).unwrap();
+    let batch_file = root.join("transfer.batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: postfiat_crypto_provider::address_from_public_key(&key.public_key),
+        amount: 250_000,
+        batch_file: batch_file.clone(),
+    })
+    .unwrap();
+    let rows = apply_batch(ApplyBatchOptions {
+        data_dir: data_dir.clone(),
+        batch_file,
+        certificate_file: None,
+    })
+    .unwrap();
+    assert!(rows[0].accepted);
+    (root, data_dir)
+}
+
+/// The receipt reader takes its snapshot from the validator's handle. If the
+/// validator's operation ends during that read, the database must stay open
+/// until the snapshot is dropped, or redb releases the file lock under it.
+#[cfg(target_os = "linux")]
+#[test]
+fn held_receipt_snapshot_keeps_the_store_open_after_the_validator_releases_it() {
+    use postfiat_storage::transactional::transactional_open_counts_for;
+    let (root, data_dir) = committed_transactional_node("snapshot-hold");
+    let store = postfiat_storage::NodeStore::new(&data_dir);
+    let validator_handle = store.transactional_store_lease().unwrap().unwrap();
+    let snapshot = store
+        .held_transactional_read_snapshot()
+        .unwrap()
+        .expect("the validator holds the store");
+    let before = transactional_open_counts_for(&data_dir);
+    drop(validator_handle);
+    assert_eq!(
+        transactional_open_counts_for(&data_dir).database_closes,
+        before.database_closes,
+        "the database closed while a snapshot read was in progress"
+    );
+    let rows = snapshot
+        .receipts_tail(None, 1, 1 << 20, Instant::now() + Duration::from_secs(5))
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    drop(snapshot);
+    assert_eq!(
+        transactional_open_counts_for(&data_dir).database_closes,
+        before.database_closes + 1
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+/// The receipts reply when a reader bound at the validator's address answers
+/// every snapshot query with `body` while the test holds the store's lease;
+/// the lease is released after two seconds, so a direct read can answer.
+#[cfg(target_os = "linux")]
+fn receipts_with_snapshot_reply(chain_id: &str, body: &'static [u8]) -> RpcResponse {
+    use postfiat_rpc_sdk::receipts_request;
+    use std::io::Read;
+    use std::os::linux::net::SocketAddrExt;
+    use std::os::unix::fs::MetadataExt;
+    use std::os::unix::net::{SocketAddr, UnixListener};
+    let (root, data_dir) = committed_transactional_node(chain_id);
+    let port = free_port();
+    let ready = root.join("rpc.ready.json");
+    let mut rpc = spawn_rpc_serving(&data_dir, &ready, port, false, 1);
+    wait_for_file(&ready);
+    let meta = fs::metadata(&data_dir).unwrap();
+    // SAFETY: geteuid has no arguments or preconditions.
+    let uid = unsafe { libc::geteuid() };
+    let name = format!("postfiat.receipts.v1.{uid}.{}.{}", meta.dev(), meta.ino());
+    let listener =
+        UnixListener::bind_addr(&SocketAddr::from_abstract_name(name.as_bytes()).unwrap()).unwrap();
+    let reader = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut header = [0; 4];
+        stream.read_exact(&mut header).unwrap();
+        let mut query = vec![0; u32::from_be_bytes(header) as usize];
+        stream.read_exact(&mut query).unwrap();
+        stream
+            .write_all(&(body.len() as u32).to_be_bytes())
+            .unwrap();
+        stream.write_all(body).unwrap();
+    });
+    let lease = postfiat_storage::NodeStore::new(&data_dir)
+        .transactional_store_lease()
+        .unwrap()
+        .unwrap();
+    let release = thread::spawn(move || {
+        thread::sleep(Duration::from_secs(2));
+        drop(lease);
+    });
+    let reply = rpc_call(port, &receipts_request("snapshot-reply", None, Some(1)));
+    release.join().unwrap();
+    reader.join().unwrap();
+    drop(rpc.kill());
+    let _ = rpc.wait();
+    fs::remove_dir_all(root).unwrap();
+    reply
+}
+
+/// A snapshot that is not available now (its deadline, typed or in an older
+/// validator's untyped text) falls back to the ordinary bounded direct read,
+/// and the event says so.
+#[cfg(target_os = "linux")]
+#[test]
+fn receipt_snapshot_error_falls_back_to_the_direct_read() {
+    for (chain, body) in [
+        (
+            "snapshot-fallback",
+            &br#"{"Err":"storage_size_limit: receipt snapshot deadline exhausted"}"#[..],
+        ),
+        (
+            "snapshot-fallback-typed",
+            &br#"{"Err":{"kind":"unavailable","message":"receipt snapshot deadline exhausted"}}"#[..],
+        ),
+    ] {
+        let reply = receipts_with_snapshot_reply(chain, body);
+        assert!(reply.ok, "{chain}: {:?}", reply.error);
+        assert_eq!(reply.result.unwrap().as_array().map(Vec::len), Some(1));
+        assert!(
+            reply.events.iter().any(|event| event
+                .message
+                .starts_with("receipts read directly; the validator's snapshot was unavailable")),
+            "{chain}: {:?}",
+            reply.events
+        );
+    }
+}
+
+/// A storage error the snapshot reports (integrity, corruption) is the answer:
+/// it is not replaced by a successful direct read. An older validator's
+/// untyped error text counts as such unless it is a known availability text.
+#[cfg(target_os = "linux")]
+#[test]
+fn receipt_snapshot_integrity_error_is_returned_not_replaced_by_a_direct_read() {
+    for (chain, body) in [
+        (
+            "snapshot-integrity-untyped",
+            &br#"{"Err":"storage_integrity_failure: authenticated receipt MAC mismatch"}"#[..],
+        ),
+        (
+            "snapshot-integrity-typed",
+            &br#"{"Err":{"kind":"fatal","message":"storage_integrity_failure: authenticated receipt MAC mismatch"}}"#[..],
+        ),
+    ] {
+        let reply = receipts_with_snapshot_reply(chain, body);
+        assert!(!reply.ok, "{chain}: a direct read replaced the snapshot's integrity error");
+        let error = reply.error.unwrap();
+        assert!(error.message.contains("storage_integrity_failure"), "{chain}: {error:?}");
+    }
+}
