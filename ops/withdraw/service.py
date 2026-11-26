@@ -92,6 +92,73 @@ def run(args,**kw):return subprocess.run([str(a) for a in args],check=True,captu
 
 def bridge_status():
     return call('vault_bridge_status',{'asset_id':FAMILY})
+# An optional proving window. WITHDRAW_PROVING_WINDOW_FILE names the file the window's launcher
+# writes while the window is open (`window.mode`, holding `deposits` or `none`; removed at the close).
+# WITHDRAW_PROVING_WINDOW_HOURS gives its hours in UTC, `17:00-19:00`, for the next opening time and,
+# without the file, for the window itself. Neither set: no window, as before.
+WINDOW_MODES = ('deposits', 'none')
+PROBE_SECONDS = 60
+_probe = {}
+
+
+def window_hours():
+    hours = os.environ.get('WITHDRAW_PROVING_WINDOW_HOURS')
+    m = re.fullmatch(r'([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)', hours or '')
+    return (int(m[1]) * 60 + int(m[2]), int(m[3]) * 60 + int(m[4])) if m else None
+
+
+def proving_window():
+    """None without a configured window; else whether it is open and, when known, its next opening."""
+    path, hours = os.environ.get('WITHDRAW_PROVING_WINDOW_FILE'), os.environ.get('WITHDRAW_PROVING_WINDOW_HOURS')
+    if not path and not hours:
+        return None
+    now, span = utcnow(), window_hours()
+    if path:
+        try:
+            is_open = Path(path).read_text().strip() in WINDOW_MODES
+        except OSError:
+            is_open = False
+    else:
+        minute = now.hour * 60 + now.minute
+        is_open = span is not None and (span[0] <= minute < span[1] if span[0] <= span[1]
+                                        else minute >= span[0] or minute < span[1])
+    opens = None
+    if not is_open and span is not None:
+        start = now.replace(hour=span[0] // 60, minute=span[0] % 60, second=0, microsecond=0)
+        opens = (start if start > now else start + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    return dict(open=is_open, opens_at=opens)
+
+
+def prover_answers():
+    """A cheap probe of the proving machine (its proof host is there), at most once a minute."""
+    if _probe.get('at', 0) + PROBE_SECONDS > time.time():
+        return _probe['ok']
+    try:
+        ok = subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8'] + VAST
+                            + [f'test -x {REMOTE}/proof-host'], capture_output=True, timeout=20).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        ok = False
+    _probe.update(at=time.time(), ok=ok)
+    return ok
+
+
+def window_refusal(window):
+    """Why payouts cannot be proved now, or None. Only with a configured window."""
+    if window is None:
+        return None
+    if not window['open']:
+        return 'Ethereum withdrawals are closed: proving window closed' + (
+            f"; it next opens at {window['opens_at']}." if window['opens_at'] else '.')
+    if not prover_answers():
+        return 'Ethereum withdrawals are closed: the proving window is open but the prover does not answer.'
+    return None
+
+
+def window_closed():
+    window = proving_window()
+    return window is not None and not window['open']
+
+
 def payout_preflight():
     if not worker_started.is_set():
         return 'Withdrawal worker is stopped.'
@@ -129,11 +196,16 @@ def readiness():
                 (j['stage'] == 'paid' and not proven_paid(j))]
     stalled = [j['burn_tx_id'] for j in jobs if j['stage'] in ACTIVE_STAGES and
                (datetime.now(timezone.utc) - datetime.fromisoformat(j['updated_at'])).total_seconds() > 3600]
-    preflight_error = payout_preflight()
+    window = proving_window()
+    waiting = [j['burn_tx_id'] for j in jobs if j['stage'] == 'waiting_for_window']
+    preflight_error = window_refusal(window) or payout_preflight()
     payout_ready = not (blocked or stalled or preflight_error)
     health = dict(ok=True, bucket_ready=len(buckets)==1, payout_ready=payout_ready,
                   payout_preflight_error=preflight_error, last_payment_recorded_at=max(payments, default=None),
                   blocked_jobs=blocked, stalled_jobs=stalled, awaiting_finality_jobs=awaiting, exhausted_jobs=exhausted)
+    if window is not None:
+        health.update(proving_window_open=window['open'], next_window_opens_at=window['opens_at'],
+                      waiting_for_window_jobs=waiting)
     if len(buckets)!=1:return dict(**health,ready=False,message='No single active deposit bucket for the current bridge setting.')
     if not payout_ready:
         health['message'] = preflight_error or 'The withdrawal worker has blocked or stalled jobs.'
@@ -449,11 +521,24 @@ def reconciliation_due(job, directory, startup):
     return any(intent_path(result).exists() and not result.exists() for result in results)
 
 
+def journaled(directory):
+    """Whether any Ethereum transaction of this job was journaled or recorded (and so may be sent)."""
+    return any(directory.glob('**/*.intent.json')) or any(directory.glob('**/eth-*.json'))
+
+
 def run_jobs(startup=False):
     for path in sorted(JOBS.glob('*/job.json'),key=lambda p:p.stat().st_mtime):
         try:
             stored=load(path);job=classify_failure(dict(stored))
-            if (job.get('stage') not in ACTIVE_STAGES and not reconciliation_due(job, path.parent, startup)
+            closed = window_closed()
+            if job.get('stage') == 'waiting_for_window':
+                if closed:
+                    continue
+            elif closed and job.get('stage') == 'queued' and not journaled(path.parent):
+                # Nothing of it was sent: it waits for the next proving window instead of failing.
+                restage(job, 'waiting_for_window', 'Waiting for the next proving window.')
+                continue
+            elif (job.get('stage') not in ACTIVE_STAGES and not reconciliation_due(job, path.parent, startup)
                     and not route_retry_due(job)):
                 if job != stored:
                     write_job(job)
@@ -466,6 +551,11 @@ def run_jobs(startup=False):
                 job['error_scope'] = 'burn' if isinstance(error, IneligibleBurn) else 'route'
                 new_stage = ('awaiting_finality' if isinstance(error, AwaitingFinality) else
                              'reconciliation_required' if isinstance(error, ReconciliationRequired) else 'failed')
+                if new_stage == 'failed' and job['error_scope'] == 'route' and window_closed():
+                    # Cut by the window's close, or no prover outside the window: a wait, not a failure.
+                    job['error'] = None
+                    restage(job, 'waiting_for_window', 'Waiting for the next proving window: ' + detail)
+                    continue
                 if new_stage == 'failed' and job['error_scope'] == 'route':
                     record_route_failure(job)
                 if job.get('stage') != new_stage or job.get('detail') != detail or new_stage == 'failed':
