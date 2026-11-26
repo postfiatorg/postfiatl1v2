@@ -140,6 +140,13 @@ def finality_warning(report: dict[str, Any]) -> str | None:
     shown = tx_id.encode("unicode_escape").decode("ascii")
     if body.get("confirmation") == "rejected":
         return f"warning: the independently verified receipt rejected payment {shown}"
+    error = body.get("verification_error")
+    if isinstance(error, str) and error:
+        reason = error.encode("unicode_escape").decode("ascii")
+        return (
+            f"warning: the local verifier failed after payment {shown} was submitted ({reason}); "
+            "verify it again later - do not resubmit"
+        )
     return (
         "warning: finality not observed before --poll-timeout-seconds; "
         f"transaction {shown} may still finalize - poll it, do not resubmit"

@@ -2652,6 +2652,49 @@ class WalletHelperTests(unittest.TestCase):
                     self.assertEqual(result.finalized, status == "independently_verified")
                     self.assertEqual(result.finality_timeout, status == "pending")
 
+    def test_verifier_failure_after_submission_keeps_the_submitted_id(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        wallet = TransparentWallet("test", 0, "pf-from", "00", Path("key"), Path("backup"), {})
+        trust = wallet_module.FinalityTrust(Path("archive"), "test", "01" * 48, "02" * 48)
+        signed_id = "ab" * 48
+        quote = {"ok": True, "result": {
+            "transaction_kind": "transparent_transfer", "from": "pf-from", "to": "pf-to",
+            "amount": 25, "chain_id": "test", "genesis_hash": trust.genesis_hash,
+            "protocol_version": 1, "sequence": 1, "minimum_fee": 1,
+        }}
+        pending = {"confirmation": "pending", "tx_id": signed_id, "report": None}
+        broken = WalletCommandError("payment finality verification failed: archive unreadable")
+
+        def sign(command, **kwargs):
+            Path(command[command.index("--output") + 1]).write_text('{"unsigned": {}}')
+
+        def run(send, preflight):
+            with tempfile.TemporaryDirectory() as tmp, (
+                mock.patch.object(client, "transfer_fee_quote_response", return_value=quote)), (
+                mock.patch.object(client, "mempool_submit_signed_transfer_finality", return_value={"tx_id": "cd" * 48})
+            ) as inline, mock.patch.object(client, "mempool_submit_signed_transfer", return_value={"tx_id": "cd" * 48}) as plain, (
+                mock.patch.object(wallet_module, "_run", side_effect=sign)), (
+                mock.patch.object(wallet_module, "_local_payment_evidence", side_effect=preflight)), (
+                mock.patch.object(wallet_module, "verify_payment_finality", side_effect=broken)
+            ):
+                kwargs = dict(wallet=wallet, to_address="pf-to", amount=25, work_dir=tmp, finality_trust=trust)
+                if send is send_pft_and_poll_finality:
+                    kwargs.update(poll_timeout_seconds=5, poll_interval_seconds=0)
+                return send(client, **kwargs), inline.call_count + plain.call_count
+
+        for send in (send_pft, send_pft_and_poll_finality):
+            with self.subTest(send=send.__name__):
+                result, submitted = run(send, lambda *args: pending)
+                self.assertEqual(submitted, 1)
+                self.assertEqual(result.tx_id, signed_id)
+                self.assertEqual(result.confirmation, "pending")
+                self.assertTrue(result.pending)
+                self.assertFalse(result.finalized)
+                self.assertIn("archive unreadable", result.verification_error)
+            with self.subTest(send=send.__name__, before_submission=True):
+                with self.assertRaises(WalletCommandError):
+                    run(send, mock.Mock(side_effect=broken))
+
     def test_account_history_rejects_missing_or_mismatched_scan_metadata(self) -> None:
         client = PostFiatRpcClient("127.0.0.1:1234")
         complete = {
