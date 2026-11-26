@@ -89,7 +89,10 @@ pub(super) fn genesis_shielded_state(genesis: &Genesis) -> io::Result<ShieldedSt
 }
 
 pub(super) fn check_state_domain(genesis_hash: &str, state: &ShieldedState) -> io::Result<()> {
-    if state.pq_pool_v1.is_some() && genesis_hash != GENESIS_HASH {
+    if state.pq_pool_v1.is_some()
+        && genesis_hash != GENESIS_HASH
+        && genesis_hash != postfiat_types::PQ_DEVNET_GENESIS_HASH
+    {
         return Err(fixture_error("pq_pool_inactive"));
     }
     if state.pq_fixture.is_some() != (genesis_hash == GENESIS_HASH) {
