@@ -99,6 +99,55 @@ pub fn verify_l1_abortable(
     Ok(statement)
 }
 
+/// Local input to shield authorization. The signer retains the blinders and
+/// the ciphertexts it sealed for the two intended recipients.
+pub struct ShieldOutputIntent<'a> {
+    pub owner: &'a [u8; 48],
+    pub value: u64,
+    pub blinder: &'a [u8; 78],
+    pub envelope: &'a [u8; postfiat_types::pq_payment::ENVELOPE_BYTES],
+}
+
+pub fn sign_l1_shield(
+    chain: postfiat_types::pq_payment::Chain,
+    terms: &postfiat_types::pq_payment::Terms,
+    inner: &[u8],
+    mint: u64,
+    inner_fee: u64,
+    outputs: [ShieldOutputIntent<'_>; 2],
+    private_key: &[u8],
+) -> Result<postfiat_types::pq_payment::PqPayment, &'static str> {
+    use postfiat_types::pq_payment::{Mode, PqPayment};
+    let tx = ShieldedTx::from_l1_inner(inner).map_err(|_| "invalid shield header")?;
+    if terms.mode != Mode::Shield
+        || mint == 0
+        || tx.v_mint != mint
+        || tx.v_unshield != 0
+        || tx.fee != inner_fee
+    {
+        return Err("shield debit differs from intent");
+    }
+    for (output, (coin, envelope)) in outputs
+        .iter()
+        .zip([(&tx.coin_out0, &tx.env0), (&tx.coin_out1, &tx.env1)])
+    {
+        if pft_binius_shielded::shake256::coin_commit(output.owner, output.value, output.blinder)
+            != *coin
+            || output.envelope != envelope
+        {
+            return Err("shield output differs from intent");
+        }
+    }
+    let msg = terms
+        .signing_message(chain, tx.statement().tx_ctx)
+        .ok_or("missing shield source")?;
+    let signature = postfiat_crypto_provider::ml_dsa_65_sign(private_key, &msg)
+        .map_err(|_| "shield signing failed")?
+        .try_into()
+        .map_err(|_| "bad signature length")?;
+    PqPayment::encode(terms, Some(&signature), inner)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,53 +235,4 @@ mod tests {
         assert!(ms_abort < 1.0);
         assert!(flag.load(Ordering::Relaxed));
     }
-}
-
-/// Local input to shield authorization. The signer retains the blinders and
-/// the ciphertexts it sealed for the two intended recipients.
-pub struct ShieldOutputIntent<'a> {
-    pub owner: &'a [u8; 48],
-    pub value: u64,
-    pub blinder: &'a [u8; 78],
-    pub envelope: &'a [u8; postfiat_types::pq_payment::ENVELOPE_BYTES],
-}
-
-pub fn sign_l1_shield(
-    chain: postfiat_types::pq_payment::Chain,
-    terms: &postfiat_types::pq_payment::Terms,
-    inner: &[u8],
-    mint: u64,
-    inner_fee: u64,
-    outputs: [ShieldOutputIntent<'_>; 2],
-    private_key: &[u8],
-) -> Result<postfiat_types::pq_payment::PqPayment, &'static str> {
-    use postfiat_types::pq_payment::{Mode, PqPayment};
-    let tx = ShieldedTx::from_l1_inner(inner).map_err(|_| "invalid shield header")?;
-    if terms.mode != Mode::Shield
-        || mint == 0
-        || tx.v_mint != mint
-        || tx.v_unshield != 0
-        || tx.fee != inner_fee
-    {
-        return Err("shield debit differs from intent");
-    }
-    for (output, (coin, envelope)) in outputs
-        .iter()
-        .zip([(&tx.coin_out0, &tx.env0), (&tx.coin_out1, &tx.env1)])
-    {
-        if pft_binius_shielded::shake256::coin_commit(output.owner, output.value, output.blinder)
-            != *coin
-            || output.envelope != envelope
-        {
-            return Err("shield output differs from intent");
-        }
-    }
-    let msg = terms
-        .signing_message(chain, tx.statement().tx_ctx)
-        .ok_or("missing shield source")?;
-    let signature = postfiat_crypto_provider::ml_dsa_65_sign(private_key, &msg)
-        .map_err(|_| "shield signing failed")?
-        .try_into()
-        .map_err(|_| "bad signature length")?;
-    PqPayment::encode(terms, Some(&signature), inner)
 }
