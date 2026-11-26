@@ -24,30 +24,37 @@ alert() { "$HOME/.local/bin/b24-alert" "$*" || true; }
 direct() { ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile="$KNOWN" -o LogLevel=ERROR \
   -o ControlMaster=auto -o ControlPath="$CM" -o ControlPersist=yes -o ServerAliveInterval=20 \
   -o ProxyCommand="$COLAB ssh --proxy-mode -s $NAME" root@colab-prover "$@"; }
+bounded_direct() { timeout --kill-after=2 "${COLAB_PROVER_STEP_SECONDS:-30}" ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile="$KNOWN" -o LogLevel=ERROR -o ControlMaster=auto -o ControlPath="$CM" -o ControlPersist=yes \
+  -o ServerAliveInterval=20 -o ProxyCommand="$COLAB ssh --proxy-mode -s $NAME" root@colab-prover "$@"; }
 
 # The local ends of the window: the withdrawal door's port and the deposit prover's socket. Both ride
 # on the one connection; if it was lost they are put back. Safe to run at any time in a window.
 # Each step runs whatever the others did (a failing door check does not keep the deposit socket from
 # being put back); the steps that failed are named, and ensure fails if any did.
+# Each remote operation of a step has a whole-command deadline; the three steps' sum (3 x 30 s by
+# default) fits inside the ensure unit's two-minute limit, and a timeout is an ordinary failed step.
+STEP_SECONDS=${COLAB_PROVER_STEP_SECONDS:-30}
+bounded() { timeout --kill-after=2 "$STEP_SECONDS" "$@"; }
 ensure_connection() {
-  ssh -O check -o ControlPath="$CM" root@colab-prover 2>/dev/null || direct true || return 1
+  bounded ssh -O check -o ControlPath="$CM" root@colab-prover 2>/dev/null || bounded_direct true || return 1
 }
 ensure_door() {
   if ! ss -ltn | grep -q "127.0.0.1:20628 "; then
-    ssh -O forward -o ControlPath="$CM" -L 127.0.0.1:20628:127.0.0.1:2223 root@colab-prover || return 1
+    bounded ssh -O forward -o ControlPath="$CM" -L 127.0.0.1:20628:127.0.0.1:2223 root@colab-prover || return 1
     log "withdrawal door forwarded"
   fi
-  ssh -F /dev/null -oIdentitiesOnly=yes -i "$ROOT/solexit/testkey" -oStrictHostKeyChecking=yes -oGlobalKnownHostsFile=/dev/null \
+  bounded ssh -F /dev/null -oIdentitiesOnly=yes -i "$ROOT/solexit/testkey" -oStrictHostKeyChecking=yes -oGlobalKnownHostsFile=/dev/null \
     -oUserKnownHostsFile="$ROOT/solexit/known_hosts.colab" -oBatchMode=yes -oConnectTimeout=8 -oHostKeyAlias='[ssh8.vast.ai]:20628' \
     -p 20628 root@127.0.0.1 pf-sol-exit-check || return 1
 }
 ensure_deposits() {
   [ "$(cat "$ROOT/window.mode" 2>/dev/null)" = deposits ] || return 0
-  systemctl --user stop pft-sol-prover-tunnel.service 2>/dev/null || true
+  bounded systemctl --user stop pft-sol-prover-tunnel.service 2>/dev/null || true
   if ! python3 -c "import socket,sys;s=socket.socket(socket.AF_UNIX);s.settimeout(8);s.connect(sys.argv[1])" "$SOCK" 2>/dev/null; then
     mkdir -p -m 700 "$(dirname "$SOCK")" || return 1
     rm -f "$SOCK"
-    ssh -O forward -o ControlPath="$CM" -L "$SOCK:/workspace/sol-ingress/speed-i2/prover.sock" root@colab-prover || return 1
+    bounded ssh -O forward -o ControlPath="$CM" -L "$SOCK:/workspace/sol-ingress/speed-i2/prover.sock" root@colab-prover || return 1
     log "deposit prover socket forwarded"
   fi
 }
@@ -63,22 +70,53 @@ ensure() {
 # The timer's ensure: after three failed runs in a row in an open window it alerts once, and once
 # more when a run works again. The count of failed runs lives beside window.mode.
 FAILS=$ROOT/window.ensure-failures
+ALERTED=$ROOT/window.ensure-alerted
 ensure_watch() {
-  [ -f "$STANZA" ] || { rm -f "$FAILS"; return 0; }
+  [ -f "$STANZA" ] || { rm -f "$FAILS" "$ALERTED"; return 0; }
   local before; before=$(cat "$FAILS" 2>/dev/null || echo 0)
+  # A run the unit's limit cut short left its attempt counted: its alert is sent now.
+  if [ "$before" -ge 3 ] && [ ! -e "$ALERTED" ]; then
+    : > "$ALERTED"
+    alert "Colab proving window has failed three checks in a row; deposits and withdrawals may be closed. See $LOG"
+  fi
+  echo $((before + 1)) > "$FAILS"  # this attempt counts until it succeeds
   if ensure; then
-    [ "$before" -ge 3 ] && { log "ensure recovered after $before failed runs"; alert "Colab proving window recovered after $before failed checks. See $LOG"; }
-    rm -f "$FAILS"
+    if [ -e "$ALERTED" ]; then
+      log "ensure recovered after $before failed runs"
+      alert "Colab proving window recovered after $before failed checks. See $LOG"
+    fi
+    rm -f "$FAILS" "$ALERTED"
     return 0
   fi
-  echo $((before + 1)) > "$FAILS"
-  [ $((before + 1)) = 3 ] && alert "Colab proving window has failed three checks in a row; deposits and withdrawals may be closed. See $LOG"
+  if [ $((before + 1)) -ge 3 ] && [ ! -e "$ALERTED" ]; then
+    : > "$ALERTED"
+    alert "Colab proving window has failed three checks in a row; deposits and withdrawals may be closed. See $LOG"
+  fi
   return 1
+}
+
+# The open's failure handler: only the shell running `up` cleans up and alerts (a failure inside a
+# command substitution reaches it once, through the failed assignment). It keeps the original
+# status, does each step best-effort and always attempts the alert.
+open_failed() {
+  local status=$1
+  [ "$BASHPID" = "${UP_SHELL:-}" ] || exit "$status"
+  trap - ERR; set +e
+  log "window failed to open" 2>/dev/null
+  rm -f "$STANZA" "$ROOT/window.mode" "$ROOT/window.opened" 2>/dev/null
+  timeout 180 $COLAB stop -s "$NAME" >/dev/null 2>&1
+  alert "Colab proving window failed to open; deposits and withdrawals stay closed. See $LOG"
+  exit "$status"
 }
 
 up() {
   local deposits=${1:-}
-  trap 'trap - ERR; log "window failed to open"; rm -f "$STANZA" "$ROOT/window.mode"; timeout 180 $COLAB stop -s "$NAME" >/dev/null 2>&1 || true; alert "Colab proving window failed to open; deposits and withdrawals stay closed. See $LOG"' ERR
+  UP_SHELL=$BASHPID
+  trap 'open_failed $?' ERR
+  # A window record from another day is stale: the services stop pointing at it before anything else.
+  if [ "$(cat "$ROOT/window.opened" 2>/dev/null)" != "$(date -u +%F)" ]; then
+    rm -f "$STANZA" "$ROOT/window.mode" "$ROOT/window.opened"
+  fi
   if $COLAB sessions 2>/dev/null | grep -q "^\[$NAME\]"; then log "session $NAME already exists"; else
     local got=
     # G4 first: 48 cores and 96 GB of GPU memory (measured 2026-11-25). Deposit proving is limited by
@@ -97,6 +135,7 @@ up() {
     done
     if [ -z "$got" ]; then
       log "no GPU available from Colab before the deadline"
+      rm -f "$STANZA" "$ROOT/window.mode" "$ROOT/window.opened"
       alert "Colab proving window did not open: no GPU before the deadline; deposits and withdrawals stay closed. See $LOG"
       exit 75
     fi
@@ -127,26 +166,34 @@ EOF
   ssh -o BatchMode=yes -p 20628 root@ssh8.vast.ai 'test -x /workspace/b23-withdraw-20261116/proof-host && echo services-reach-colab' | tee -a "$LOG"
   echo "${deposits:-none}" > "$ROOT/window.mode"
   ensure
+  date -u +%F > "$ROOT/window.opened"  # the dated record `check` asks for
   log "window open"
 }
 
 # The evening check after the opening time: a window that is not open is said the same evening,
 # also when the open never ran (the relay host down at its start) or failed without a word.
 check() {
-  local mode; mode=$(cat "$ROOT/window.mode" 2>/dev/null || true)
-  if [ -f "$STANZA" ] && { [ "$mode" = deposits ] || [ "$mode" = none ]; }; then
+  local mode opened live=no; mode=$(cat "$ROOT/window.mode" 2>/dev/null || true)
+  opened=$(cat "$ROOT/window.opened" 2>/dev/null || true)
+  timeout 60 $COLAB sessions 2>/dev/null | grep -q "^\[$NAME\]" && live=yes
+  if [ -f "$STANZA" ] && { [ "$mode" = deposits ] || [ "$mode" = none ]; } && [ "$opened" = "$(date -u +%F)" ] && [ $live = yes ]; then
     log "check: window open (deposits: $mode)"; return 0
   fi
-  log "check: window not open (window.mode: ${mode:-absent})"
+  log "check: window not open (window.mode: ${mode:-absent}, opened: ${opened:-never}, session alive: $live)"
   alert "Colab proving window is not open at its check time; deposits and withdrawals are closed. See $LOG"
   return 1
 }
 
 down() {
-  rm -f "$ROOT/window.mode" "$FAILS"
-  ssh -O exit -o ControlPath="$CM" root@colab-prover 2>/dev/null || true
-  rm -f "$STANZA" "$SOCK"
-  local failed=()
+  # Every close action is attempted; each failure is named, and the close alerts once at the end.
+  local failed=() f
+  for f in "$ROOT/window.mode" "$ROOT/window.opened" "$FAILS" "$ALERTED"; do
+    rm -f "$f" 2>/dev/null || failed+=("removing $f")
+  done
+  timeout 30 ssh -O exit -o ControlPath="$CM" root@colab-prover 2>/dev/null || true
+  for f in "$STANZA" "$SOCK"; do
+    rm -f "$f" 2>/dev/null || failed+=("removing $f")
+  done
   timeout 180 $COLAB stop -s "$NAME" >>"$LOG" 2>&1 || failed+=("stopping the session $NAME")
   if ! $COLAB sessions >"$ROOT/window.sessions" 2>&1; then
     failed+=("listing the sessions")
@@ -155,11 +202,11 @@ down() {
   fi
   tail -2 "$ROOT/window.sessions" >>"$LOG" 2>/dev/null || true
   if [ ${#failed[@]} != 0 ]; then
-    log "window close incomplete: ${failed[*]}; the services no longer point at the session"
+    log "window close incomplete: ${failed[*]}" || true
     alert "Colab proving window did not close cleanly: ${failed[*]}. See $LOG"
     return 1
   fi
-  log "window closed"
+  log "window closed" || true
 }
 
 case ${1:-} in

@@ -12,14 +12,21 @@ Solana deposits, Solana and Ethereum withdrawals, and the B24 daily proof.
   runtime). The Solana withdrawal service runs as its own user: `/etc/hosts` points that name at a
   local port that is forwarded to a second SSH daemon on the session, which has a fixed host key and
   admits only that service's key with its forced command (`colab-sol-withdraw.sh`, run once with sudo).
-- `colab-prover.sh down` logs "window closed" only when the session is stopped and no longer listed;
-  otherwise it logs and alerts what failed and exits non-zero.
+- `colab-prover.sh down` attempts every close action (state files, the connection, the stanza and socket, the
+  session stop) and logs "window closed" only when the session is stopped and no longer listed; otherwise it
+  logs and alerts once what failed and exits non-zero.
 - `colab-prover-check.timer` (17:05 UTC, not enabled by default) runs `colab-prover.sh check`, which sends
-  the B24 alert when no window is open then, also when the relay host was down at 16:15.
+  the B24 alert unless today's open is recorded (`window.opened`, written by a successful `up`), the stanza
+  and `window.mode` (`deposits` or `none`) are in place and the session is listed. `up` removes a record
+  from another day before it asks for a machine, and also when no GPU came before the limit.
 - `colab-prover.sh ensure` (every two minutes) puts back the connection, the withdrawal door and the
-  deposit socket, each step whatever the others did. After three failed runs in a row in an open
-  window it sends the B24 alert once, and once more when a run works again
-  (`window.ensure-failures` beside `window.mode` holds the count).
+  deposit socket, each step whatever the others did and each remote command bounded
+  (`COLAB_PROVER_STEP_SECONDS`, 30 s; three steps fit in the unit's two minutes). A run counts as failed
+  until it succeeds, so one the unit's limit cuts short is counted too; after three failed runs in a row in
+  an open window it sends the B24 alert once, and once more when a run works again
+  (`window.ensure-failures` and `window.ensure-alerted` beside `window.mode`).
+- A failed open alerts once, also when the failure is inside a command substitution or when logging or
+  cleanup itself fails; the handler keeps the original status.
 - The prover files are not in this repository. They are kept on the relay host in
   `~/var/colab-prover/bundle` (506 MB); `bundle.SHA256SUMS` lists them. The session's fixed host key
   and the launcher's self-test key are in `~/var/colab-prover/solexit` on that host only.
