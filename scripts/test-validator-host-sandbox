@@ -1,0 +1,465 @@
+#!/usr/bin/env bash
+# Tests for ops/validator-host/systemd (opt-in sandbox drop-ins for the
+# validator RPC and transport services).
+#
+# Static part (any user): drop-in contents, and install.sh against a temporary
+# unit directory with a stub systemctl (dry-run, install, uninstall, no restart
+# unless --restart, rollback on a mismatch, unit-name checks).
+#
+# Live part (root, systemd): set SANDBOX_NODE_BIN to a published postfiat-node
+# release binary and SANDBOX_NODE_SHA256 to its published sha256. The test
+# refuses a binary whose hash differs. It only uses throwaway transient units
+# (systemd-run) named postfiat-sbxtest-*, running as `nobody` over a throwaway
+# data dir under /var/lib; it never touches an installed postfiat unit. For
+# each service it
+#   1. starts the unit with the sandbox directives of the example unit
+#      (systemd/postfiat-*.service.example) and records RPC replies / transport
+#      readiness and the `systemd-analyze security` exposure score;
+#   2. installs the drop-in with install.sh (no restart), checks the running
+#      process is unchanged, restarts the unit and repeats the checks: replies
+#      must be identical, every directive must show in `systemctl show`, and
+#      the exposure score must drop;
+#   3. uninstalls the drop-in and checks the unit is back to the example set.
+# Then, for every directive, a probe unit with the example set plus that one
+# directive must show its effect and the example set alone must not.
+# SANDBOX_NODE_LIBDIR (optional): a directory holding ld-linux-x86-64.so.2 and
+# the libraries to run the binary with, for hosts whose glibc is older than the
+# release's. SANDBOX_DROPIN_DIR (optional) replaces ops/validator-host/systemd.
+# The static part runs a stub systemctl from mktemp -d: on a host with a noexec
+# /tmp, set TMPDIR to a directory that allows exec.
+#
+#   scripts/test-validator-host-sandbox                     # static + live
+#   scripts/test-validator-host-sandbox --negative-controls # live, with broken
+#       drop-ins that the test must reject (exit 0 only if every control fails)
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SELF="$ROOT/scripts/test-validator-host-sandbox"
+DROPIN_DIR="${SANDBOX_DROPIN_DIR:-$ROOT/ops/validator-host/systemd}"
+INSTALL="$DROPIN_DIR/install.sh"
+DIRECTIVES=(PrivateDevices ProtectClock ProtectHostname ProtectProc ProcSubset RestrictNamespaces
+  RestrictAddressFamilies MemoryDenyWriteExecute SystemCallFilter SystemCallErrorNumber)
+# Directives of the example units that the live units carry (paths and
+# service-specific lines are set by the test).
+EXAMPLE_KEYS="NoNewPrivileges|PrivateTmp|ProtectSystem|ProtectHome|ProtectControlGroups|ProtectKernelTunables|ProtectKernelModules|ProtectKernelLogs|RestrictSUIDSGID|LockPersonality|RestrictRealtime|SystemCallArchitectures|CapabilityBoundingSet|AmbientCapabilities|UMask|LimitNOFILE|LimitCORE|TasksMax|KillMode"
+PREFIX="postfiat-sbxtest-$$"
+T0="$(date +%s)"
+WORK="$(mktemp -d)"
+LIVE=""
+UNITS=()
+PASSES=0
+FAILS=0
+
+cleanup() {
+  local u
+  for u in "${UNITS[@]}"; do
+    systemctl stop "$u" 2>/dev/null || true
+    systemctl reset-failed "$u" 2>/dev/null || true
+    rm -rf "/run/systemd/system/$u.d"
+  done
+  if [ "${#UNITS[@]}" -gt 0 ]; then systemctl daemon-reload; fi
+  rm -rf "$WORK"
+  if [ -n "$LIVE" ]; then rm -rf "$LIVE"; fi
+}
+trap cleanup EXIT
+
+pass() { PASSES=$((PASSES + 1)); echo "PASS $1"; }
+fail() { FAILS=$((FAILS + 1)); echo "FAIL $1: $2"; }
+check_eq() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "got '$2' want '$3'"; fi; }
+finish() {
+  if [ "$FAILS" -eq 0 ]; then
+    echo "RESULT: PASS ($PASSES passed, 0 failed)"
+    exit 0
+  fi
+  echo "RESULT: FAIL ($PASSES passed, $FAILS failed)"
+  exit 1
+}
+
+# ----------------------------------------------------------- negative controls
+if [ "${1:-}" = "--negative-controls" ]; then
+  run_control() { # name, expected FAIL pattern, edit command for the copy
+    local name="$1" want="$2" copy="$WORK/$1" rc=0
+    shift 2
+    cp -r "$ROOT/ops/validator-host/systemd" "$copy"
+    "$@" "$copy"
+    echo "== negative control $name"
+    SANDBOX_DROPIN_DIR="$copy" SANDBOX_LIVE_ONLY=1 "$SELF" >"$WORK/$name.out" 2>&1 || rc=$?
+    grep -E '^(FAIL|RESULT)' "$WORK/$name.out" | sed 's/^/  | /'
+    if [ "$rc" -ne 0 ] && grep -qE "$want" "$WORK/$name.out"; then
+      pass "control $name rejected (exit $rc)"
+    else
+      fail "control $name" "exit $rc, expected non-zero with /$want/"
+    fi
+  }
+  # 1. A directive the binary does not tolerate: no AF_INET means no listener.
+  no_inet() { sed -i 's/^RestrictAddressFamilies=.*/RestrictAddressFamilies=AF_UNIX/' "$1"/postfiat-*-sandbox.conf; }
+  run_control no-inet 'FAIL (rpc|transport) after: ' no_inet
+  # 2. A drop-in missing one directive.
+  no_protectproc() { sed -i '/^ProtectProc=/d' "$1"/postfiat-*-sandbox.conf; }
+  run_control missing-protectproc 'FAIL (rpc|transport) after: ProtectProc' no_protectproc
+  # 3. A binary whose hash differs from the published one.
+  echo "== negative control bad-sha256"
+  rc=0
+  SANDBOX_NODE_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+    SANDBOX_LIVE_ONLY=1 "$SELF" >"$WORK/bad-sha.out" 2>&1 || rc=$?
+  grep -E '^(FAIL|RESULT)' "$WORK/bad-sha.out" | sed 's/^/  | /'
+  if [ "$rc" -ne 0 ] && grep -q 'FAIL release binary sha256' "$WORK/bad-sha.out"; then
+    pass "control bad-sha256 rejected (exit $rc)"
+  else
+    fail "control bad-sha256" "exit $rc"
+  fi
+  finish
+fi
+
+# ------------------------------------------------------------------ static part
+if [ -z "${SANDBOX_LIVE_ONLY:-}" ]; then
+  echo "== drop-in contents"
+  for conf in "$DROPIN_DIR"/postfiat-rpc-sandbox.conf "$DROPIN_DIR"/postfiat-validator-transport-sandbox.conf; do
+    name="$(basename "$conf")"
+    check_eq "$name: section" "$(grep -c '^\[Service\]$' "$conf")" 1
+    keys="$(grep -oE '^[A-Za-z]+' "$conf" | tr '\n' ' ')"
+    check_eq "$name: directives" "$keys" "${DIRECTIVES[*]} "
+    for unit in "$ROOT"/systemd/postfiat-rpc.service.example "$ROOT"/systemd/postfiat-validator-transport.service.example; do
+      dup="$(grep -oE '^[A-Za-z]+' "$conf" | while read -r k; do grep -q "^$k=" "$unit" && echo "$k"; done || true)"
+      check_eq "$name: nothing already set in $(basename "$unit")" "$dup" ""
+    done
+  done
+
+  echo "== install.sh with a stub systemctl"
+  stub="$WORK/systemctl"
+  cat >"$stub" <<'STUB'
+#!/usr/bin/env bash
+echo "$*" >>"$STUB_CALLS"
+if [ "$1" = show ]; then
+  key="$4"
+  case "$key" in
+    LoadState) echo "${STUB_LOADSTATE:-loaded}" ;;
+    FragmentPath) echo "" ;;
+    RestrictAddressFamilies) echo "AF_INET AF_INET6 AF_UNIX" ;;
+    SystemCallFilter) echo "read write close openat" ;;
+    ProtectProc) echo "${STUB_PROTECTPROC:-invisible}" ;;
+    ProcSubset) echo pid ;;
+    SystemCallErrorNumber) echo 1 ;;
+    *) if [ -f "$STUB_DIR/$2.d/50-postfiat-sandbox.conf" ]; then echo yes; else echo no; fi ;;
+  esac
+fi
+exit 0
+STUB
+  chmod +x "$stub"
+  udir="$WORK/units"
+  mkdir -p "$udir"
+  inst() { STUB_CALLS="$WORK/calls" STUB_DIR="$udir" SYSTEMD_UNIT_DIR="$udir" SYSTEMCTL="$stub" "$INSTALL" "$@"; }
+  rc_of() { local rc=0; "$@" >"$WORK/out" 2>&1 || rc=$?; echo "$rc"; }
+  : >"$WORK/calls"
+  check_eq "dry-run exit" "$(rc_of inst --dry-run install rpc postfiat-rpc.service)" 0
+  check_eq "dry-run writes nothing" "$(find "$udir" -mindepth 1 | wc -l)" 0
+  check_eq "dry-run calls no daemon-reload/restart" "$(grep -cE 'daemon-reload|restart' "$WORK/calls" || true)" 0
+  check_eq "install exit" "$(rc_of inst install rpc postfiat-validator-0-rpc.service)" 0
+  dest="$udir/postfiat-validator-0-rpc.service.d/50-postfiat-sandbox.conf"
+  check_eq "install file identical" "$(cmp -s "$dest" "$DROPIN_DIR/postfiat-rpc-sandbox.conf" && echo same)" same
+  check_eq "install mode" "$(stat -c %a "$dest")" 644
+  check_eq "install daemon-reload" "$(grep -c '^daemon-reload' "$WORK/calls")" 1
+  check_eq "install does not restart" "$(grep -c '^restart' "$WORK/calls" || true)" 0
+  check_eq "install prints restart note" "$(grep -c 'not restarted' "$WORK/out")" 1
+  check_eq "transport install exit" "$(rc_of inst install transport postfiat-validator-0.service)" 0
+  check_eq "transport file identical" "$(cmp -s "$udir/postfiat-validator-0.service.d/50-postfiat-sandbox.conf" \
+    "$DROPIN_DIR/postfiat-validator-transport-sandbox.conf" && echo same)" same
+  check_eq "--restart restarts" "$(rc_of inst --restart install rpc postfiat-validator-0-rpc.service; grep -c '^restart postfiat-validator-0-rpc.service' "$WORK/calls")" "0
+1"
+  check_eq "uninstall exit" "$(rc_of inst uninstall rpc postfiat-validator-0-rpc.service)" 0
+  check_eq "uninstall removed dir" "$([ -e "$udir/postfiat-validator-0-rpc.service.d" ] && echo present || echo gone)" gone
+  check_eq "uninstall again is a no-op" "$(rc_of inst uninstall rpc postfiat-validator-0-rpc.service)" 0
+  check_eq "rollback on a mismatch exit" "$(STUB_PROTECTPROC=default rc_of inst install rpc postfiat-rpc.service)" 1
+  check_eq "rollback removed the drop-in" "$([ -e "$udir/postfiat-rpc.service.d" ] && echo present || echo gone)" gone
+  check_eq "unloaded unit refused" "$(STUB_LOADSTATE=not-found rc_of inst install rpc postfiat-rpc.service)" 1
+  check_eq "path in unit name refused" "$(rc_of inst install rpc ../x.service)" 2
+  check_eq "non-service unit refused" "$(rc_of inst install rpc postfiat-rpc.timer)" 2
+  check_eq "unknown kind refused" "$(rc_of inst install signer postfiat-rpc.service)" 2
+fi
+
+# -------------------------------------------------------------------- live part
+if [ -z "${SANDBOX_NODE_BIN:-}" ]; then
+  echo "SKIP live part: SANDBOX_NODE_BIN not set"
+  finish
+fi
+[ "$(id -u)" -eq 0 ] || { echo "the live part needs root (systemd-run)" >&2; exit 1; }
+[ -n "${SANDBOX_NODE_SHA256:-}" ] || { echo "SANDBOX_NODE_SHA256 is required" >&2; exit 1; }
+echo "== live: release binary"
+actual_sha="$(sha256sum "$SANDBOX_NODE_BIN" | cut -d' ' -f1)"
+echo "binary sha256 $actual_sha expected $SANDBOX_NODE_SHA256"
+if [ "$actual_sha" != "$SANDBOX_NODE_SHA256" ]; then
+  fail "release binary sha256" "refusing to run an unverified binary"
+  finish
+fi
+pass "release binary sha256 matches"
+
+LIVE="$(mktemp -d /var/lib/postfiat-sbxtest.XXXXXX)"
+chmod 0755 "$LIVE"
+mkdir -p "$LIVE/bin"
+install -m 0755 "$SANDBOX_NODE_BIN" "$LIVE/bin/postfiat-node"
+NODE=("$LIVE/bin/postfiat-node")
+if [ -n "${SANDBOX_NODE_LIBDIR:-}" ]; then
+  cp -r "$SANDBOX_NODE_LIBDIR" "$LIVE/lib"
+  chmod -R a+rX "$LIVE/lib"
+  NODE=("$LIVE/lib/ld-linux-x86-64.so.2" --library-path "$LIVE/lib" "$LIVE/bin/postfiat-node")
+  echo "loader: $LIVE/lib/ld-linux-x86-64.so.2 sha256 $(sha256sum "$LIVE/lib/ld-linux-x86-64.so.2" | cut -d' ' -f1)"
+fi
+free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
+"${NODE[@]}" init --data-dir "$LIVE/node" --validators 1 >"$WORK/init.out" 2>&1 || {
+  fail "postfiat-node init" "$(tail -3 "$WORK/init.out")"
+  finish
+}
+P2P="$(free_port)"
+"${NODE[@]}" topology --validators 1 --base-port "$P2P" --output "$LIVE/topology.json" >"$WORK/topo.out" 2>&1
+mkdir -p "$LIVE/log" "$LIVE/rpc" "$LIVE/votes" "$LIVE/ready"
+chown -R nobody:nogroup "$LIVE/node" "$LIVE/log" "$LIVE/rpc" "$LIVE/votes" "$LIVE/ready"
+RPC_PORT="$(free_port)"
+
+example_props() { # example unit -> -p arguments for its sandbox directives
+  grep -E "^($EXAMPLE_KEYS)=" "$1" | sed 's/^/-p\n/'
+}
+mapfile -t RPC_PROPS < <(example_props "$ROOT/systemd/postfiat-rpc.service.example")
+mapfile -t TX_PROPS < <(example_props "$ROOT/systemd/postfiat-validator-transport.service.example")
+echo "example sandbox directives: rpc $((${#RPC_PROPS[@]} / 2)), transport $((${#TX_PROPS[@]} / 2))"
+COMMON=(-p User=nobody -p Group=nogroup -p "ReadWritePaths=$LIVE/node $LIVE/log $LIVE/rpc $LIVE/votes $LIVE/ready")
+
+start_unit() { # kind unit
+  local kind="$1" unit="$2"
+  if [ "$kind" = rpc ]; then
+    systemd-run -q --unit "$unit" "${COMMON[@]}" "${RPC_PROPS[@]}" -- "${NODE[@]}" rpc-serve \
+      --unsafe-devnet-json-storage --data-dir "$LIVE/node" --spool-dir "$LIVE/rpc/spool" \
+      --ready-file "$LIVE/rpc/ready.json" --bind-host 127.0.0.1 --port "$RPC_PORT" \
+      --event-log "$LIVE/log/rpc-events.jsonl" --max-requests 100000 --allow-owned-lane --keep-alive
+  else
+    systemd-run -q --unit "$unit" "${COMMON[@]}" "${TX_PROPS[@]}" \
+      -p Environment=POSTFIAT_PREWARM_SHIELDED_VERIFIER=1 \
+      -p Environment=POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1 \
+      -p Environment=POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1 \
+      -p "Environment=POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE=$LIVE/ready/transport-validator.ready.json" \
+      -- "${NODE[@]}" transport-validator-serve --unsafe-devnet-json-storage --unsafe-devnet-file-signer \
+      --data-dir "$LIVE/node" --topology "$LIVE/topology.json" --key-file "$LIVE/node/validator_keys.json" \
+      --vote-dir "$LIVE/votes" --bind-host 127.0.0.1 --max-connections 10000 --timeout-ms 30000 \
+      --event-log "$LIVE/log/transport-events.jsonl"
+  fi
+}
+
+wait_listen() { # port -> 0 when listening within 60 s
+  for _ in $(seq 1 120); do
+    ss -Htln "sport = :$1" | grep -q . && return 0
+    sleep 0.5
+  done
+  return 1
+}
+
+# RPC replies, one line per request: id, ok/error code. Same set before/after.
+rpc_probe() {
+  python3 - "$RPC_PORT" <<'PY'
+import json, socket, sys
+port = int(sys.argv[1])
+def req(i, method, params=None):
+    return json.dumps({"version": "postfiat-local-rpc-v1", "id": f"sbx-{i}", "method": method, "params": params or {}})
+lines = [req(1, "status"), req(2, "status"), req(3, "blocks"), req(4, "server_info"),
+         req(5, "no_such_method"), "this is not json"]
+for i, line in enumerate(lines, 1):
+    reply = b""
+    with socket.create_connection(("127.0.0.1", port), timeout=30) as s:
+        s.sendall(line.encode() + b"\n")
+        s.shutdown(socket.SHUT_WR)
+        while chunk := s.recv(65536):
+            reply += chunk
+    if not reply:
+        print(f"req{i} no-reply")
+        continue
+    first = json.loads(reply.decode().splitlines()[0])
+    print(f"req{i}", "ok" if first.get("ok") else (first.get("error") or {}).get("code"))
+PY
+}
+
+# Transport readiness: ready file fields, listener, one connection accepted.
+tx_probe() {
+  local ready="$LIVE/ready/transport-validator.ready.json"
+  jq -r '"schema \(.schema)", "bind \(.bind_address)", "prewarm requested \(.shielded_verifier_prewarm.requested) swap_warm \(.shielded_verifier_prewarm.asset_orchard_swap_verifier_warm) private_egress_warm \(.shielded_verifier_prewarm.asset_orchard_private_egress_verifier_warm)"' "$ready" 2>/dev/null || echo "no ready file"
+  python3 -c 'import socket,sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=5).close(); print("connect ok")' "$P2P" 2>/dev/null || echo "connect refused"
+}
+
+wait_ready() { # kind
+  if [ "$1" = rpc ]; then wait_listen "$RPC_PORT"; return; fi
+  for _ in $(seq 1 120); do
+    [ -s "$LIVE/ready/transport-validator.ready.json" ] && wait_listen "$P2P" && return 0
+    sleep 0.5
+  done
+  return 1
+}
+
+unit_error() { # last "error:" line the unit logged since this test started, else its result
+  journalctl -u "$1" --no-pager -o cat --since "@$T0" | grep -E '^error:' | tail -1 | grep . ||
+    echo "Result=$(systemctl show "$1" -p Result --value)"
+}
+score() { systemd-analyze security "$1" --no-pager 2>/dev/null | grep -oE 'Overall exposure level for [^:]+: [0-9.]+' | grep -oE '[0-9.]+$'; }
+main_pid() { systemctl show "$1" -p MainPID --value; }
+# Seccomp filters attached to the main process (the example set already has one
+# for SystemCallArchitectures=native; the drop-in adds more).
+filters_of() { awk '/^Seccomp_filters:/{print $2}' "/proc/$(main_pid "$1")/status"; }
+show_dropin() { # unit -> one line per directive as systemctl shows it (filter summarised)
+  local k v
+  for k in "${DIRECTIVES[@]}"; do
+    v="$(systemctl show "$1" -p "$k" --value)"
+    case "$k" in
+      SystemCallFilter) if grep -qw read <<<"$v" && ! grep -qw ptrace <<<"$v"; then v="@system-service"; else v="${v:0:40}"; fi ;;
+      RestrictAddressFamilies) v="$(tr ' ' '\n' <<<"$v" | sort | tr '\n' ' ')" ;;
+    esac
+    echo "$k=$v"
+  done
+}
+expected_dropin() {
+  printf '%s\n' PrivateDevices=yes ProtectClock=yes ProtectHostname=yes ProtectProc=invisible ProcSubset=pid \
+    RestrictNamespaces=yes "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX " MemoryDenyWriteExecute=yes \
+    SystemCallFilter=@system-service SystemCallErrorNumber=1
+}
+
+for kind in rpc transport; do
+  unit="$PREFIX-$kind.service"
+  UNITS+=("$unit")
+  echo "== live $kind: $unit, example directives only"
+  start_unit "$kind" "$unit"
+  if ! wait_ready "$kind"; then
+    fail "$kind before: ready" "$(unit_error "$unit")"
+    continue
+  fi
+  pass "$kind before: ready"
+  if [ "$kind" = rpc ]; then rpc_probe >"$WORK/$kind.before"; else tx_probe >"$WORK/$kind.before"; fi
+  sed 's/^/  /' "$WORK/$kind.before"
+  before_score="$(score "$unit")"
+  before_pid="$(main_pid "$unit")"
+  before_filters="$(filters_of "$unit")"
+  echo "  exposure $before_score, MainPID $before_pid, Seccomp_filters $before_filters"
+
+  echo "== live $kind: install.sh install (no restart)"
+  rc=0
+  SYSTEMD_UNIT_DIR=/run/systemd/system "$INSTALL" install "$kind" "$unit" >"$WORK/install.out" 2>&1 || rc=$?
+  sed 's/^/  | /' "$WORK/install.out"
+  check_eq "$kind: install.sh exit" "$rc" 0
+  check_eq "$kind: running process not restarted (MainPID)" "$(main_pid "$unit")" "$before_pid"
+  check_eq "$kind: running process unchanged (Seccomp_filters)" "$(filters_of "$unit")" "$before_filters"
+
+  echo "== live $kind: restart with the drop-in"
+  if [ "$kind" = transport ]; then rm -f "$LIVE/ready/transport-validator.ready.json"; fi
+  systemctl restart "$unit"
+  if ! wait_ready "$kind"; then
+    fail "$kind after: ready" "$(unit_error "$unit")"
+  else
+    pass "$kind after: ready"
+    if [ "$kind" = rpc ]; then rpc_probe >"$WORK/$kind.after"; else tx_probe >"$WORK/$kind.after"; fi
+    sed 's/^/  /' "$WORK/$kind.after"
+    check_eq "$kind after: same replies as before" "$(diff "$WORK/$kind.before" "$WORK/$kind.after" && echo same)" same
+  fi
+  show_dropin "$unit" >"$WORK/$kind.show"
+  while IFS= read -r want; do
+    got="$(grep "^${want%%=*}=" "$WORK/$kind.show")"
+    check_eq "$kind after: ${want%%=*}" "$got" "$want"
+  done < <(expected_dropin)
+  after_filters="$(filters_of "$unit" 2>/dev/null || echo none)"
+  echo "  Seccomp_filters before $before_filters after $after_filters"
+  if [ "$after_filters" != none ] && [ "$after_filters" -gt "$before_filters" ]; then
+    pass "$kind after: more seccomp filters on the main process"
+  else
+    fail "$kind after: seccomp filters" "before $before_filters after $after_filters"
+  fi
+  after_score="$(score "$unit")"
+  echo "  exposure before $before_score after $after_score"
+  if [ -n "$after_score" ] && awk -v a="$after_score" -v b="$before_score" 'BEGIN{exit !(a < b)}'; then
+    pass "$kind: exposure score $before_score -> $after_score"
+  else
+    fail "$kind: exposure score" "before $before_score after $after_score"
+  fi
+  if [ "$kind" = rpc ]; then
+    events="$(jq -c 'select(.id == "sbx-1" or .id == "sbx-2") | [.method, .ok]' "$LIVE/log/rpc-events.jsonl" | sort | uniq -c | awk '{print $1, $2}')"
+    check_eq "rpc: event log has status ok from both runs" "$events" '4 ["status",true]'
+  fi
+
+  echo "== live $kind: install.sh uninstall + restart"
+  rc=0
+  SYSTEMD_UNIT_DIR=/run/systemd/system "$INSTALL" uninstall "$kind" "$unit" >"$WORK/install.out" 2>&1 || rc=$?
+  sed 's/^/  | /' "$WORK/install.out"
+  check_eq "$kind: install.sh uninstall exit" "$rc" 0
+  if [ "$kind" = transport ]; then rm -f "$LIVE/ready/transport-validator.ready.json"; fi
+  systemctl restart "$unit"
+  if wait_ready "$kind"; then pass "$kind rollback: ready"; else fail "$kind rollback: ready" "not ready"; fi
+  check_eq "$kind rollback: PrivateDevices" "$(systemctl show "$unit" -p PrivateDevices --value)" no
+  check_eq "$kind rollback: exposure back to $before_score" "$(score "$unit")" "$before_score"
+  systemctl stop "$unit"
+done
+
+# ---------------------------------------------------------- per-directive probes
+echo "== per-directive effects (example set + one directive vs example set alone)"
+cat >"$LIVE/probe.py" <<'PY'
+import ctypes, errno, mmap, os, socket, subprocess, sys
+libc = ctypes.CDLL(None, use_errno=True)
+name, host_uts = sys.argv[1], sys.argv[2]
+def eff(cond):
+    print("EFFECT" if cond else "NOEFFECT")
+if name == "PrivateDevices":
+    eff(not os.path.exists("/dev/tty1"))
+elif name == "ProtectClock":
+    buf = ctypes.create_string_buffer(512)  # struct timex, modes=0 is a read
+    eff(libc.adjtimex(buf) == -1 and ctypes.get_errno() == errno.EPERM)
+elif name == "ProtectHostname":
+    eff(os.readlink("/proc/self/ns/uts") != host_uts)
+elif name == "ProtectProc":
+    eff(not os.path.exists("/proc/1"))
+elif name == "ProcSubset":
+    eff(not os.path.exists("/proc/meminfo"))
+elif name == "RestrictNamespaces":
+    eff(subprocess.run(["unshare", "--user", "true"], capture_output=True).returncode != 0)
+elif name == "RestrictAddressFamilies":
+    try:
+        socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 0).close()
+        eff(False)
+    except OSError as error:
+        eff(error.errno == errno.EAFNOSUPPORT)
+elif name == "MemoryDenyWriteExecute":
+    try:
+        mmap.mmap(-1, 4096, prot=mmap.PROT_READ | mmap.PROT_WRITE | mmap.PROT_EXEC).close()
+        eff(False)
+    except OSError as error:
+        eff(error.errno == errno.EPERM)
+elif name == "SystemCallFilter":
+    # ptrace is outside @system-service; with SystemCallErrorNumber=EPERM it fails, else 0
+    eff(libc.ptrace(0, 0, None, None) == -1 and ctypes.get_errno() == errno.EPERM)
+elif name == "SystemCallErrorNumber":
+    # filter alone kills on a denied call (SIGSYS); with the errno it returns EPERM
+    r = subprocess.run([sys.executable, "-c", "import ctypes; ctypes.CDLL(None).ptrace(0,0,None,None)"])
+    eff(r.returncode == 0)
+PY
+chmod 0644 "$LIVE/probe.py"
+host_uts="$(readlink /proc/1/ns/uts)"
+probe() { # name, unit, extra -p args...
+  local name="$1" unit="$2"
+  shift 2
+  UNITS+=("$unit")
+  systemd-run -q --wait --pipe --unit "$unit" -p User=nobody -p Group=nogroup "${RPC_PROPS[@]}" "$@" \
+    -- python3 "$LIVE/probe.py" "$name" "$host_uts" 2>&1 | tail -1
+}
+n=0
+for d in "${DIRECTIVES[@]}"; do
+  n=$((n + 1))
+  line="$(grep "^$d=" "$DROPIN_DIR/postfiat-rpc-sandbox.conf" || true)"
+  if [ -z "$line" ]; then
+    fail "effect $d" "not in the drop-in"
+    continue
+  fi
+  case "$d" in
+    SystemCallErrorNumber)
+      with=(-p "$(grep '^SystemCallFilter=' "$DROPIN_DIR/postfiat-rpc-sandbox.conf")" -p "$line")
+      without=(-p "$(grep '^SystemCallFilter=' "$DROPIN_DIR/postfiat-rpc-sandbox.conf")") ;;
+    SystemCallFilter)
+      with=(-p "$line" -p SystemCallErrorNumber=EPERM)
+      without=(-p SystemCallErrorNumber=EPERM) ;;
+    *) with=(-p "$line"); without=() ;;
+  esac
+  w="$(probe "$d" "$PREFIX-p$n-with.service" "${with[@]}")"
+  o="$(probe "$d" "$PREFIX-p$n-without.service" "${without[@]}")"
+  echo "  $d: with=$w without=$o"
+  check_eq "effect $d (with / without)" "$w/$o" "EFFECT/NOEFFECT"
+done
+finish
