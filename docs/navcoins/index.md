@@ -78,7 +78,9 @@ The later fleet report at 20:15 UTC recorded B24 epoch 10 finalized at height 19
 With the B24 128-block profile and no subsequent finalization, height 2030 is the last height inside the freshness window, and 2031 is the first stale height. Other checks, including halt and supply policy, still apply. No completed mint or redemption was observed in the 20:15 report. The B24 job selects its release from the fleet. See the [reading runbook](../runbooks/b24-schwab-nav-reading.md).
 
 - **pfUSDC.** Ethereum and Solana deposits mint separate pfUSDC series. Solana
-  pfUSDC can be withdrawn to Solana since 23 November, within small caps; see
+  pfUSDC can be withdrawn to Solana since 23 November, within small caps.
+  Since 26 November deposits and withdrawals are proved, and so open, only
+  during a daily proving session; see
   [Network Status](../status/network-status.md#usdc-bridges).
 
 ## What the proof does and does not prove

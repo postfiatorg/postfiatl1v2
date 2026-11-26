@@ -7,7 +7,9 @@ mainnet or authorize real-value custody.
 The devnet's Solana route holds real USDC in a capped vault on Solana
 mainnet, and since 23 November 2026 pfUSDC can be withdrawn back to Solana. This is a
 controlled devnet with small caps; there is no public announcement of Solana
-withdrawals ([handoff of 25 November](../status/handoff-2026-11-25.md)).
+withdrawals ([handoff of 25 November](../status/handoff-2026-11-25.md)). Since
+26 November Solana deposits and both withdrawal paths are open only during a
+daily proving session ([handoff of 26 November](../status/handoff-2026-11-26.md)).
 
 ## Controlled-Testnet Facts
 
