@@ -26,6 +26,8 @@ REVISION = os.environ.get("SETTLER_REVISION", "04600868")
 RELEASE_HEIGHT = os.environ.get("SETTLER_RELEASE_HEIGHT", "1890")
 ATTEMPT_SECONDS = int(os.environ.get("SETTLER_ATTEMPT_SECONDS", "900"))
 FIRST_RETRY, MAX_RETRY, GIVE_UP = 90, 3600, 12
+# A burn one discovery did not list keeps its count this long: one scan is not a settlement.
+ABSENT_KEEP = 7 * 86400
 
 
 def log(message):
@@ -99,6 +101,8 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
         failed = False
         for burn in sorted(burns, key=lambda b: backoff.get(b, {}).get("ended", -1)):
             entry = backoff.get(burn, dict(failures=0, next=0, gave_up=False))
+            if burn in backoff:
+                entry["seen"] = now
             if entry["gave_up"]:
                 log(f"not settling {burn}: given up after {entry['failures']} attempts")
                 continue
@@ -114,6 +118,7 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
                 continue
             failed = True
             entry["failures"] += 1
+            entry["seen"] = now
             entry["ended"] = ended
             entry["next"] = ended + delay(entry["failures"])
             if entry["failures"] >= GIVE_UP:
@@ -127,8 +132,9 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
                     f"next in {delay(entry['failures'])} s")
             backoff[burn] = entry
             save_backoff(path, backoff)
-        # A burn no longer pending (settled or refunded elsewhere) leaves the backoff.
-        backoff = {b: e for b, e in backoff.items() if b in burns}
+        # A burn no longer pending (settled or refunded elsewhere) leaves the backoff, once no
+        # discovery has listed it for ABSENT_KEEP: a scan that missed it keeps its count and give-up.
+        backoff = {b: e for b, e in backoff.items() if b in burns or now - e.get("seen", now) < ABSENT_KEEP}
         save_backoff(path, backoff)
         return 1 if failed else 0
 

@@ -86,6 +86,14 @@ class Pass(unittest.TestCase):
             s.run_pass(10_000, lambda: list(burns), lambda b: (calls.append(b), (False, "no"))[1], self.state)
         self.assertEqual(calls[0], burns[3], "the burn whose attempt was cut is tried first")
 
+    def test_a_burn_missing_from_one_discovery_keeps_its_failures_and_its_give_up(self):
+        for n in range(3):
+            self.once(n * 4000)
+        self.once(20_000, burns=())  # one scan that did not list it
+        self.once(30_000)
+        backoff = json.loads((self.state / "backoff.json").read_text())
+        self.assertEqual(backoff[BURN]["failures"], 4)
+
     def test_each_settlement_is_the_reviewed_restricted_path_and_bounded(self):
         with patch.object(s, "STATE", self.state), patch.object(s.subprocess, "run") as run:
             run.return_value.returncode, run.return_value.stdout, run.return_value.stderr = 0, "signed by 5 of 6\n", ""
