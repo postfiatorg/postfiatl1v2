@@ -23,9 +23,15 @@ Use `--output` and `--log-dir` to pin paths for release evidence.
 ```bash
 scripts/testnet-validator-doctor \
   --data-dir /var/lib/postfiat/validator-0 \
-  --validator-service postfiat-validator-0.service \
-  --rpc-service postfiat-rpc-0.service
+  --validator-service validator-0=postfiat-validator-0.service \
+  --rpc-service validator-0=postfiat-validator-0-rpc.service
 ```
+
+`--validator-service` and `--rpc-service` take `node_id=unit`. The node id is
+the one `postfiat-node status` reports for the data dir (`validator-N` on the
+shipped validator hosts), and the shipped units are
+`postfiat-validator-N.service` and `postfiat-validator-N-rpc.service`. A value
+without `node_id=` is rejected before the doctor builds anything.
 
 One-validator mode verifies the local validator and reports the expected BFT
 quorum from the active registry, but it does not require that quorum to be
@@ -40,7 +46,7 @@ scripts/testnet-validator-doctor \
   --data-root /var/lib/postfiat \
   --validator-count 5 \
   --validator-service-template 'postfiat-{node_id}.service' \
-  --rpc-service-template 'postfiat-rpc-{index}.service'
+  --rpc-service-template 'postfiat-{node_id}-rpc.service'
 ```
 
 The doctor checks:

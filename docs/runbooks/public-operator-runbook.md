@@ -315,8 +315,8 @@ readiness, and key-file permissions
 ```bash
 scripts/testnet-validator-doctor \
   --data-dir /var/lib/postfiat/validator-0 \
-  --validator-service postfiat-validator-0.service \
-  --rpc-service postfiat-rpc-0.service
+  --validator-service validator-0=postfiat-validator-0.service \
+  --rpc-service validator-0=postfiat-validator-0-rpc.service
 ```
 
 **RPC health and cross-endpoint consistency:**

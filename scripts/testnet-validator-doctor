@@ -223,12 +223,16 @@ def discover_data_dirs(args: argparse.Namespace) -> list[Path]:
     return unique
 
 
-def parse_unit_map(values: list[str] | None) -> dict[str, str]:
+def parse_unit_map(values: list[str] | None, flag: str = "--validator-service") -> dict[str, str]:
     mapping: dict[str, str] = {}
     for value in values or []:
-        if "=" not in value:
-            raise SystemExit(f"unit mapping must be node_id=unit: {value}")
-        node_id, unit = value.split("=", 1)
+        node_id, sep, unit = value.partition("=")
+        if not sep or not node_id.strip() or not unit.strip():
+            raise SystemExit(
+                f"{flag} must be node_id=unit, for example "
+                f"validator-0=postfiat-validator-0.service; got {value!r}. "
+                "The node_id is the one `postfiat-node status` reports for the data dir."
+            )
         mapping[node_id.strip()] = unit.strip()
     return mapping
 
@@ -320,9 +324,11 @@ def log_file_tail(path: Path | None, tail_lines: int) -> dict[str, Any]:
 def parse_log_files(values: list[str] | None) -> dict[str, Path]:
     mapping: dict[str, Path] = {}
     for value in values or []:
-        if "=" not in value:
-            raise SystemExit(f"log file mapping must be node_id=path: {value}")
-        node_id, path = value.split("=", 1)
+        node_id, sep, path = value.partition("=")
+        if not sep or not node_id.strip() or not path.strip():
+            raise SystemExit(
+                f"--log-file must be node_id=path, for example validator-0=/path/to/log; got {value!r}"
+            )
         mapping[node_id.strip()] = Path(path.strip())
     return mapping
 
@@ -970,6 +976,11 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     if args.tail_lines < 0:
         raise SystemExit("--tail-lines must be nonnegative")
+    # Reject malformed mappings before the build, so a bad flag fails in
+    # well under a second instead of after `cargo build`.
+    validator_unit_map = parse_unit_map(args.validator_service, "--validator-service")
+    rpc_unit_map = parse_unit_map(args.rpc_service, "--rpc-service")
+    log_files = parse_log_files(args.log_file)
     args.log_dir.mkdir(parents=True, exist_ok=True)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if not args.no_build:
@@ -994,9 +1005,6 @@ def main(argv: list[str]) -> int:
             return 1
 
     data_dirs = discover_data_dirs(args)
-    validator_unit_map = parse_unit_map(args.validator_service)
-    rpc_unit_map = parse_unit_map(args.rpc_service)
-    log_files = parse_log_files(args.log_file)
     validators = [
         collect_validator(
             index=index,
