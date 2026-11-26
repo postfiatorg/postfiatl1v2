@@ -67,7 +67,7 @@ the newest reading's finalize height (`ensure_nav_asset_live_for_epoch` in
 `crates/execution/src/nav_vault_asset_execution.rs`). The chain counts blocks,
 not time, so on an idle chain an old reading stays usable longer.
 
-The later fleet report at 20:15 UTC recorded B24 epoch 10 finalized at height 1902 and the fleet at 1903. The table above records an earlier observation. Source calendar age is measured from the packet's observation cutoff. The report does not give the exact cutoff, so the calendar age at 20:15 is unknown.
+The later fleet report at 20:15 UTC recorded B24 epoch 10 finalized at height 1902 and the fleet at 1903. A read-only `nav_reserve_proof_status` on validator 0 on 26 November at 10:14 UTC (height 1906) confirms it: the newest B24 packet is epoch 10, `nav_per_unit` 1006077 (NAV 1.006077), submitted at height 1901 and finalized, and the active B24 profile's `max_epoch_gap_blocks` is 128. The table above records an earlier observation. Source calendar age is measured from the packet's observation cutoff. The report does not give the exact cutoff, so the calendar age at 20:15 is unknown.
 
 | Asset and evidence | NAV-priced mint | NAV-priced redeem | Export | Secondary trading |
 | --- | --- | --- | --- | --- |
@@ -78,7 +78,9 @@ The later fleet report at 20:15 UTC recorded B24 epoch 10 finalized at height 19
 With the B24 128-block profile and no subsequent finalization, height 2030 is the last height inside the freshness window, and 2031 is the first stale height. Other checks, including halt and supply policy, still apply. No completed mint or redemption was observed in the 20:15 report. The B24 job selects its release from the fleet. See the [reading runbook](../runbooks/b24-schwab-nav-reading.md).
 
 - **pfUSDC.** Ethereum and Solana deposits mint separate pfUSDC series. Solana
-  pfUSDC can be withdrawn to Solana since 23 November, within small caps; see
+  pfUSDC can be withdrawn to Solana since 23 November, within small caps.
+  Since 26 November deposits and withdrawals are proved, and so open, only
+  during a daily proving session; see
   [Network Status](../status/network-status.md#usdc-bridges).
 
 ## What the proof does and does not prove

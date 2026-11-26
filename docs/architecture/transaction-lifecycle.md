@@ -37,8 +37,9 @@ sequenceDiagram
 7. Clients use read RPC to query `tx`, account state, receipts, and account
    history. `blocks`, `receipts` and `tx` are answered by key without decoding
    the whole history ([Fast Validator Reads](../specs/fast-validator-reads-20261124.md)).
-   The source of the live build `04600868` contains this change (it descends
-   from `9d34b58e0`); on 25 November 2026 a `blocks` read by height on validator
+   The sources of `04600868` and of `2356caf1` (`sol-exit-r3`, the build the
+   validators run on 26 November) contain this change (both descend from
+   `9d34b58e0`); on 25 November 2026 a `blocks` read by height on validator
    0 answered in under one second.
 
 Receipt semantics are mandatory: a committed block may contain a rejected
