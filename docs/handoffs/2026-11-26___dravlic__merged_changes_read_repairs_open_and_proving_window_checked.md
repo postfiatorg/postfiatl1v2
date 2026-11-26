@@ -7,6 +7,8 @@
 
 I worked from the [26 November handoff](../status/handoff-2026-11-26.md). The thirteen pull requests merged after the release was cut (#244 to #256) are read, with a note on each. Nothing in them pays twice or shows a payment as final that is not, and five points should change before a release; those are [#265](https://github.com/postfiatorg/postfiatl1v2/pull/265), [#266](https://github.com/postfiatorg/postfiatl1v2/pull/266) and [#267](https://github.com/postfiatorg/postfiatl1v2/pull/267), each read by a second reader. `main`'s two red checks are repaired ([#263](https://github.com/postfiatorg/postfiatl1v2/pull/263)). The daily proving window ([#257](https://github.com/postfiatorg/postfiatl1v2/pull/257)) is read before its first unattended run: as the code reads, Ethereum withdrawals are not closed outside the window, and several failures send no alert. Both are repaired in [#272](https://github.com/postfiatorg/postfiatl1v2/pull/272) and [#273](https://github.com/postfiatorg/postfiatl1v2/pull/273), not installed. The FastPay proxy on the work server runs #239 since 09:44 UTC. The block on validator-5 is still on. The docs carry `sol-exit-r3` and the window's hours ([#264](https://github.com/postfiatorg/postfiatl1v2/pull/264)), and the Task Node text for the hours is [tasknode #442](https://github.com/postfiatorg/tasknode/pull/442). Nothing on the live chain or on a validator was changed by me.
 
+**For tonight, 26 November: please watch the proving window by hand.** Check at 17:05 UTC that the session is really open, and make sure no Ethereum withdrawal is started outside 17:00 to 19:00 UTC. The launcher still raises no alert when it fails to start, and the Ethereum withdrawal service still reports ready all day until [#277](https://github.com/postfiatorg/postfiatl1v2/pull/277), which is in `main`, is installed on its host with its setting. #272 and #273 are not to be installed.
+
 ## Current state
 
 **Chain and deployment**
@@ -97,7 +99,7 @@ For the owner (date first asked):
 - The work server: it has not answered since about 12:25 UTC; is that known on your side (2026-11-26).
 - Tonight's window: whether it is open by 17:05 UTC, and no Ethereum withdrawal outside it; #272 and #273 are not for tonight (2026-11-26).
 - tasknode #442: a deploy and the setting (2026-11-26).
-- Who installs the reviewer follow-ups on the six hosts: I can, one host at a time (2026-11-25).
+- The reviewer follow-ups (private pull request 53): installed on the six hosts by the owner's side, as agreed in the meeting of 26 November. I say on that pull request when its last read is back, with the steps (2026-11-25).
 - #249 and #251: I can bring #249 up to `main` (2026-11-26).
 - #232: the licence of `pft-binius-shielded`, and the two findings of the A666 recovery policy (2026-11-26).
 - The account history index rebuild and the full storage verification: I can run both, one host at a time (2026-11-25).
