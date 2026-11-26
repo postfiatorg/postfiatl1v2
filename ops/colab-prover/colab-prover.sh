@@ -7,7 +7,8 @@
 # The services keep their own commands (ssh/scp to root@ssh8.vast.ai): while a window is open an
 # ssh_config stanza sends that name through one multiplexed connection to the Colab VM, because
 # Colab allows one SSH connection per runtime. Removing the stanza is the rollback.
-set -euo pipefail
+# -E: the ERR trap that `up` sets also covers the functions it calls (ensure, direct).
+set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")" && pwd)
 COLAB="$HOME/.local/bin/colab --auth=adc"
 NAME=${COLAB_PROVER_SESSION:-pft-prover}
@@ -17,6 +18,7 @@ KNOWN=$HOME/.ssh/known_hosts.colab-prover
 SOCK=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pft-sol-prover/prover.sock
 LOG=$ROOT/window.log
 log() { echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"; }
+alert() { "$HOME/.local/bin/b24-alert" "$*" || true; }
 # Before the stanza exists, and for the first connection, talk to the VM directly.
 direct() { ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile="$KNOWN" -o LogLevel=ERROR \
   -o ControlMaster=auto -o ControlPath="$CM" -o ControlPersist=yes -o ServerAliveInterval=20 \
@@ -46,7 +48,7 @@ ensure() {
 
 up() {
   local deposits=${1:-}
-  trap 'log "window failed to open"; rm -f "$STANZA"; timeout 180 $COLAB stop -s "$NAME" >/dev/null 2>&1 || true; "$HOME/.local/bin/b24-alert" "Colab proving window failed to open; deposits and withdrawals stay closed. See $LOG" || true' ERR
+  trap 'trap - ERR; log "window failed to open"; rm -f "$STANZA" "$ROOT/window.mode"; timeout 180 $COLAB stop -s "$NAME" >/dev/null 2>&1 || true; alert "Colab proving window failed to open; deposits and withdrawals stay closed. See $LOG"' ERR
   if $COLAB sessions 2>/dev/null | grep -q "^\[$NAME\]"; then log "session $NAME already exists"; else
     local got=
     # G4 first: 48 cores and 96 GB of GPU memory (measured 2026-11-25). Deposit proving is limited by
@@ -63,7 +65,11 @@ up() {
       done
       [ -n "$got" ] || { [ $((round % 5)) = 1 ] && log "no GPU yet (round $round)"; sleep 45; }
     done
-    [ -n "$got" ] || { log "no GPU available from Colab before the deadline"; exit 75; }
+    if [ -z "$got" ]; then
+      log "no GPU available from Colab before the deadline"
+      alert "Colab proving window did not open: no GPU before the deadline; deposits and withdrawals stay closed. See $LOG"
+      exit 75
+    fi
     log "session $NAME on $got"
   fi
   rm -f "$KNOWN"; ssh -O exit -o ControlPath="$CM" root@colab-prover 2>/dev/null || true
