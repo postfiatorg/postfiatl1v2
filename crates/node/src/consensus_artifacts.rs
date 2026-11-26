@@ -3370,7 +3370,7 @@ pub(super) fn verify_signed_governance_batch(
         }
         if amendment.kind == postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1 {
             let required = postfiat_types::pq_exit_freeze_quorum(validators.len());
-            if usize::try_from(amendment.quorum).unwrap_or(0) < required {
+            if amendment.quorum < required {
                 return Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
                     format!(
