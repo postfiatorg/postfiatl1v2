@@ -609,17 +609,17 @@ fn held_receipt_snapshot_keeps_the_store_open_after_the_validator_releases_it() 
     fs::remove_dir_all(root).unwrap();
 }
 
-/// A snapshot reply that is an error (here a deadline from a reader bound at
-/// the validator's address) falls back to the ordinary bounded direct read.
+/// The receipts reply when a reader bound at the validator's address answers
+/// every snapshot query with `body` while the test holds the store's lease;
+/// the lease is released after two seconds, so a direct read can answer.
 #[cfg(target_os = "linux")]
-#[test]
-fn receipt_snapshot_error_falls_back_to_the_direct_read() {
+fn receipts_with_snapshot_reply(chain_id: &str, body: &'static [u8]) -> RpcResponse {
     use postfiat_rpc_sdk::receipts_request;
     use std::io::Read;
     use std::os::linux::net::SocketAddrExt;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::net::{SocketAddr, UnixListener};
-    let (root, data_dir) = committed_transactional_node("snapshot-fallback");
+    let (root, data_dir) = committed_transactional_node(chain_id);
     let port = free_port();
     let ready = root.join("rpc.ready.json");
     let mut rpc = spawn_rpc_serving(&data_dir, &ready, port, false, 1);
@@ -636,7 +636,6 @@ fn receipt_snapshot_error_falls_back_to_the_direct_read() {
         stream.read_exact(&mut header).unwrap();
         let mut query = vec![0; u32::from_be_bytes(header) as usize];
         stream.read_exact(&mut query).unwrap();
-        let body = br#"{"Err":"receipt snapshot deadline exhausted"}"#;
         stream
             .write_all(&(body.len() as u32).to_be_bytes())
             .unwrap();
@@ -650,16 +649,63 @@ fn receipt_snapshot_error_falls_back_to_the_direct_read() {
         thread::sleep(Duration::from_secs(2));
         drop(lease);
     });
-    let reply = rpc_call(port, &receipts_request("fallback", None, Some(1)));
+    let reply = rpc_call(port, &receipts_request("snapshot-reply", None, Some(1)));
     release.join().unwrap();
     reader.join().unwrap();
-    assert!(reply.ok, "{:?}", reply.error);
-    assert_eq!(reply.result.unwrap().as_array().map(Vec::len), Some(1));
-    assert!(reply
-        .events
-        .iter()
-        .any(|event| event.message == "receipts queried"));
     drop(rpc.kill());
     let _ = rpc.wait();
     fs::remove_dir_all(root).unwrap();
+    reply
+}
+
+/// A snapshot that is not available now (its deadline, typed or in an older
+/// validator's untyped text) falls back to the ordinary bounded direct read,
+/// and the event says so.
+#[cfg(target_os = "linux")]
+#[test]
+fn receipt_snapshot_error_falls_back_to_the_direct_read() {
+    for (chain, body) in [
+        (
+            "snapshot-fallback",
+            &br#"{"Err":"storage_size_limit: receipt snapshot deadline exhausted"}"#[..],
+        ),
+        (
+            "snapshot-fallback-typed",
+            &br#"{"Err":{"kind":"unavailable","message":"receipt snapshot deadline exhausted"}}"#[..],
+        ),
+    ] {
+        let reply = receipts_with_snapshot_reply(chain, body);
+        assert!(reply.ok, "{chain}: {:?}", reply.error);
+        assert_eq!(reply.result.unwrap().as_array().map(Vec::len), Some(1));
+        assert!(
+            reply.events.iter().any(|event| event
+                .message
+                .starts_with("receipts read directly; the validator's snapshot was unavailable")),
+            "{chain}: {:?}",
+            reply.events
+        );
+    }
+}
+
+/// A storage error the snapshot reports (integrity, corruption) is the answer:
+/// it is not replaced by a successful direct read. An older validator's
+/// untyped error text counts as such unless it is a known availability text.
+#[cfg(target_os = "linux")]
+#[test]
+fn receipt_snapshot_integrity_error_is_returned_not_replaced_by_a_direct_read() {
+    for (chain, body) in [
+        (
+            "snapshot-integrity-untyped",
+            &br#"{"Err":"storage_integrity_failure: authenticated receipt MAC mismatch"}"#[..],
+        ),
+        (
+            "snapshot-integrity-typed",
+            &br#"{"Err":{"kind":"fatal","message":"storage_integrity_failure: authenticated receipt MAC mismatch"}}"#[..],
+        ),
+    ] {
+        let reply = receipts_with_snapshot_reply(chain, body);
+        assert!(!reply.ok, "{chain}: a direct read replaced the snapshot's integrity error");
+        let error = reply.error.unwrap();
+        assert!(error.message.contains("storage_integrity_failure"), "{chain}: {error:?}");
+    }
 }
