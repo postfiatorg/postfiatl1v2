@@ -3,7 +3,7 @@
 One Google Colab GPU session a day does the proving that two Vast machines did around the clock:
 Solana deposits, Solana and Ethereum withdrawals, and the B24 daily proof.
 
-- Window: 17:00 to 19:00 UTC. The session starts at 16:15 (`colab-prover-open.timer`) and stops at
+- Window: 17:00 to 19:00 UTC. The session starts asking for a GPU at 15:00 (`colab-prover-open.timer`) and stops at
   19:00 (`colab-prover-close.timer`). Outside the window deposits and withdrawals report closed.
 - `colab-prover.sh up deposits` gets a machine (G4 first), uploads the prover files, lays them out as
   the Vast provers had them, warms up, and then redirects the services. `down` undoes it.

@@ -70,7 +70,7 @@ up() {
   tar -C "$ROOT" -cf - bundle provision.sh warm.sh fetch-circuits.py solexit/hostkey solexit/authorized_keys solexit/pf-sol-exit-prove | direct 'mkdir -p /content && tar -C /content -xf - && bash /content/provision.sh' 2>&1 | tail -3 | tee -a "$LOG"
   local vram; vram=$(direct 'nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits')
   # Under 60 GB the deposit prover (24.5 GB) leaves no room for a withdrawal prover (23 GB).
-  if [ "$deposits" = deposits ] && [ "$vram" -lt 60000 ]; then log "GPU has ${vram} MiB: deposits stay closed this window"; deposits=; fi
+  if [ "$deposits" = deposits ] && [ "$vram" -lt 60000 ]; then log "GPU has ${vram} MiB: deposits stay closed this window"; deposits=; "$HOME/.local/bin/b24-alert" "Colab gave a ${vram} MiB GPU: Solana deposits stay closed this window; withdrawals and B24 are served. See $LOG" || true; fi
   direct "bash /content/warm.sh $deposits" 2>&1 | tail -3 | tee -a "$LOG"
   if [ -n "${COLAB_PROVER_NO_SWITCH:-}" ]; then log "set up and warm; services not switched"; return; fi
   mkdir -p "$(dirname "$STANZA")"
