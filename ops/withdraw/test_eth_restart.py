@@ -118,6 +118,7 @@ class RestartTests(unittest.TestCase):
                 log['topics'] = [Web3.keccak(text='PFTLCheckpointAdvanced(bytes32,bytes32,uint64,bytes32)'),
                                  Web3.keccak(hexstr=prior),Web3.keccak(hexstr=target)]
                 log['data'] = (3).to_bytes(32,'big') + bytes(32)
+                net.contract.return_value.functions.acceptedCheckpointCommitment.return_value.call.return_value = True
             if mode == 'withdraw':
                 service.run_jobs()
                 service.run_jobs()

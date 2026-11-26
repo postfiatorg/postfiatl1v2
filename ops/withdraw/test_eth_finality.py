@@ -13,7 +13,7 @@ from web3.exceptions import TransactionNotFound
 import service
 from eth_finality import AwaitingFinality, confirm_action
 from eth_journal import ReconciliationRequired, durable_json
-from eth_send import VAULT
+from eth_send import VAULT, VERIFIER
 
 
 def terms(burn='11'*48):
@@ -38,7 +38,43 @@ def chain(expected=None, tx='0x'+'ab'*32, height=100):
     return eth, receipt, canonical, finalized
 
 
+def checkpoint_chain(event, accepted, prior='12'*48, target='34'*48, height=100):
+    """A finalized verifier call whose receipt logs `event` and whose target is `accepted`."""
+    eth, receipt, canonical, finalized = chain(height=height)
+    receipt['to'] = VERIFIER
+    log = receipt['logs'][0]
+    log.update(address=VERIFIER, data=(3).to_bytes(32, 'big') + bytes(32),
+               topics=[Web3.keccak(text=event+'(bytes32,bytes32,uint64,bytes32)'),
+                       Web3.keccak(hexstr=prior), Web3.keccak(hexstr=target)])
+    reads = []
+    def read(commitment):
+        def call(block_identifier):
+            reads.append((commitment, block_identifier))
+            return accepted.get(commitment, False)
+        return Mock(call=call)
+    eth.contract.return_value.functions.acceptedCheckpointCommitment.side_effect = read
+    return eth, receipt, finalized, reads, dict(prior=prior, target=target, height=3)
+
+
 class FinalityTests(unittest.TestCase):
+    def test_checkpoint_counts_when_its_target_is_accepted_at_the_finalized_block(self):
+        target = Web3.keccak(hexstr='34'*48)
+        for event in ('PFTLCheckpointAdvanced', 'PFTLHistoricalCheckpointRecognized'):
+            with self.subTest(event=event):
+                eth, receipt, finalized, reads, expected = checkpoint_chain(event, {target: True})
+                done = confirm_action(eth, 'checkpoint', receipt['transactionHash'], expected)
+                self.assertEqual(done['block'], 100)
+                self.assertEqual(reads, [(target, finalized['number'])])
+        # A matching event is not enough: the verifier must hold the target as accepted.
+        eth, receipt, _, _, expected = checkpoint_chain('PFTLCheckpointAdvanced', {})
+        with self.assertRaises(ReconciliationRequired):
+            confirm_action(eth, 'checkpoint', receipt['transactionHash'], expected)
+        for changes in (dict(status=0), dict(to=VAULT)):
+            eth, receipt, _, _, expected = checkpoint_chain('PFTLCheckpointAdvanced', {target: True})
+            receipt.update(changes)
+            with self.subTest(changes=changes), self.assertRaises(ReconciliationRequired):
+                confirm_action(eth, 'checkpoint', receipt['transactionHash'], expected)
+
     def test_reorg_until_same_transaction_reappears_in_a_finalized_block(self):
         expected = terms()
         eth, receipt, canonical, finalized = chain(expected)
