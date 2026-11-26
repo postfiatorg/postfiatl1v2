@@ -26,27 +26,38 @@ ROOT = Path(__file__).resolve().parent
 VENDOR = ROOT / "_vendor"
 MERMAID_CDN = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js"
 STATUS_RE = re.compile(r"^>\s*\*\*Status:\*\*\s*(.+)$", re.MULTILINE)
+SCORE_RE = re.compile(r"^>\s*\*\*Mean score:\*\*\s*(\d+)", re.MULTILINE)
+
+
+def route_for(path: Path) -> str:
+    rel = path.resolve().relative_to(ROOT)
+    if rel.name == "README.md":
+        return "/" if len(rel.parts) == 1 else f"/{rel.parts[0]}"
+    return "/" + str(rel.with_suffix(""))
 
 
 def pages() -> list[dict]:
-    items = [{"route": "/", "path": ROOT / "README.md"}]
-    for path in sorted((ROOT / "pillars").glob("*.md")):
-        items.append({"route": f"/pillars/{path.stem}", "path": path})
-    for item in items:
-        text = item["path"].read_text(encoding="utf-8")
-        title = next((line[2:].strip() for line in text.splitlines() if line.startswith("# ")), item["path"].stem)
+    files = [ROOT / "README.md", *sorted((ROOT / "pillars").glob("*.md"))]
+    if (ROOT / "feedback" / "README.md").exists():
+        files += [ROOT / "feedback" / "README.md", *sorted((ROOT / "feedback").glob("[0-9]*.md"))]
+    items = []
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        title = next((line[2:].strip() for line in text.splitlines() if line.startswith("# ")), path.stem)
         status = STATUS_RE.search(text)
-        item["title"] = title
-        item["status"] = status.group(1).strip() if status else ""
+        score = SCORE_RE.search(text)
+        items.append({"route": route_for(path), "path": path, "title": title,
+                      "status": status.group(1).strip() if status else (f"{score.group(1)}/100" if score else ""),
+                      "section": "Feedback" if path.parent.name == "feedback" else "Specs"})
     return items
 
 
-def rewrite_links(body: str) -> str:
-    # Relative links between specs are written as files (pillars/01-x.md) so
-    # they also work on GitHub; turn them into site routes here.
+def rewrite_links(body: str, page: Path) -> str:
+    # Links between pages are written as relative .md files so they also work
+    # on GitHub; turn them into site routes here.
     def fix(match: re.Match) -> str:
         target = match.group(1)
-        if target.startswith(("http://", "https://", "#", "mailto:")):
+        if target.startswith(("http://", "https://", "#", "mailto:", "/")):
             return match.group(0)
         anchor = ""
         if "#" in target:
@@ -54,9 +65,11 @@ def rewrite_links(body: str) -> str:
             anchor = "#" + anchor
         if not target.endswith(".md"):
             return match.group(0)
-        name = target.rsplit("/", 1)[-1][:-3]
-        route = "/" if name == "README" else f"/pillars/{name}"
-        return f'href="{route}{anchor}"'
+        resolved = (page.parent / target).resolve()
+        try:
+            return f'href="{route_for(resolved)}{anchor}"'
+        except ValueError:
+            return match.group(0)
 
     return re.sub(r'href="([^"]+)"', fix, body)
 
@@ -65,21 +78,26 @@ def render(item: dict, nav: list[dict]) -> str:
     text = item["path"].read_text(encoding="utf-8")
     md = markdown.Markdown(extensions=["tables", "fenced_code", "toc", "sane_lists", "attr_list"],
                            extension_configs={"toc": {"permalink": False}})
-    body = rewrite_links(md.convert(text))
+    body = rewrite_links(md.convert(text), item["path"])
     links = []
+    section = ""
     for entry in nav:
+        if entry["section"] != section and entry["section"] == "Feedback":
+            links.append('<div class="nav-section">Feedback</div>')
+        section = entry["section"]
         active = " is-active" if entry["route"] == item["route"] else ""
-        if entry["route"] == "/":
+        title = entry["title"].replace("Feedback — ", "")
+        if entry["route"] in ("/", "/feedback"):
             label = "Overview"
         else:
             # "Pillar 3 — Validator Rewards Program" -> "3 · Validator Rewards Program"
-            number, _, name = entry["title"].partition(" — ")
-            label = f'{number.replace("Pillar ", "")} · {name}' if name else entry["title"]
+            number, _, name = title.partition(" — ")
+            label = f'{number.replace("Pillar ", "")} · {name}' if name else title
         label = html.escape(label)
         word = entry["status"].split(" ")[0].strip(".,;:") if entry["status"] else ""
         status = f'<span class="nav-status">{html.escape(word)}</span>' if word else ""
         links.append(f'<a class="nav-link{active}" href="{entry["route"]}">{label}{status}</a>')
-    toc = md.toc if item["route"] != "/" else ""
+    toc = md.toc if item["route"] not in ("/", "/feedback") else ""
     mermaid_src = "/_vendor/mermaid.min.js" if (VENDOR / "mermaid.min.js").exists() else MERMAID_CDN
     return PAGE.format(title=html.escape(item["title"]), nav="\n".join(links), body=body, toc=toc, mermaid=mermaid_src)
 
@@ -120,6 +138,7 @@ nav.side {{ border-right:1px solid var(--line); padding:24px 14px; position:stic
 .nav-link {{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:7px 10px; line-height:1.35; border-radius:7px; color:var(--ink); text-decoration:none; font-size:14px; }}
 .nav-link:hover {{ background:var(--code); }}
 .nav-link.is-active {{ background:var(--ink); color:#fff; }}
+.nav-section {{ margin:22px 8px 6px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }}
 .nav-status {{ font-size:11px; opacity:.7; white-space:nowrap; }}
 main {{ padding:40px 56px 96px; max-width:980px; }}
 aside.toc {{ padding:40px 16px; position:sticky; top:0; height:100vh; overflow:auto; font-size:13px; }}
