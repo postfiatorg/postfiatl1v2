@@ -143,11 +143,22 @@ check() {
 }
 
 down() {
-  rm -f "$ROOT/window.mode"
+  rm -f "$ROOT/window.mode" "$FAILS"
   ssh -O exit -o ControlPath="$CM" root@colab-prover 2>/dev/null || true
   rm -f "$STANZA" "$SOCK"
-  timeout 180 $COLAB stop -s "$NAME" 2>&1 | tail -1 | tee -a "$LOG" || true
-  $COLAB sessions 2>&1 | tail -2 | tee -a "$LOG"
+  local failed=()
+  timeout 180 $COLAB stop -s "$NAME" >>"$LOG" 2>&1 || failed+=("stopping the session $NAME")
+  if ! $COLAB sessions >"$ROOT/window.sessions" 2>&1; then
+    failed+=("listing the sessions")
+  elif grep -q "^\[$NAME\]" "$ROOT/window.sessions"; then
+    failed+=("the session $NAME is still listed")
+  fi
+  tail -2 "$ROOT/window.sessions" >>"$LOG" 2>/dev/null || true
+  if [ ${#failed[@]} != 0 ]; then
+    log "window close incomplete: ${failed[*]}; the services no longer point at the session"
+    alert "Colab proving window did not close cleanly: ${failed[*]}. See $LOG"
+    return 1
+  fi
   log "window closed"
 }
 

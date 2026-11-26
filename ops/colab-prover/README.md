@@ -12,6 +12,8 @@ Solana deposits, Solana and Ethereum withdrawals, and the B24 daily proof.
   runtime). The Solana withdrawal service runs as its own user: `/etc/hosts` points that name at a
   local port that is forwarded to a second SSH daemon on the session, which has a fixed host key and
   admits only that service's key with its forced command (`colab-sol-withdraw.sh`, run once with sudo).
+- `colab-prover.sh down` logs "window closed" only when the session is stopped and no longer listed;
+  otherwise it logs and alerts what failed and exits non-zero.
 - `colab-prover-check.timer` (17:05 UTC, not enabled by default) runs `colab-prover.sh check`, which sends
   the B24 alert when no window is open then, also when the relay host was down at 16:15.
 - `colab-prover.sh ensure` (every two minutes) puts back the connection, the withdrawal door and the
