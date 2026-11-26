@@ -13,7 +13,8 @@ class RouteFailureTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.jobs = Path(tmp.name)
-        self.clock = datetime(2026, 11, 26, 12, 0, tzinfo=timezone.utc)
+        # Just after the real time: rows written now (updated_at) are then already due.
+        self.clock = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=1)
         for name, value in (('JOBS', self.jobs), ('utcnow', lambda: self.clock)):
             patcher = patch.object(service, name, value, create=True)
             patcher.start()
