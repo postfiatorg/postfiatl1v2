@@ -82,7 +82,8 @@ class EthereumReceiptTests(unittest.TestCase):
         with patch.object(service, 'prove') as prove, patch.object(service.subprocess, 'run') as send:
             with self.assertRaisesRegex(RuntimeError, 'checkpoint receipt'):
                 service.process({'burn_tx_id': self.burn})
-            self.assertEqual(service.read_job(self.burn)['stage'], 'catching_up')
+            # The saved receipt is checked before any checkpoint work: the job does not move on.
+            self.assertNotIn(service.read_job(self.burn).get('stage'), ('catching_up', 'reading', 'proving', 'paying'))
             send.assert_not_called()
             prove.assert_not_called()
 

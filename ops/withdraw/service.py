@@ -382,10 +382,15 @@ def process(job):
     for folder in sorted(d.glob('checkpoint-*')):
         result = folder / 'eth-result.json'
         if result.exists() or intent_path(result).exists():
-            stage(job, 'catching_up', 'Checking saved Ethereum checkpoint transaction.')
             if not result.exists():
+                stage(job, 'catching_up', 'Recovering the saved Ethereum checkpoint transaction.')
                 eth_send('checkpoint', folder, result)
-            finalized_checkpoint(folder)
+            # A saved receipt is only checked: an unchanged wait refreshes the job, not its history.
+            try:
+                finalized_checkpoint(folder)
+            except AwaitingFinality as error:
+                restage(job, 'awaiting_finality', str(error)[:400])
+                raise
     stage(job,'reading','Reading the finalized burn from all six validators.')
     bundle,A=export_bundle(d);blocks={b['header']['height']:b for b in A['blocks']['blocks']}
     red=[r for r in A['ledger']['vault_bridge_redemptions'] if r['withdrawal_packet']['burn_tx_id']==burn]
