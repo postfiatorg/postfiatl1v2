@@ -300,6 +300,9 @@ mod private_action_admission;
 pub use private_action_admission::*;
 mod private_readiness_read;
 pub use private_readiness_read::*;
+pub const MAX_NODE_TRANSPORT_FRAME_BYTES: u64 = 4 * 1024 * 1024;
+#[cfg(target_os = "linux")]
+pub mod validator_receipt_reader;
 mod validator_signer;
 mod validator_signer_guard;
 pub use validator_signer::*;

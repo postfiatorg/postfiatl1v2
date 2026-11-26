@@ -4,7 +4,7 @@ Post Fiat L1 (PFTL) is a layer-1 settlement ledger written in Rust. It follows
 the XRP Ledger model: known validators, deterministic finality from quorum
 certificates, a fixed-supply native token (PFT) whose fees burn, and no
 validator rewards. Accounts and validators sign with post-quantum ML-DSA-65
-from genesis, validator-trust changes are ratified on chain by Cobalt, and
+from genesis, Cobalt can ratify on-chain validator-trust changes, and
 private settlement uses Asset-Orchard, a typed-asset extension of Zcash Orchard.
 Its main application is NAVCoins, assets whose supply is tied to
 machine-checkable reserve packets. The design is in the
@@ -27,7 +27,7 @@ machine-checkable reserve packets. The design is in the
 - **21 November.** All six validators moved to `main-r64-20261121`; `main` became the only long-lived branch ([Master State](status/master-state.md)).
 - **23 November.** The first Solana withdrawal release (rules from block 1841); first real withdrawals; the deposit route re-anchored at block 1847.
 - **24 November.** The second Solana exit release (rules from block 1890): every Solana deposit batch can be withdrawn, a refund path for a burn that cannot be paid, each validator reviews a settlement itself. Real withdrawals of 0.30, 0.30 and 4.00 USDC were paid and settled.
-- **25 November.** Read-only read: all six validators at height 1897, one state root, build `04600868` (the second Solana exit release). No B24 reading since epoch 9 (height 1842).
+- **25 November.** Read-only read: all six validators at height 1897, one state root, build `04600868` (the second Solana exit release). B24 epoch 10 subsequently finalized at 1902.
 - **Limits.** A controlled devnet with small caps, not announced: one withdrawal spends one deposit batch, the minimum is 0.30 USDC, the vault accepts 25 USDC more, a withdrawal takes about four minutes ([Network Status](status/network-status.md#usdc-bridges)).
 
 ## Start here
@@ -44,6 +44,20 @@ Codenames such as A666, BMNRC, Z3 or G4 are defined in the
 
 ## What exists now
 
+<!-- component-observations -->
+
+| Component and evidence | Chain / height | Last observed | Result |
+| --- | --- | --- | --- |
+| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/ops/b24-live/known-releases.txt) | postfiat-wan-devnet-2 / 1903 | 2026-11-25 20:15 UTC | Six validators reported on sol-exit-r2 |
+| [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
+| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45701171620) | Source build / n/a | 2026-11-25T21:22:27Z | Verified (workflow success, comparison success) |
+
+[Observation records, source revisions, artifacts and observers](status/component-observations.json)
+
+<!-- /component-observations -->
+
+
+
 Reviewed against main `ce3659b22` and a read-only fleet read on 2026-11-25. Implementation
 and local qualification below do not imply deployment; fleet observations retain their own
 dates on [Network Status](status/network-status.md).
@@ -52,13 +66,13 @@ dates on [Network Status](status/network-status.md).
 | --- | --- | --- |
 | Core chain | Accounts, signed transfers, fees, blocks, receipts, deterministic replay and state roots. | [Architecture Overview](architecture/overview.md) |
 | Finality | Consensus v2 prepare/precommit with commit quorum certificates; 5 of 6 on the devnet. | [Finality](architecture/finality.md) |
-| Validator-trust governance | Cobalt ratifies validator-registry and trust-graph changes; active on the devnet since height 916. Other governance scopes and proposals remain Foundation-administered. | [Cobalt](governance/cobalt.md), [Validator Registry](governance/validator-registry.md) |
+| Validator-trust governance | The E5 campaign verified Cobalt at height 924 for validator-registry and trust-graph changes. Other governance scopes and proposals remain Foundation-administered. | [Cobalt](governance/cobalt.md), [Validator Registry](governance/validator-registry.md) |
 | Settlement lanes | Consensus transactions, W6 atomic swaps, FastPay, FastSwap and Asset-Orchard, each with its own finality and recovery rules. | [Settlement Lanes](architecture/settlement-lanes.md) |
 | Privacy | Orchard/Halo2 deposit, spend, withdraw, scan and selective disclosure. The shielded stack is not post-quantum. Public submission of shielded actions is off on every validator. | [Privacy](privacy/overview.md) |
 | Post-quantum authorization | ML-DSA-65 for accounts and validators; larger certificates accepted as a design cost. | [Quantum Authorization](quantum/authorization.md) |
 | Quantum-safe private payments | PFSH02 shield, pay and withdrawal verified for PFT and pfUSDC on a local rehearsal chain. | [Browser wallet](wallets/shielded-wallet.md#pfsh02-browser-wallet), [Protocol](quantum/private-payments.md) |
 | Storage | Transactional `redb` storage active since height 930; G5 offline qualified on 2026-10-23 for the October 21 binary. G6 remains open; later binaries need their own qualification. | [Network Status](status/network-status.md), [State And Storage](architecture/state-and-storage.md) |
-| NAVCoins | A666 v2 (public general availability closed) and BMNRC (created 2026-10-02) are on the devnet. B24, the Schwab-backed NAVCoin, has been created and cashed in with real money since mid-November; its newest reading on the chain is epoch 9 (NAV 1.006419, height 1842). | [NAVCoins](navcoins/index.md) |
+| NAVCoins | A666 v2 (public general availability closed) and BMNRC (created 2026-10-02) are on the devnet. B24, the Schwab-backed NAVCoin, has been created and cashed in with real money since mid-November; epoch 10 finalized at height 1902 on 25 November. | [NAVCoins](navcoins/index.md) |
 | USDC bridges | pfUSDC is minted from USDC on Ethereum and on Solana. Solana deposits and withdrawals run on the devnet with small caps and limits; no real Ethereum deposit or withdrawal is recorded since 2026-11-21. | [Network Status](status/network-status.md#usdc-bridges), [Bridge Audit Map](status/bridge-audit-map.md) |
 | YOLO target receipts | Implemented and disabled by default; activation needs a future governance amendment. Receipts confer no trading, minting or reserve authority. | [YOLO Target Receipt v1](yolo/target-receipt-v1.md) |
 | RPC and clients | Newline-delimited JSON over TCP; read methods, controlled write methods, account history; Python client and Rust SDK. `blocks`, `receipts` and `tx` are answered by key since #227. | [RPC](rpc/overview.md), [Python](python/quickstart.md) |

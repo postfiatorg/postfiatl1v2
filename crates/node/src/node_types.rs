@@ -2821,6 +2821,9 @@ pub struct OwnedObjectsOptions {
     /// Omit `owner_pubkey_hex` from each object (the key is the top-level
     /// `owner_public_key_hex`).
     pub omit_owner_keys: bool,
+    /// Add `node_id` and `inventory_revision` (or the reason it is
+    /// unavailable). Without it the page has the shape it had before them.
+    pub include_inventory_revision: bool,
     /// Lowers the page byte bound below `OWNED_OBJECTS_PAGE_MAX_BYTES`;
     /// never raises it. Not an RPC parameter.
     pub max_page_bytes: Option<usize>,
@@ -3360,6 +3363,36 @@ pub struct OwnedObjectsReport {
     pub view_digest: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub owner_keys_omitted: bool,
+    /// Orders two answers of the same node: read from the same view as the
+    /// page. Compare as (`finalized_height`, `fastpay_sequence`), and only
+    /// between answers with the same `node_id` and `incarnation`. Absent,
+    /// with `inventory_revision_unavailable` set, when the answering server
+    /// can change objects without advancing it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inventory_revision: Option<OwnedObjectsInventoryRevision>,
+    /// Why `inventory_revision` is absent (e.g.
+    /// `legacy_owned_applies_enabled`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inventory_revision_unavailable: Option<String>,
+    /// The answering node's id (`status.node_id`); absent only when the
+    /// data directory has no node state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_id: Option<String>,
+}
+
+/// Revision of one node's object view. `fastpay_sequence` is the number of
+/// FastPay version fences in the view (finalized plus pending effects), the
+/// same count each journal effect records as its `application_sequence`. At
+/// one finalized height it only grows; pending minority effects are dropped
+/// only when a new height finalizes. `incarnation` names the data
+/// directory's history: created with the directory, replaced on every
+/// snapshot import, kept across restarts. Revisions of different
+/// incarnations are not comparable.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct OwnedObjectsInventoryRevision {
+    pub finalized_height: u64,
+    pub fastpay_sequence: u64,
+    pub incarnation: String,
 }
 
 /// One `owned_objects` row: an `OwnedObject`, serialized identically unless
@@ -3864,6 +3897,39 @@ pub struct BlockVerificationReport {
     pub block_count: usize,
     pub tip_hash: String,
     pub state_root: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PaymentConfirmation {
+    Pending,
+    Rejected,
+    IndependentlyVerified,
+}
+
+/// An operator's independent record of one exact historical committee exception.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaymentCommitteePin {
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub height: u64,
+    pub block_hash: String,
+    pub ordered_registry_root: String,
+    pub signing_registry_root: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PaymentFinalityEvidence {
+    pub schema: String,
+    pub confirmation: PaymentConfirmation,
+    pub tx_id: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub genesis_registry_root: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub historical_committee_pins: Vec<PaymentCommitteePin>,
+    pub report: Option<TxFinalityReport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

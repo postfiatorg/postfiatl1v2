@@ -8,8 +8,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use postfiat_node::{init, InitOptions};
 use postfiat_rpc_sdk::{
-    server_info_request, validate_response_kind, verify_bridge_request, RpcRequest, RpcResponse,
-    RpcResponseKind,
+    owned_objects_request, server_info_request, validate_response_kind, verify_bridge_request,
+    OwnedObjectsParams, RpcRequest, RpcResponse, RpcResponseKind,
 };
 
 fn node_bin() -> &'static str {
@@ -365,4 +365,173 @@ fn rpc_worker_unreadable_request_file_answers_with_fallback_error_shape() {
     assert_eq!(response.events[0].message, "rpc request failed");
 
     fs::remove_dir_all(root).expect("remove RPC test directory");
+}
+
+/// `owned_objects` over rpc-serve carries `node_id` and `inventory_revision`
+/// only when asked, and the revision only where the
+/// owned-lane gate refuses legacy (non-v3) certified applies: those change
+/// objects without a FastPay fence, so the revision would not move. Where
+/// they are allowed (the default lane) the page says why it is absent.
+#[test]
+fn owned_objects_revision_only_where_the_owned_lane_refuses_legacy_applies() {
+    let root = unique_root();
+    let data_dir = root.join("node");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-fastpay-default-rpc-test".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 1,
+    })
+    .expect("initialize RPC test node");
+    let owner = postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[83; 32]);
+    let request = owned_objects_request(
+        "owned-objects-revision",
+        OwnedObjectsParams {
+            owner_public_key_hex: postfiat_crypto_provider::bytes_to_hex(&owner.public_key),
+            asset: None,
+            limit: None,
+            cursor: None,
+            omit_owner_keys: false,
+            include_inventory_revision: true,
+        },
+    );
+    let mut default_request = request.clone();
+    default_request
+        .params
+        .as_object_mut()
+        .expect("params")
+        .remove("include_inventory_revision");
+    for disabled in [false, true] {
+        let port = free_port();
+        let ready = root.join(format!("owned-objects-{disabled}.ready.json"));
+        let mut child = spawn_rpc_serving(&data_dir, &ready, port, disabled, 2);
+        wait_for_file(&ready);
+        // Without the parameter the page has main's shape: none of the fields.
+        let default = rpc_call(port, &default_request);
+        assert!(default.ok, "owned_objects failed: {:?}", default.error);
+        let default = default.result.expect("owned_objects result");
+        for field in [
+            "node_id",
+            "inventory_revision",
+            "inventory_revision_unavailable",
+        ] {
+            assert!(
+                default.get(field).is_none(),
+                "{field} in a default page: {default}"
+            );
+        }
+        let response = rpc_call(port, &request);
+        assert!(response.ok, "owned_objects failed: {:?}", response.error);
+        validate_response_kind(&response, RpcResponseKind::OwnedObjects)
+            .expect("owned_objects response validates");
+        let result = response.result.expect("owned_objects result");
+        assert_eq!(result["node_id"], "validator-0");
+        if disabled {
+            let revision = &result["inventory_revision"];
+            assert_eq!(revision["finalized_height"], result["height"]);
+            assert_eq!(revision["fastpay_sequence"], 0);
+            assert_eq!(revision["incarnation"].as_str().map(str::len), Some(32));
+            assert!(result.get("inventory_revision_unavailable").is_none());
+        } else {
+            assert!(result.get("inventory_revision").is_none(), "{result}");
+            assert_eq!(
+                result["inventory_revision_unavailable"],
+                "legacy_owned_applies_enabled"
+            );
+        }
+        let status = child.wait().expect("wait for RPC server");
+        assert!(status.success(), "RPC server failed with {status}");
+    }
+
+    fs::remove_dir_all(root).expect("remove RPC test directory");
+}
+
+/// The test process plays the validator and holds the real redb writer handle.
+/// The separate production rpc-serve process starts its own isolated workers.
+#[cfg(target_os = "linux")]
+#[test]
+fn isolated_receipts_and_status_answer_during_a_validator_commit() {
+    use postfiat_node::{
+        apply_batch, create_transfer_batch, init_consensus_v2, validator_receipt_reader,
+        ApplyBatchOptions, BatchTransferOptions, InitConsensusV2Options,
+    };
+    use postfiat_rpc_sdk::{receipts_request, status_request};
+    let root = unique_root();
+    let data_dir = root.join("node");
+    let chain_id = "rpc-commit-window";
+    init_consensus_v2(InitConsensusV2Options {
+        data_dir: data_dir.clone(),
+        chain_id: chain_id.into(),
+        node_id: "validator-0".into(),
+        validator_count: 1,
+        activation_height: 1000,
+        storage_activation_height: Some(1),
+    })
+    .unwrap();
+    let backup =
+        postfiat_rpc_sdk::wallet_backup_from_master_seed(chain_id, "ab".repeat(32), 0).unwrap();
+    let key = postfiat_rpc_sdk::derive_wallet_key_pair(&backup).unwrap();
+    let to = postfiat_crypto_provider::address_from_public_key(&key.public_key);
+    let commit = || {
+        let batch_file = root.join("transfer.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: data_dir.clone(),
+            key_file: None,
+            to: to.clone(),
+            amount: 250_000,
+            batch_file: batch_file.clone(),
+        })
+        .unwrap();
+        let rows = apply_batch(ApplyBatchOptions {
+            data_dir: data_dir.clone(),
+            batch_file,
+            certificate_file: None,
+        })
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].accepted);
+        rows[0].clone()
+    };
+    commit();
+    let port = free_port();
+    let ready = root.join("rpc.ready.json");
+    let mut rpc = spawn_rpc_serving(&data_dir, &ready, port, false, 5);
+    wait_for_file(&ready);
+    let _reader = validator_receipt_reader::Service::start(&data_dir).unwrap();
+    let lease = postfiat_storage::NodeStore::new(&data_dir)
+        .transactional_store_lease()
+        .unwrap()
+        .unwrap();
+    let started = Instant::now();
+    let latest = commit();
+    // Wait beyond the full production deadline, leaving time for the typed
+    // status fallback within its 30-second maximum age.
+    thread::sleep(Duration::from_secs(21).saturating_sub(started.elapsed()));
+    let previous = rpc_call(port, &status_request("status-during-lease"));
+    assert!(previous.ok, "{:?}", previous.error);
+    assert_eq!(previous.result.unwrap()["block_height"], 1);
+
+    let lookup = |id: &str, tx: Option<&str>| {
+        let reply = rpc_call(port, &receipts_request(id, tx, Some(1)));
+        assert!(reply.ok, "{:?}", reply.error);
+        assert!(reply.events.iter().any(|event| event
+            .message
+            .starts_with("receipt snapshot at height 2 block ")));
+        reply.result.unwrap()
+    };
+    let expected = serde_json::json!([latest]);
+    assert_eq!(lookup("first-ever-lookup", Some(&latest.tx_id)), expected);
+    assert_eq!(lookup("latest", None), expected);
+    assert_eq!(
+        lookup("unknown", Some("missing-transaction")),
+        serde_json::json!([])
+    );
+    assert!(started.elapsed() >= Duration::from_secs(20));
+    drop(lease);
+    let refreshed = rpc_call(port, &status_request("status-after-lease"));
+    assert!(refreshed.ok, "{:?}", refreshed.error);
+    assert_eq!(refreshed.result.unwrap()["block_height"], 2);
+    assert!(rpc.wait().unwrap().success());
+    drop(_reader);
+    fs::remove_dir_all(root).unwrap();
 }

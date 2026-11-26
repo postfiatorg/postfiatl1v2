@@ -12,6 +12,7 @@ import json
 import re
 import socket
 import threading
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -287,6 +288,78 @@ def _require_owned_objects_paging(page: dict[str, Any]) -> None:
             "owned_objects answered a truncated page without next_cursor and view_digest: "
             "the node is too old for paging; upgrade it or read from another node"
         )
+    owned_objects_revision(page)
+
+
+@dataclass(frozen=True, order=True)
+class OwnedObjectsRevision:
+    """`owned_objects` `inventory_revision`: orders two answers of one node.
+
+    Compare as (`finalized_height`, `fastpay_sequence`) and only between
+    answers with the same `node_id` and `incarnation` (the data directory's
+    history; new on every snapshot import). `incarnation` is `None` from
+    nodes that predate it and takes no part in the comparison.
+    """
+
+    finalized_height: int
+    fastpay_sequence: int
+    incarnation: str | None = field(default=None, compare=False)
+
+
+_U64_MAX = 2**64 - 1
+# Fields of the moment a page was read; an all-pages result takes the last page's.
+_OWNED_OBJECTS_TIP_FIELDS = (
+    "height", "state_root", "inventory_revision", "inventory_revision_unavailable", "node_id",
+)
+
+
+def _is_u64(value: Any) -> bool:
+    return type(value) is int and 0 <= value <= _U64_MAX
+
+
+def _is_clean_string(value: Any) -> bool:
+    """Nonempty, no surrounding whitespace, no control characters (Rust `clean_string_field`)."""
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and value == value.strip()
+        and not any(unicodedata.category(char) == "Cc" for char in value)
+    )
+
+
+def owned_objects_revision(page: dict[str, Any]) -> tuple[str | None, OwnedObjectsRevision] | None:
+    """`(node_id, revision)` of an `owned_objects` page; `None` from older nodes.
+
+    Checks like the Rust validator: a present `node_id` is null or a clean
+    string, also without a revision; a revision holds two u64 values, its
+    `finalized_height` equals the page `height`, and a present `incarnation`
+    is 32 lowercase hex digits. `inventory_revision_unavailable` (why a
+    server omits the revision) is a clean string and never beside one.
+    """
+    node_id = page.get("node_id")
+    if node_id is not None and not _is_clean_string(node_id):
+        raise RpcClientError(f"owned_objects answered a malformed node_id: {node_id!r}")
+    raw = page.get("inventory_revision")
+    reason = page.get("inventory_revision_unavailable")
+    if reason is not None and (not _is_clean_string(reason) or raw is not None):
+        raise RpcClientError(
+            f"owned_objects answered a malformed inventory_revision_unavailable: {reason!r}"
+        )
+    if raw is None:
+        return None
+    values = [raw.get(name) if isinstance(raw, dict) else None
+              for name in ("finalized_height", "fastpay_sequence")]
+    height = page.get("height")
+    if not all(_is_u64(value) for value in values) or not _is_u64(height) or height != values[0]:
+        raise RpcClientError(f"owned_objects answered a malformed inventory_revision: {raw!r}")
+    incarnation = raw.get("incarnation")
+    if incarnation is not None and not (
+        isinstance(incarnation, str)
+        and len(incarnation) == 32
+        and all(char in "0123456789abcdef" for char in incarnation)
+    ):
+        raise RpcClientError(f"owned_objects answered a malformed inventory_revision: {raw!r}")
+    return node_id, OwnedObjectsRevision(values[0], values[1], incarnation)
 
 
 class PostFiatRpcClient:
@@ -1190,8 +1263,13 @@ class PostFiatRpcClient:
         limit: int | None = None,
         cursor: str | None = None,
         omit_owner_keys: bool = False,
+        include_inventory_revision: bool = False,
     ) -> dict[str, Any]:
-        """One page of owned objects; pass the previous `next_cursor` as `cursor`."""
+        """One page of owned objects; pass the previous `next_cursor` as `cursor`.
+
+        `include_inventory_revision` asks for `node_id` and `inventory_revision`;
+        nodes before it ignore the parameter and send neither.
+        """
         params: dict[str, Any] = {"owner_public_key_hex": owner_public_key_hex}
         if asset is not None:
             params["asset"] = asset
@@ -1201,6 +1279,8 @@ class PostFiatRpcClient:
             params["cursor"] = cursor
         if omit_owner_keys:
             params["omit_owner_keys"] = True
+        if include_inventory_revision:
+            params["include_inventory_revision"] = True
         return self._call("owned_objects", params)
 
     def owned_objects_all(
@@ -1210,6 +1290,7 @@ class PostFiatRpcClient:
         asset: str | None = None,
         page_limit: int = 128,
         omit_owner_keys: bool = False,
+        include_inventory_revision: bool = False,
         max_restarts: int = OWNED_OBJECTS_ALL_MAX_RESTARTS,
     ) -> dict[str, Any]:
         """Every owned object from one object view, or an error.
@@ -1227,10 +1308,19 @@ class PostFiatRpcClient:
         The result is the first page's fields with `objects`, `object_count`
         (all objects), `truncated: false`, `cursor` and `next_cursor` both
         `None`, `view_digest` of the view read, and `pages` (pages read).
+        The pages are bound by the view digest, not by one revision: the
+        revision can grow between pages of one view. `height`, `state_root`,
+        and, when `include_inventory_revision` is set and the node sends them,
+        `inventory_revision` and `node_id` are the last page read's; see
+        `owned_objects_revision`.
         """
         for _ in range(max_restarts + 1):
             first = self.owned_objects(
-                owner_public_key_hex, asset=asset, limit=page_limit, omit_owner_keys=omit_owner_keys
+                owner_public_key_hex,
+                asset=asset,
+                limit=page_limit,
+                omit_owner_keys=omit_owner_keys,
+                include_inventory_revision=include_inventory_revision,
             )
             _require_owned_objects_paging(first)
             view = first.get("view_digest")
@@ -1246,6 +1336,7 @@ class PostFiatRpcClient:
                         limit=page_limit,
                         cursor=page["next_cursor"],
                         omit_owner_keys=omit_owner_keys,
+                        include_inventory_revision=include_inventory_revision,
                     )
                 except RpcError as error:
                     if error.error.get("code") != OWNED_OBJECTS_VIEW_CHANGED:
@@ -1259,8 +1350,10 @@ class PostFiatRpcClient:
                 pages += 1
                 objects.extend(page.get("objects") or [])
             if not changed:
+                tip = {key: page[key] for key in _OWNED_OBJECTS_TIP_FIELDS if key in page}
                 return {
-                    **first,
+                    **{key: value for key, value in first.items() if key not in _OWNED_OBJECTS_TIP_FIELDS},
+                    **tip,
                     "objects": objects,
                     "object_count": len(objects),
                     "truncated": False,

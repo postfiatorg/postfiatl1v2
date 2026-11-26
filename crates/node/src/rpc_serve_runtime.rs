@@ -36,6 +36,7 @@ fn rpc_serve_drain(
     #[cfg(test)] listener_for_test: Option<TcpListener>,
 ) -> Result<(RpcServeReport, TcpListener), String> {
     clear_transport_ready_file(&options.ready_file, "rpc serve")?;
+    let mut status_read_at = Instant::now();
     let mut local_status = status(NodeOptions {
         data_dir: options.data_dir.clone(),
     })
@@ -43,6 +44,7 @@ fn rpc_serve_drain(
     let reconciled_terminal_entries = reconcile_terminal_mempool_entries(&options.data_dir)
         .map_err(|error| format!("rpc serve terminal mempool reconciliation failed: {error}"))?;
     if reconciled_terminal_entries > 0 {
+        status_read_at = Instant::now();
         local_status = status(NodeOptions {
             data_dir: options.data_dir.clone(),
         })
@@ -150,7 +152,7 @@ fn rpc_serve_drain(
             rpc_serve_health_stamp(&options.data_dir, false)?,
             initial_mempool,
         )),
-        status_checked_at: Some(Instant::now()),
+        status_checked_at: Some(status_read_at),
         mempool_checked_at: Some(Instant::now()),
     }));
     {

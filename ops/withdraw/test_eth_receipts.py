@@ -6,6 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import service
+from web3 import Web3
+from test_eth_finality import chain
 
 
 class EthereumReceiptTests(unittest.TestCase):
@@ -17,6 +19,9 @@ class EthereumReceiptTests(unittest.TestCase):
         witness = json.loads(fixture.read_text())
         packet = witness['withdrawal_packet']
         self.burn = packet['burn_tx_id']
+        self.terms = {k:packet[k] for k in ('burn_tx_id','withdrawal_id','recipient','amount_atoms')}
+        self.terms['packet_digest'] = '42'*32
+        self.eth = chain(self.terms, height=123)[0]
         self.height = packet['finalized_height']
         self.folder = self.jobs / self.burn
         self.folder.mkdir()
@@ -46,9 +51,10 @@ class EthereumReceiptTests(unittest.TestCase):
     def test_process_accepts_only_successful_cached_withdrawals(self):
         for changes in ({}, {'status': 0}, {'mode': 'checkpoint'}, {'status': None},
                         {'status': True}, {'tx': 'abc'}, {'block': -1}):
-            with self.subTest(changes=changes), patch.object(service.subprocess, 'run') as send:
+            with self.subTest(changes=changes), patch.object(service.subprocess, 'run') as send, patch.object(service, 'ethereum_reader') as web:
+                web.return_value = self.eth
                 self.result.write_text(json.dumps(self.receipt | changes))
-                job = {'burn_tx_id': self.burn}
+                job = dict(self.terms)
                 if changes:
                     with self.assertRaisesRegex(RuntimeError, 'reconcile'):
                         service.process(job)

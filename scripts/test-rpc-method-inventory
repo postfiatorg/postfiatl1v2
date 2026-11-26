@@ -25,6 +25,7 @@ POSTURE_LABELS = {
     "read_only_public": "public read",
     "authorized_protocol_mutation_public": "authorized protocol mutation public",
     "controlled_write_gated": "controlled write gated",
+    "private_action_gated": "private action gated",
     "privacy_alpha_gated": "privacy-alpha gated",
     "owned_lane_gated": "owned-lane gated",
     "operator_or_local_only": "operator/local only",
@@ -260,14 +261,22 @@ def main() -> int:
     run_documentation_parser_regressions()
     with tempfile.TemporaryDirectory(prefix="postfiat-rpc-inventory-") as directory:
         output = Path(directory) / "inventory.json"
+        guide_table = Path(directory) / "rpc-table.md"
         subprocess.run(
-            [str(GENERATOR), "--output", str(output)],
+            [str(GENERATOR), "--output", str(output), "--exchange-guide-table", str(guide_table)],
             cwd=ROOT,
             check=True,
             text=True,
             stdout=subprocess.PIPE,
         )
         inventory = json.loads(output.read_text(encoding="utf-8"))
+
+        published = json.loads((ROOT / "docs/runbooks/rpc-method-inventory.json").read_text())
+        for field in ("methods", "counts", "checks"):
+            assert published[field] == inventory[field], f"published RPC inventory out of date: {field}"
+        guide = (ROOT / "docs/integrate/exchange-guide.md").read_text()
+        expected_table = "<!-- rpc-family-table -->\n" + guide_table.read_text() + "<!-- /rpc-family-table -->"
+        assert expected_table in guide, "exchange guide RPC table is out of date"
 
     methods = {item["method"]: item for item in inventory["methods"]}
     expected = {

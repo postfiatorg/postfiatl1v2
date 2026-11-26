@@ -15,6 +15,8 @@ does not transfer authority.
 
 ## Adversary
 
+The count-based score assumes each remaining candidate is equally likely after conditioning on the observer’s information. With unequal probabilities the best single guess has probability `max(p_i)`. The historical fixture field `posterior_bps` stores the rounded equal-weight estimate. No field measurement here validates equal weights.
+
 The v1 adversary is a public observer attempting to identify one target action
 after applying declared public and inferable metadata. The model gives no
 credit for channel independence. Perfectly correlated channels collapse to the
@@ -26,9 +28,9 @@ The constants are derived mechanically:
 
 | Constant | Derivation |
 | --- | --- |
-| Joint posterior ceiling | 625 bps = 6.25% |
+| Joint equal-weight estimate threshold | 625 bps = 6.25% |
 | Minimum joint candidate count | `ceil(10000 / 625) = 16` |
-| Single-channel posterior ceiling | 1,250 bps = 12.5% |
+| Single-channel equal-weight estimate threshold | 1,250 bps = 12.5% |
 | Minimum batch size | `ceil(10000 / 1250) = 8` |
 | Minimum timing-bucket cohort | 16 candidates |
 | Minimum activity timing buckets | 8 buckets |
@@ -45,7 +47,7 @@ requires explicit disclosure.
 flowchart TD
   Threat[Declared adversary<br/>single-target public observer]
   Channels[Measured metadata channels<br/>timing, fee class, asset policy,<br/>batch size, disclosure, RPC]
-  Floors[Derive privacy floors<br/>candidate counts and posterior ceilings]
+  Floors[Derive privacy floors<br/>candidate counts and equal-weight estimate thresholds]
   Fixtures[Fixture calibration<br/>valid case plus negative controls]
   Policy[Governed route constants<br/>baseline, hold, downgrade,<br/>disclosure, fail closed]
   Wallet[Wallet and RPC policy<br/>batching, delay, relay, disclosure discipline]

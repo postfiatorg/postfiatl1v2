@@ -37,6 +37,85 @@ pub struct TransactionalGenerationPointerV1 {
     pub migration_packet_root: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct GenerationVerificationReport {
+    pub schema: &'static str,
+    pub previous_full_verification_height: Option<u64>,
+    pub metadata: TransactionalStoreMetaV1,
+    pub verification: LogicalIntegrityReport,
+}
+
+/// Run the authenticated logical scan using an existing generation and its node-local
+/// key. Opening for maintenance must never initialize a missing key or redb database.
+pub fn verify_existing_generation(
+    data_dir: &Path,
+    expected_chain_id: &str,
+    expected_genesis_hash: &str,
+) -> io::Result<GenerationVerificationReport> {
+    let node = NodeStore::try_new_read_only(data_dir)?;
+    let genesis = node.read_genesis()?;
+    let genesis_hash = crate::integrity::to_hex(&crate::integrity::legacy_checksum(
+        b"postfiat.genesis.v1",
+        genesis.to_json().map_err(crate::invalid_data)?.as_bytes(),
+    ));
+    if genesis.chain_id != expected_chain_id || genesis_hash != expected_genesis_hash {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "unexpected node chain id or genesis hash",
+        ));
+    }
+    if !node.storage_backend_mode()?.is_transactional() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "selected backend is not transactional",
+        ));
+    }
+    if node.read_ordered_commit_journal_raw()?.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "ordered commit recovery is pending",
+        ));
+    }
+    let pointer = node.transactional_generation_pointer()?;
+    let directory = pointer
+        .as_ref()
+        .map_or(data_dir, |pointer| &pointer.database_directory);
+    let database =
+        lease::acquire_transactional_store(directory, node.integrity_key.clone(), false)?;
+    let before = database.meta()?;
+    if let Some(pointer) = &pointer {
+        validate_generation_pointer_binding(pointer, &before)?;
+    }
+    if before.chain_id != genesis.chain_id
+        || before.genesis_hash != genesis_hash
+        || before.protocol_version != genesis.protocol_version
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "unexpected transactional chain, genesis or protocol",
+        ));
+    }
+    let verification = database.verify_and_mark_full_integrity()?;
+    let metadata = database.meta()?;
+    if metadata.last_full_verification_height != Some(verification.finalized_height)
+        || metadata.finalized_height != verification.finalized_height
+        || metadata.migration_packet_root != before.migration_packet_root
+        || metadata.generation != before.generation
+        || node.transactional_generation_pointer()? != pointer
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "verified tip or selected generation changed",
+        ));
+    }
+    Ok(GenerationVerificationReport {
+        schema: "postfiat-storage-generation-verification-v1",
+        previous_full_verification_height: before.last_full_verification_height,
+        metadata,
+        verification,
+    })
+}
+
 impl NodeStore {
     pub fn open_transactional_store(&self) -> StorageResult<TransactionalStore> {
         let directory = self
@@ -246,6 +325,23 @@ impl NodeStore {
             Err(error) if error.code() == StorageErrorCode::WriterBusy => Err(error.into()),
             Err(_) => Ok(None),
         }
+    }
+
+    /// Snapshot the already validated handle held by this process for an
+    /// operation. A sibling reader must never open or retain a writer lease
+    /// on an idle validator. Before activation, the legacy store is authoritative.
+    pub fn held_transactional_read_snapshot(
+        &self,
+    ) -> StorageResult<Option<TransactionalReadSnapshot>> {
+        let Some(store) = self.live_transactional_store() else {
+            return Ok(None);
+        };
+        let snapshot = store.read_snapshot()?;
+        let meta = snapshot.meta();
+        Ok(meta
+            .scheduled_activation_height
+            .is_some_and(|height| meta.finalized_height >= height)
+            .then_some(snapshot))
     }
 
     fn live_transactional_store(&self) -> Option<Arc<TransactionalStore>> {

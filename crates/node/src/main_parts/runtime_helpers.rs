@@ -647,7 +647,7 @@ fn print_usage() {
   Resident transport readiness markers: set POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE or POSTFIAT_TRANSPORT_BLOCK_VOTE_READY_FILE to write a JSON ready file after prewarm and bind, before accepting client traffic.
   postfiat-node rpc-probe --port PORT [--host HOST] [--timeout-ms MS]
   postfiat-node validator-signer-serve --key-file PATH [--proposal-key-file PATH] --state-dir PATH [--initialize-state [--min-height N]] [--chain-id ID --genesis-hash HASH] --socket PATH [--socket-group NAME|GID] --allow-peer-uid UID [--allow-peer-uid UID ...] [--deadline-ms MS]
-  postfiat-node rpc-serve --unsafe-devnet-json-storage [--data-dir PATH] [--spool-dir PATH] [--ready-file PATH] --port PORT [--bind-host HOST] [--max-requests N] [--timeout-ms MS] [--child-timeout-ms MS] [--event-log PATH] [--allow-mempool-submit] [--allow-mempool-submit-finality] [--finality-topology PATH] [--finality-key-file PATH [--finality-proposal-key-file PATH] | --finality-signer-socket PATH] [--finality-artifact-root PATH] [--finality-timeout-ms MS] [--finality-send-retries N] [--finality-retry-backoff-ms MS] [--finality-vote-phase-deadline-ms MS] [--finality-quorum-early-full-propagation] [--max-mempool-submit-per-peer N] [--max-mempool-submit-total N] [--allow-orchard-batch-create] [--max-orchard-batch-create-per-peer N] [--max-orchard-batch-create-total N] [--max-orchard-batch-create-concurrent N] [--max-child-dispatch-concurrent N] [--max-child-dispatch-per-peer N] [--disable-owned-lane] [--keep-alive]
+  postfiat-node rpc-serve --unsafe-devnet-json-storage [--data-dir PATH] [--spool-dir PATH] [--ready-file PATH] --port PORT [--bind-host HOST] [--max-requests N] [--timeout-ms MS] [--child-timeout-ms MS] [--event-log PATH] [--allow-mempool-submit] [--allow-mempool-submit-finality] [--finality-topology PATH] [--finality-key-file PATH [--finality-proposal-key-file PATH] | --finality-signer-socket PATH] [--finality-artifact-root PATH] [--finality-timeout-ms MS] [--finality-send-retries N] [--finality-retry-backoff-ms MS] [--finality-vote-phase-deadline-ms MS] [--finality-quorum-early-full-propagation] [--max-mempool-submit-per-peer N] [--max-mempool-submit-total N] [--allow-orchard-batch-create] [--max-orchard-batch-create-per-peer N] [--max-orchard-batch-create-total N] [--max-orchard-batch-create-concurrent N] [--max-child-dispatch-concurrent N] [--max-child-dispatch-per-peer N] [--allow-owned-lane | --disable-owned-lane] [--keep-alive]
   postfiat-node rpc-catch-up [--data-dir PATH] --source-host HOST --source-rpc-port PORT [--work-dir PATH] [--max-blocks N] [--timeout-ms MS]
   postfiat-node rpc-catch-up-certified-delta [--data-dir PATH] --source-host HOST --source-rpc-port PORT --expected-height N --expected-block-hash HASH --expected-state-root HASH [--work-dir PATH] [--max-blocks N] [--timeout-ms MS]
   postfiat-node metrics [--data-dir PATH]
@@ -733,12 +733,12 @@ fn print_usage() {
   postfiat-node ratify-require-memo-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-orchard-aware-bridge-claim-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-pfusdc-source-series-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
-  postfiat-node ratify-solana-exit-open [--data-dir PATH] --validators CSV --height H --amendment-file PATH
-  postfiat-node ratify-solana-exit-retire [--data-dir PATH] --validators CSV --height H --amendment-file PATH
-  postfiat-node ratify-solana-exit-close [--data-dir PATH] --validators CSV --height H --amendment-file PATH
-  postfiat-node ratify-solana-exit-paid [--data-dir PATH] --validators CSV --height H --packet-hash HEX --solana-slot SLOT --payout-index N --signature-hex HEX --amendment-file PATH
-  postfiat-node ratify-solana-exit-min-withdrawal [--data-dir PATH] --validators CSV --height H --atoms N --amendment-file PATH
-  postfiat-node ratify-solana-exit-refund [--data-dir PATH] --validators CSV --height H --packet-hash HEX --solana-slot SLOT --signature-hex HEX --amendment-file PATH
+  postfiat-node ratify-solana-exit-open [--data-dir PATH] --validators CSV [--support CSV] --height H --amendment-file PATH
+  postfiat-node ratify-solana-exit-retire [--data-dir PATH] --validators CSV [--support CSV] --height H --amendment-file PATH
+  postfiat-node ratify-solana-exit-close [--data-dir PATH] --validators CSV [--support CSV] --height H --amendment-file PATH
+  postfiat-node ratify-solana-exit-paid [--data-dir PATH] --validators CSV [--support CSV] --height H --packet-hash HEX --solana-slot SLOT --payout-index N --signature-hex HEX --amendment-file PATH
+  postfiat-node ratify-solana-exit-min-withdrawal [--data-dir PATH] --validators CSV [--support CSV] --height H --atoms N --amendment-file PATH
+  postfiat-node ratify-solana-exit-refund [--data-dir PATH] --validators CSV [--support CSV] --height H --packet-hash HEX --solana-slot SLOT --signature-hex HEX --amendment-file PATH
   postfiat-node ratify-solana-bridge-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-shielded-atomic-batch-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-asset-orchard-pricing-enforcement-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
@@ -838,7 +838,7 @@ fn print_usage() {
   postfiat-node account-tx [--data-dir PATH] --address ADDRESS [--from-height HEIGHT] [--to-height HEIGHT] [--limit N]
   postfiat-node account-tx-index-build [--data-dir PATH]
   postfiat-node account-tx-index-status [--data-dir PATH]
-  postfiat-node owned-objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys]
+  postfiat-node owned-objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys] [--include-inventory-revision]
   postfiat-node receipts [--data-dir PATH] [--tx-id ID] [--limit N]
   postfiat-node rpc --method server_info [--data-dir PATH]
   postfiat-node rpc --method ledger [--data-dir PATH] [--limit N]
@@ -867,7 +867,7 @@ fn print_usage() {
   postfiat-node rpc --method private_readiness [--data-dir PATH] [--pool-id ID]
   postfiat-node rpc --method account_lines [--data-dir PATH] --account ADDRESS [--issuer ADDRESS] [--asset-id ID] [--limit N]
   postfiat-node rpc --method account_assets [--data-dir PATH] --account ADDRESS [--asset-id ID] [--limit N]
-  postfiat-node rpc --method owned_objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys]
+  postfiat-node rpc --method owned_objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N] [--cursor CURSOR] [--omit-owner-keys] [--include-inventory-revision]
   postfiat-node rpc --method issuer_assets [--data-dir PATH] --issuer ADDRESS [--limit N]
   postfiat-node rpc --method escrow_info [--data-dir PATH] --escrow-id ID
   postfiat-node rpc --method account_escrows [--data-dir PATH] --account ADDRESS [--role owner|recipient] [--state open|finished|canceled] [--limit N]
@@ -888,6 +888,7 @@ fn print_usage() {
   postfiat-node certify-batch [--data-dir PATH] [--batch-kind transparent|governance|shielded|bridge] --batch-file PATH --validator-key-dir PATH --proposal-file PATH --vote-dir PATH --certificate-file PATH [--height N] [--view N] [--timeout-certificate-file PATH] [--skip-block-log-verify]
   postfiat-node batch-archive [--data-dir PATH] [--batch-kind KIND] [--batch-id ID] [--limit N]
   postfiat-node verify-state [--data-dir PATH]
+  postfiat-node verify-payment-finality --data-dir PATH --chain-id ID --genesis-hash HASH --genesis-registry-root HASH [--historical-committee-pins PATH] (--tx-id ID | --signed-payment FILE)
   postfiat-node verify-blocks [--data-dir PATH]
   postfiat-node verify-governance [--data-dir PATH] [--cobalt-mode canonical|non-uniform] [--trust-graph-root HASH]
   postfiat-node verify-bridge [--data-dir PATH]

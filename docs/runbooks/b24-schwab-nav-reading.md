@@ -30,8 +30,8 @@ python3 -m venv ~/repos/postfiatl1v2-live/.venv-ops
 `daily.py` runs these stages in order. Each failure writes `failure.json` with the stage name
 in the run directory and stops; nothing retries on its own.
 
-1. `pre-capture-runtime-check`: all six validators must run the pinned node binary
-   (`DAILY_NODE_SHA`) for both the transport and the RPC service.
+1. `pre-capture-runtime-check`: read all six release manifests, select the matching row in
+   `ops/b24-live/known-releases.txt`, then check the running transport and RPC binaries on every host and the rehearsal tool on the job machine and validator-0.
 2. `chain-read`: the next epoch must be `finalized_epoch + 1` under the expected proof profile,
    and the asset must not be halted.
 3. `collector-plan`, `aws-preflight`, `budget`: reviewed plan, no leftover instance, a cost
@@ -59,18 +59,20 @@ on demand).
 cd ~/repos/postfiatl1v2-live
 PY=.venv-ops/bin/python
 
-$PY ops/b24-live/daily.py --check      # local inputs only; no AWS, no chain writes
+$PY ops/b24-live/daily.py --check      # reads all six validators and checks executable hashes over SSH
 $PY ops/b24-live/daily.py --now        # on-demand reading (refuses while the timer's run is active)
 $PY ops/b24-live/daily.py --resume <run-dir>
 ```
 
-`--execute` is what the timer runs at 17:55 UTC.
+The timer starts `--execute` at 17:55 UTC for a fixed 18:15 UTC measurement.
+`--now` schedules an immediate reading with a short preparation lead.
+`--check` needs RPC and SSH connectivity and makes zero AWS calls or chain writes.
 
 `--resume` finishes a run that already has a capture and a verified proof. It never starts an
 AWS instance.
 
-- If nothing was submitted, it runs stages 6 to 8.
-- If the submit already landed (accepted on all six), it runs only finalize and pricing.
+- For an unsent reading, resume runs stages 6 to 8 only within 12 hours of the capture cutoff. After that, take a fresh reading.
+- If only the submit landed, resume verifies acceptance on all six at the same tip before running finalize and pricing. This continuation precedes the age check. If finalize or pricing may also have landed, inspect the six receipts and the finalized packet before retrying. The continuation replays both remaining operations.
 - It refuses if `complete.json` exists.
 
 ## When it fails
@@ -79,9 +81,11 @@ Read `failure.json` in the run directory first.
 
 | Stage / message | Cause seen before | Fix |
 | --- | --- | --- |
-| `pre-capture-runtime-check`: requires release … on all six validators | The fleet was upgraded and `DAILY_NODE_SHA` still names the old binary | Confirm the new release is built from `main` and contains the B24 code, then pin its binary hash |
+| Unreachable validator | Fleet release cannot be established | Restore RPC and SSH reachability to the named host and repeat `--check`. |
+| Mixed release or process hash mismatch | Manifests or running processes disagree | Finish or roll back the operator-approved fleet rollout, verify both units on each affected host, then repeat `--check`. |
+| Release missing from known releases | All six agree but the job lacks a matching row | Verify the release commit and node SHA. On the job machine run `ops/b24-live/rehearsal_tool.sh <release-name> <commit> <node-sha256>`, review and install its printed row in `ops/b24-live/known-releases.txt`, then repeat `--check`. |
 | `collector-plan`: MINT reader path is unavailable | `mint_reader/observe_deposit.py` missing | It is in this repository; check the checkout |
-| `rehearsal`: canary expected status did not match | The rehearsal tool was built from an older release than the fleet runs | Rebuild `tools/b23-nav-canary` from the fleet's source commit, copy it to `validator-0:/tmp/b23-tee-nav-canary-<first 16 hex of sha256>`, point `CANARY` in `ops/b24-replacement/common.py` at it, then `--resume` |
+| Rehearsal tool missing or digest mismatch | Wrong artifact or build machine | Rebuild with the release helper on the job machine, verify its printed hash and release row, then run `--check` to verify the local tool and validator-0 copy. |
 | `submission`: `rpc_finality_submit_failed … Permission denied (os error 13)` | Root-owned entries in `/var/lib/postfiat/validator-N/certified-send-outbox/` | `chown` those entries to `postfiat`. Check whether the submit landed (six-validator receipt for the tx id in `live/01-daily-submit/expected-state.json`) before anything else, then `--resume` |
 
 A failed run costs its AWS reservation. Use `--resume` rather than a fresh `--now` whenever the

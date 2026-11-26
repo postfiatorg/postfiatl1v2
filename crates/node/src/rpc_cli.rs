@@ -358,6 +358,13 @@ const RPC_ORCHARD_ACTION_SPOOL_MAX_REQUEST_BYTES: u64 = MAX_RPC_REQUEST_BYTES as
 const RPC_ORCHARD_ACTION_SPOOL_MAX_TOTAL_BYTES: u64 = 64 * 1024 * 1024;
 const RPC_SERVE_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60);
 const RPC_SERVE_HEALTH_STAMP_MAX_AGE: Duration = Duration::from_secs(1);
+/// While the validator process holds the database to commit a block, `status`
+/// answers with the report read before that commit began, for at most this
+/// long. To a caller it looks like a validator that has not committed the
+/// block yet, which every caller already has to tolerate.
+const RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE: Duration = Duration::from_secs(30);
+/// How long a `status` refresh waits for the database when such a report exists.
+const RPC_SERVE_STATUS_REFRESH_WAIT: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, serde::Serialize)]
 struct RpcServeReadinessReport {
@@ -1003,18 +1010,15 @@ fn handle_rpc_serve_connection(
         match rpc_serve_cached_status(&context.data_dir, &context.health_cache) {
             Ok((report, cache_hit)) => {
                 health_cache_hit = cache_hit;
-                success_response(
-                &id,
-                &report,
-                vec![RpcEvent::new("status", report.node_id.clone(), "status queried")],
-            )
-            .unwrap_or_else(|error| {
-                rpc_serve_error_response(
-                    &id,
-                    "rpc_internal",
-                    &format!("status serialization failed: {error}"),
-                )
-            })
+                let message = if cache_hit {
+                    format!("cached status at height {} block {}", report.block_height, report.block_tip_hash)
+                } else {
+                    "status queried".into()
+                };
+                success_response(&id, &report, vec![RpcEvent::new("status", report.node_id.clone(), message)])
+                    .unwrap_or_else(|error| {
+                        rpc_serve_error_response(&id, "rpc_internal", &format!("status serialization failed: {error}"))
+                    })
             }
             Err(error) => rpc_serve_error_response(&id, "rpc_status_failed", &error.to_string()),
         }
@@ -1931,6 +1935,19 @@ fn handle_rpc_serve_connection(
             merge_rpc_serve_runtime_metrics(result, context.runtime_metrics.snapshot());
         }
     }
+    if method == "owned_objects" && response.ok {
+        if let Some(result) = response.result.as_mut() {
+            gate_owned_objects_inventory_revision(
+                result,
+                rpc_serve_owned_lane_admits_legacy_applies(
+                    context.allow_mempool_submit,
+                    context.allow_mempool_submit_finality,
+                    context.allow_orchard_batch_create,
+                    context.owned_lane_enabled,
+                ),
+            );
+        }
+    }
     let (response, written) =
         write_rpc_serve_response(reader.get_mut().tcp_stream_mut(), response);
     if !written {
@@ -2176,15 +2193,52 @@ fn rpc_serve_cached_status(
     // Start the age before the read, and publish it only on success: a slow
     // or failed refresh must not extend the lifetime of an old report.
     let checked_at = Instant::now();
-    let report = status(NodeOptions {
-        data_dir: data_dir.to_path_buf(),
-    })
-    .map_err(|error| format!("rpc status read failed: {error}"))?;
+    // The report of the last successful refresh, if it is recent enough to be
+    // the answer while the sibling process holds the database for a commit.
+    let before_commit = health_cache.lock().ok().and_then(|cache| {
+        match (cache.status_checked_at, cache.status.as_ref()) {
+            (Some(read_at), Some(report))
+                if read_at.elapsed() <= RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE =>
+            {
+                Some((read_at, report.clone()))
+            }
+            _ => None,
+        }
+    });
+    let read = || {
+        status(NodeOptions {
+            data_dir: data_dir.to_path_buf(),
+        })
+    };
+    let refreshed = if before_commit.is_some() {
+        postfiat_storage::transactional::with_writer_lease_deadline(
+            RPC_SERVE_STATUS_REFRESH_WAIT,
+            read,
+        )
+    } else {
+        read()
+    };
+    let report = match (refreshed, before_commit) {
+        (Ok(report), _) => report,
+        // Only the busy database is answered from the earlier report; any other
+        // failure is reported. The earlier report keeps its own read time, so it
+        // is not made fresh and stops being used after the bound.
+        (Err(error), Some((read_at, report))) if rpc_serve_storage_writer_busy(&error)
+            && read_at.elapsed() <= RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE => {
+            return Ok((report, true));
+        }
+        (Err(error), _) => return Err(format!("rpc status read failed: {error}")),
+    };
     if let Ok(mut cache) = health_cache.lock() {
         cache.status = Some(report.clone());
         cache.status_checked_at = Some(checked_at);
     }
     Ok((report, false))
+}
+
+fn rpc_serve_storage_writer_busy(error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::WouldBlock
+        && error.to_string().contains("storage_writer_busy")
 }
 
 /// The cached status with the validator-registry update count read in the
@@ -4359,6 +4413,50 @@ fn rpc_serve_method_allowed(
     )
 }
 
+/// Why an `owned_objects` page carries no `inventory_revision`.
+pub(crate) const OWNED_OBJECTS_REVISION_LEGACY_APPLIES: &str = "legacy_owned_applies_enabled";
+
+/// Whether this server's method gate admits a legacy (non-v3) certified
+/// owned apply or unwrap. Those change objects without a FastPay fence, so
+/// the inventory revision would not move.
+fn rpc_serve_owned_lane_admits_legacy_applies(
+    allow_mempool_submit: bool,
+    allow_mempool_submit_finality: bool,
+    allow_orchard_batch_create: bool,
+    owned_lane_enabled: bool,
+) -> bool {
+    ["owned_apply", "owned_unwrap_apply"].into_iter().any(|method| {
+        rpc_serve_method_allowed_with_owned_lane(
+            method,
+            allow_mempool_submit,
+            allow_mempool_submit_finality,
+            allow_orchard_batch_create,
+            owned_lane_enabled,
+        )
+    })
+}
+
+/// Keeps a requested `inventory_revision` only where every admitted object
+/// mutation advances it; otherwise replaces it with the reason. A page read
+/// without `include_inventory_revision` has neither and stays as it is.
+fn gate_owned_objects_inventory_revision(
+    result: &mut serde_json::Value,
+    legacy_applies_admitted: bool,
+) {
+    if !legacy_applies_admitted {
+        return;
+    }
+    if let Some(result) = result.as_object_mut() {
+        if result.remove("inventory_revision").is_none() {
+            return;
+        }
+        result.insert(
+            "inventory_revision_unavailable".to_string(),
+            serde_json::json!(OWNED_OBJECTS_REVISION_LEGACY_APPLIES),
+        );
+    }
+}
+
 fn rpc_serve_method_allowed_with_owned_lane(
     method: &str,
     allow_mempool_submit: bool,
@@ -4474,18 +4572,21 @@ fn rpc_serve_method_allowed_with_owned_lane(
         || (allow_mempool_submit_finality
             && is_mempool_submit_signed_transfer_finality_method(method))
         || (allow_orchard_batch_create && is_orchard_batch_create_method(method))
-        || (owned_lane_enabled
-            && matches!(
-                method,
-                "owned_sign"
-                    | "owned_apply"
-                    | "owned_unwrap_sign"
-                    | "owned_unwrap_apply"
-                    | "owned_sign_v3"
-                    | "owned_apply_v3"
-                    | "owned_unwrap_sign_v3"
-                    | "owned_unwrap_apply_v3"
-            ))
+        || (owned_lane_enabled && is_owned_lane_write_method(method))
+}
+
+fn is_owned_lane_write_method(method: &str) -> bool {
+    matches!(
+        method,
+        "owned_sign"
+            | "owned_apply"
+            | "owned_unwrap_sign"
+            | "owned_unwrap_apply"
+            | "owned_sign_v3"
+            | "owned_apply_v3"
+            | "owned_unwrap_sign_v3"
+            | "owned_unwrap_apply_v3"
+    )
 }
 
 #[cfg(test)]

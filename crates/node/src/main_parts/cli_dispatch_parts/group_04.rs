@@ -1763,6 +1763,9 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 limit,
                 cursor: flag_value(flags, "--cursor").map(ToString::to_string),
                 omit_owner_keys: flags.iter().any(|flag| flag == "--omit-owner-keys"),
+                include_inventory_revision: flags
+                    .iter()
+                    .any(|flag| flag == "--include-inventory-revision"),
                 max_page_bytes: None,
             })
             .map_err(|error| format!("owned-objects failed: {error}"))?;

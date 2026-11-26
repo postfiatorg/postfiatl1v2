@@ -50,7 +50,9 @@ oncall="$HOME/.config/postfiat/sol-exit-oncall.env"
 tmp=$(mktemp "${oncall}.XXXXXXXX")
 printf 'cd -- %q\nexport REV=%q H=%q KIT=%q\n' "$PWD" "$REV" "$H" "$KIT" > "$tmp"
 mv -T "$tmp" "$oncall"
-python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
+# Name the live release and the one it replaced; the kit has no defaults and refuses either missing.
+EXIT_OLD_RELEASE=<live release id> EXIT_OLDER_RELEASE=<release it replaced> \
+  python3 ops/sol-live/exit_release_kit.py --release "$REL" --binary "$B"
 export ARCHIVE="$KIT/anchor-replay" INTEGRITY="$EXIT_WORK/replay/source/.integrity.key"
 export FAUCET="$EXIT_WORK/replay/source/faucet_account.json"
 mkdir -m700 "$ARCHIVE"
@@ -304,7 +306,7 @@ Inspect the tar inventory and release inputs. In the **private GitHub repository
 sudo /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root /bin/bash -ceu 'cd /; [[ $1 =~ ^[0-9a-f]{64}$ && $2 == /* && $3 =~ ^[1-9][0-9]{0,17}$ ]]; umask 077; d=$(mktemp -d /var/lib/pf-sol-install.XXXXXXXX); trap '\''rm -rf -- "$d"'\'' EXIT; cd "$d"; timeout --kill-after=5s 120s runuser -u postfiat -- /usr/bin/head -c "$(($3 + 1))" -- "$2" > bundle.tar; [[ $(stat -c %s bundle.tar) == "$3" ]]; printf "%s  bundle.tar\n" "$1" | sha256sum --strict -c -; umask 022; tar -xf bundle.tar --no-same-owner --no-same-permissions; /bin/bash ./install-exit-system.sh' _ "${SHA256:?digest from private GitHub commit}" "${BUNDLE:?absolute tar path}" "${BUNDLE_BYTES:?byte count from private GitHub commit}"
 ```
 
-The installer checks the installed revision, disabled/stopped withdrawal unit, inactive self-test and free port before invalidating earlier proof. A same-revision reinstall keeps the installed payer inode. On first install it copies the two checked source descriptors into private staging, validates the staged identities under the worker UID, and publishes them. Retire the administrator’s original fee-payer copy under the owner’s key-custody procedure before funding. Any retained copy can still spend that key’s SOL.
+The installer checks the installed revision, disabled/stopped withdrawal unit, inactive self-test and free port before invalidating earlier proof. A unit that is activating, deactivating or reloading counts as running. Both units are masked for the whole run and unmasked when it ends, whether it succeeds or fails. The new tree is built and checked under `/opt/postfiat/sol-exit.d/`; a failed build or check leaves everything as it was. A failure after the new unit files are loaded puts back the live tree's links and its own unit files; the self-test must then pass again. Its unit files and the self-test gate are loaded before the tree is switched in by one rename of the `/opt/postfiat/sol-exit` link. The previous tree stays as `sol-exit.previous`; appending `--rollback` puts it and its unit files back. Appending `--prune` removes older trees, and a re-run removes trees left by an interrupted install. A bundle older than the installed revision is refused unless `--allow-downgrade` is appended. The worker starts only on the tree the self-test unit last passed on. The worker runs as user and group ID 59900 (`account_id` in the installer); an install at ID 999 is moved there with both units stopped and masked: group first, then user, then every file under `/var/lib/pf-sol-exit` with the old IDs. A filesystem mounted under that directory stops the move. A same-revision reinstall keeps the installed payer inode. On first install it copies the two checked source descriptors into private staging, validates the staged identities under the worker UID, and publishes them. Retire the administrator’s original fee-payer copy under the owner’s key-custody procedure before funding. Any retained copy can still spend that key’s SOL.
 
 **First orchestrator step after the owner returns.** Run the installed oneshot. Its root preflight checks the worker’s actual host identity and sudo policy. It refuses Docker group membership, write access to /run/docker.sock, any sudo grant, and permission to read or traverse the administrator’s home. The remaining proof runs unprivileged. Its systemd settings use the worker UID, dedicated prover identity, protected home, read-only runtime and writable jobs directory. It binds port 18089 briefly, checks the installed payer, six distinct validator tunnels and finalized Solana network, and verifies the returned proof and public values locally with the pinned Solana tag-7 verifier. Stop here on failure. Both funding and tag 3 independently verify the saved possession signatures and the root-owned self-test log before signing.
 
@@ -554,6 +556,8 @@ The script needs Python 3.10 or newer and `setfacl` (the `acl` package). Any fai
 
 The script runs the first review and stops if it ends in an RPC or access error.
 
+**The settlement loop's restricted door.** Add `--settler-key FILE` (the loop's public key, printed by `install-exit-settler.sh`) to the install above. The script then writes one `restrict,command="…exit_review_door.py"` line into the reviewer user's `authorized_keys` and enables `pft-sol-exit-sign-door.path`. The door reads one JSON request on stdin. It accepts exactly two: hand in a drafted paid or refund decision for this host's own review, and return this host's result. The result is its signature, its refusal with the reason, or pending. It runs no command, names no file and gives no shell, transfer or forwarding. The node user signs a handed-in decision only from this host's own fresh verdict, as `exit_review.py sign` does (`exit_review.py sign-door`). What this changes: `exit_govern.py paid --restricted` collects every host's signature through the doors and never logs in as root to sign. With fewer than five signatures nothing is settled. Drafting, assembling and the proposer's batch submission still run through `govern.py`'s root login (see "What stays open").
+
 **Check the six providers.** Use at least three different Solana providers across the six hosts. With `HOSTS` set to the six hosts, this prints each host's provider (host name only) and warns when fewer than three differ:
 
 ```bash
@@ -561,10 +565,12 @@ for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; 
 ```
 
 **What stays open.**
-- **Root ssh from the relay.** The relay host still reaches every validator host as root over ssh (`govern.py`, `remote`). Root can run the node's signing command with the validator key directly, or replace the reviewer, so a compromised relay host can still sign on all six. Only the operators can close this:
-  - give the relay a non-root key whose forced command allows only `exit_review.py sign` with its four arguments;
-  - keep each validator key readable only by the node user;
-  - remove root ssh for settlement.
+- **Root ssh from the relay.** The relay host still reaches every validator host as root over ssh (`govern.py`, `remote`). Root can run the node's signing command with the validator key directly, or replace the reviewer, so a compromised relay host can still sign on all six. The restricted door removes root from the signatures (`--restricted`). It does not remove root from three other steps:
+  - the lead host drafts the decision with its node's data directory;
+  - the lead host assembles it the same way;
+  - the proposer submits the batch round with its validator key.
+
+  Root ssh for settlement can go only once those three have a restricted way as well. Keep each validator key readable only by the node user.
 - **Shared providers.** Independence also needs each host's Solana endpoint to be a different provider; the check above only warns.
 
 **Order, so that no payout waits unsettled** (each payout blocks the next until it is settled):
@@ -572,6 +578,36 @@ for h in $HOSTS; do ssh "root@$h" cat /etc/postfiat/sol-exit-review.json; echo; 
 2. For the next payout, confirm on each host that `/var/lib/postfiat-exit-review/<sha256 of the paid decision>.json` approves the same decision the settler signed.
 3. Just before the second release height, let the settler settle every paid burn, then stop it.
 4. From the height, the relay runs `exit_govern.py paid` (and `refund`). It only drafts and collects signatures; each host signs from its own review.
+
+### Settlement loop as a service
+
+Today the relay's settlement loop is the tmux session `settler`, running `oncall/settler.sh` every 90 s. That loop settles through `exit_govern.py paid --burn` and the root login. The installed loop is `pft-sol-exit-settler.timer`. It runs one pass of `exit_settler.py` every 90 s, as its own user `pft-sol-exit-settler`. A pass works like this:
+- It holds a lock, so two passes never run at once.
+- It finds burns to settle through any answering validator.
+- It proposes each one with `exit_govern.py paid --burn B --restricted`, bounded to 900 s.
+- A burn that keeps failing waits from 90 s, doubling up to an hour. It raises one `ALERT` line when it starts failing and one when the loop gives up after 12 attempts; after that, settle it by hand.
+- Every failure is a journal line: `journalctl -u pft-sol-exit-settler`.
+
+The loop only proposes. Each host's reviewer signs through its door, and with fewer than five signatures nothing settles.
+
+**Install on the relay machine, as root there:**
+
+```bash
+git archive -o exit-settler.tar "$COMMIT" ops/sol-live solana/deploy
+bash ops/sol-live/install-exit-settler.sh exit-settler.tar /home/postfiat/.ssh/known_hosts
+```
+
+The script:
+- creates the user and its SSH key (mode 0600, never printed) and `/etc/postfiat/sol-exit-settler.env`, where the Solana RPC URL goes;
+- prints the public key and the line each validator's `install-exit-review.sh … --settler-key FILE` writes;
+- then asks all six doors a read-only request.
+
+It enables nothing while a host does not answer; it names that host and exits 3. It also enables nothing while drafting, assembling and submitting still need a root login; it says so and exits 4. Until it enables the timer, keep the tmux loop. When it does, stop the tmux loop first, then start the timer:
+
+```bash
+tmux send-keys -t settler C-c && tmux kill-session -t settler   # as the relay's on-call login
+systemctl enable --now pft-sol-exit-settler.timer
+```
 
 ### Upgrade the initialised Solana verifier
 
@@ -621,6 +657,8 @@ If a step fails:
 - **After a successful migration.** The old program refuses every withdrawal with `Binding`, which is safe but stops payouts. To recover, upgrade to the new build again. No instruction restores the old route.
 
 ## Recovery
+
+Payouts while one validator is down. The holder is paid on Solana either way. Before this change the settlement loop (`oncall/settler.sh`) never settled that payout on the L1: `govern.py` drafted the decision with all six validators as supporters, five signed, and `governance-amendment-assemble` refused it ("requires one signed governance authorization for every support vote"). The loop logged a non-zero exit and tried again every 90 seconds until the sixth host answered. Now `govern.py` re-drafts the decision with exactly the five signers as supporters (`ratify-solana-exit-* --support`), checks that nothing else changed, and the five signatures settle it. The same holds for a refund, a close and a re-opening. Two hosts down, or one down and one reviewer refusing, still settle nothing, and the run names those hosts. The re-draft runs on the first answering validator's resident `postfiat-node`, so that binary must be this version or newer. On that host, `postfiat-node 2>&1 | grep -cF 'ratify-solana-exit-paid [--data-dir PATH] --validators CSV [--support CSV]'` prints 1. An older binary ignores `--support`; `govern.py` then stops with "the drafting node must know ratify-solana-exit --support" and nothing is submitted.
 
 On signer loss or a settlement backlog, disable public admission immediately by running `"$HOME/.local/bin/disable-sol-exit"` on the relay host. Confirm its effective false flag and the authenticated disabled-job response. If the relay cannot be controlled, block the public withdrawal path at the gateway and verify denial there. Preserve the original burn IDs, pending claims, journals and finalized payment references. Page the settlement on-call and all signer operators. Direct burns remain possible until a close is committed, because five validators can finalize them. Five can also close direct L1 admission with a separate decision, and the same five can re-open it after that close, so a lost sixth signer neither blocks nor locks holders' exit. Track new burns and outstanding custody continuously. Restore the sixth signer using its rehearsed recovery path, fence any old signer before resuming, and verify the restored committee identity, safety history and agreed parent. Pay and settle all pending claims using their original packets, and reconcile custody before re-opening. Preserve evidence and wait for accepted receipts and closed descriptors on at least five agreeing validators; the wrapper names any validator that did not answer.
 

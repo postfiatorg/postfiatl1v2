@@ -1814,6 +1814,69 @@ mod rpc_serve_request_tests {
         }
         fs::write(&genesis_path, genesis).unwrap();
         assert!(!rpc_serve_cached_status(&root, &cache).unwrap().1);
+
+        // The sibling process holds the database to commit a block: a second
+        // open of the file holds its exclusive lock, as that process would.
+        fn database_file(dir: &Path) -> Option<PathBuf> {
+            for entry in fs::read_dir(dir).ok()?.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(found) = database_file(&path) {
+                        return Some(found);
+                    }
+                } else if path.extension().is_some_and(|extension| extension == "redb") {
+                    return Some(path);
+                }
+            }
+            None
+        }
+        let (before_commit, _) = rpc_serve_cached_status(&root, &cache).expect("report before commit");
+        postfiat_storage::transactional::release_inactive_shared_transactional_stores()
+            .expect("close this process's idle handle");
+        let held = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(database_file(&root).expect("transactional database file"))
+            .expect("open database file");
+        held.try_lock().expect("hold the database as the committing process does");
+        let two_seconds_old = Instant::now() - Duration::from_secs(2);
+        cache.lock().unwrap().status_checked_at = Some(two_seconds_old);
+        let started = Instant::now();
+        let (during_commit, hit) = rpc_serve_cached_status(&root, &cache)
+            .expect("status must answer while the database is held for a commit");
+        assert!(hit, "the answer during a commit is the earlier report");
+        assert_eq!(during_commit.block_tip_hash, before_commit.block_tip_hash);
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "the refresh must not wait out the 20 second lease deadline: {:?}",
+            started.elapsed()
+        );
+        assert_eq!(
+            cache.lock().unwrap().status_checked_at,
+            Some(two_seconds_old),
+            "an answer during a commit must not make the earlier report fresh"
+        );
+        // Past the bound the earlier report is not used: the read fails closed as before.
+        cache.lock().unwrap().status_checked_at = Some(
+            Instant::now() - RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE - Duration::from_secs(1),
+        );
+        // With no earlier report at all the read fails closed too.
+        let empty = Mutex::new(RpcServeHealthCache::default());
+        let (refused, unprimed) = postfiat_storage::transactional::with_writer_lease_deadline(
+            Duration::from_millis(250),
+            || {
+                (
+                    rpc_serve_cached_status(&root, &cache),
+                    rpc_serve_cached_status(&root, &empty),
+                )
+            },
+        );
+        assert!(refused.unwrap_err().contains("storage_writer_busy"));
+        assert!(unprimed.unwrap_err().contains("storage_writer_busy"));
+        drop(held);
+        let (after_commit, hit) = rpc_serve_cached_status(&root, &cache).expect("read after the commit");
+        assert!(!hit);
+        assert_eq!(after_commit.block_height, before_commit.block_height);
         fs::remove_dir_all(root).expect("cleanup transactional RPC fixture");
     }
 

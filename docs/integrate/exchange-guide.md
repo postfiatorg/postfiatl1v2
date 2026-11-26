@@ -72,9 +72,6 @@ What you can do today:
   WebSocket client exists for wallet-facing proxies.
 - **Port.** Validator RPC listens on `27650 + validator index` on loopback by
   default ([Public RPC Operator Policy](../runbooks/public-rpc-operator-policy.md)).
-- **Writes are opt-in.** Submission methods are disabled unless the operator
-  starts `rpc-serve` with the matching flag
-  ([Write Policy](../rpc/write-policy.md)).
 - **Clients.** Use the Python client (`python/postfiat_rpc`) or the Rust SDK
   (`crates/rpc_sdk`) rather than hand-building signatures.
 
@@ -92,10 +89,31 @@ Methods an exchange needs ([RPC Methods](../rpc/methods.md)):
 | `mempool_submit_signed_payment_v2` | Submit a signed payment with memos (when enabled) |
 | `mempool_status` | Pending transaction count |
 
-The release generator's RPC service unit starts `rpc-serve` with
-`--allow-mempool-submit-finality`, the finality-returning submit path
-(`crates/node/src/batch_snapshot.rs`). The full code-derived authorization
-list is the [RPC Method Inventory](../runbooks/rpc-method-inventory.md).
+A remote method is reachable by anyone who can connect to the listener. The
+release service binds it to loopback. The following defaults apply when
+`rpc-serve` starts without method flags.
+
+<!-- rpc-family-table -->
+| Method family | Transport | Default (bare server) | Authorization | Effect |
+| --- | --- | --- | --- | --- |
+| Reads | RPC TCP | Enabled | Public queries | Read node or chain data |
+| FastSwap and FastLane<br>`fastlane_asset_control_apply`, `fastlane_asset_control_catch_up`, `fastlane_asset_control_prepare`, `fastlane_exit`, `fastswap_apply`, `fastswap_cancel_apply`, `fastswap_catch_up`, `fastswap_commit`, `fastswap_commit_round`, `fastswap_new_round_vote`, `fastswap_precommit`, `fastswap_prepare` | RPC TCP | Enabled | Signed intents, policy authorization or quorum certificates. A new-round vote uses existing prepared swap state and local round checks, without a caller signature. | Prepare, vote, catch up or apply protocol transitions |
+| Owned payments and unwraps<br>`owned_apply`, `owned_apply_v3`, `owned_sign`, `owned_sign_v3`, `owned_unwrap_apply`, `owned_unwrap_apply_v3`, `owned_unwrap_sign`, `owned_unwrap_sign_v3` | RPC TCP | Enabled (`--allow-owned-lane` / `--disable-owned-lane`) | Signed owner intents or certified operations | Sign or apply owned-lane transitions |
+| Mempool submission | RPC TCP | Disabled (`--allow-mempool-submit`) | Signed transaction or protocol payload | Submit to the mempool |
+| Finality submission and voting | RPC TCP | Disabled (`--allow-mempool-submit-finality`) | Signed transaction, batch or consensus evidence as required by the method | Coordinate certification, voting or finality |
+| Orchard batch creation | RPC TCP | Disabled (`--allow-orchard-batch-create`) | Method-specific proof and parameter checks | Construct private batches |
+| Private action admission | RPC TCP | Disabled (`--allow-private-action-admission`) | Domain, intent and action validation for admission | Queue an action or read its admission receipt |
+| Operator methods | Local CLI | Local only | Local process and storage permissions | Local reads or mutations |
+<!-- /rpc-family-table -->
+
+The generated validator RPC service explicitly enables the owned lane and
+finality submission. The legacy `server_info.rpc.read_only` field tracks the
+mempool, finality, Orchard batch and owned-lane switches. FastSwap/FastLane
+protocol mutations remain reachable when that field is true, and private
+action admission has its own switch. Mempool and finality submissions share per-peer and
+global rate limits. Those counters do **not** cover owned-lane applies.
+The [RPC Method Inventory](../runbooks/rpc-method-inventory.md) lists the
+transport policy for each method.
 
 ## Confirmation (finality)
 
@@ -108,25 +126,78 @@ confirmation depth: waiting for more blocks does not add safety. Note that all
 six validators are administered by one organization today, so the fault
 assumption rests on that organization.
 
-A committed block can contain a **rejected** transaction. Credit a deposit or
-mark a withdrawal complete only when both hold
-([Finality](../architecture/finality.md#client-finality),
-[RPC Overview](../rpc/overview.md)):
+A committed block can contain a **rejected** transaction. The Python wallet's
+default `confirmation == "rpc_confirmed"` means the submission server
+returned a matching accepted receipt inline, or the query server later
+reported it through `tx`. Both paths trust that server. The compatibility
+field `finalized` is also true for this RPC-only outcome.
 
-1. `tx` returns a finality report with `confirmed: true`; the report also
-   carries `proof_id`, the `block` record with its certificate, `tip_hash` and
-   `tip_state_root` (`TxFinalityReport` in `crates/node/src/node_types.rs`);
-   and
-2. the report's `receipt` has `accepted: true` and an accepted `code`.
+For independently verified exchange credit, provision a full, immutable
+archive copy from your own node and pin the chain ID, genesis hash and
+genesis validator registry root through your trusted deployment records.
+Use a local, trusted `postfiat-node` build. The verifier follows ordered
+committee changes, checks quorum signatures and chain linkage, replays
+archived transactions and receipts, and resolves the signed native payment
+at its certified receipt index. Pruned archives and committee changes
+that require unauthenticated historical keys cannot supply this result.
+This is full-history replay per observed payment. Budget for archive size
+and replay time before enabling it on a deposit processor.
 
-Store the evidence with the credit: finality proof ID, block hash, certificate
-ID, registry root, receipt code and message
-([Wallet Exchange Custody Model](../specs/wallet-exchange-custody-model.md)).
-Consider querying more than one validator RPC and comparing the results.
+```python
+from pathlib import Path
+from postfiat_rpc import FinalityTrust, verify_payment_finality
 
-If a finality poll times out, the transaction may still finalize. Poll again by
-transaction ID; do not sign a replacement (`finality_warning` in
-`python/postfiat_rpc/pftl_transfer.py`).
+trust = FinalityTrust(Path(archive_path), chain_id, genesis_hash, genesis_registry_root)
+evidence = verify_payment_finality(trust, deposit_tx_id)
+if evidence["confirmation"] == "independently_verified":
+    payment = evidence["report"]["transaction_rows"][0]
+    # Match the expected deposit address, amount in atoms and customer memo.
+    # Record evidence and credit once, keyed by (chain_id, genesis_hash, tx_id).
+```
+
+Some devnet recovery blocks followed a different signing committee from the
+one reconstructed by applying all ordered updates. Genesis-only verification
+refuses this history. A custodian that independently authenticated the recovery
+decision and its block can provide a local JSON array of exception records.
+Each record contains the exact `chain_id`, `genesis_hash`, positive `height`,
+`block_hash`, `ordered_registry_root` (the full committee after applying the
+due updates) and `signing_registry_root` (the full committee authorized for that
+block). Hashes and roots are 96 lowercase hexadecimal characters. List records
+in strictly increasing height order.
+
+Obtain these values from independently authenticated recovery records, verify
+the signers’ authority through the custodian’s deployment records, then retain
+the approved file with its provenance outside the archive. The payment RPC,
+archive and certificate alone cannot establish a recovery decision. Set
+`historical_committee_pins=Path("/custody/trust/recovery.json")` on
+`FinalityTrust`, or supply `--historical-committee-pins PATH` to either transfer
+or native verification CLI. Certificate and execution replay both check the
+pinned block and committee roots. The verifier checks the block quorum, the
+signed authority for effective committee changes, and the payment receipt. A
+legacy unsigned Foundation drill record can only preserve the already-active
+signers at an independently pinned recovery block. The result records the
+pins used. Independent credit on the affected devnet history
+remains unverified until the custodian provisions this evidence and successfully
+replays its own archive.
+
+Pass the same `finality_trust=trust` to `send_pft_and_poll_finality` to
+require this verification for withdrawals. Both the inline-submit and
+submit-then-poll paths derive the transaction ID from the locally signed
+payment. The transfer CLI accepts `--poll-finality --verification-archive PATH
+--trusted-genesis-hash HASH --trusted-genesis-registry-root ROOT` together
+with `--chain-id ID`. Save the result's `finality_evidence` with the
+withdrawal or the complete deposit evidence returned above. It contains the
+trust pins, transaction ID, replay tip, proof ID, signed block certificate,
+decoded payment and matching receipt. An independently verified payment has
+`accepted: true` and the literal receipt code `accepted`. Retain the
+corresponding full archive for later replay.
+
+A `pending` result means this archive has no receipt yet. Publish a new
+complete archive version by atomically switching the verifier's path to the
+new immutable directory, then query the same transaction ID. A `rejected`
+result records the certified unsuccessful receipt. Archive errors fail the
+verification. A polling timeout can precede finality, so continue looking
+up the existing ID before considering a replacement payment.
 
 ## Deposits
 

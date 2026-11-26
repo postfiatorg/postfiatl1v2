@@ -3059,6 +3059,7 @@ fn example_rpc_unit_matches_generator_accept_budget() {
         1,
         "the example unit passes --max-requests exactly once"
     );
+    assert_eq!(unit.matches(" --allow-owned-lane ").count(), 1);
     assert!(unit.contains("\nRestart=always\n"));
     assert!(
         unit.contains(RPC_RESTART_SEC_LINE),
@@ -3192,6 +3193,7 @@ fn deployment_validator_unit_stage_is_canonical_and_non_overwriting() {
         assert!(!rpc_unit.contains("RestartSec=5"));
         assert!(!rpc_unit.contains("Restart=on-failure"));
         assert!(rpc_unit.contains("--unsafe-devnet-json-storage"));
+        assert_eq!(rpc_unit.matches(" --allow-owned-lane ").count(), 1);
         assert!(rpc_unit.contains("--allow-mempool-submit-finality"));
         assert!(!rpc_unit.contains("--allow-mempool-submit --"));
         assert!(!rpc_unit.contains("0.0.0.0"));

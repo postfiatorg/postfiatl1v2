@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Match a durable block marker to a Linux redb flock interval on one host."""
+
+import argparse
+import json
+import re
+from decimal import Decimal
+from pathlib import Path
+
+LOCK = re.compile(
+    r"^(\d+\.\d+) flock\(\d+<([^>]+)>, (LOCK_EX\|LOCK_NB|LOCK_UN)\)\s+= 0 <(\d+\.\d+)>$"
+)
+MARKER = re.compile(r"postfiat_commit_lease pid=(\d+) epoch_ns=(\d+) height=(\d+) block=(\S+)$")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--trace-prefix", required=True, type=Path)
+    parser.add_argument("--database", required=True, type=Path)
+    parser.add_argument("--markers", required=True, type=Path)
+    parser.add_argument("--pid", required=True, type=int)
+    args = parser.parse_args()
+    events = []
+    for path in args.trace_prefix.parent.glob(args.trace_prefix.name + ".*"):
+        if not path.suffix[1:].isdigit():
+            continue
+        for line in path.read_text().splitlines():
+            m = LOCK.fullmatch(line.strip())
+            if m and m[2] == str(args.database):
+                events.append((Decimal(m[1]), m[3], Decimal(m[4])))
+    markers = []
+    for line in args.markers.read_text().splitlines():
+        m = MARKER.search(line)
+        if m and int(m[1]) == args.pid:
+            markers.append((Decimal(m[2]) / 10 ** 9, int(m[3]), m[4]))
+    if not events or not markers:
+        parser.exit(1, "Missing successful flock calls or durable block markers.\n")
+    acquired = None
+    measurements = 0
+    for at, operation, latency in sorted(events):
+        if operation == "LOCK_EX|LOCK_NB":
+            acquired = (at, latency)
+            continue
+        if acquired is None:
+            continue  # Attached while the process already held a lease.
+        start, start_latency = acquired
+        acquired = None
+        window = [m for m in markers if start + start_latency <= m[0] <= at]
+        if len(window) != 1:
+            continue  # Require one durable block under this exact handle.
+        _, height, block = window[0]
+        print(json.dumps(dict(pid=args.pid, database=str(args.database),
+                              height=height, block_hash=block, acquisition_epoch=str(start),
+                              release_epoch=str(at), hold_ms_min=float((at - start - start_latency) * 1000),
+                              hold_ms_max=float((at + latency - start) * 1000))))
+        measurements += 1
+    if measurements == 0:
+        parser.exit(1, "No complete file-lock interval containing exactly one durable block.\n")
+
+
+if __name__ == "__main__":
+    main()
