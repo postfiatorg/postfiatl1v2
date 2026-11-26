@@ -46,23 +46,28 @@ ensure() {
 
 up() {
   local deposits=${1:-}
-  trap 'log "window failed to open"; "$HOME/.local/bin/b24-alert" "Colab proving window failed to open; deposits and withdrawals stay closed. See $LOG" || true' ERR
+  trap 'log "window failed to open"; rm -f "$STANZA"; timeout 180 $COLAB stop -s "$NAME" >/dev/null 2>&1 || true; "$HOME/.local/bin/b24-alert" "Colab proving window failed to open; deposits and withdrawals stay closed. See $LOG" || true' ERR
   if $COLAB sessions 2>/dev/null | grep -q "^\[$NAME\]"; then log "session $NAME already exists"; else
     local got=
     # G4 first: 48 cores and 96 GB of GPU memory (measured 2026-11-25). Deposit proving is limited by
     # CPU on the 12-core A100 shapes, and the deposit prover and a withdrawal prover fit together
     # only on a GPU with more than 60 GB.
-    for shape in "G4" "A100 --high-mem" "A100" "H100"; do
-      for try in 1 2 3; do
-        if timeout 240 $COLAB new -s "$NAME" --gpu $shape 2>&1 | grep -q "Session READY"; then got=$shape; break 2; fi
-        sleep 20
+    # Colab's supply varies: on 26 November a G4 came in 5 seconds at 23:40 UTC and nothing at all
+    # came for 43 minutes from 02:26. Keep asking, every shape in turn, until the deadline.
+    local deadline=$(( $(date +%s) + 9000 )) round=0
+    [ -n "${COLAB_PROVER_UNTIL:-}" ] && deadline=$(date -u -d "today ${COLAB_PROVER_UNTIL}" +%s)
+    while [ -z "$got" ] && [ "$(date +%s)" -lt "$deadline" ]; do
+      round=$((round+1))
+      for shape in "G4" "A100 --high-mem" "A100" "H100"; do
+        if timeout 240 $COLAB new -s "$NAME" --gpu $shape 2>&1 | grep -q "Session READY"; then got=$shape; break; fi
       done
+      [ -n "$got" ] || { [ $((round % 5)) = 1 ] && log "no GPU yet (round $round)"; sleep 45; }
     done
-    [ -n "$got" ] || { log "no GPU available from Colab"; exit 75; }
+    [ -n "$got" ] || { log "no GPU available from Colab before the deadline"; exit 75; }
     log "session $NAME on $got"
   fi
   rm -f "$KNOWN"; ssh -O exit -o ControlPath="$CM" root@colab-prover 2>/dev/null || true
-  tar -C "$ROOT" -cf - bundle provision.sh warm.sh solexit/hostkey solexit/authorized_keys solexit/pf-sol-exit-prove | direct 'mkdir -p /content && tar -C /content -xf - && bash /content/provision.sh' 2>&1 | tail -3 | tee -a "$LOG"
+  tar -C "$ROOT" -cf - bundle provision.sh warm.sh fetch-circuits.py solexit/hostkey solexit/authorized_keys solexit/pf-sol-exit-prove | direct 'mkdir -p /content && tar -C /content -xf - && bash /content/provision.sh' 2>&1 | tail -3 | tee -a "$LOG"
   local vram; vram=$(direct 'nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits')
   # Under 60 GB the deposit prover (24.5 GB) leaves no room for a withdrawal prover (23 GB).
   if [ "$deposits" = deposits ] && [ "$vram" -lt 60000 ]; then log "GPU has ${vram} MiB: deposits stay closed this window"; deposits=; fi

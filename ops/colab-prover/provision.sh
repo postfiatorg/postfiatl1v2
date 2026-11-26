@@ -38,5 +38,7 @@ if [ -d /content/solexit ]; then
   /usr/sbin/sshd -p 2223 -o ListenAddress=127.0.0.1 -h /root/pfx/hostkey -o AuthorizedKeysFile=/root/pfx/authorized_keys \
     -o PasswordAuthentication=no -o PidFile=/root/pfx/sshd.pid -E /root/pfx/sshd.log
 fi
+# The circuit files, fetched in parallel and checked, so that no proof downloads them.
+python3 /content/fetch-circuits.py $B/dep/circuits.sha256
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 echo PROVISIONED

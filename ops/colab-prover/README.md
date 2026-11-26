@@ -26,5 +26,20 @@ Measured on 25 and 26 November 2026 (G4: RTX PRO 6000 Blackwell 96 GB, 48 cores)
 Warm-up from request to ready was 43 minutes (the circuit files are downloaded each session). The
 session uses about 11.2 compute units an hour: about 31 a day for this window.
 
+The circuit files (6.2 GB) are fetched on the session with 16 parallel ranges and checked against a
+pinned hash (`fetch-circuits.py`, 3 min 43 s). One connection to that bucket gives about 5 MB/s, and
+the prover's own download once took over 40 minutes and failed a window.
+
+Colab's supply varies. On 26 November a G4 came in 5 seconds at 23:40 UTC, a fallback A100 after 12
+minutes at 01:13, nothing at all for 43 minutes from 02:26, and a G4 after 3 minutes at 03:13. The
+launcher keeps asking, every shape in turn, until 18:30 UTC, and raises the B24 alert if it never
+opens. The two stopped Vast provers (`62235352`, `53579074`) are the manual fallback.
+
+The Solana observer moved on 26 November from Vast `61511840` (2x RTX PRO 5000, $2.24/h) to Vast
+`62617699` (Threadripper PRO 5975WX, 251 GB, 1.1 TB, $0.71/h). `mainnet-capture.py` and
+`mainnet-go.py` name the new host. It has its own node identity and caught up 32 minutes after
+starting from an empty disk. A real deposit (`Sm1Mo4BP…`) was captured by it, proved on the session
+in 96 s and credited on six validators 151 s after sending.
+
 Not done: the Task Node does not yet show the window's hours; a session that dies inside a window is
 not restarted; a real Ethereum withdrawal and a real Solana withdrawal have not been made through it.

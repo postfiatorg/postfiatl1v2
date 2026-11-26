@@ -20,8 +20,8 @@ SSH = [
     "-oBatchMode=yes",
     "-oConnectTimeout=8",
     "-p",
-    "37815",
-    "root@37.63.76.95",
+    "63534",
+    "root@207.216.48.74",
 ]
 BASE = STATE / "mainnet"
 
@@ -141,8 +141,8 @@ def credit(relay, activation, sig, slot, first_seen):
                     "rsync",
                     "-a",
                     "-e",
-                    "ssh -oBatchMode=yes -p 37815",
-                    f"root@37.63.76.95:/work/g/sol-live/receipts/{slot}/",
+                    "ssh -oBatchMode=yes -p 63534",
+                    f"root@207.216.48.74:/work/g/sol-live/receipts/{slot}/",
                     str(stage) + "/",
                 ],
                 check=True,
