@@ -1,0 +1,9 @@
+[Unit]
+Description=Check the Colab proving window at 17:05 UTC
+
+[Timer]
+OnCalendar=*-*-* 17:05:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target

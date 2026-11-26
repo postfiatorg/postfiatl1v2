@@ -12,6 +12,35 @@ Solana deposits, Solana and Ethereum withdrawals, and the B24 daily proof.
   runtime). The Solana withdrawal service runs as its own user: `/etc/hosts` points that name at a
   local port that is forwarded to a second SSH daemon on the session, which has a fixed host key and
   admits only that service's key with its forced command (`colab-sol-withdraw.sh`, run once with sudo).
+- `colab-prover.sh down` attempts every close action (state files, the connection, the stanza and socket, the
+  session stop) and logs "window closed" only when the session is stopped and no longer listed; otherwise it
+  logs and alerts once what failed and exits non-zero. Logging is best-effort everywhere: an unwritable
+  `window.log` never keeps an action (the session stop included) from running.
+- `up`, `down` and `ensure` hold one lock (`window.lock` beside `window.mode`). A second `up` exits at once
+  ("nothing changed"); `ensure` skips its run quietly while `up` or `down` holds it; `down` waits for it up to
+  150 s (`COLAB_PROVER_LOCK_WAIT`) and then closes anyway. An `up` that finds today's open window (dated record,
+  stanza, mode, and the session listed) changes nothing. A session listing that fails or times out
+  (`COLAB_PROVER_LIST_SECONDS`, 15 s and a 2 s kill) is never taken as "no session": `up` asks again five
+  times and then alerts and changes nothing; `check` alerts. A failed `up` removes only the state files it
+  wrote and stops only a session it created.
+- `colab-prover-check.timer` (17:05 UTC, not enabled by default) runs `colab-prover.sh check`, which sends
+  the B24 alert unless today's open is recorded (`window.opened`, written by a successful `up`), the stanza
+  and `window.mode` (`deposits` or `none`) are in place and the session is listed; a listing that fails or
+  times out counts as not open, and its 17 s deadline leaves the unit's minute for the alert. Before it asks
+  for a machine, `up` removes the state of a window that is not open (a record from another day, an open
+  that did not finish, or a session the listing says is gone).
+- `colab-prover.sh ensure` (every two minutes) puts back the connection, the withdrawal door and the
+  deposit socket, each step whatever the others did and each command bounded with a 2 s kill grace
+  (`COLAB_PROVER_STEP_SECONDS`, 15 s, for the connection, the forwards and the tunnel stop;
+  `COLAB_PROVER_DOOR_SECONDS`, 30 s, for the door's self-test, an SSH login and two file tests that take a
+  few seconds when healthy). With the defaults a run takes at most 125 s (five step commands, the door
+  check and the 8 s socket probe), inside the unit's three minutes; larger overrides must keep that sum
+  under the unit's limit. A failing step of an open window is counted, never torn down. A run counts as failed
+  until it succeeds, so one the unit's limit cuts short is counted too; after three failed runs in a row in
+  an open window it sends the B24 alert once, and once more when a run works again
+  (`window.ensure-failures` and `window.ensure-alerted` beside `window.mode`).
+- A failed open alerts once, also when the failure is inside a command substitution or when logging or
+  cleanup itself fails; the handler keeps the original status.
 - The prover files are not in this repository. They are kept on the relay host in
   `~/var/colab-prover/bundle` (506 MB); `bundle.SHA256SUMS` lists them. The session's fixed host key
   and the launcher's self-test key are in `~/var/colab-prover/solexit` on that host only.
