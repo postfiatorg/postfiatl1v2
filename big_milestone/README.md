@@ -65,7 +65,7 @@ flowchart LR
 
 Formalising the deterministic governance framework is the **core of the project**. Today the pipeline is a typed ruleset and deterministic policy, with Cobalt ratification. It runs in research and shadow mode, and authority transfer is not active ([overview](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/deterministic-governance-overview.md), [verifiable constitution](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/verifiable-constitution.md)).
 
-No single pillar owns formalising the framework itself. [Pillar 1](pillars/01-hive-governance.md) defines how a session's decision becomes a ruling request, what evidence a ruling may use, and the rule that two separate hosts must replay it to the same result (a disagreement records `hold-no-op`). The wider framework, meaning the ruleset, policy and authority transfer, still needs an owner.
+No single pillar owns formalising the framework itself. [Pillar 1](pillars/01-hive-governance.md) defines how a session's decision becomes a ruling request and uses the snapshot as its evidence (its R27). No pillar yet requires two separate hosts to replay a ruling to the same result, or says what a disagreement records. The wider framework, meaning the ruleset, policy and authority transfer, still needs an owner.
 
 Its scoring runs need **rented GPUs** (Vast and RunPod H200s, roughly $2–4 an hour; past campaigns cost $5–80). [Pillar 1](pillars/01-hive-governance.md) keeps the public conversation off GPUs. The deterministic scoring that ratifies decisions still needs a cheaper, repeatable home.
 
@@ -77,7 +77,7 @@ Governance needs a **fixed cadence**, so the public knows when the next packet a
 
 ### A method for capturing protocol state
 
-There must be one defined way to gather the protocol's current state into a packet: chain height and state root, validators and their admission verdicts, NAV reserve-proof status, bridge state, board budgets, steward-supplied open P0s and changes since the last packet. Each field carries a trust level. That packet is pinned to IPFS. [Pillar 1](pillars/01-hive-governance.md) defines `pf.governance.packet.v1`, and [Pillar 2](pillars/02-message-protocol.md) defines its envelope.
+There must be one defined way to gather the protocol's current state into a packet: chain height and state root, validators and their admission verdicts, NAV reserve-proof status, bridge state, board budgets, steward-supplied open P0s and changes since the last packet. Each field carries a trust level. That packet is pinned to IPFS. [Pillar 1](pillars/01-hive-governance.md) defines `pf.governance.packet.v1`, though its snapshot does not yet carry admission verdicts, reserve-proof status, board budgets or a trust level per field, and [Pillar 2](pillars/02-message-protocol.md) defines its envelope.
 
 ## Chain readiness gates
 
@@ -85,7 +85,7 @@ People can't be moved off the old chain until the new chain performs well enough
 
 | Gate | Where it stands today | Owner |
 |---|---|---|
-| **1. Supports NFTs in a smart way** | `nft_mint`, `nft_transfer` and `nft_burn` are built and signed with ML-DSA-65. Metadata standard, migration and explorer view are missing. Storage does not scale yet: every NFT transaction copies the ledger and re-checks every NFT ever minted, so keyed storage and paginated lists must land before Task Node switches over. | [Pillar 4](pillars/04-nft-system.md) |
+| **1. Supports NFTs in a smart way** | `nft_mint`, `nft_transfer` and `nft_burn` are built and signed with ML-DSA-65. Metadata standard, migration and explorer view are missing. Storage does not scale yet: every NFT transaction copies the ledger and re-checks every NFT ever minted. [Pillar 4](pillars/04-nft-system.md) R16 benchmarks this and swaps the linear scans for keyed lookups before Task Node switches over if cost grows with the number of NFTs. Paginated lists are not yet specified. | [Pillar 4](pillars/04-nft-system.md) |
 | **2. Works with existing memo-type private payments** | Memos ride on `payment_v2` and are signed into FastPay orders, at most 256 decoded bytes per memo and 512 bytes across all memos, in plaintext. Today's encrypted-memo payments (`pf.ptr` with an encrypted CID) run on the old chain only. | [Pillar 2](pillars/02-message-protocol.md) |
 | **3. FastPay as the default for Task Node payouts** | FastPay p50 is 183 ms to quorum across 6 validators on 3 continents, and the epoch-2 committee has been live since height 1123. FastPay carries PFT only, and memos on FastPay certificates don't appear in account history yet. Task Node payouts still send XRPL `Payment`s on the old chain and never touch FastPay. | [Pillar 2](pillars/02-message-protocol.md) · readiness |
 | **4. Cobalt understood: simulations, blog posts, Lean proofs** | The adversarial campaign E1–E6 concluded **KEEP_ACTIVE**: 10,240 oracle cases, 442,368 schedules with zero conflicts, +0.45% latency. Live rotation committed at height 924. There is **no Lean model of Cobalt yet**. Lean exists for the PFSH02 privacy work only, on an unmerged branch. | Readiness: more blog posts and iterative Lean studies |
@@ -110,7 +110,7 @@ flowchart LR
 | **1. Validators** | Public genesis and signed releases. The genesis cohort comes from the old chain's Dynamic UNL scoring plus a signed `IdentityReceiptV1` binding each old key to a new ML-DSA key. Later validators pass the admission policy and are ratified by the current set. Making Cobalt the only path for registry changes (gate Z1) is still open. | [Pillar 3](pillars/03-validator-program.md) · [genesis spec](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/architecture/l1v2-testnet-genesis-and-launch-spec.md) · [testnet path](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/testnet-path.md) |
 | **2. Task Node on the new chain** | Payouts on FastPay, the message protocol and NFT mints on the new chain. | [Pillar 2](pillars/02-message-protocol.md) · [Pillar 4](pillars/04-nft-system.md) |
 | **3. Users and assets** | NFT migration and identity minting. **The token and balance migration plan does not exist yet**; the genesis spec marks token migration out of scope. | [Pillar 4](pillars/04-nft-system.md) · [Pillar 6](pillars/06-hive-identity.md) |
-| **4. Old chain archived** | Old `pf.ptr` v4 pointers stay decodable for replay. A final old-chain ledger hash is published at the freeze, so NFT provenance and evidence archives can still be checked once the old chain is gone. | [Pillar 2](pillars/02-message-protocol.md) · [Pillar 4](pillars/04-nft-system.md) |
+| **4. Old chain archived** | Old `pf.ptr` v4 pointers stay decodable for replay. No pillar yet requires a final old-chain ledger hash at the freeze, which NFT provenance checks need once the old chain is gone. | [Pillar 2](pillars/02-message-protocol.md) · [Pillar 4](pillars/04-nft-system.md) |
 
 ## NAVCoins: the near-term product
 

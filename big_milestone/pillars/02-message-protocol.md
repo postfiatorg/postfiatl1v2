@@ -109,7 +109,7 @@ sequenceDiagram
     - optionally `request_hash` (x402), `in_reply_to` and, in a sealed message's inner header, `outer_readers_hash`, the outer envelope's `RH` (R5, R11).
 - **R5.** Signature, encoding and hashes:
     - **Signature.** ML-DSA-65, context `postfiat-l1-v2/message-envelope/v1`, over SHA3-384(header) ‖ `RH` ‖ SHA3-384(body), where `RH` = SHA3-384 of the length-prefixed readers in order. Adding, removing, reordering or editing a reader breaks it.
-    - **Encoding.** Deterministic: ascending fields, no unknown fields, defaults omitted. Verifiers never re-serialize. `body_encoding` is `PROTOBUF` (default) or `CANONICAL_JSON` (RFC 8785) for Pillar 1 packets, Pillar 4's metadata twin and legacy bodies.
+    - **Encoding.** Deterministic: ascending fields, no unknown fields, defaults omitted. Verifiers never re-serialize. `body_encoding` is `PROTOBUF` (default) or `CANONICAL_JSON` (RFC 8785) for Pillar 1 packets, Pillar 4's JSON view (its R2) and legacy bodies.
     - **Hashes.** The CID uses SHA-256, as IPFS expects. Chain-side commitments use SHA3-384 over the exact bytes; Pillar 4's `metadata_hash` is one.
     - **Randomised signing.** Each signature, and so each CID, is new; nothing deduplicates by either. Fixed-byte vectors use the seeded signer.
 - **R6.** Registry and evolution. The full name is always in the envelope, so the id is a hint, never a gate; anyone can publish with id `1`. Field numbers are never reused, readers ignore unknown fields, and a breaking change gets a new `vN`. Each entry lists the schema's default readers (R11).
@@ -241,7 +241,7 @@ Prices, pinning, float and the x402 asset are founder decisions (open questions 
     - a Sealed envelope referenced from a public leg (deposit, withdrawal or companion payment): no circuit change, but it links that leg to the message;
     - an encrypted memo inside the note ciphertext: strongest privacy, but note-format and circuit work and a new audit;
     - off-chain delivery (Hive or Nostr) of a Sealed envelope: no linkage, weaker delivery and durability.
-13. **Protobuf everywhere?** The founder's story asks for protobuf. `CANONICAL_JSON` lets Pillar 1 packets, Pillar 4's twin and the other Task Node names move without conversion; protobuf-only means converting about 24 schemas before Stage 2. `body_encoding` supports either.
+13. **Protobuf everywhere?** The founder's story asks for protobuf. `CANONICAL_JSON` lets Pillar 1 packets, Pillar 4's JSON view and the other Task Node names move without conversion; protobuf-only means converting about 24 schemas before Stage 2. `body_encoding` supports either.
 14. **Payout float and targets.** How much PFT sits in the payout pool, in how many objects, refilled at what level? A larger float stalls less but puts more capital in a hot wallet. What p50, p95, fallback and pin-resolution targets must AC 11 meet?
 
 ## Code references

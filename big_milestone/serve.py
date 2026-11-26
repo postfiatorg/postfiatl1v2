@@ -42,21 +42,29 @@ def pages() -> list[dict]:
     rounds = sorted((ROOT / "feedback").glob("round-*"), key=lambda d: int(d.name.split("-")[1]))
     if (ROOT / "feedback" / "README.md").exists():
         files.append(ROOT / "feedback" / "README.md")
-    for round_dir in rounds:
-        files += sorted(round_dir.glob("[0-9]*.md"))
+    files += sorted((page for round_dir in rounds for page in round_dir.glob("[0-9]*.md")),
+                    key=lambda page: (page.name, int(page.parent.name.split("-")[1])))
     files += sorted((ROOT / "changelog").glob("*.md"))
-    latest = rounds[-1].name if rounds else ""
+    # Each pillar's feedback entry in the nav is its latest surviving review:
+    # a reverted revision's review is deleted, so later rounds can be partial.
+    latest_for = {}
+    for round_dir in rounds:
+        for page in round_dir.glob("[0-9]*.md"):
+            latest_for[page.name] = round_dir.name
     items = []
     for path in files:
         text = path.read_text(encoding="utf-8")
         title = next((line[2:].strip() for line in text.splitlines() if line.startswith("# ")), path.stem)
         status = STATUS_RE.search(text)
         score = SCORE_RE.search(text)
+        is_round_page = "feedback" in path.parts and path.parent.name.startswith("round-")
+        if is_round_page:
+            title = f"{title} (round {path.parent.name.split('-')[1]})"
         items.append({"route": route_for(path), "path": path, "title": title,
                       "status": status.group(1).strip() if status else (f"{score.group(1)}/100" if score else ""),
-                      "section": "Specs" if "feedback" not in path.parts else f"Feedback · {latest.replace('-', ' ')}",
+                      "section": "Specs" if "feedback" not in path.parts else "Feedback · latest",
                       "in_nav": "changelog" not in path.parts
-                      and ("feedback" not in path.parts or path.parent.name in ("feedback", latest))})
+                      and (not is_round_page or latest_for.get(path.name) == path.parent.name)})
     return items
 
 
@@ -82,11 +90,25 @@ def rewrite_links(body: str, page: Path) -> str:
     return re.sub(r'href="([^"]+)"', fix, body)
 
 
+def render_checkboxes(body: str) -> str:
+    body = re.sub(
+        r"<li>\s*\[ \]\s*",
+        '<li class="task-item"><input type="checkbox" disabled> ',
+        body,
+    )
+    body = re.sub(
+        r"<li>\s*\[[xX]\]\s*",
+        '<li class="task-item is-done"><input type="checkbox" disabled checked> ',
+        body,
+    )
+    return body
+
+
 def render(item: dict, nav: list[dict]) -> str:
     text = item["path"].read_text(encoding="utf-8")
     md = markdown.Markdown(extensions=["tables", "fenced_code", "toc", "sane_lists", "attr_list"],
                            extension_configs={"toc": {"permalink": False}})
-    body = rewrite_links(md.convert(text), item["path"])
+    body = render_checkboxes(rewrite_links(md.convert(text), item["path"]))
     links = []
     section = ""
     for entry in (e for e in nav if e["in_nav"]):
@@ -167,6 +189,9 @@ table {{ border-collapse:collapse; width:100%; margin:16px 0; font-size:14px; ba
 th, td {{ border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top; }}
 th {{ background:var(--code); }}
 .mermaid {{ background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:16px; margin:18px 0; text-align:center; }}
+li.task-item {{ list-style:none; margin-left:-20px; }}
+li.task-item input[type="checkbox"] {{ margin-right:8px; accent-color:var(--accent); transform:scale(1.1); vertical-align:middle; }}
+li.task-item.is-done {{ color:var(--muted); text-decoration:line-through; }}
 @media (max-width: 1100px) {{ .layout {{ grid-template-columns:220px minmax(0,1fr); }} aside.toc {{ display:none; }} main {{ padding:28px; }} }}
 @media (max-width: 720px) {{ .layout {{ display:block; }} nav.side {{ position:static; height:auto; }} }}
 </style></head>

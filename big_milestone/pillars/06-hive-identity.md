@@ -137,15 +137,15 @@ flowchart TB
 
 ### Links
 
-- **R13. Validator link.** The [Pillar 3](03-validator-program.md) R13 connect command signs the R7 digest under the context `postfiat-l1-v2/identity-link/v1`. That context must be on the Pillar 3 signer's allow-list of non-consensus contexts, because today's helper needs a key file and the signer process refuses anything else.
+- **R13. Validator link.** The [Pillar 3](03-validator-program.md) R13 connect command signs the R7 digest under the context `postfiat-l1-v2/identity-link/v1`. Pillar 3 must add an allow-list of non-consensus contexts (binding, identity link) to its signer, with this context on it, because today's helper needs a key file and the signer process refuses anything else.
     - **Checks:** at link time consensus checks the ML-DSA signature, and `node_id` and key against the live registry. The link stores the key.
-    - **Staleness:** computed at read time. A link is **stale** when its stored key no longer matches the registry, so a validator rotation writes nothing to identity state. Task Node's binding is different: under Pillar 3 R15 it follows a ratified rotation by validator id, so access continues while the on-chain link waits for a re-link.
+    - **Staleness:** computed at read time. A link is **stale** when its stored key no longer matches the registry, so a validator rotation writes nothing to identity state. Task Node's binding is different: it follows Pillar 3 R15, where a rotated-away key is *lapsed* inside a grace window, while the on-chain link waits for a re-link.
     - **Self-unlink:** checked against the stored key, so a retired validator can always detach itself.
 - **R14. Old-chain link.** A dual-signature proof modelled on `IdentityReceiptV1`: the old-chain key and the ML-DSA key each sign a digest of one body.
     - **Format:** a 33-byte compressed secp256k1 key and the DER ECDSA signature `ripple-keypairs` makes over SHA-512Half. Consensus accepts strict DER with low S only.
     - **Index:** consensus derives the old-chain account id (RIPEMD-160 of SHA-256 of the key) and indexes the link by it.
     - **Key types:** a key-type byte leaves room for ed25519 accounts (open question 10).
-    - **Uses:** [Pillar 2](02-message-protocol.md) R24 ties old encrypted history to the new account through it. A [Pillar 4](04-nft-system.md) claim may cite it as the old-wallet signature, but does not need it: Pillar 4's burn-memo path works for any key type.
+    - **Uses:** [Pillar 2](02-message-protocol.md) R24 ties old encrypted history to the new account through it. [Pillar 4](04-nft-system.md) could accept it as a claim's old-wallet proof, but does not need it: Pillar 4's burn-memo path works for any key type.
 - **R15. EVM and Solana links.** EIP-191 and Solana signed-message proofs over the R7 digest. Consensus does not verify them, so they are labelled **client-verified**, checked by the SDK and explorer, and removable only by the account. They pay the link fee and count toward the link cap (R26).
 - **R16. Links are opt-in, one at a time.** Task Node never links keys automatically. Shielded spending keys and notes ([Pillar 5](05-local-task-node.md)) are never linked. A published `pfpq1…` address is a separate opt-in and reveals nothing about what it receives. Today's `visibility` setting cannot apply on chain, so the mint flow warns that the whole card is public.
 
@@ -156,7 +156,7 @@ flowchart TB
     - **Revoke, or `rotate` marked compromised:** badges come off every event from the old key. Events anchored on chain before that height (such as [Pillar 1](01-hive-governance.md) transcripts) or carrying a valid R20 signature show *anchored before revoke*.
     - **Planned `rotate`:** old-key events show only *previous key of @handle*.
     - **Cache:** cleared whenever the indexer sees an identity transaction.
-- **R19. Agent identities.** An `agent` or `service` identity names its operator through a `controller` link that the controller account co-signs, so no one can claim an unwilling controller. The controller can unlink itself. `hive-board@` becomes the first `agent` identity. [Pillar 1](01-hive-governance.md) participants resolve through the identity object. [Pillar 10](10-information-hive-mind.md) contributors may use it, or a Task Node-only pseudonym that never touches this pillar (Pillar 10 R24).
+- **R19. Agent identities.** An `agent` or `service` identity names its operator through a `controller` link that the controller account co-signs, so no one can claim an unwilling controller. The controller can unlink itself. `hive-board@` becomes the first `agent` identity. [Pillar 1](01-hive-governance.md) participants resolve through the identity object. [Pillar 10](10-information-hive-mind.md) contributors may use it, or a Task Node-only pseudonym that never touches this pillar (Pillar 10 R21).
 - **R20. Post-quantum signatures for high-value events.** Governance minutes and similar events can carry an ML-DSA account signature over `pf.nostr.event.v1`, `chain_id` and the event id. It cannot sit inside the event, because the id covers the tags, so it travels in the [Pillar 1](01-hive-governance.md) pinned transcript bundle or a companion event citing the id, never as a 4 KB tag on third-party relays. The SDK checks it against the identity.
 - **R21. Validator connect.** The [Pillar 3](03-validator-program.md) connect flow emits the R13 link, so each `validator_bindings` row gets an on-chain twin.
 
@@ -206,7 +206,7 @@ Each step works under every founder answer; an answer changes only a parameter, 
 | Depends on | Why |
 |---|---|
 | [Pillar 2 — Message protocol](02-message-protocol.md) | The `message_key` shape and `pf.identity.*` schema names. Neither blocks Step 1. |
-| [Pillar 3 — Validators](03-validator-program.md) | The R13 connect command and the signer's allow-list entry for the identity-link context. |
+| [Pillar 3 — Validators](03-validator-program.md) | The R13 connect command, and a signer allow-list for the identity-link context, which Pillar 3 must add. |
 | [Pillar 5 — Local Task Node](05-local-task-node.md) | The same v1 import and v2 derivation on the device. |
 | Consensus review | `identity_set`, BIP-340 and ECDSA verification (R4, R8). |
 | Browser wallet signing ([`wallet_wasm`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/wallet_wasm/src/lib.rs), Task Node [`tx-builder.js`](https://github.com/postfiatorg/tasknode/blob/main/src/features/wallet/l1/lib/tx-builder.js)) | Task Node's bundled WASM exports signers for transfers, `payment_v2`, asset, offer and escrow transactions, swaps and owned objects. `tx-builder.js` calls only the transfer, asset and offer ones; `wallet_sign_payment_v2` has no caller, and its 512 memo bytes cannot hold a mint anyway. No signer exists for `identity_set`, NFTs or generic messages. To add: the `identity_set` type, a `wallet_sign_identity_set_fields` export, a rebuilt WASM bundle in Task Node, a `tx-builder.js` branch and its submit RPC. [Pillar 2](02-message-protocol.md) owns envelope signing. |
@@ -215,7 +215,7 @@ Each step works under every founder answer; an answer changes only a parameter, 
 |---|---|
 | [Pillar 1 — Hive governance](01-hive-governance.md) | Participants, the Hive bot and anchored transcripts. |
 | [Pillar 2 — Message protocol](02-message-protocol.md) | Reader keys, and the old-chain link for old encrypted history. |
-| [Pillar 4 — NFTs](04-nft-system.md) | The avatar; the old-chain link as an optional claim proof. |
+| [Pillar 4 — NFTs](04-nft-system.md) | The avatar; the old-chain link, if Pillar 4 adopts it as a claim proof. |
 | [Pillar 5 — Local Task Node](05-local-task-node.md) | The published `pfpq1…` address. |
 | [Pillar 8 — On-chain identity, DID and KYC](08-onchain-identity.md) | `did:pftl` includes the minted identity (Pillar 8 R7). Credentials are separate records keyed by the same account, so each account has one identity object. |
 | [Pillars 3](03-validator-program.md), [7](07-navcoin-fees.md), [9](09-finance-hub.md) and [10](10-information-hive-mind.md) | Validator directory and per-operator rewards, issuer display, gating and optional attribution, if adopted. |
@@ -253,7 +253,7 @@ Each step works under every founder answer; an answer changes only a parameter, 
 3. **Economics.** What are the identity and link fees? Keep the burn (the chain's current pattern), or add a refundable reserve (a new mechanism, part of which a tombstone keeps)? Should handle prices vary with length? What is the link cap? Should Task Node sponsor mint fees beyond starter PFT? Each is a constant or the one fee function (R26).
 4. **After a revoke or rotate,** may the retired npub be rebound to a new account by its key holder, with a fresh BIP-340 proof: never, after a hold-back period, or at once? May the handle move to another account, under the same options? "Never" is safest against impersonation but blocks the simplest recovery. Each is one consensus parameter (R9).
 5. **Existing users: keep v1, or move them to v2?** v2 needs one seed backup and no trust in Task Node; until the R1 guard ships, a compromised Task Node server could derive the v1 key of any user who signs a challenge. Nostr has no key migration, so moving gives contacts a new npub. R1 ships either way, and `rotate` lets anyone move later.
-6. **Validator link key.** This is the same choice as Pillar 3's open question on a separate operator key. The consensus key matches today's helper. A separate operator key keeps the consensus key out of application signing, but needs a one-time delegation from the validator key. Only the key R13 checks changes.
+6. **Validator link key.** Pillar 3 must make the same choice for its binding command. The consensus key matches today's helper. A separate operator key keeps the consensus key out of application signing, but needs a one-time delegation from the validator key. Only the key R13 checks changes.
 7. **Recovery key.** Add an optional recovery key that can `rotate_account` without the lost key? It is the only full recovery path, at the cost of another key to protect. Without it, the registrar moving the handle is the recovery.
 8. **Gating.** Should a minted identity be required for Finance Hub, per-operator validator rewards or NFT claims, or stay optional? Where required, who pays the mint fee? Hive-mind credit also accepts a Pillar 10 pseudonym either way.
 9. **Relay.** Should Post Fiat run a Nostr relay, with public relays as mirrors? Hive depends on three third-party relays. Governance already survives relay loss through Pillar 1's pinned bundles, and R20 keeps large signatures off relays either way.

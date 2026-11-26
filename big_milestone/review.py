@@ -142,38 +142,44 @@ def write_feedback(pillar: Path, reviews: list[dict], run_at: str, out_dir: Path
 
 
 def write_overview() -> None:
+    # A pillar's revision is kept only if it scored higher than the version
+    # before it; when one is reverted its review is deleted, so later rounds
+    # may cover only some pillars. Each pillar is shown at its latest round.
     rounds = sorted((int(p.parent.name.split("-")[1]), json.loads(p.read_text()))
                     for p in (ROOT / "feedback").glob("round-*/scores.json"))
     if not rounds:
         return
-    latest_no, latest = rounds[-1]
-    head = ["Pillar"] + [f"Round {n} mean" for n, _ in rounds] + [f"R{latest_no} {name}" for name in MODELS.values()]
-    if len(rounds) > 1:
-        head.append(f"Change R{rounds[0][0]}→R{latest_no}")
+    names = sorted({name for _, data in rounds for name in data["pillars"]})
+    latest = {name: max((n, data["pillars"][name]) for n, data in rounds if name in data["pillars"])
+              for name in names}
+    head = ["Pillar"] + [f"Round {n}" for n, _ in rounds] + ["Current", *MODELS.values(), "Change"]
     table = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
-    for name, row in latest["pillars"].items():
-        cells = [f"[{row['title']}](round-{latest_no}/{name})"]
+    for name in names:
+        n_last, row = latest[name]
+        cells = [f"[{row['title']}](round-{n_last}/{name})"]
         for n, data in rounds:
             mean = data["pillars"].get(name, {}).get("mean")
-            cells.append(f"[{mean}](round-{n}/{name})" if mean is not None else "n/a")
+            cells.append(f"[{mean}](round-{n}/{name})" if mean is not None else "—")
+        cells.append(f"**{row['mean']}** (round {n_last})")
         cells += [str(row["scores"].get(m)) if row["scores"].get(m) is not None else "n/a" for m in MODELS]
-        if len(rounds) > 1:
-            first = rounds[0][1]["pillars"].get(name, {}).get("mean")
-            cells.append(f"**{row['mean'] - first:+d}**" if None not in (first, row["mean"]) else "n/a")
+        first = rounds[0][1]["pillars"].get(name, {}).get("mean")
+        cells.append(f"{row['mean'] - first:+d}" if None not in (first, row["mean"]) else "n/a")
         table.append("| " + " | ".join(cells) + " |")
-    overall = []
+    per_round = []
     for n, data in rounds:
         means = [r["mean"] for r in data["pillars"].values() if r["mean"] is not None]
-        overall.append(f"round {n}: **{round(sum(means) / len(means))}**/100 ({data['run_at']})")
-    latest_means = [r["mean"] for r in latest["pillars"].values() if r["mean"] is not None]
+        per_round.append(f"round {n}: {round(sum(means) / len(means))} over {len(means)} pillars ({data['run_at']})")
+    current = [row["mean"] for _, row in latest.values() if row["mean"] is not None]
     text = ["# Feedback — Overview", "",
-            f"> **Mean score:** {round(sum(latest_means) / len(latest_means))}/100 in round {latest_no} across {len(latest_means)} pillars",
+            f"> **Mean score:** {round(sum(current) / len(current))}/100 across the current {len(current)} pillar specs",
             ">",
             f"> **Method:** for each pillar, {' and '.join(MODELS.values())} each received the founder's original prompt and that "
             "pillar's spec once, and scored 0–100 how well it matches the founder's intention and how likely it is to "
             "work (technically robust, economically coherent). Each round's pages hold both reviews in full, with "
-            "numbered problems for follow-up agents. Pillars are revised from one round's problems before the next round.",
-            "", "Overall: " + " · ".join(overall), "", *table, ""]
+            "numbered problems for follow-up agents. After each round the pillars are revised from its problems; a "
+            "revision is kept only if the next round scores it higher, otherwise the pillar goes back to its previous "
+            "text and that round's review of it is deleted. A dash means the round's revision of that pillar was reverted.",
+            "", "Rounds: " + " · ".join(per_round), "", *table, ""]
     (ROOT / "feedback" / "README.md").write_text("\n".join(text))
 
 

@@ -88,7 +88,7 @@ flowchart LR
     - **Step 2.** Switch the publisher and the live `ga-models` row to `finance_hub`. The `goodbrief` index (R21) starts on it.
     - An integration test fetches real files as a validator, a top-30 account, a rank-31 account and a suspended validator.
 - **R3.** *Qualifying validator* is one server function. It reads Pillar 3's access state (*active*, or *lapsed* inside grace), not raw bindings, on a configured network list, so a testnet or mainnet value needs no code change. Whether liveness counts is open question 1. Results are cached, so file requests never wait on the registry. A stale validator feed blocks new grants but never revokes access (as in Pillar 3) and raises an alert (R22).
-- **R4.** *Top 30* comes from a stored **daily snapshot** (account, rank, score, components, time) taken at a configured UTC time. A failed job leaves the last good snapshot in force and alerts. Scoring and population are open questions 2–3. Blacklisted accounts are skipped. Ties end on `account_id`, not today's possibly empty handle. Pillars 1, 4, 6 and 8, which consider top-30 status as a gate or credential, read this snapshot.
+- **R4.** *Top 30* comes from a stored **daily snapshot** (account, rank, score, components, time) taken at a configured UTC time. A failed job leaves the last good snapshot in force and alerts. Scoring and population are open questions 2–3. Blacklisted accounts are skipped. Ties end on `account_id`, not today's possibly empty handle. Pillars 1, 4 and 8, which consider top-30 status as a gate or credential, read this snapshot.
 - **R5.** **One grace mechanism for both bases.** An account that stops qualifying enters grace, and the hub shows the exact end time. A validator's grace is Pillar 3's *lapsed* window. Lengths, repeats and an optional keep-until rank are parameters (open question 4).
 - **R6.** The session gains `financeHub` from R1. `App.jsx` and `hasFinanceHubAccess` read it, the sidebar shows the basis, and the locked screen explains both paths.
 
@@ -117,10 +117,10 @@ flowchart LR
 - **R17.** Company search, and a per-account watchlist stored in Task Node.
 - **R18.** Record eligible accounts, daily actives and return visits by basis, for the founder (targets: open question 9).
 - **R19.** **Pillar 10 interface.**
-    - `hub/coverage_manifest.json`: each company or protocol, its asset class and area tags, keyed by model directory (`RKLB`). Pillar 10 R1 adds `interview_mode`, `interview_enabled` and `budget_priority` to each entry.
+    - `hub/coverage_manifest.json`: each company or protocol, its asset class and area tags, keyed by model directory (`RKLB`). Pillar 10 R9 adds an interview mode by asset class to each entry.
     - `models/<DIR>/agent_brief_members.json` and `agent_brief_public.json`. The build fails if the public file has model numbers or targets.
     - The research host pulls accepted insights with a read-only service token, as the finance agent does, into `models/<DIR>/contributor_insights.json` (empty if none).
-    - **Ask the agent** posts `tasknode-finance-hub:ask-agent` with the model key. The shell opens Pillar 10's screened interview mode (its R6 and R9) on that company, so anything a member offers goes through the same eligibility, attestation and screening.
+    - **Ask the agent** posts `tasknode-finance-hub:ask-agent` with the model key. The shell opens a Pillar 10 interview (its R10) on that company, so anything a member offers goes through the same eligibility, attestation and screening.
 
 ### Publishing
 
