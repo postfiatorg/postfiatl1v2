@@ -1,12 +1,12 @@
 # Pillar 1 — Hive Chat Governance Module
 
-> **Status:** Partial. Hive Chat, the boards, the Wanted list, IPFS pinning and the `pf.ptr` pointer writer are live. The governance schedule, protocol-state collector, session room, signed minutes, link to the deterministic pipeline and explorer view do not exist yet.
+> **Status:** Partial. Hive Chat, the boards and their budgets, the Wanted list, IPFS pinning and the `pf.ptr` pointer writer are live. The governance schedule, steward set, protocol-state collector, session room, signed minutes, link to the deterministic pipeline and explorer view do not exist yet.
 >
 > **Bubbles up to:** [Outcome A · Post-human governance in public](../README.md#three-outcomes). This is the surface where people see Post Fiat governing itself.
 
 ## In one paragraph
 
-Post Fiat governance runs on information packets. On a fixed public schedule, a versioned **collector** captures the protocol's current state as a machine-made snapshot. A steward, at first the founder, adds a brief, open questions and proposed decisions, and together these form a **protocol-state packet**. The steward signs it. It is pinned to IPFS and anchored on chain, and a pre-read period starts. Then a public **governance session** of about 30 minutes runs in its own Hive Chat room, led by an agent facilitator. At close, Task Node freezes a verifiable **transcript** and drafts **minutes with deliverables**, which the steward signs and anchors. The packet is then **acted on**. Deliverables become paid Wanted items. Flagged decisions go to the deterministic governance pipeline, which publishes a replayable ruling. The next packet reports what happened to each deliverable. Every artifact is labelled human, agent or deterministic, and the page sets out how the human share shrinks over time.
+Post Fiat governance runs on information packets. On a fixed public schedule, a versioned **collector** captures the protocol's state as a machine-made snapshot, and an agent writes a **machine brief** from it. A steward, at first the founder, adds a brief, open questions and proposed decisions to form a **protocol-state packet**, signs it, and anchors it on chain. A public **governance session** of about 30 minutes then runs in its own Hive Chat room, led by an agent facilitator that asks the agenda and answers from the snapshot. At close, Task Node freezes a verifiable **transcript** and drafts **minutes with deliverables**, each quoting the steward's own words. The steward signs, and one transaction anchors the result. The packet is then **acted on**: deliverables become paid Wanted items within board budgets, flagged decisions get a replayable deterministic ruling, and the next packet reports what happened. Every artifact is labelled human, agent or deterministic, and the page sets out how the human share shrinks.
 
 ## User story
 
@@ -14,55 +14,45 @@ Post Fiat governance runs on information packets. On a fixed public schedule, a 
 
 **Augmented story.**
 
-1. **Schedule.** Hive shows the next session's start time and packet deadline, with links to past sessions. Extraordinary sessions are possible and labelled as such.
-2. **Collect.** Before the deadline the collector publishes a **protocol snapshot**: chain height, validators, Cobalt state, bridge and NAVCoin supply, Task Node status, and the state of the last session's deliverables. Each field records its source, when it was read and a hash of the raw response.
-3. **Brief.** I press **Prepare governance packet**. The snapshot is attached, read-only. I write the brief, `open_questions` and `proposed_decisions`, and sign with my wallet. Task Node pins the packet and my signed `pf.ptr` transaction anchors it. The card shows its title, CID, transaction and countdown.
-4. **Pre-read.** Members read and queue questions. Board managers add theirs here, since they work asynchronously.
-5. **Open.** At the start time I sign the **session-open event**. The session has its own room, so the main Hive room carries on. The event fixes the toggles:
+1. **Schedule.** Hive shows the next session's start and packet deadline, and links to past sessions. Extraordinary sessions are labelled.
+2. **Collect.** Before the deadline the collector publishes a **protocol snapshot** covering the chain, Cobalt, the bridge, NAVCoins, Task Node, board budgets and earlier deliverables, each field with its source and trust level. An agent writes a **machine brief** on what changed, what is stalled and what looks wrong.
+3. **Brief.** I press **Prepare governance packet** and write the brief, `open_questions` and `proposed_decisions` beside the read-only snapshot, adding answer options to any I want ruled on. I choose session settings, embargo anything sensitive, and sign once.
+4. **Pre-read.** Members and board managers post a few signed questions each. With no pre-read in the schedule, the upload opens the conversation directly.
+5. **Open.** At the start time I sign the **session-open event**, which picks the agenda from the queued questions and fixes the toggles:
     - *Posting policy*: steward only, an allowlist (for example validators), or all Hive members.
-    - *Agent mode*: off, agenda (the facilitator asks the packet's and the queue's questions in order), or interactive (it also follows up).
-6. **Converse.** The facilitator asks structured questions such as "Decision needed: …" and "Evidence for …". I answer inline. Others post if the policy allows, and their posts are marked as community input.
-7. **Close.** At the deadline, or when I press **Close**, the room freezes. Task Node builds the **transcript manifest** (every included signed event, in order) and drafts minutes: decisions, open questions and deliverables, each citing its source events.
-8. **Sign.** I edit and sign the approval. My signed transactions anchor the transcript and minutes.
-9. **Act.** Deliverables become proposed Wanted items and open for work once their reward is set. Flagged decisions go to the deterministic pipeline, and each ruling is anchored with the session.
-10. **Audit.** Anyone, logged in or not, can open the session page or the explorer, see every artifact with its CID and transaction, and check them with the verifier script.
-11. **Follow through.** The next snapshot reports every deliverable: open, in progress, done, needing a rewrite, or dropped.
+    - *Agent mode*: off, agenda (the facilitator asks the agenda and answers me), or interactive (it also follows up).
+6. **Converse.** The facilitator asks structured questions such as "Decision needed: …". I answer, and ask it questions that it answers from the snapshot. Others post if allowed, as community input.
+7. **Close.** At the deadline, or when I press **Close**, the room freezes. Task Node sweeps the relays, builds the **transcript manifest** and drafts minutes, each item quoting the line of mine it came from.
+8. **Sign.** I check each item against its quote, edit and sign, with co-stewards if the threshold needs them. One transaction anchors approval, transcript and minutes.
+9. **Act.** Deliverables become proposed Wanted items and open once their reward is confirmed. Flagged decisions get deterministic rulings.
+10. **Audit.** Anyone, logged in or not, can check every artifact from the session page or explorer with the verifier script.
+11. **Follow through.** The next snapshot reports every deliverable (proposed, open, in progress, done, rewrite or dropped) and every ruling.
 
 ## What exists today
 
-Checked against Task Node `main` at `204d238`.
+Checked against Task Node `main` at `204d238` and postfiatl1v2 `main` at `5936d4563`.
 
 | Component | Where | State |
 |---|---|---|
-| Public Hive room (Nostr kind-1, NIP-10 root) | [`shared/hive-group.js`](https://github.com/postfiatorg/tasknode/blob/main/shared/hive-group.js), [`HiveGroupChat.jsx`](https://github.com/postfiatorg/tasknode/blob/main/src/features/hive/HiveGroupChat.jsx), [`139_hive_group_chat.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/139_hive_group_chat.sql) | Live. One room, `tasknode-hive-v1`, although the `hive_group_channels` table allows several. Each event needs one `e` root tag matching the room. |
-| Room API | [`server/hive-group-routes.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-routes.js) | Live. Reading needs no login. Posting needs an event signed by the member's own key. |
-| Relays and ingest | [`hive-group-relay.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-relay.js), [`hive-group-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-worker.js), [`repositories/hive-group.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/hive-group.js) | Live. Public relays (primal, nos.lol, damus). A 5-second loop imports events only from NIP-05 directory members, and only from about 10 minutes before the last delivered message. Postgres sets the order (`sequence`). |
-| Hive bot | [`server/hive-group-provider.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-provider.js) | Live. One decide-and-reply cycle every 60 seconds by default (`TASKNODE_HIVE_GROUP_BOT_INTERVAL_SECONDS`), with at most one reply. A reply can take up to 180 seconds. |
-| Board-manager replies | [`server/hive-group-board.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-board.js) | Live, asynchronous. Managers answer queued escalations, and replies post under the Hive bot key. Managers are not live participants. |
-| Boards and Wanted list | [`board-config.js`](https://github.com/postfiatorg/tasknode/blob/main/server/board-config.js), [`board-wanted.js`](https://github.com/postfiatorg/tasknode/blob/main/server/board-wanted.js), [`165_five_boards_wanted.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/165_five_boards_wanted.sql), [`HiveWanted.jsx`](https://github.com/postfiatorg/tasknode/blob/main/src/features/hive/HiveWanted.jsx) | Live, with five public boards. Items have `reward_pft` and a required http(s) `source_url`. The stored status is `open` or `dropped`, and the other states are worked out from tasks. **There is no draft state.** `board_ai_l1_governance` is hidden. |
-| Memo-style artifacts | [`hive-board-secretary-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-board-secretary-worker.js), [`hive-reports-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-reports-worker.js) | Live. Fixed-section memos and reports, the closest thing to minutes today. |
-| IPFS pinning | [`context-ipfs.js`](https://github.com/postfiatorg/tasknode/blob/main/server/context-ipfs.js) (`pinContextIpfsJson`), [`ipfs-replication-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/ipfs-replication-worker.js) | Live. Pins to Pinata, then a queue re-pins to the first-party cluster. Six read gateways, and a 16 MiB JSON cap in code. JSON is written with plain `JSON.stringify`, **which is not canonical**. |
-| Pointer `pf.ptr` v4 | [`pftl-pointer.js`](https://github.com/postfiatorg/tasknode/blob/main/server/pftl-pointer.js), [`pftl-submit.js`](https://github.com/postfiatorg/tasknode/blob/main/server/pftl-submit.js), [`context-publish.js`](https://github.com/postfiatorg/tasknode/blob/main/server/context-publish.js) | Live on the **old chain** (`xrpl.js`, network id 2025). Fields: cid, target, kind, schema, task_id, thread_id, context_id, flags. Kinds 1–11 are used (`CHAT=4`, `POLICY=7`, `DOCUMENT=10`, `SYSTEM=11`). The user's wallet signs context pointers. The server signs task-review pointers. |
-| New-chain memos | [`core_chain.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/core_chain.rs), [`docs/rpc/methods.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/rpc/methods.md) | Built. Up to 4 memos per payment, 256 bytes of data each. `tx` and `account_tx` return the memos. |
-| Explorer | [`docs/explorer-spec.md`](https://github.com/postfiatorg/postfiatorg.github.io/blob/main/docs/explorer-spec.md) | New chain only, with no content-pointer view yet. |
-| Deterministic governance | [overview](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/deterministic-governance-overview.md), [verifiable constitution](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/verifiable-constitution.md), [evidence packet schema](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/validator-evidence-packet-schema.md) | Research and shadow mode. On devnet, Cobalt ratifies validator-registry and trust-graph changes, and the Foundation holds the other scopes. The Verifiable Constitution lane answers typed questions from hash-bound evidence with a deterministic Qwen profile, with no live effect. Collector-run manifests are drafted for validator evidence. |
-| Governance rhythm | [`dunl-subscorer-shadow-weekly-2026.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/dunl-subscorer-shadow-weekly-2026.md) | Weekly dynamic-UNL shadow scoring rounds on frozen, hashed inputs. |
-| Inference cost | [agent plan](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/deterministic-governance-agent-plan.md) (`scripts/gov-inference-provider`), [H200 run plan](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/reputation-scoring-h200-run-plan.md), [results](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/reputation-scoring-h200-results-20260901.md) | Rented RunPod or Vast GPUs at an estimated $2.20–3.50 per host-hour. One run cost $5.34, and a full campaign $77.32. |
+| Hive room and API | [`shared/hive-group.js`](https://github.com/postfiatorg/tasknode/blob/main/shared/hive-group.js), [`repositories/hive-group.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/hive-group.js), [`hive-group-routes.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-routes.js) | Live. One room (`HIVE_GROUP_ID` is a constant), though `hive_group_channels` allows several. Reading needs no login. A posted event must be signed by the member's key and gets its `sequence` only when a relay acknowledges it. No moderation. |
+| Relays, ingest, bot | [`hive-group-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-worker.js), [`hive-group-relay.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-relay.js), [`hive-group-board.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-board.js) | Live. A 5-second loop imports only NIP-05 directory members' events, from about 10 minutes before the last delivered one, at most 200 per relay query. The bot replies at most once per 60-second cycle, taking up to 180 seconds. Board managers answer escalations asynchronously under the bot key. |
+| Boards, budgets, Wanted list | [`099_board_manager_v2_decisions.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/099_board_manager_v2_decisions.sql), [`board-wanted.js`](https://github.com/postfiatorg/tasknode/blob/main/server/board-wanted.js), [`165_five_boards_wanted.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/165_five_boards_wanted.sql) | Live, five public boards. `board_reward_budgets` holds daily, per-task and per-user caps; `board_reward_spend` records spend. Wanted items store `open` or `dropped` and derive other states from tasks; **no draft state**. `board_ai_l1_governance` is hidden. |
+| IPFS pinning | [`context-ipfs.js`](https://github.com/postfiatorg/tasknode/blob/main/server/context-ipfs.js) | Live. Pinata, then the first-party node (which rejects a CID mismatch) and cluster replication. CIDv0, dag-pb, 16 MiB JSON cap. Plain `JSON.stringify`, **not canonical**. |
+| Pointer `pf.ptr` v4 | [`pftl-pointer.js`](https://github.com/postfiatorg/tasknode/blob/main/server/pftl-pointer.js), [`pftl-submit.js`](https://github.com/postfiatorg/tasknode/blob/main/server/pftl-submit.js), [`context-publish.js`](https://github.com/postfiatorg/tasknode/blob/main/server/context-publish.js) | Live on the **old chain** (network id 2025), upper-case hex. Fields: 1 cid (text), 2 target, 3 kind (1–11 and 99 only), 4 schema (integer), 5–7 task, thread and context ids, 8 flags. Users' wallets sign context pointers by prepare, sign and submit, with a `LastLedgerSequence` expiry. |
+| New chain | [`transactions_mempool_receipts.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/transactions_mempool_receipts.rs), [`methods.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/rpc/methods.md), [`postfiat_wallet_wasm.d.ts`](https://github.com/postfiatorg/tasknode/blob/main/src/features/wallet/l1/wasm/postfiat_wallet_wasm.d.ts), [`explorer-spec.md`](https://github.com/postfiatorg/postfiatorg.github.io/blob/main/docs/explorer-spec.md) | `payment_v2` takes up to 4 lower-case hex memos, 256 data bytes each and **512 in total**, a non-zero amount, and may pay oneself. Receipts carry `accepted`; `status` returns height and state root. Task Node's wallet has `wallet_sign_payment_v2`, but no flow calls it. The explorer reads only this chain and has no content-pointer view. |
+| Chain-state records | [`component-observations.json`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/component-observations.json) | Operator-entered dated records behind `chain-state-current.md`. Cobalt was last observed at height 924, the fleet at 1906. |
+| Deterministic governance | [overview](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/deterministic-governance-overview.md), [verifiable constitution](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/verifiable-constitution.md), [weekly dUNL rounds](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/dunl-subscorer-shadow-weekly-2026.md) | Research and shadow mode; Cobalt ratifies registry and trust-graph changes on devnet. The Verifiable Constitution answers typed questions from fixed answer sets, including `hold-no-op`. An answer counts when two machines give the same parsed-output root; a split forces `hold-no-op`. |
+| Inference cost | [agent plan](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/deterministic-governance-agent-plan.md), [H200 plan](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/reputation-scoring-h200-run-plan.md), [results](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/reputation-scoring-h200-results-20260901.md) | `scripts/gov-inference-provider` rents RunPod (preferred, H100) or Vast GPUs. H200s cost an estimated $2.20–3.50 per host-hour. The documented $5.34 run and $77.32 campaign were batch scoring; no per-ruling cost exists. |
 
 ## Architecture
 
 ### Who makes each artifact
 
-| Artifact | Made by | Label | Signed by |
-|---|---|---|---|
-| Schedule | Task Node, from the cadence the founder sets | deterministic | Steward, on change |
-| Protocol snapshot | Versioned collector | deterministic | Inside the steward-signed packet |
-| Brief, open questions, proposed decisions | Steward | human | Steward |
-| Facilitator questions | Facilitator agent | agent | Hive bot Nostr key |
-| Transcript manifest | Task Node, by the inclusion rule (R12) | deterministic | Steward approval |
-| Minutes | Agent draft plus steward edits, labelled per item | agent, human | Steward approval |
-| Rulings | Deterministic pipeline | deterministic | Anchored with replay hashes |
-| Deliverable follow-up | Derived from Wanted item state | deterministic | Next snapshot |
+- **Deterministic:** the schedule, the snapshot (with a trust level per field), the eligibility list, the transcript manifest, rulings and follow-up.
+- **Agent:** the machine brief, facilitator turns and minutes drafts.
+- **Human:** the steward set, the brief, questions and proposed decisions, and minutes edits.
+
+Steward wallets sign the schedule, packet and approval, and the founder's wallet signs the steward set. Nostr keys sign the open event and facilitator turns. The ruling signer anchors rulings (R27a).
 
 ### Flow
 
@@ -77,25 +67,28 @@ sequenceDiagram
     participant H as Session room
     participant A as Facilitator agent
     participant D as Deterministic pipeline
-    C->>S: snapshot with per-field sources and raw hashes
-    F->>S: brief, open questions, proposed decisions
-    S->>I: pin canonical packet and snapshot
-    S-->>F: packet hash and CID to sign
-    F->>L: signed pf.ptr memo, kind GOVERNANCE
-    S->>H: announce session, pre-read opens
-    F->>H: signed session-open event with toggles
+    participant K as Ruling signer
+    C->>S: snapshot, raw responses, trust levels
+    A->>S: machine brief from the snapshot
+    F->>S: brief, questions, decisions, settings
+    S->>I: pin canonical packet, snapshot, machine brief
+    F->>L: one payment with the packet memo
+    S->>H: create session room, pre-read opens
+    H->>S: signed pre-read questions
+    F->>H: signed session-open event with agenda and toggles
     loop about 30 minutes
-        A->>H: agenda question
-        F->>H: answer
+        A->>H: agenda question or cited answer
+        F->>H: answer or question
     end
-    S->>S: freeze room, build transcript manifest
-    A->>S: draft minutes citing event ids
+    S->>S: freeze, relay sweep, transcript manifest
+    A->>S: draft minutes quoting steward events
     F->>S: edit and sign approval
-    S->>I: pin transcript bundle and minutes
-    F->>L: signed pf.ptr memos for transcript and minutes
+    S->>I: pin transcript bundle, minutes, approval
+    F->>L: one payment with approval, transcript and minutes memos
     S->>S: deliverables become proposed Wanted items
-    S->>D: flagged decisions
-    D->>L: ruling pinned and anchored
+    S->>D: ruling requests for flagged decisions
+    D->>I: rulings with replay hashes
+    K->>L: one payment with the ruling memos
 ```
 
 ### Session states
@@ -103,218 +96,190 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> Scheduled
-    Scheduled --> PreRead: packet anchored
+    Scheduled --> PreRead: packet anchored, or snapshot-only packet at deadline
     Scheduled --> Missed: deadline passed without packet
     Scheduled --> Cancelled: steward cancels
+    Missed --> Scheduled: extraordinary session called
     PreRead --> Live: start time and open event
     PreRead --> Cancelled: steward cancels
     Live --> Frozen: deadline or steward closes
     Live --> Cancelled: steward aborts
-    Frozen --> InReview: manifest and draft minutes ready
-    InReview --> InReview: steward edits, new revision
-    InReview --> Anchoring: steward signs approval
+    Frozen --> InReview: sweep done, manifest and draft ready
+    InReview --> InReview: edit makes a new revision
+    InReview --> CollectingApprovals: first approval signature
+    CollectingApprovals --> InReview: edit voids signatures
+    CollectingApprovals --> Anchoring: threshold reached
     InReview --> Expired: review window ends
+    CollectingApprovals --> Expired: review window ends
     Anchoring --> AnchorFailed: pin fails or receipt rejected
-    AnchorFailed --> Anchoring: retry with the same bytes
-    Anchoring --> Published: all receipts accepted
-    Published --> [*]
+    AnchorFailed --> Anchoring: new transaction, same memo bytes
+    Anchoring --> Acting: close-out receipt accepted
+    Acting --> Closed: deliverables created, rulings anchored or failed
+    Closed --> [*]
 ```
 
-An edit makes a new revision of the minutes and never rebuilds the transcript. A cancelled or expired session keeps its packet and frozen manifest on record.
+Edits make new minutes revisions and never rebuild the transcript. With one steward, the first signature meets the threshold. Cancelled and expired sessions keep their packet and manifest. The schedule enables either `Missed` or the snapshot-only path (R2). Rulings have their own states (R27a).
 
 ### How authority moves from humans to machines (proposed progression)
 
 | Stage | Machine-made | Human-made | Effect of a ruling |
 |---|---|---|---|
-| **Stage 0**, the Step 1 build | Snapshot, manifest, draft minutes, rulings on request | Brief, edits to the minutes, steward signature | Advisory, like today's Verifiable Constitution answers |
-| **Stage 1** | Minutes extracted by the deterministic profile, which can be replayed. They publish automatically unless a steward signs a public veto. | Brief. Steward notes are a separate signed artifact. | Advisory |
-| **Stage 2** | Rulings on agreed classes of decision take effect, for example opening a Wanted item from a governed budget, or a registry change through Cobalt | Brief and a signed public veto | Binding within those classes |
+| **Stage 0**, the Step 1 build | Snapshot, machine brief, manifest, draft minutes, rulings on flagged decisions | Brief, minutes edits, steward signature | Advisory, like today's Verifiable Constitution answers |
+| **Stage 1** | Minutes extracted by the replayable deterministic profile, published unless a steward signs a public veto | Brief; steward notes as a separate signed artifact | Advisory |
+| **Stage 2** | Rulings on agreed classes take effect, for example opening a Wanted item from a governed budget, or a registry change through Cobalt | Brief and a signed public veto | Binding within those classes |
 
-The founder decides when governance moves to the next stage and which classes of decision may bind. The Cobalt and Foundation boundaries in the deterministic governance overview are never bypassed.
+The founder decides what evidence moves governance between stages and which classes may bind. The Cobalt and Foundation boundaries in the deterministic governance overview are never bypassed.
 
 ## Technical requirements
 
 ### Fixed timeline
 
-- **R1.** A `hive_governance_schedule` record holds the cadence rule, the next start (UTC), the packet deadline, the pre-read length, the session length (30 minutes by default) and the review window. A steward signs and anchors every change. The founder sets the values.
-- **R2.** Hive and the public session page always show the next session and its deadline. A session is never skipped silently. A missed deadline is handled as the founder chooses (see the open questions).
-- **R3.** Extraordinary sessions are labelled as extraordinary on the card, in the archive and in the schema.
+- **R1.** A `hive_governance_schedule` record holds the cadence rule (`per_dunl_round`, `every_nth_round` or `calendar`), next start (UTC), packet deadline, pre-read length (zero allowed), session length (30 minutes by default), review window, relay-sweep timeout, `on_missed_deadline` (`snapshot_only` or `record_missed`), `on_review_expiry` (`publish_unapproved` or `manifest_only`) and `proposed_expiry_sessions` (none or a count). A steward signs and anchors each change. Every option is built; the founder picks the values.
+- **R2.** Hive and the public page always show the next session and deadline; no session is skipped silently. Under `snapshot_only` the snapshot and machine brief become the packet at the deadline, labelled *no steward brief*, and the steward signs its anchor at open. Under `record_missed` the session becomes `Missed`.
+- **R3.** Extraordinary sessions are labelled on the card, in the archive and in the schema. A steward with the `call` role (R20a) can call one at any time, including after `Missed`.
 
 ### Protocol-state methodology
 
-- **R4.** A versioned collector, `pf-gov-collector`, writes `pf.governance.snapshot.v1`. Each field records `source` (an RPC method, an endpoint, or a file at a commit), `read_at` (a height or a UTC time), `raw_sha256` and `value`. A run manifest records the collector's version, its code hash and every raw-response hash, following the validator-evidence collector-run manifest. The raw responses are pinned with the snapshot, so every field can be re-derived from them.
-- **R5.** The minimum fields:
-    - New chain: `status`, `validators`, `ledger`, `bridge_status` and `navcoin_bridge_supply_status`.
-    - Cobalt: the dated observation in `docs/status/chain-state-current.md`, at a commit.
-    - Task Node: `/api/system/status`.
-    - The latest dynamic-UNL scoring round and its verdict.
-    - Each deliverable from the previous session, with its `wantedState` and task id.
-    - Fields with no machine source yet, such as open P0s, are marked `steward_supplied`.
-- **R6.** `pf.governance.packet.v1` has two parts. The `snapshot` is read-only and referenced by CID and hash. The `steward_brief` is editable and holds `title`, `summary`, `changes_since_last`, `open_questions[]`, `proposed_decisions[]` and `attachments[]`. A steward who disputes a snapshot field writes a note in the brief that cites it.
-- **R7.** Attachments are CIDs within the existing pin limits. Agents read only text, Markdown or JSON attachments.
+- **R4.** A versioned collector, `pf-gov-collector`, writes `pf.governance.snapshot.v1`. Each field records `source` (RPC method, endpoint, or file at a commit), `read_at`, `raw_cid`, `raw_hash`, `value` and a `trust_level`: `chain_read` (the same answer from two or more validator endpoints at a recorded height), `operator_attested` (a Task Node API or dated operator record) or `human`. A run manifest records the collector version, code hash and every raw hash, like the validator-evidence collector-run manifest. Each raw response is pinned on its own; one over the pin cap fails the run by name. `status` (height, state root) is read before and after the other chain reads, and a root mismatch at one height marks the snapshot `inconsistent`. Re-derivation proves the extraction; the trust level says what backs the raw bytes.
+- **R5.** Minimum sections:
+    - `chain_state`: `status`, `validators`, `ledger`, `bridge_status`, `navcoin_bridge_supply_status`, `nav_reserve_proof_status`, and the admission verdicts and ratifications [Pillar 3](03-validator-program.md) published since the last snapshot;
+    - `cobalt`: the Cobalt record in `component-observations.json` at a commit, `stale` if observed before the previous snapshot;
+    - `tasknode` (`/api/system/status`) and `dunl_round` (latest scoring round and verdict);
+    - `boards`: each board's budget row, today's spend and the `reward_pft` of its open and proposed governance items;
+    - `deliverables`: every earlier deliverable not done or dropped, and every earlier ruling, with state and task id;
+    - `steward_supplied` fields with no machine source, such as open P0s.
+- **R6.** `pf.governance.packet.v1` holds the `snapshot` and `machine_brief` (read-only, by CID and hash), the `steward_brief` (`title`, `summary`, `changes_since_last`, `open_questions[]`, `proposed_decisions[]`, `attachments[]`), `session_settings` (pre-read posting policy, allowlist, agent mode), `steward_set_version` and an optional `reward_ceiling_pft`. A decision meant for a ruling lists answer options, always including `hold-no-op`. A disputed snapshot field gets a citing note in the brief.
+- **R6a.** An agent writes the **machine brief** from the snapshot and previous minutes only: changes, stalled deliverables, stale or inconsistent fields and the questions they raise, each citing a field path. The steward cannot edit it.
+- **R7.** Attachments are CIDs within the pin limits; agents read only text, Markdown or JSON. A brief item or attachment can be **embargoed**: only its hash and a label are published until a signed `pf.governance.reveal.v1` releases the bytes. The Brief screen lists every `steward_supplied` field and attachment for a disclosure check before signing.
 
 ### Session room and transcript
 
-- **R8.** Each session is its own `hive_group_channels` row with its own root event, plus an announcement card in the main room, which is never locked. The worker, routes and UI must support many channels, because `HIVE_GROUP_ID` is a constant today.
-- **R9.** The **session-open event**, signed by the steward's Nostr key, fixes:
-    - `posting_policy`: `steward_only`, `allowlist` or `members`;
-    - the allowlist;
-    - `agent_mode`: `off`, `agenda` or `interactive`;
-    - the open and close times;
-    - the packet CID.
-- **R10.** `/api/hive/group/messages` enforces the posting policy, the time window and a per-pubkey rate limit on session channels. The founder sets the rate-limit values.
-- **R11.** Relay ingest for a session starts at its open time, not at the usual window of about 10 minutes before the last delivered message. A Task Node outage during a session then loses no member events.
-- **R12.** **Inclusion rule.** An event belongs to the canonical transcript when all of the following hold:
-    - its signature is valid;
-    - its root tag is the session root;
-    - the session-open event made its author eligible;
-    - Task Node received it between the open event and the freeze;
-    - it is within the rate limit.
+- **R8.** Each session gets its own `hive_group_channels` row and root event when its packet is anchored (under `snapshot_only`, at the deadline), plus a card in the main room, which is never locked. The worker, routes and UI must support many channels.
+- **R8a.** **Pre-read questions** are signed kind-1 events on the session root tagged `["phase","pre_read"]`, from authors `session_settings` allows, under per-pubkey count and length caps. Board managers post theirs under the Hive bot key, labelled `agent`, as they work today. The open event lists the accepted questions, in order, as the agenda.
+- **R9.** The **session-open event**, signed by a steward with the `open` role, fixes `posting_policy` (`steward_only`, `allowlist` or `members`) and the allowlist, `agent_mode` (`off`, `agenda` or `interactive`), the facilitator pubkey, open and close times, the packet CID, the agenda, and the CID and hash of the **eligibility list** (`pf.governance.eligibility.v1`: every eligible pubkey with handle and source, `directory`, `allowlist`, `steward` or `facilitator`). Validator allowlists come from Task Node's validator bindings, top-30 lists from [Pillar 9](09-finance-hub.md)'s daily snapshot.
+- **R10.** On session channels, `/api/hive/group/messages` enforces the posting policy, time window and a per-pubkey rate limit. Task Node stamps `received_at` and a receipt number when it first sees an event, by API or ingest, without waiting for a relay acknowledgement.
+- **R11.** Session ingest runs from the root's creation, accepts every pubkey on the eligibility list and pages past the 200-event relay limit. At freeze Task Node fixes the cut-off T, sweeps every relay from the open time until EOSE or the sweep timeout, then builds the manifest. Eligible events found only by the sweep, with `created_at` between open and T, are included and marked `recovered`, so an outage loses no member events.
+- **R12.** **Inclusion rule.** An event belongs to the canonical transcript when:
+    - its signature is valid and its root tag is the session root;
+    - its author is eligible (for pre-read events, under `session_settings`);
+    - it is a pre-read event received between the room's creation and open within its caps, a live event received between open and T, or `recovered`;
+    - it is within the rate limit and not moderated (R13a).
 
-    Events are ordered by Task Node's receipt `sequence`, not by the `created_at` time the client sets. Member events that were seen but excluded are listed by id, with a reason code.
-- **R13.** The pinned **transcript bundle** holds the manifest, every included raw signed event and a rendered Markdown copy. The manifest gives the ordered event ids, the receipt sequence, `created_at` and the exclusions. The transcript therefore never depends on relays keeping events.
-- **R14.** Governance JSON is canonicalised with RFC 8785 (JCS) before pinning, which needs a canonical mode in `pinContextIpfsJson`. The SHA-256 of the canonical bytes is recorded. JSON is the authoritative v1 form. A later protobuf form from [Pillar 2](02-message-protocol.md) is a separate artifact that cites the JSON CID. Past sessions are never re-pinned.
+    Order is by receipt number, not client `created_at`; recovered events follow by `created_at`, then id. Seen but excluded events are listed with a reason code.
+- **R13.** The pinned **transcript bundle** holds the manifest, every included raw signed event and a Markdown rendering, so the transcript never depends on relays. The manifest lists the ordered ids with receipt numbers, times, phase and `recovered` marks, and the exclusions.
+- **R13a.** **Moderation.** Before approval a steward can mark a non-steward event `moderated` with a reason. The bundle drops its content and keeps its event id, which commits to it, and the reason. Minutes cannot cite it. Moderation is public.
+- **R14.** Governance JSON is canonicalised with RFC 8785 (JCS) before pinning, which needs a canonical mode in `pinContextIpfsJson`. Every hash inside a governance record is SHA3-384 over the exact bytes, the chain-side commitment of [Pillar 2](02-message-protocol.md) R5; only the CID uses SHA-256, as IPFS requires. Pins keep the code's fixed CIDv0 dag-pb parameters, so Pinata and the first-party node agree on CIDs. In Step 2 each artifact becomes a Pillar 2 envelope whose `CANONICAL_JSON` body is the same JCS bytes, so there is one canonical form. Past sessions are never re-pinned.
 
 ### Agents in the session
 
-- **R15.** A **facilitator** replies as each event arrives, not on the 60-second cycle. It works through `open_questions[]` and the pre-read queue in order. It takes one turn per steward turn, unless the agent mode is `interactive`. Its reply latency is published for every session. The founder sets the target.
-- **R16.** Board managers take part through the pre-read queue and escalations, as they do today. Live replies from them are optional.
-- **R17.** Prompts carry steward messages, the packet and community messages as separately labelled blocks. Community text and attachments are treated as quoted data and never as instructions. Agents never decide for the steward.
+- **R15.** The **facilitator** has its own Nostr key, separate from the Hive bot key, named in the open event and always eligible. It acts only on steward turns, one job at a time, starting when Task Node receives the steward's event (R10), not on the 60-second cycle. In `agenda` mode it asks the next agenda question and answers the steward's questions; `interactive` adds follow-ups. Community posts never trigger it; it summarises them when the steward asks. It drafts agenda wording during the pre-read. The room shows drafting status, agenda progress and time left. Reply latency is published against the founder's target.
+- **R15a.** The facilitator sees the packet, the snapshot with raw responses, the machine brief and the previous minutes. Factual answers cite a field path or say the snapshot does not cover it. A live read goes through the collector code and is cited with height and trust level.
+- **R16.** Board managers join through the pre-read and escalations; live replies are optional.
+- **R17.** Prompts carry steward messages, the packet and community messages as labelled blocks; community text is quoted data, never instructions. Minutes are drafted in two isolated passes. Pass 1 writes decisions, open questions and deliverables from the steward brief, steward events and the facilitator questions they answer. Pass 2 writes `community_input[]` from community events only. Agents never decide for the steward.
 
 ### Minutes and signatures
 
-- **R18.** `pf.governance.minutes.v1` has four lists: `decisions[]`, `open_questions[]`, `deliverables[]` and `community_input[]`. Each item carries a provenance label (`human`, `agent` or `deterministic`) and its source event ids. Each deliverable also has a title, an owning board, an acceptance line, a proposed reward and an optional `ruling` flag.
-- **R19.** A validator rejects a draft in which any decision or deliverable either cites no steward or agenda event, or cites an event that is not in the manifest. Items that come only from the community go in `community_input[]`.
-- **R20.** Approval is a signed record over the packet CID, the manifest hash and the minutes hash. It carries a steward-set id and a threshold, so M-of-N signing works even while N is 1.
-- **R21.** Minutes are drafted on Task Node's existing inference stack, so the chat layer needs **no GPU rental**. This does not make the deterministic pipeline any cheaper. R27 covers that cost.
+- **R18.** `pf.governance.minutes.v1` has `decisions[]`, `open_questions[]`, `deliverables[]` and `community_input[]`, each item with a provenance label (`human`, `agent` or `deterministic`) and source event ids. Decisions and deliverables carry a `quote`, a verbatim span of the cited steward text. Deliverables add a title, owning board, acceptance line, proposed reward and optional `ruling` flag. Community items record their author and whether a decision cites them.
+- **R19.** A validator rejects a decision or deliverable that cites no steward event or brief item, or cites an event outside the manifest or moderated; whose `quote` is absent from the cited text; or whose reward exceeds the board's `per_task_cap_pft` or the remaining `reward_ceiling_pft`. The review screen shows each item beside its quote.
+- **R20.** **Approval** is a signed record over the packet CID, the manifest and minutes hashes, the transcript and minutes CIDs and the steward-set version, from M stewards with the `approve` role. Any minutes revision voids the signatures collected.
+- **R20a.** **Steward set.** `pf.governance.steward_set.v1` holds a version, threshold M and each member's wallet address, Nostr pubkey and roles (`call`, `open`, `approve`, `anchor_ruling`). Each Nostr key signs its wallet address and the set version, binding the two keys. The founder's wallet anchors every version; the verifier uses the one in force at each anchor. With one steward, a lost key stops approvals until the founder anchors a new set, and sessions in review expire on record. In Step 2 [Pillar 6](06-hive-identity.md) identities provide the binding.
+- **R21.** Minutes are drafted on Task Node's existing inference stack, so the chat layer needs **no GPU rental**. Rulings still cost GPU time (R27).
 
 ### Anchoring and explorer
 
-- **R22.** A steward's wallet signs every governance anchor, using the client-side prepare, sign and submit flow that context publishing uses today. The server never signs one.
-- **R23.** Anchors stay in `pf.ptr` v4 and use one new kind, `GOVERNANCE`. The proposed value is 12, the next free number, and it is registered with Pillar 2. Field 4 (`schema`) carries the artifact's schema id. Field 6 (`thread_id`) carries the session id, so an indexer can group a session without fetching anything from IPFS. A test vector proves the memo fits the new chain's 256-byte data limit.
-- **R24.** The anchor writer can target either chain. The founder chooses which (see the open questions).
-- **R25.** Anchoring is idempotent, keyed by session id, schema id and SHA-256. Each artifact is pinned before it is anchored, and a retry resubmits the same bytes. A step succeeds only when its receipt is **accepted**; a committed transaction alone does not count. Each CID must be readable from at least two gateways before it is anchored.
-- **R26.** The explorer gets a **governance view** that groups `GOVERNANCE` memos by `thread_id` and shows each session's timeline.
+- **R22.** Steward wallets sign governance anchors through the client-side prepare, sign and submit flow that context publishing uses. The founder's wallet anchors the steward set and the ruling signer anchors rulings (R27a). Task Node's server keys never sign an anchor. A session takes one packet payment, one open event and one close-out payment, plus the ruling payment.
+- **R23.** Anchors stay in `pf.ptr` v4 with one new kind, `GOVERNANCE`, proposed value 12, registered with Pillar 2 and added to the encoder. Field 4 (`schema`) carries a governance schema id registered with Pillar 2; artifacts carry their full schema name, so the id is a lookup hint. Field 6 (`thread_id`) carries the session id (at most 36 bytes), so an indexer groups sessions without IPFS. A memo is about 102 bytes (CIDv0 48, session id 38, other fields 8, type and format 8), so three fit the 256-per-memo and 512-per-payment limits; a test vector checks the worst case on both chains. In Step 2 Pillar 2's v5 pointer replaces v4 with the same kind, schema id and `thread_id`.
+- **R24.** One anchor interface targets either chain (open question 5):
+    - old chain: an XRPL `Payment` as today, accepted when validated with `tesSUCCESS`;
+    - new chain: a `payment_v2` to the signer's own account for the smallest non-zero amount, lower-case hex memos, accepted when the finalized receipt says `accepted: true`, signed by a new flow that calls `wallet_sign_payment_v2`;
+    - if anchoring starts on the old chain, the first new-chain anchor is an archive record of every earlier session's CIDs and transaction hashes, so the explorer shows the whole history.
+- **R25.** Anchoring is idempotent, keyed by session id, schema id and hash, and each artifact is pinned first. Memo bytes are fixed; a retry signs a new transaction with the same memo bytes, since the old one may have expired. State is per artifact, so a retry covers only unconfirmed ones. Only an **accepted** receipt counts. Each CID must be confirmed pinned by both Pinata and the first-party cluster first.
+- **R26.** The explorer gets a **governance view** that groups `GOVERNANCE` memos by `thread_id` into a session timeline.
 
 ### Acting on the minutes
 
-- **R27.** **Rulings.** Each decision flagged `ruling` is exported as a Verifiable Constitution question, with the snapshot as its evidence packet. It is queued for the deterministic Qwen profile through `scripts/gov-inference-provider`, or whatever replaced it in the migration the founder mentioned. The typed answer and its replay hashes are pinned and anchored. A ruling has only the effect its stage allows.
-- **R28.** **Deliverables.** Each deliverable becomes a `board_wanted_items` row with a new `proposed` status. This needs a migration of the status check, and `wantedState` must treat proposed items as not open. The `source_url` is the public session page, and the proposed reward goes in `reward_pft`. The item opens once someone confirms the reward. Who that is, the founder decides.
-- **R29.** **Follow-up.** The next snapshot lists each previous deliverable with its derived state. That closes the loop from packet, to work, to the next packet.
+- **R27.** **Rulings.** Only a decision with listed answer options can be flagged `ruling`. Its `pf.governance.ruling_request.v1` carries the question, the options (always including `hold-no-op`), the deterministic profile id and the evidence: snapshot, steward brief, steward events and the approved minutes item, never community text. It runs as a Verifiable Constitution question on two distinct hosts through a provider interface, today `scripts/gov-inference-provider`; whatever the founder's migration produced plugs in behind it. Matching parsed-output roots give the answer; a split records `hold-no-op`. A session's rulings share one rental, and each has only the effect its stage allows.
+- **R27a.** **Ruling lifecycle and cost.** A ruling goes `Queued`, `Running`, `Replayed` or `Diverged`, then `Anchored`. A provider error, timeout or the per-session cost cap makes it `Failed`; the steward retries or drops it, and the next snapshot reports it. Each run records host-hours, hosts and cost and stops before the cap. The ruling signer, a steward wallet or a registered runner key with the `anchor_ruling` role, anchors a session's rulings in one payment. The verifier checks replay hashes, so validity never depends on the anchoring key.
+- **R28.** **Deliverables.** Each becomes a `board_wanted_items` row with a new `proposed` status. That needs a status-check migration, and `wantedState` must treat proposed items as not open. `source_url` is the public session page and `reward_pft` the proposed reward. The item opens when the confirmer (open question 9) confirms; if that is the steward, the approval signature confirms and items open at `Acting`. Items still proposed after `proposed_expiry_sessions` are dropped as *expired unconfirmed*; with no expiry they stay in every snapshot.
+- **R29.** **Follow-up.** The next snapshot lists every earlier deliverable and ruling with its state, closing the loop from packet to work to the next packet.
 
 ### Public surface
 
-- **R30.** A public session page and archive work without login. They show the live session, every artifact and its anchors, and a **Verify** link to `verify-governance-session`. That script checks the hashes, signatures, the inclusion rule and the replay hashes of each ruling.
-- **R31.** A blog post explains the packet schema, the snapshot method and how a session runs, written together with Pillar 2's message-protocol post. The founder's story expects this post to exist, and it does not exist yet.
+- **R30.** A public session page and archive work without login, lead with the machine-made artifacts, show every artifact with its label and anchors, and link to `verify-governance-session`. Its **deterministic** mode uses only the chain and public gateways to check hashes, signatures, the steward key binding, eligibility, the inclusion rule, quotes, the approval threshold and replay hashes. Its best-effort **`--check-relays`** mode lists eligible relay events missing from the manifest, warning that relays drop events and clients set `created_at`.
+- **R31.** A blog post explains the packet schema, the snapshot method and how a session runs, written with Pillar 2's message-protocol post. The founder's story expects it; it does not exist yet.
 
 ## Security model
 
 | Threat | Control |
 |---|---|
-| A member posts straight to relays to bypass the toggles | The inclusion rule (R12). Excluded events are listed. |
-| A non-member posts to the session root | Ignored at ingest, as today |
-| Spoofed `created_at` | Order comes from the receipt `sequence`, and the time window from the server's receipt time (R12) |
-| Relays drop events | The pinned bundle holds every raw event (R13) |
-| A compromised server or database forges history | The steward's wallet signs the anchors (R22), and the approval covers the manifest and minutes hashes (R20) |
-| A compromised server censors events | The verifier compares relay copies with the manifest and reports member events that are missing |
-| Prompt injection into minutes or deliverables | R17–R19, steward review, and a red-team pass before the first public session |
-| Spam or runaway LLM cost | Posting policy, rate limits and turn limits (R9, R10, R15) |
-| Loss of the steward key | M-of-N approval (R20) |
+| Relay-direct posts, ineligible keys, spoofed `created_at` | Inclusion rule and receipt order (R11, R12); exclusions listed |
+| Relays drop events | The bundle holds every raw event (R13) |
+| A compromised server forges history | Steward wallets sign anchors over the manifest and minutes (R20, R22). Receipt order and eligibility remain server-assembled, steward-approved claims: the verifier proves consistency, not truth. |
+| A compromised server censors or remaps identities | `--check-relays` (R30); eligibility fixed at open (R9); keys bound in the steward set (R20a); Pillar 6 later |
+| Prompt injection, spoofed citations | Isolated passes (R17), quote check (R19), steward review, red-team pass |
+| A forged ruling | Two-host replay hashes (R27) |
+| Abuse, sensitive disclosure | Moderation (R13a); embargo (R7) |
+| Spam, runaway cost, unbounded rewards | Policies, caps and steward-only triggers (R8a, R10, R15, R19, R27a) |
+| Loss of a steward key | With one steward, a single point of failure until the founder anchors a new set (R20a); M-of-N removes it |
 
 ## Economics
 
 | Cost line | Size | Who pays |
 |---|---|---|
-| Pins and replication | A few small JSON artifacts per session | Task Node's existing Pinata account and cluster |
-| Anchors | About five to seven memos per session | The steward's wallet, which is public on chain |
-| Facilitator and minutes inference | Bounded by the turn limit | Task Node's inference budget, with a per-session cap the founder sets |
-| Rulings | One GPU rental per run (documented at $5.34 for one run, $77.32 for a campaign) | The founder decides: every ruling, batched per session, or flagged classes only |
-| Deliverable rewards | `reward_pft` on each item | The owning board's budget, as today |
+| Pins and replication | A few JSON artifacts and raw responses per session | Task Node's Pinata account and cluster |
+| Anchors | Two payments per session plus one for rulings; `payment_v2` fees grow with memo bytes. Published per session. | The signer's wallet |
+| Facilitator, machine brief, minutes | Bounded by steward-only triggers and the turn cap; cost published per session | Task Node's inference budget, under a per-session cap |
+| Rulings | Host-hours × two hosts × hourly rate plus start-up, shared by the session's rulings. H200s are estimated at $2.20–3.50 per host-hour. | As the founder decides, under a hard per-session cap |
+| Deliverable rewards | `reward_pft`, within the per-task cap and session ceiling | The owning board's `board_reward_budgets`, as today |
 
-The economics close in three ways. Deliverables pay out through the existing path from Wanted item to task to reward. Each snapshot's follow-up stops minutes from becoming write-only. The posting policy bounds what open participation costs.
+Deliverables pay out through the existing Wanted item, task and reward path, within existing budgets. Each snapshot shows those budgets and every stalled deliverable, so minutes cannot become write-only. Recorded attribution gives any incentive the founder picks its data.
 
 ## Dependencies
 
 | Step | Depends on | Notes |
 |---|---|---|
-| **Step 1 (MVP)** | The existing `pf.ptr` writer and wallet signing, Pinata and replication, the Hive room, the Wanted list and the L1 RPC reads | Needs no other pillar. Identity comes from today's NIP-05 directory and wallet-linked Nostr keys. Session pages link to raw transactions and gateways. |
-| **Step 2** | [Pillar 2 — Message protocol](02-message-protocol.md) | Schema registry ids, the protobuf form and the `GOVERNANCE` kind |
-| | [Pillar 6 — Hive identity on chain](06-hive-identity.md) | Stewards and allowlisted participants identified on chain |
-| | The explorer governance view (R26) | Needs anchors on the new chain, the only chain the explorer indexes |
-| | New-chain `payment_v2` memo signing in Task Node | Only if anchors go to the new chain |
-| **Step 3** | A cheap, repeatable home for the deterministic pipeline | Needed for Stage 1 minutes and Stage 2 rulings |
+| **Step 1 (MVP)**: R1–R25, R27–R31 | The `pf.ptr` writer and wallet signing, Pinata and replication, the Hive room, the Wanted list and budgets, L1 RPC reads, and one rental through `gov-inference-provider` | No other pillar's code. Kind 12 and schema ids are agreed with Pillar 2. Identity is today's NIP-05 directory, bound by the steward set. If the founder picks the new chain, the `wallet_sign_payment_v2` flow is in Step 1. |
+| **Step 2** | [Pillar 2 — Message protocol](02-message-protocol.md) | `CANONICAL_JSON` envelopes (R14) and v5 pointers (R23) |
+| | [Pillar 6 — Hive identity on chain](06-hive-identity.md) | Stewards, facilitator and allowlisted participants identified on chain |
+| | Explorer governance view (R26) | Needs new-chain anchors |
+| **Step 3** | A cheap, repeatable home for the deterministic pipeline behind the R27 interface | For Stage 1 minutes every session and Stage 2 rulings |
 
 ## Acceptance criteria
 
-1. The founder runs a full scheduled session in production:
-    - the next-session card is shown in advance;
-    - the snapshot and brief are anchored before the deadline;
-    - the live session lasts about 30 minutes;
-    - the minutes are signed.
-2. The schedule, packet, snapshot, transcript, minutes and approval each have a CID and an **accepted** transaction signed by the steward's wallet. All of them can be reached from the public session page without logging in.
-3. `verify-governance-session` passes for a third party who uses only public gateways and the chain. It re-derives every snapshot field from the pinned raw responses and rebuilds the transcript from the bundle.
-4. In a test that posts directly to the relays, an ineligible member's event and an event received after the freeze are both excluded and listed. Steward-only and open policies behave as specified.
-5. Each deliverable appears as a proposed Wanted item linked to the session, and the next snapshot reports its state.
-6. At least one decision gets a deterministic ruling, anchored with replay hashes, and the cost of the run is recorded.
-7. The chat layer runs with no GPU rental, and the facilitator's reply latency is published.
-8. A red-team pass shows that injected community text cannot create a decision or a deliverable.
-9. The blog post (R31) is published and linked from the session page.
+1. **Step 1.** The founder runs a scheduled session in production: the card shows in advance, the packet is anchored before the deadline, the session lasts about 30 minutes, and the minutes reach the approval threshold.
+2. **Step 1.** The schedule, steward set, packet and close-out each have a CID and an **accepted** transaction from the founder's or a steward wallet, reachable from the public page without login. The session needed two wallet signatures per anchor chain, plus the ruling payment.
+3. **Step 1.** The verifier's deterministic mode passes for a third party using only gateways and the chain: it re-derives every snapshot field, checks trust levels, key binding and eligibility, rebuilds the transcript and checks quotes. `--check-relays` reports.
+4. **Step 1.** Posting directly to relays: an ineligible event and a post-freeze event are excluded and listed, an allowlisted key outside the directory is included, events sent during a Task Node outage are recovered, and the steward-only and members policies behave as specified.
+5. **Step 1.** Each deliverable is a proposed Wanted item linked to its session; a reward over the per-task cap is rejected; the next snapshot reports every state, including `proposed`.
+6. **Step 1.** A decision with answer options gets a ruling replayed on two hosts and anchored with replay hashes, its cost recorded and under the cap.
+7. **Step 1.** The chat layer uses no GPU rental; facilitator latency and inference cost are published.
+8. **Step 1.** A red-team pass shows injected community text, including spoofed citations, cannot create a decision or deliverable.
+9. **Step 1.** The blog post (R31) is live and linked from the session page.
+10. **Step 2.** Artifacts are Pillar 2 envelopes over the same JCS bytes, the explorer shows the session timeline, and participants resolve through Pillar 6.
 
 ## Open questions for the founder
 
-- **Cadence.** What is the fixed rhythm?
-    - One session per dynamic-UNL scoring round (weekly today), every Nth round, or a calendar slot you pick.
-    - How long is the pre-read? A longer one lets more time zones prepare, but each cycle takes longer.
-- **Missed deadline.** (a) Open with a snapshot-only packet, so governance never pauses. (b) Record the session as `Missed`, which avoids holding an empty session.
-- **Who may open or call a session?** Options: you only, a steward set you name, or validators and top-30 users.
-- **Steward set and approval.** A single key (N=1), or M of N from the start, and if so, who? When the review window ends, is the transcript published with the minutes marked unapproved, or is only the manifest kept?
-- **Anchor chain.**
-    - (a) The old chain. It works today, but the explorer does not show it and it needs migrating later.
-    - (b) The new chain. It matches the migration and the explorer, but needs new-chain memo signing in Task Node.
-    - (c) Both chains during the transition. This gives the most continuity at the highest cost.
-- **Stages.** What evidence moves governance from Stage 0 to 1, and from 1 to 2? Which classes of decision may a ruling bind?
-- **Ruling budget.** Should every session produce rulings, or only for decisions you flag? Is there a GPU cap per session? And "we have migrated that": what now runs deterministic inference, and at what cost?
-- **Deliverable rewards.** Who confirms a reward and opens the item: the board manager, a steward, or the minutes themselves at Stage 2?
-- **Participant incentives.** No reward, reputation only, or Wanted items for governance contributions (for example, a cited question that led to a decision)?
-- **Limits.** Set the per-pubkey rate limit, the agent turn cap, the per-session inference cap and the facilitator latency target.
-- **Board ownership.** Should `board_ai_l1_governance` return to own governance deliverables, or should each deliverable go to the board for its subject?
+Each answer sets a value or picks an option that is already built, so none blocks building Step 1. All are needed before the first production session.
+
+1. **Cadence.** One session per dynamic-UNL round (weekly today), every Nth round, or a calendar slot?
+2. **Pre-read.** None, so the upload opens the conversation as in your story, or a set length? Longer helps more time zones prepare but slows each cycle.
+3. **Missed deadline.** (a) A snapshot-only packet, so governance never pauses, or (b) record `Missed` and hold no briefless session?
+4. **Stewards.** N=1, or M of N from the start, and who? Who may call and open sessions: you, named stewards, or validators and top-30 users? At review expiry, publish the transcript with unapproved minutes, or keep only the manifest?
+5. **Anchor chain.** (a) Old chain: works today, invisible to the explorer, needs the archive record later. (b) New chain: matches the migration and explorer, needs the `wallet_sign_payment_v2` flow in Step 1. (c) Both: most continuity, double the cost and signatures.
+6. **Ruling signer.** A steward wallet keeps every anchor human-signed, at one more signature per session. A registered runner key needs no human step, but an operator holds it. Validity is the same either way.
+7. **Stages.** What moves governance from Stage 0 to 1 and 1 to 2: a number of sessions where replayed minutes match approved ones, a run with no veto, or your call each time? Which classes may a ruling bind?
+8. **Rulings and the GPU migration.** A ruling every session, or only when you flag one? What per-session GPU cap? "We have migrated that": the agent plan prefers RunPod H100 over Vast. Is that the migration, or does deterministic inference now run elsewhere, and at what cost? For the Step 3 home, options beyond per-session batching (built) include reserved instances, validator-hosted inference, or a smaller profile, which the Verifiable Constitution allows only after a model-governance packet proves it.
+9. **Deliverable rewards.** Who confirms a reward: the board manager, a steward, or the minutes at Stage 2? Do unconfirmed items expire after some sessions?
+10. **Participant incentives.** None, reputation only, or Wanted items for contributions such as a cited question? Attribution is recorded either way.
+11. **Limits.** Rate limit, pre-read caps, turn cap, inference cap, facilitator latency target, and whether packets carry a reward ceiling.
+12. **Board ownership.** Should `board_ai_l1_governance` own governance deliverables again, or should each go to the board for its subject?
 
 ## Code references
 
-- Hive room: [`shared/hive-group.js`](https://github.com/postfiatorg/tasknode/blob/main/shared/hive-group.js) · [`server/hive-group-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-worker.js) · [`server/hive-group-relay.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-relay.js) · [`server/hive-group-routes.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-routes.js) · [`server/repositories/hive-group.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/hive-group.js)
-- Wanted list: [`server/board-wanted.js`](https://github.com/postfiatorg/tasknode/blob/main/server/board-wanted.js) · [`165_five_boards_wanted.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/165_five_boards_wanted.sql)
-- Pointers and IPFS: [`server/pftl-pointer.js`](https://github.com/postfiatorg/tasknode/blob/main/server/pftl-pointer.js) · [`server/context-publish.js`](https://github.com/postfiatorg/tasknode/blob/main/server/context-publish.js) · [`server/context-ipfs.js`](https://github.com/postfiatorg/tasknode/blob/main/server/context-ipfs.js) · [`docs/wiki/architecture/ipfs.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/ipfs.md)
-- L1: [`docs/rpc/methods.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/rpc/methods.md) · [`docs/governance/`](https://github.com/postfiatorg/postfiatl1v2/tree/main/docs/governance) · [`dynamic-unl-l1-evidence-source-note.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/dynamic-unl-l1-evidence-source-note.md)
-- Explorer: [`docs/explorer-spec.md`](https://github.com/postfiatorg/postfiatorg.github.io/blob/main/docs/explorer-spec.md) · Blog: [LLM governance replay](https://github.com/postfiatorg/postfiatorg.github.io/blob/main/content/blog/llm-governance-replay.md)
+- Task Node: [`hive-group-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-worker.js) · [`board-wanted.js`](https://github.com/postfiatorg/tasknode/blob/main/server/board-wanted.js) · [`pftl-pointer.js`](https://github.com/postfiatorg/tasknode/blob/main/server/pftl-pointer.js) · [`context-ipfs.js`](https://github.com/postfiatorg/tasknode/blob/main/server/context-ipfs.js) · [`docs/wiki/architecture/ipfs.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/ipfs.md)
+- L1: [`transactions_mempool_receipts.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/transactions_mempool_receipts.rs) · [`docs/rpc/methods.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/rpc/methods.md) · [`docs/governance/`](https://github.com/postfiatorg/postfiatl1v2/tree/main/docs/governance) · [`scripts/gov-inference-provider`](https://github.com/postfiatorg/postfiatl1v2/blob/main/scripts/gov-inference-provider)
+- Website: [`docs/explorer-spec.md`](https://github.com/postfiatorg/postfiatorg.github.io/blob/main/docs/explorer-spec.md) · [LLM governance replay](https://github.com/postfiatorg/postfiatorg.github.io/blob/main/content/blog/llm-governance-replay.md)
 
-## Revision notes (review round 1)
+---
 
-| Item | Change |
-|---|---|
-| Gemini P1 | Rulings through the Verifiable Constitution lane (R27), a stage table, provenance labels and AC6. The old GPU criterion now covers the chat layer only (AC7). What the GPU migration refers to is an open question. |
-| Gemini P2 | Inclusion rule (R12), pinned bundle (R13), ingest from session start (R11), AC4. Partly disputed: non-members cannot pollute Postgres, because ingest drops pubkeys outside the directory. |
-| Gemini P3 | The steward's wallet signs anchors (R22), and approval is signed over the hashes (R20). |
-| Gemini P4 | Versioned collector with per-field sources (R4–R5). The snapshot is split from the brief (R6). |
-| Gemini P5 | One room per session, and the toggles are enums (R8–R9). The main room is never locked. |
-| Gemini P6 | Event-driven facilitator (R15), board managers through the pre-read queue (R16), prompt boundary and validator (R17, R19). The latency target is an open question. |
-| Gemini P7 | One kind, with the schema id in field 4 and the session id in field 6 (R23). JCS JSON is authoritative (R14). |
-| Gemini P8 | Proposed Wanted items with rewards (R28), follow-up (R29), an Economics section and limits. The policy values are open questions. |
-| Gemini P9 | Fixed schedule (R1–R3) and a pre-read state. Durations are open questions. |
-| Gemini P10 | New states: Missed, Cancelled, Expired and AnchorFailed. Idempotent anchoring (R25). Partly disputed: Pinata is not the only store, because a queue re-pins to the first-party cluster. |
-| Gemini P11 | Dependencies arranged by step, with a Step 1 MVP that needs no other pillar. Blog post added (R31, AC9). |
-| Opus P1 | The fixed timeline is now a requirement (R1–R3, AC1). Only its values are open. |
-| Opus P2 | As Gemini P4. Fields with no machine source are marked `steward_supplied`. |
-| Opus P3 | Stage table, labels and rulings (R27). |
-| Opus P4 | As Gemini P2. The signed open event defines who is eligible (R9). |
-| Opus P5 | As Gemini P7. Proposed value 12. |
-| Opus P6 | Checked: pointers go to the old chain, and the explorer reads only the new chain. The writer can target either chain (R24), and the choice is an open question. |
-| Opus P7 | Checked: the 60-second interval is configurable, and a reply can take up to 180 seconds. R15. |
-| Opus P8 | As Gemini P5. |
-| Opus P9 | R17–R19, AC8. |
-| Opus P10 | R21 is limited to the chat layer. R27, AC6 and the Economics section cost the rulings. |
-| Opus P11 | RFC 8785, receipt order and a verifier (R12, R14, R30). Checked: `pinContextIpfsJson` uses `JSON.stringify`. |
-| Opus P12 | As Gemini P10. |
-| Opus P13 | Posting policy and rate limits (R9–R10). Incentives and gating are open questions. |
-| Opus P14 | Public page and archive with no login (R30), blog post (R31), AC2 and AC9. |
-| Opus P15 | Re-checked at `204d238`. Corrections: board managers reply asynchronously under the bot key; Wanted items have no draft state; the JSON cap is 16 MiB; pointers are on the old chain. |
-| Opus P16 | Signed M-of-N approval (R20) and wallet-signed anchors (R22). The steward set is an open question. |
+*Revision history: [changelog](../changelog/01-hive-governance.md).*

@@ -1,12 +1,12 @@
 # Pillar 3 — Validator Rewards Program
 
-> **Status:** Early. The node binary and its RPC modes exist. So do the operator key and manifest tools, a signer with a double-sign guard, a deterministic admission policy and the Task Node binding. Binding to the new chain works today, but only for the six Foundation validators. Outside operators still cannot join. There is no signed public release, public genesis, receipt or ratification client, upgrade command, single docs page or SSH dashboard. Reward grants are off.
+> **Status:** Early. The node binary and its RPC server exist. So do the operator key and manifest tools, a signer with a double-sign guard, a deterministic admission policy and the Task Node binding. Binding to the new chain works, but only for the six Foundation validators and only with key files. Outside operators cannot join. There is no signed public release, public genesis, stand-alone RPC follower, receipt or ratification client, upgrade command, single docs page or SSH dashboard. Reward grants are off.
 >
 > **Bubbles up to:** [Outcome B · A production-ready new chain](../README.md#three-outcomes). *A decentralised new chain*. Outside validators are the first stage of moving off the old chain.
 
 ## In one paragraph
 
-Post Fiat validators get something real for running a node: **Finance Hub** and **GoodAlexander research API keys**, plus a monthly reward for staying up. To deliver that on the new chain, an outsider must be able to **install, update and monitor** a postfiatl1v2 validator, optionally run an **RPC node**, and **connect** it to Task Node, all from one page. On the founder's question: **yes, we have RPC software.** It is the same `postfiat-node` binary in RPC mode, and it updates through the same release. Joining is deliberately not self-service. The first outside validators come from the old chain's Dynamic UNL scoring. Later ones must pass a deterministic admission policy and be ratified by the current validators. That gate is what keeps rewards and research access from being farmed. Today all six validators are Foundation-run. The tooling is spread across about eight docs or assumes the Foundation's fleet, and Task Node's connect screen defaults to the old `postfiatd` chain. This pillar packages the tooling into a product and rolls it out in steps.
+Post Fiat validators get something real for running a node: **Finance Hub** and **GoodAlexander research API keys**, plus a monthly reward for staying up. To deliver that on the new chain, an outsider must be able to **install, update and monitor** a postfiatl1v2 validator, optionally run an **RPC node**, and **connect** it to Task Node, all from one page. On the founder's question: **yes, we have RPC software.** It is `rpc-serve` in the same `postfiat-node` binary, updated through the same release. Today it runs only beside a validator; this pillar builds the stand-alone RPC node that follows the tip. Joining is deliberately not self-service. The first outside validators come from the old chain's Dynamic UNL scoring. Later applicants run a follower first, pass a deterministic admission policy and are ratified by the current validators. That gate keeps rewards and research access from being farmed. Each verdict is a public, recomputable record: validator membership is itself post-human governance in action.
 
 ## User story
 
@@ -17,320 +17,334 @@ Post Fiat validators get something real for running a node: **Finance Hub** and 
 **Augmented story.**
 
 1. **One page.** I open *Run a validator* on postfiat.org, next to the old-chain [validator setup](https://postfiat.org/validator-setup/) page. Its sections are Requirements, Keys, Install, Join, Update, RPC node, Connect and Status. Every command is copy-paste.
-2. **Install.** I download a signed release (`postfiat-node` plus systemd units). I verify the tag, the checksums and the signed deployment manifest against the publisher key shown on the page. I make a master key and a hot key, and I run the hot key in the separate signer process.
-3. **Join.** I am an old-chain validator picked by the frozen Dynamic UNL round. One command builds my `IdentityReceiptV1`, which binds my old key to a new ML-DSA-65 key, and I submit it before the deadline. Later applicants run a command that assembles their evidence and previews the policy verdict (*admit*, *hold* or *reject*, with reasons). I watch my status go from *submitted* to *ratified* to *active*.
-4. **Update.** `postfiat-node upgrade --check` tells me whether a release is a rolling update or must be installed before activation height H. Applying it verifies the signature, stops the services, backs up chain data, swaps the binary, restarts and health-checks. It never touches the signer's double-sign state, and it refuses anything not on the signed channel.
-5. **RPC node.** The **same binary** runs in RPC mode. The *private* profile listens on loopback for my own wallet or local Task Node. The *public* profile sits behind a TLS edge. Either one catches up from a pinned checkpoint published with the release.
-6. **Connect.** In Task Node, under **Settings > Validator**, the new chain becomes the default at the agreed rollout step. I paste one command as root. It fetches a one-time challenge, signs it inside a sandbox with no network access, and sends back only the signature. My profile shows *Validator · bound · active*, and Finance Hub opens.
-7. **Status UX.** Over SSH, `postfiat-node top` shows:
-    - height and lag behind the network;
-    - peers;
-    - my precommit signing;
-    - my reward eligibility as Task Node sees it;
-    - the release and any upgrade-by height;
-    - signer health, disk use and recent warnings.
-
-8. **Rewards and access.** Anyone can recheck my participation record. Task Node counts it, and the reward and research access follow published rules, including the rule for when I go offline.
-9. **Useful.** A public directory lists my validator with its participation and, if I opt in, my public RPC endpoint.
+2. **Install.** I verify a signed release against the publisher key on the page. My master key stays offline. Only the signer, under its own user, reads my validator key.
+3. **Join.** If the frozen Dynamic UNL round picked me, one command builds my `IdentityReceiptV1`, binding my old key to my new ML-DSA-65 key. If I come later, I first run a follower that observers measure, then one command previews my verdict (*admit*, *hold* or *reject*, with reasons). My status goes from *observing* to *ratified* to *active*.
+4. **Update.** `postfiat-node upgrade --check` says whether a release is rolling or must be installed before activation height H. Applying it checks disk, takes a snapshot, swaps the binary and health-checks. It never touches the signer's guard.
+5. **RPC node.** The **same binary** runs as a non-voting follower: privately on loopback for my wallet or local Task Node, or publicly on a separate host behind a TLS edge, so public load never reaches my validator.
+6. **Connect.** In Task Node, under **Settings > Validator**, the new chain becomes the default at the agreed step. I paste one command. My signer signs a one-time challenge, and only the signature leaves. My profile shows *Validator · bound · active*, and Finance Hub opens. A later key rotation keeps the binding.
+7. **Status UX.** Over SSH, without root, `postfiat-node top` shows node health, my signing, my join or ratification status, my eligibility as Task Node sees it, any upgrade-by height and alerts. Keys open logs, the doctor and an upgrade check. When I'm away, alerts reach my webhook.
+8. **Rewards and access.** Anyone can recheck my participation from finalized votes. The reward and research access follow published rules, including what happens when I go offline.
+9. **Useful.** My validator votes, can serve admission for local Task Node users, run a public follower and act as a feed observer, and is listed in a public directory.
 
 ## What exists today
 
 | Component | Where | State |
 |---|---|---|
-| Node binary with RPC modes | [`crates/node`](https://github.com/postfiatorg/postfiatl1v2/tree/main/crates/node): `rpc-serve`, `rpc-catch-up`, `rpc-catch-up-certified-delta` | Built. **No separate RPC product: RPC is the same binary.** The documented topology runs a validator and its RPC service on one data directory. The pinned catch-up fails closed unless it ends at the expected height, block hash and state root. |
-| RPC surface | [`docs/rpc/methods.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/rpc/methods.md) · [`public-rpc-operator-policy.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/public-rpc-operator-policy.md) · [`systemd/postfiat-rpc.service.example`](https://github.com/postfiatorg/postfiatl1v2/blob/main/systemd/postfiat-rpc.service.example) | `status`, `account`, `account_tx`, `tx`, `receipts`, `blocks`, `validators` and `mempool_submit_signed_*`. There is no `account_info`. Private-action admission (`private_action_submit`, `private_action_receipt`) is built behind `--allow-private-action-admission`. It is off, and it signs with the validator's own finality key, so only validators can serve it. Public binds are refused, so public RPC needs a TLS edge. Most reads took 7–10 s on the devnet. **No public endpoint.** |
-| Release process | [`docs/release-process.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/release-process.md) · [`signed-deployment-manifest.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/signed-deployment-manifest.md) | The process is defined: signed tag, SBOM, checksums, a second builder, and rollout one validator at a time. Units check a manifest signed by **one** ML-DSA-65 publisher key. No public release has gone through it. |
-| Consensus-change activation | [`replicated-state-v2-activation.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/replicated-state-v2-activation.md) | A governance amendment schedules a future height. Such a change must never ship by "uncoordinated rolling restart". |
-| Rollout tool | [`safe-validator-rollout.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/safe-validator-rollout.md) | Foundation fleet only. |
-| Operator runbook | [`public-operator-runbook.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/public-operator-runbook.md) | The closest thing to one page. It lists the gaps: no signed artifact, no genesis, no registration tooling, no l1v2 sidecar, no public monitoring and **no hardware sizing**. Units run as user `postfiat` under `ProtectSystem=strict`. |
-| Admission and removal | [`validator-registry.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/validator-registry.md) · [genesis spec](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/architecture/l1v2-testnet-genesis-and-launch-spec.md) §3, §5 · [`launch-topology-thresholds.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/architecture/launch-topology-thresholds.md) (proposal) | There is **no join transaction and no stake.** Genesis membership is `G0 = Selected ∩ Receipted`, from a frozen old-chain Dynamic UNL round. **Admission Policy V1** is an advisory selector. Its floors are 99.5% uptime, accountability of at least 70, no shared control groups, a signed manifest and a key-domain proof. Registry changes need ML-DSA-65 signatures from the current registry plus consensus ordering. Removal is a signed transition. Launch needs `n ≥ 12`, with at most 2 seats per correlated group. |
-| Operator CLI pieces | [`cli_dispatch_parts/`](https://github.com/postfiatorg/postfiatl1v2/tree/main/crates/node/src/main_parts/cli_dispatch_parts) | Present: `operator-onboarding-keygen` (master and hot key), `operator-manifest-create`, `operator-attestation-create`, `validator-key-stage`, `validator-signer-serve` and `deployment-*`. **Missing:** `upgrade`, `top`, a receipt command and a ratification command. |
-| Key custody | [signer policy](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/public-rpc-operator-policy.md#validator-signer-process) · [`validator-emergency-key-rotation.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/validator-emergency-key-rotation.md) | The signer saves its last signed round before each vote and must "never … restore an older copy". It is not yet deployed: the fleet uses key files. There is no HSM. Rotation goes through a registry update. |
-| Health tools | `scripts/node-status`, `scripts/testnet-validator-doctor` ([doc](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/validator-doctor.md)), `scripts/testnet-rpc-doctor`, `scripts/testnet-monitor-snapshot`, `python/postfiat_rpc/cobalt_ui.py` | JSON reports and a local alert spool. **No terminal UI.** |
-| Task Node binding | [`tasknode-l1-validator-binding.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/tasknode-l1-validator-binding.md) · Task Node [`public/l1-validator.sh`](https://github.com/postfiatorg/tasknode/blob/main/public/l1-validator.sh) · [`server/l1-validator-identity.js`](https://github.com/postfiatorg/tasknode/blob/main/server/l1-validator-identity.js) | **Works for registry members.** It runs as root on Linux x86_64. It downloads a SHA-256-pinned helper and gets a single-use challenge that expires after 30 minutes. It signs under `postfiat-l1-v2/tasknode-validator-binding/v1` inside `unshare --net`, then posts the proof. The chain id is hard-coded to `postfiat-wan-devnet-2`. |
-| Registry and participation feed | [`tools/tasknode-validator-binding/registry.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/tools/tasknode-validator-binding/registry.py) → `research.goodalexander.com:18443/l1-registry/registry.json` | **Live.** At revision time it was fresh and listed six validators with 30 daily participation rows each. Two agreeing RPC reads feed it, and it counts real `precommit_qc.votes`. It is **unsigned**: Task Node checks its shape and rejects it after one hour. The per-validator uptime record is **not exported**. |
-| Old-chain onboarding (default) | Task Node [`public/validator.sh`](https://github.com/postfiatorg/tasknode/blob/main/public/validator.sh) · [`ValidatorSettings.jsx`](https://github.com/postfiatorg/tasknode/blob/main/src/features/research/ValidatorSettings.jsx) (`useState("ledger")`) | Live. Targets `postfiatd`; the new chain is opt-in. |
-| Rewards | [`server/l1-validator-rewards.js`](https://github.com/postfiatorg/tasknode/blob/main/server/l1-validator-rewards.js) · [`server/l1-validator-uptime.js`](https://github.com/postfiatorg/tasknode/blob/main/server/l1-validator-uptime.js) · [`server/validator-rewards.js`](https://github.com/postfiatorg/tasknode/blob/main/server/validator-rewards.js) | Built. **$20 a month of Task Node USD credit** per validator id, not PFT. It needs 25 of 30 observed days at 95% or more, and the registry is rechecked when the grant is made. Grants run only if `TASKNODE_VALIDATOR_REWARDS_ENABLED=true`, which `fly.toml` doesn't set. `TASKNODE_L1_UPTIME_REWARDS_ENABLED` is false and would switch the evidence to uptime probes. |
-| Research access | [`server/index-viewer-routes.js`](https://github.com/postfiatorg/tasknode/blob/main/server/index-viewer-routes.js) · [`server/repositories/validator-bindings.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/validator-bindings.js) · [`server/validator-dashboard.js`](https://github.com/postfiatorg/tasknode/blob/main/server/validator-dashboard.js) | Live. **Any unrevoked binding**, old-chain or new-chain, unlocks the validator-tier Finance Hub bundles and validator research API keys. Chat Deep Research is open to every signed-in account. New-chain validators are checked against the registry only when they bind. Participation affects the monthly credit, never access. Only the user's own *Unbind* removes it. A web dashboard shows reward history. |
+| Node and RPC server | [`crates/node`](https://github.com/postfiatorg/postfiatl1v2/tree/main/crates/node): `rpc-serve`, `rpc-catch-up`, `rpc-catch-up-certified-delta` | Built. **RPC is not a separate product.** On a validator, `rpc-serve` also drives finality, sharing one store with `transport-validator-serve`. **No stand-alone follower:** `rpc-catch-up` imports a bounded batch (default 64 blocks) and exits. The pinned form fails closed unless it ends at the expected height, hash and state root. |
+| RPC surface and speed | [`methods.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/rpc/methods.md) · [fast-reads note](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/specs/fast-validator-reads-20261124.md) · [`public-rpc-operator-policy.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/public-rpc-operator-policy.md) | `status`, `account`, `account_tx`, `tx`, `receipts`, `blocks`, `validators` and `mempool_submit_signed_*`. There is no `account_info`. Public binds are refused. `status` and `server_info` are in-process, and `blocks`, `receipts` and `tx` read by key (0.3–0.5 s for `blocks`). **Other reads start a child process each and took 7–10 s**, queued on the store's exclusive lock, which block commits also hold. **No public endpoint.** |
+| Private-action admission | [`private_action_rpc.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/private_action_rpc.rs) | Built, off (`--allow-private-action-admission`). The validator verifies the user's proof, reserves the batch and runs an ordinary certified finality round. It signs only consensus messages, so it adds no key domain. It needs the validator's live store, so only validators can serve it. |
+| Release and upgrade | [`release-process.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/release-process.md) · [`signed-deployment-manifest.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/signed-deployment-manifest.md) · [runbook §7](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/public-operator-runbook.md#7-upgrade-and-rollback) · [`safe-validator-rollout.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/safe-validator-rollout.md) · [`replicated-state-v2-activation.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/replicated-state-v2-activation.md) | Defined (signed tag, SBOM, checksums, second builder), with a manifest signed by **one** ML-DSA-65 key. No public release has used it. The Foundation-only rollout tool snapshots first and keeps a rollback pair; binary-only rollback failed in the live-canary postmortem. Consensus changes use a scheduled height. |
+| Operator runbook | [`public-operator-runbook.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/public-operator-runbook.md) | The closest thing to one page. Its own gap list: no signed artifact, genesis, registration tooling or public monitoring, and **no hardware sizing**. |
+| Admission and removal | [`validator-registry.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/validator-registry.md) · [genesis spec](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/architecture/l1v2-testnet-genesis-and-launch-spec.md) §3–5 · [`launch-topology-thresholds.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/architecture/launch-topology-thresholds.md) (proposal) · [evidence fields](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/validator-evidence-field-registry.md) | **No join transaction and no stake.** The public testnet is a fresh genesis, `G0 = Selected ∩ Receipted`, from a frozen old-chain round, with no inserted seats. Later changes pass commit-reveal ratification (§4.2), proposed only by the Foundation pipeline. **Admission Policy V1** is a pure selector. Proposed floors: network-observed `uptime_window_bps` ≥ 9950 over 7 days, accountability ≥ 70, no shared control group, a signed manifest, a key-domain proof. Missing evidence holds. Rotation needs a continuity receipt from both keys. Proposed launch: `n ≥ 12`, quorum 10, at most 2 seats per correlated group, **the Foundation included**. The L3 independence verifier is not built. |
+| Operator CLI | [`cli_dispatch_parts/`](https://github.com/postfiatorg/postfiatl1v2/tree/main/crates/node/src/main_parts/cli_dispatch_parts) | Present: `operator-onboarding-keygen`, `operator-manifest-create`, `operator-attestation-create`, `validator-key-stage`, `validator-signer-serve`, `deployment-*`. **Missing:** `upgrade`, `top`, follower mode, a receipt command, a ratification client. |
+| Key custody | [signer policy](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/public-rpc-operator-policy.md#validator-signer-process) · [`validator_signer.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/validator_signer.rs) | The signer runs under its own user, with guard state outside the data directory that must never be restored. **It signs only consensus and transport contexts**, so it refuses the Task Node binding. The two-user deployment is unqualified, and **the fleet uses key files**. No HSM. |
+| Health tools | `scripts/node-status`, [`validator-doctor`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/validator-doctor.md), `scripts/testnet-rpc-doctor`, `scripts/testnet-monitor-snapshot` | JSON reports. The monitor spools `postfiat.monitor-alert.v1` envelopes "for external delivery", but nothing delivers them. **No terminal UI and no metrics endpoint.** |
+| Task Node binding | [binding runbook](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/runbooks/tasknode-l1-validator-binding.md) · [`l1-validator.sh`](https://github.com/postfiatorg/tasknode/blob/main/public/l1-validator.sh) · [`l1-validator-identity.js`](https://github.com/postfiatorg/tasknode/blob/main/server/l1-validator-identity.js) · [`156_l1_validator_bindings.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/156_l1_validator_bindings.sql) | **Works for registry members with key files.** It runs as root on Linux x86_64 and finds the node by its `--key-file`, so **it fails in signer mode**. A pinned helper signs a single-use, 30-minute challenge inside `unshare --net`. The chain id is hard-coded, also in a database constraint. An account may hold several bindings. |
+| Participation feed | [`registry.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/tools/tasknode-validator-binding/registry.py) → `research.goodalexander.com:18443/l1-registry/registry.json` | **Live.** It lists six validators with daily participation counted from `precommit_qc.votes`. Two RPC reads on one host feed it. It is **unsigned**: Task Node checks its shape and rejects it after one hour. |
+| Old-chain onboarding (default) | [`validator.sh`](https://github.com/postfiatorg/tasknode/blob/main/public/validator.sh) · [`ValidatorSettings.jsx`](https://github.com/postfiatorg/tasknode/blob/main/src/features/research/ValidatorSettings.jsx) (`useState("ledger")`) | Live. Targets `postfiatd`. The new chain is opt-in. |
+| Rewards | [`l1-validator-rewards.js`](https://github.com/postfiatorg/tasknode/blob/main/server/l1-validator-rewards.js) · [`l1-validator-uptime.js`](https://github.com/postfiatorg/tasknode/blob/main/server/l1-validator-uptime.js) · [`validator-rewards.js`](https://github.com/postfiatorg/tasknode/blob/main/server/validator-rewards.js) | Built, off. **$20 a month of Task Node USD credit** per validator id, not PFT. It needs ≥ 25 observed days of the last 30 with mean participation ≥ 95%. **After a key rotation, grants fail** (`l1_validator_key_not_current`) and re-binding is refused until the old binding is removed. `TASKNODE_VALIDATOR_REWARDS_ENABLED` is unset in `fly.toml`; `TASKNODE_L1_UPTIME_REWARDS_ENABLED` is false. |
+| Research access | [`index-viewer-routes.js`](https://github.com/postfiatorg/tasknode/blob/main/server/index-viewer-routes.js) · [`validator-bindings.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/validator-bindings.js) · [`validator-dashboard.js`](https://github.com/postfiatorg/tasknode/blob/main/server/validator-dashboard.js) | Live. **Any unrevoked binding on either chain** unlocks the validator Finance Hub bundles and research API keys. Chat Deep Research is open to all accounts. The registry is checked only at bind time. Only *Unbind* removes access. |
 
-**Current network** ([network status](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/network-status.md), [Cobalt](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/cobalt.md)):
+**Current network** ([network status](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/network-status.md)):
 
-- six Foundation validators, quorum 5 of 6;
-- no outside validators and no public RPC;
-- Cobalt last verified active at height 924, after ratifying two **key rotations**. **No add-validator change has been ratified on the live devnet**, only in a local drill.
+- six Foundation validators, quorum 5 of 6, no outside validators and no public RPC;
+- [Cobalt](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/cobalt.md) was last verified active at height 924, after ratifying two **key rotations**;
+- **no add-validator change has been ratified on the live devnet**, only in a local drill;
+- recent old-chain rounds scored 42–55 validators for a 20-seat UNL ([shadow evaluation](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/dunl-subscorer-shadow-eval-20260901.md)).
 
 ### Gates that block outsiders
 
-From the [testnet path](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/testnet-path.md). Launch gates L1–L6 are in genesis spec §5.
+From the [testnet path](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/testnet-path.md) [milestone](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/plans/active/l1v2-public-testnet-path-milestone.md). **Gate Zero** (Z1–Z3) is the operator's recorded rule: no community-facing step starts until all three close.
 
 | Item | What it is | Why it blocks validators |
 |---|---|---|
-| Z1 | Cobalt-ratified transitions become the only registry-change path on the devnet | Ratifying outsiders needs it |
-| Z2 | Decision on whether AI model output stays authoritative | It fixes the admission evidence path |
-| Z3 | NAVCoin swaps work end to end | A Gate Zero precondition for any community step |
-| C1 | Dynamic UNL verification and evidence transparency on the old chain | The genesis set is selected from that scoring |
-| C4 | Sidecar extended into the l1v2 ratification client | Without it, no receipt submission or ratification |
-| B2/B3 (G6) | Six-clone rehearsal and deployment decision | Launch gate L1 requires it |
-| D4 | Public-testnet launch decision | No network to join before it |
+| Z1 | Cobalt ratification is the only registry-change path on the devnet, proven on a real validator change | Ratifying outsiders needs it |
+| Z2 | Old-chain Dynamic UNL rounds move from AI-model scores to the deterministic v2 sub-scorer, with model output only an advisory flag (decided, not live) | Those rounds select `G0`, so the scorer must be final and replayable |
+| Z3 | NAVCoin swaps round-trip repeatedly with no consensus upgrade | Strangers shouldn't run a binary whose consensus surface is still changing |
+| C1 | Dynamic UNL verification and evidence transparency on the old chain | `G0` is selected from that scoring |
+| C4 | The sidecar extended into the l1v2 ratification client | Receipt submission and ratification need it |
+| B2/B3 (G6) | Six-clone rehearsal and deployment decision | Launch gate L1 |
+| D4 | Public-testnet launch decision | No public network before it |
 
 ## Architecture
 
 ```mermaid
 flowchart TB
     subgraph JOIN["Joining the validator set"]
-        DU["Old-chain Dynamic UNL round<br/>frozen and deterministic"] --> RC["IdentityReceiptV1<br/>old key binds new ML-DSA-65 key"]
+        DU["Old-chain Dynamic UNL round<br/>frozen, deterministic scorer"] --> RC["IdentityReceiptV1<br/>old key binds new ML-DSA-65 key"]
         RC --> G0["Genesis set G0<br/>Selected ∩ Receipted"]
-        EV["Admission evidence<br/>manifest, attestation, key-domain proof"] --> POL["Admission Policy V1<br/>admit, hold or reject"]
-        POL --> RAT["Ratification by current validators<br/>registry quorum and Cobalt checker"]
+        CF["Candidate follower node<br/>observed before admission"] --> POL["Admission Policy V1<br/>admit, hold or reject"]
+        POL --> RAT["Ratification client on each validator<br/>commit-reveal and Cobalt check"]
         G0 --> REG(("Validator registry"))
         RAT --> REG
     end
     R["Signed release channel<br/>tag, SBOM, checksums, manifest"] --> UP["postfiat-node upgrade<br/>rolling or activation height"]
-    UP --> V["Validator<br/>transport-validator-serve"]
-    UP --> P["RPC node<br/>private or public profile"]
-    V --> S["Signer process<br/>double-sign guard"]
+    UP --> V["Validator<br/>transport and private rpc-serve"]
+    UP --> F["Follower node<br/>non-voting RPC"]
+    S["Signer process<br/>own user, double-sign guard"] --> V
     REG --> V
-    V --> OBS["Independent observers<br/>count precommit votes"]
-    OBS --> RJ["Signed registry and uptime feed"]
-    V -->|"one-time challenge, signed offline"| TN["Task Node binding"]
+    F --> EDGE["TLS edge<br/>public reads"]
+    EDGE -->|"private actions only"| V
+    V --> OBS["Observers, each with its own key<br/>recount precommit votes"]
+    OBS --> RJ["Signed feeds, k of n"]
+    S -->|"one-time challenge, signed offline"| TN["Task Node binding"]
     RJ --> TN
-    TN --> ACC{"Access state<br/>active, lapsed, revoked"}
+    TN --> ACC{"Access state<br/>pending, active, lapsed, revoked"}
     ACC --> FH["Finance Hub and<br/>research API keys"]
     ACC --> RW["Monthly reward"]
     TN --> DIR["Public validator directory"]
-    V --> TOP["postfiat-node top<br/>SSH dashboard"]
+    V --> TOP["postfiat-node top<br/>SSH dashboard and alerts"]
     RJ --> TOP
+    RAT --> GOV["Public governance records"]
 ```
+
+### Keys
+
+| Key | Lives in | Signs |
+|---|---|---|
+| Old-chain master key (secp256k1) | The operator's old-chain custody | The fork half of `IdentityReceiptV1`, via `postfiatd validator-keys` |
+| Operator master key (ML-DSA-65) | Offline, from `operator-onboarding-keygen` | The onboarding record naming the validator key |
+| Validator key | The signer process | Votes, proposals, transport authentication and private-action rounds. Also the ML-DSA half of the receipt, rotation continuity receipts and ratification reveals. The Task Node binding and Pillar 6 link go through R13 (open question 12). |
+| Release publisher key | Foundation release custody | The deployment manifest |
+| Observer keys | One per observer | That observer's feed |
+
+A ratified rotation changes the key but not the validator id. Bindings follow the id (R15).
 
 ### Security model and failure modes
 
 | Trust root | Protects | Today | Required |
 |---|---|---|---|
-| Release publisher key | Every binary outsiders run | One ML-DSA-65 key | Pinned on the docs page with a rotation procedure; m-of-n is open question 9 |
-| Validator key | Consensus votes | Key files on the fleet; the signer process is built but not deployed | The signer process is the default for outsiders; the master key stays offline; guard state is never backed up or restored |
-| Registry feed | Binding, access, rewards | Unsigned, on one research host, from two RPC reads | Signed, with at least two independent observers, and recomputable from finalized votes |
-| Connect command | The key while binding | Piped from tasknode.postfiat.org into a root shell; the pinned helper signs offline | The signer ships inside the signed release, with an offline mode |
-| Catch-up source | A new node's start state | An operator-chosen host | Pinned checkpoints published with each release |
+| Release publisher key | Every binary outsiders run | One ML-DSA-65 key | Pinned on the docs page, with rotation; m-of-n is open question 9 |
+| Validator key | Consensus votes | Key files | Signer under its own user, soaked on the Foundation fleet first |
+| Consensus host | Liveness | Reads share the store lock with commits | Public reads only on follower hosts; no public port on validators |
+| Participation feed | Binding, access, rewards | Unsigned, one host | k-of-n observers with their own keys, recomputable from votes |
+| Connect command | The key while binding | Root shell reads the key file offline | Signer socket, from the signed release, with an offline mode |
+| Catch-up source | A new node's start state | Operator's choice | Pinned checkpoints in each release |
 
-- **Stale feed (more than one hour old).** New bindings and grant runs fail with a 503. Existing access is unaffected.
-- **Missing observer days.** They don't count. Credit fails closed.
-- **Failed upgrade.** Restore the binary and the data together. Binary rollback alone failed in the live-canary postmortem (runbook §7).
-- **Lost guard state.** Rotate the key. Never start a new guard for a key that has already signed.
-- **Small set.** At 6 validators with a quorum of 5, two being offline stops finality. Early outsiders add liveness risk until the set reaches the launch minimum.
+- **Feed stale or below k.** New bindings and grants fail with a 503. Existing access is unaffected. `top` shows eligibility *unknown*.
+- **Observers disagree on a day.** That day doesn't count, and the disagreement is published.
+- **Failed upgrade.** Before H, restore binary and snapshot together. After H, never roll back: the old binary can't follow the network. Halt and alert.
+- **Lost guard state.** Rotate the key. Never start a new guard for a key that has signed.
+- **Small set.** At 6 validators with quorum 5, two offline stop finality. Later applicants start as followers, and `top` shows the genesis spec's alert when reachable ratifiers near the threshold.
+
+### Participation metrics
+
+| Metric | Measured from | Used for | Threshold today |
+|---|---|---|---|
+| **Participation** | Signed ÷ committed finalized blocks per UTC day, from `precommit_qc.votes` | Reward, warning, removal, and access if chosen | Reward: mean ≥ 95% over ≥ 25 observed days of 30 (code) |
+| **Candidate uptime** (`uptime_window_bps`) | Observers probing a candidate's follower for reachability and tip lag over 7 days | Admission | Policy V1 proposed floor 9950 |
+
+A candidate has no votes, so it is measured through its follower. All thresholds live in one versioned participation policy that Task Node, `top` and the ratification client read. Whether the admission floor still applies after admission is open question 7.
 
 ### Economics
 
-- **What a validator gets.** Finance Hub and validator research API keys on binding, plus $20 a month of Task Node credit if eligible. There is no stake and the grant is small, so **research access is the main incentive**. The docs page should say so.
-- **Cost.** No hardware sizing is committed. The devnet runs on two-core cloud hosts. R11 measures the real cost and publishes it.
-- **Anti-farming.** Admission is the gate, not Task Node. Nobody self-registers: genesis seats come from old-chain scoring, the policy rejects shared control, and launch caps each correlated group at two seats. While that holds, the validator path is not a cheap bypass of Pillar 9's top-30 path.
-- **Gaps and tensions.**
-    - Credit is paid per validator id, and one account can hold several bindings.
+- **What a validator gets.** Finance Hub and research API keys on binding, plus $20 a month of credit if switched on. With no stake and a small grant, **research access is the main incentive**, and the docs page says so.
+- **Cost.** Unmeasured (the devnet uses two-core cloud hosts); R11 publishes it. A public RPC adds a follower host.
+- **Testnet.** The genesis spec calls the public testnet "no-reward" and leaves incentives to its operations package. Access and grants are separate switches here (R15, R17), so either reading works.
+- **Anti-farming.** Admission is the gate, not Task Node.
+    - Genesis seats come from old-chain scoring. Later applicants need a measured follower, a signed manifest and a key-domain proof.
+    - Correlation is checked against a published dataset. Provider, ASN and country come from the placement preflight. Ownership, custody and hosting links come from declarations and domain evidence, and an unresolved record fails.
+    - **Hidden common ownership cannot be fully detected, and without a stake trying is cheap.** A bond and per-operator rewards are open questions 3 and 6.
+- **Gaps, all founder choices.**
+    - Credit is per validator id, and one account can hold several.
     - Access never lapses.
-    - The genesis spec calls the public testnet "no-reward", yet Task Node's code (switched off) pays credit.
-    - RPC operators earn nothing.
-
-All of these are founder choices; see the open questions.
+    - Old-chain bindings unlock everything, so nothing pulls validators across.
+    - The two endpoints [Pillar 5](05-local-task-node.md) needs are unpaid.
 
 ## Technical requirements
 
 ### Staged rollout
 
-- **R0.** Each step starts only when its gate holds.
-    - **Step 1 — Foundation set.** Binding, the feed and `top` are proven on the six validators. Task Node keeps defaulting to the old chain.
-    - **Step 2 — Rehearsal (R7).** A Foundation-run "outside" validator on a separate host joins through the public tooling.
-    - **Step 3 — Genesis cohort.** Selected and receipted old-chain validators (`G0`) join the public testnet once Z1–Z3, C1, C4, G6 and D4 close. Old-chain bindings keep working, so nobody loses Finance Hub in the move.
-    - **Step 4 — Open admission.** New operators come in through Admission Policy V1 and ratification.
-    - **Default flip.** Which step flips Task Node's default is open question 11.
-    - **Leaving the old chain.** Old-chain validators aren't asked to leave until the [chain readiness gates](../README.md#chain-readiness-gates) hold.
+- **R0.** Each step starts only when its gate holds. The founder's answers move start gates, not the order.
+    - **Step 1 — Foundation set.** All six validators move to the two-user signer layout and soak (acceptance 3). Binding through the signer, the signed feed and `top` are proven here.
+    - **Step 2 — Rehearsal (R7).** A Foundation-run "outside" validator on a separate host joins through public tooling only.
+    - **Step 3 — Invited operators.** Invited operators run R10 followers, which have no consensus role and need no registry change. This starts their candidate record and gives Pillar 5 endpoints. When it starts, and whether invited operators may also vote on the devnet, is open question 1.
+    - **Step 4 — Genesis cohort.** The public testnet launches from `G0` once Z1–Z3, C1, C4, G6 and D4 close. Before outreach, count `G0`'s seats and correlation groups from the latest frozen round. Foundation seats are open question 2. Old-chain bindings keep working through the move.
+    - **Step 5 — Open admission** through R5b, R5 and R5a.
+    - **Default flip.** Open question 10.
+    - **Leaving the old chain.** Not asked until the [chain readiness gates](../README.md#chain-readiness-gates) hold.
 
 ### Distribution
 
-- **R1.** A signed release channel for each tag. It ships `postfiat-node` for linux-x86_64 and aarch64, the systemd units, an SBOM, checksums and the signed deployment manifest. A second builder reproduces it, as `docs/release-process.md` requires. The docs page shows the publisher public key and how it rotates.
-- **R2.** Each network publishes a genesis envelope, chain id, bootstrap peers and pinned catch-up checkpoints (height, block hash and state root).
+- **R1.** A signed release channel per tag.
+    - Contents: `postfiat-node` for linux-x86_64 and aarch64, systemd units for the two-user signer layout, an SBOM, checksums and the signed manifest.
+    - A second builder reproduces it, as `docs/release-process.md` requires.
+    - The offline commands (keygen, receipt, offline bind) are also built for macOS on Apple silicon if they compile there. Otherwise the page names the supported offline environment.
+    - The page shows the publisher key and how it rotates.
+- **R2.** Each network publishes a genesis envelope, chain id, bootstrap peers and pinned checkpoints (height, block hash, state root).
 - **R3.** `postfiat-node upgrade [--check]`:
-    - labels each release *rolling* or *activation at height H*, and prints H;
-    - runs as root, because the units run as `postfiat` under `ProtectSystem=strict`;
-    - verifies the signature and manifest, stops the services, backs up the data directory, swaps the binary, restarts and health-checks;
-    - restores binary and data together on failure;
-    - never copies, restores or reinitialises the signer guard;
-    - refuses anything not on the signed channel;
-    - never auto-applies an upgrade unless the founder chooses to allow it.
-- **R3a.** Consensus-breaking changes use a governance-scheduled activation height, as the replicated-state amendment does. `top` and `upgrade --check` warn when the installed binary cannot follow a scheduled height.
+    - labels each release *rolling* or *activation at height H*;
+    - runs as root, because units run as `postfiat` under `ProtectSystem=strict`;
+    - checks free disk for the snapshot before stopping anything;
+    - verifies signature and manifest, stops services, takes the safe-rollout snapshot, swaps the binary, restarts and health-checks;
+    - keeps one rollback pair until the release's observation window closes, then prunes it;
+    - on failure restores binary and snapshot together before H, and halts and alerts after H;
+    - refuses to run if a key file sits in the data directory, since the key and guard belong under the signer user;
+    - refuses anything off the signed channel;
+    - never auto-applies unless the founder allows it (open question 9).
+- **R3a.** Consensus-breaking changes use a governance-scheduled activation height. `top` and `upgrade --check` warn when the installed binary can't follow it.
 
 ### Joining, rotation and removal
 
-- **R4.** An identity-receipt command builds and checks `IdentityReceiptV1` as genesis spec §3.2 defines it. It uses the existing types in `crates/types/src/genesis_registry.rs` and the `genesis_registry.py` verifier. The old-chain signature comes from `postfiatd validator-keys`, as the sidecar does. This is how old-chain validators carry their reputation over.
-- **R5.** An admission command does four things:
-    - assembles the `ValidatorAdmissionEvidencePacket` from the manifest, the attestation and the key-domain proof;
-    - runs Admission Policy V1 locally and shows the verdict with reason codes;
-    - submits the packet to the transition proposer (today the Foundation pipeline, a recorded dependency to remove);
-    - reports status: *submitted*, *held* (with what is missing), *rejected*, *ratified* or *active*.
+- **R4.** A receipt command builds and checks `IdentityReceiptV1` per genesis spec §3.2, using `crates/types/src/genesis_registry.rs` and the `genesis_registry.py` verifier. The old-chain half comes from `postfiatd validator-keys`.
+- **R5.** An applicant command:
+    - assembles the `ValidatorAdmissionEvidencePacket`: manifest, attestation, key-domain proof and R5b record;
+    - runs Policy V1 locally and shows the verdict with reason codes;
+    - submits to the transition proposer (today the Foundation pipeline, until the multi-proposer follow-on E6);
+    - reports *observing*, *submitted*, *held* (with what is missing), *rejected*, *ratified* or *active*.
+- **R5a.** A ratification client on every validator, closing C4. For each pending admission, rotation or removal it:
+    - fetches the `TransitionProposalV1` and its frozen evidence;
+    - recomputes the delta, Policy V1 and the pinned Cobalt check;
+    - commits and reveals its signature within the height windows, through the signer, which gains this context as in R13;
+    - records a reason when it refuses.
 
-    The ratification client closes C4.
+    `top` shows pending proposals and this validator's vote. How many validators one transition may add is a payload parameter.
 
-- **R6.** The docs cover rotation (`validator-key-stage` plus a registry update) and removal (a signed transition). Whether low participation should trigger removal is open question 7.
-- **R7.** Before inviting anyone, admit a new validator on the devnet end to end through R5 and ratification, and record the heights.
-- **R8.** Benchmark set size. Every vote carries a 3,309-byte ML-DSA-65 signature. Measure certificate size, bandwidth and finality latency at `n = 12` and at any proposed maximum. Publish the results and set the maximum from them.
+- **R5b.** Candidate observation. A candidate runs an R10 follower and registers its endpoint. The R16 observers probe it and sign the resulting `uptime_window_bps`.
+- **R6.** Rotation is `validator-key-stage` plus a continuity receipt from both keys, ratified through R5a. Removal is a ratified transition. Low-participation removal is open question 7.
+- **R7.** Before inviting anyone, admit a new validator on the devnet through R5b, R5 and R5a, and record the heights.
+- **R8.** Benchmark set size. Each vote carries a 3,309-byte ML-DSA-65 signature. Measure certificate size, bandwidth and finality latency at `n = 12` and at any proposed maximum, and publish them.
 
 ### Keys
 
-- **R9.** The Keys section of the docs page covers:
-    - the master and hot key split, made with `operator-onboarding-keygen`, with the master key offline;
-    - the signer process as the default;
-    - the guard rule: never delete or restore it;
-    - links to the rotation and emergency-rotation runbooks;
-    - a plain statement that HSM custody is not implemented.
+- **R9.** The Keys section covers the key table above, the offline master key, the signer under its own user with guard state in its directory, the rule never to delete or restore the guard, the rotation runbooks, and a plain statement that HSM custody is not implemented. The signer becomes the outsiders' default only after the Step 1 soak.
 
 ### RPC node
 
-- **R10.** A packaged RPC profile on the same binary and release, as a systemd unit and a Docker compose file.
-    - **Private profile.** Loopback only, for the operator's wallet, scripts or local Task Node ([Pillar 5](05-local-task-node.md)), with a copy-paste example of how to point them at it.
-    - **Public profile.** Behind the TLS edge, with the limits in `public-rpc-operator-policy.md`.
-    - **Private admission.** On validators only, the public profile can also turn on `--allow-private-action-admission` once a release and governance enable shielded batches. [Pillar 5](05-local-task-node.md)'s local app submits proofs there, to at least two independent endpoints. The page explains the switch, its limits and how refusals are reported.
-    - **First sync.** `rpc-catch-up-certified-delta` from an R2 checkpoint.
-    - **Follower mode.** Confirm that a non-voting RPC node follows the tip on its own. If it doesn't, build that mode.
-    - **Read latency.** Cut the 7–10 s reads, and publish the measured figure.
-    - **Plain answer in the docs.** *There is no separate RPC software: RPC nodes are `postfiat-node` in RPC mode and update the same way.*
+- **R10.** A packaged RPC node on the same binary and release, as a systemd unit and a Docker compose file.
+    - **Follower mode (to build).** A non-voting node that follows the tip and verifies each certified block, holding no validator key. It starts with `rpc-catch-up-certified-delta` from an R2 checkpoint.
+    - **Private profile.** Loopback only, for the operator's wallet, scripts or local Task Node ([Pillar 5](05-local-task-node.md)), with a copy-paste example.
+    - **Public profile.** A follower behind the TLS edge, with the limits in `public-rpc-operator-policy.md`. A validator's own `rpc-serve` never binds a public address.
+    - **Admission.** Once shielded batches are enabled, a validator may turn on `--allow-private-action-admission`. The edge forwards only `private_action_submit` and `private_action_receipt` to it.
+    - **Read path.** Move the remaining child-process reads in-process, following the fast-reads note. Prove each step byte-for-byte against the old path, and publish p50 and p95 at a stated concurrency. The target is open question 11.
+    - **Plain answer in the docs.** *RPC is `postfiat-node` in follower mode, updated through the same release.*
 
 ### Docs
 
 - **R11.** One **Run a validator** page.
-    - **Location.** The canonical copy is `docs/validators/run-a-validator.md` on the MkDocs site, with the public face on postfiat.org beside the old-chain page.
-    - **Layout.** MkDocs has no tab extension configured, so either add `pymdownx.tabbed` or use anchored sections.
-    - **Requirements section.** CPU, RAM, disk and bandwidth measured on the fleet, plus monthly cost, ports and firewall rules.
-    - **Other sections.** Keys, Install, Join, Update, RPC, Connect, Status and Troubleshooting.
-    - **Scope.** It replaces the scattered runbooks for outside operators. Foundation-only tools move to an internal section.
+    - **Source.** `docs/validators/run-a-validator.md` on the MkDocs site. The postfiat.org page is generated from it, with a chain selector. The old-chain page links to it.
+    - **Layout.** Add `pymdownx.tabbed` or use anchored sections; no tab extension is configured.
+    - **Requirements.** CPU, RAM, disk (snapshot included) and bandwidth measured on the fleet, with monthly cost, ports and firewall rules, for a validator and for a follower.
+    - **Sections.** Keys, Install, Join, Update, RPC, Connect, Status and Troubleshooting. Foundation-only tools move to an internal section.
 
 ### Status UX
 
-- **R12.** `postfiat-node top` is a read-only terminal UI over the local status endpoint and store. It shows:
-    - height and lag;
-    - peers;
-    - this validator's recent precommit signing;
-    - the release and any upgrade-by height;
-    - signer guard health;
-    - disk;
-    - recent warnings;
-    - reward and access eligibility, read from the same signed feed Task Node uses and labelled as Task Node's view, so the two can't disagree.
-
-    It works over plain SSH, with no web port.
+- **R12.** `postfiat-node top`, a read-only terminal UI.
+    - **Sources.** The node's loopback status, systemd unit state, disk and the signed feed. It never opens the chain store, whose lock is exclusive, and needs no root.
+    - **Panels.** *Node* (height, lag, peers, disk), *Consensus* (signing, signer health), *Membership* (join status, or pending ratifications), *Task Node* (binding and eligibility, labelled as Task Node's view), *Release* (upgrade-by height), *Alerts*. Each is green, amber or red, and red raises a banner.
+    - **Keys.** `l` logs, `d` doctor, `u` upgrade check, `q` quit.
+    - **First run.** Before membership, the Membership panel leads and says what to do next.
+    - **Degraded feed.** It still renders and marks eligibility *unknown*.
+    - **Roles.** With RPC or admission on, request and refusal counts appear.
+- **R12a.** Alerts. A delivery service sends the existing alert spool to the operator's webhook. It covers missed precommits, signer refusals, low disk, an upcoming activation height and a falling ratifier count. An optional loopback metrics endpoint exposes the same figures.
 
 ### Task Node
 
-- **R13.** Connect stays a single command.
-    - The signing helper moves into the signed release (for example `postfiat-node tasknode-bind`) and keeps signing with no network.
-    - Add an offline copy-paste mode and aarch64 support.
-    - The chain id comes from the published network, not a constant.
-    - The success screen lists what the validator unlocked.
-- **R14.** `ValidatorSettings.jsx` defaults to the new chain at the R0 step the founder picks. The old chain stays as a legacy option.
-- **R15.** Access follows validator state.
+- **R13.** Connect stays a single command: `postfiat-node tasknode-bind`, shipped in the signed release.
+    - **Signer mode.** The signer gains a short allow-list of application contexts with no consensus slot, like transport authentication: binding, Pillar 6 link and ratification. The command asks the signer over its socket, so it needs neither root nor the key file. If the founder picks a separate operator key (open question 12), the validator key signs a one-time delegation instead.
+    - **Key-file mode** keeps the `unshare --net` sandbox. An **offline mode** copies the challenge in and the signature out.
+    - **Chain id** comes from the published network. The database constraint is migrated.
+    - Also: aarch64, and a success screen listing what was unlocked.
+- **R14.** `ValidatorSettings.jsx` defaults to the new chain at the step the founder picks. The old chain stays as a legacy option.
+- **R15.** Access follows validator state, keyed by validator id.
     - **Pending:** not in the registry.
-    - **Active:** in the registry with its current key.
-    - **Lapsed:** removed, rotated away or below the participation rule, and inside a grace window.
+    - **Active:** in the registry. After a ratified rotation, Task Node moves the binding to the new key using the feed's rotation record, so grants continue without a re-bind.
+    - **Lapsed:** removed, holding a key that no rotation explains, or below the participation rule if one is chosen. It stays lapsed through a grace window.
     - **Revoked.**
 
-    Bindings are rechecked against the signed feed on a schedule. Tier `validator` and Pillar 9's `finance_hub` tier read this state. The founder chooses the grace length and whether participation affects access.
+    Bindings are rechecked against the feed on a schedule. Tier `validator` and Pillar 9's `finance_hub` tier read this state. The rule and grace length are parameters (open question 4). Pillar 9's grace for validators reuses the *lapsed* window.
 
-- **R16.** Trustworthy uptime evidence:
-    - the exporter publishes `postfiat-validator-uptime-v1` from at least two independent observers;
-    - the feed is signed with ML-DSA-65, and Task Node checks it against a pinned key;
-    - participation comes from finalized `precommit_qc.votes`, so anyone can recompute it;
-    - a stale feed blocks grants and new bindings, never existing access.
-- **R17.** Turn on `TASKNODE_L1_UPTIME_REWARDS_ENABLED` and `TASKNODE_VALIDATOR_REWARDS_ENABLED` only after R16 holds and the economics questions are settled.
-- **R18.** A public validator directory, built on the existing validator badge. It shows network, state, participation and an optional RPC endpoint, linked to the operator's identity ([Pillar 6](06-hive-identity.md)).
+- **R16.** Trustworthy uptime evidence.
+    - **Observers.** Each runs the exporter on its own host and signs its own `postfiat-validator-uptime-v1` feed with its own ML-DSA-65 key. At least one isn't run by the Foundation, and any RPC operator may join.
+    - **Verification.** Task Node pins the observer keys and accepts a day when at least k of n feeds agree. With k below n, one observer can fail. k and n are published.
+    - **Content.** Participation from finalized `precommit_qc.votes`, candidate records and rotation records, plus a script anyone can use to recompute them from public blocks.
+    - **Failure.** Too few fresh feeds blocks grants and new bindings, never existing access.
+- **R17.** Turn on `TASKNODE_L1_UPTIME_REWARDS_ENABLED` and `TASKNODE_VALIDATOR_REWARDS_ENABLED` only after R16 holds and open question 6 is settled. Amount, unit (credit or PFT) and payee (validator or operator) are configuration.
+- **R18.** A public validator directory on the existing badge. It shows network, state, participation, roles and an optional RPC endpoint, linked to the operator's [Pillar 6](06-hive-identity.md) identity when that exists.
 
 ### Interfaces to other pillars
 
-- **To Pillar 6:** the connect command also emits the `pf.identity.link.v1` co-signature with `key_type=validator`.
-- **To Pillar 9:** the R15 access state for each account.
-- **To Pillars 2 and 5:** RPC endpoints and the method list. Pillar 5 needs at least two independent public endpoints that serve reads and private-action admission. Without a public RPC, Pillar 5 is blocked.
-- **To Pillar 1:** validator count and state for the governance packet's `chain_state`.
+- **To Pillar 1:** validator count and state for `chain_state`. Each verdict and ratification is published as a record the governance packet and block explorer can cite.
+- **To Pillars 2 and 5:** follower and admission endpoints and the method list. Pillar 5 needs two independent endpoints and is blocked until Step 3. Every validator is Foundation-run today, so whether those endpoints must be run by someone other than the Foundation before mainnet is [Pillar 5](05-local-task-node.md) open question 1. Validators may also pin message blobs if Pillar 2 chooses that option.
+- **To Pillar 6:** once Pillar 6 is live, `tasknode-bind` also emits `pf.identity.link.v1` with `key_type=validator`. Until then it binds without it, and re-running it adds the link. The link goes stale on rotation, as Pillar 6 specifies; the binding does not.
+- **To Pillar 9:** the R15 state per account. The access rule is shared with Pillar 9's open question 1.
 
 ## Dependencies
 
 | Depends on | Why |
 |---|---|
-| Gates Z1–Z3, C1, C4, G6 and D4 | Outsiders joining at all |
-| A qualifying frozen Dynamic UNL round | Selecting the genesis cohort |
-| Cobalt as the live registry path (Z1) and the R7 rehearsal | Admitting anyone after genesis |
-| [Pillar 6 — Hive identity](06-hive-identity.md) | Linking validator keys to an identity, and per-operator rewards if chosen |
-| [Pillar 9 — Finance Hub](09-finance-hub.md) | What validators get, and the shared access tier |
+| Gates Z1–Z3, C1, C4, G6 and D4 | The genesis cohort (Step 4) |
+| A qualifying frozen Dynamic UNL round | Selecting `G0` |
+| Cobalt as the live registry path (Z1), R7 and the multi-proposer follow-on E6 | Admission after genesis without a Foundation-only proposer |
+| [Pillar 9 — Finance Hub](09-finance-hub.md) | What validators get, and the shared tier |
 | Release-signing key custody | Signing the channel |
-| Founder answers below | Before R17 |
+| [Pillar 6 — Hive identity](06-hive-identity.md) (soft) | The identity link, and per-operator rewards if chosen. Steps 1–4 don't wait for it. |
+| Founder answers below | The steps and switches each one names |
 
 ## Acceptance criteria
 
-1. **Rehearsal.** On a fresh, separate host, a Foundation-run validator follows only the docs page and is admitted through R5 and ratification. Nobody SSHes into that host.
+1. **Rehearsal.** On a fresh, separate host, an operator uses only the public page and signed release, with no Foundation fleet script, pre-made config or out-of-band help. The node is observed (R5b) and passes R5. Each ratifying validator's R5a client verifies and signs independently. The heights are recorded.
 2. **Receipt.** An R4 receipt passes the `genesis_registry` verifier. Edited, expired and duplicate receipts each fail with their named code.
-3. **Upgrade.** A signed rolling release applies and a tampered one is refused. An activation-height release warns before H and switches at H. The signer guard's floor is unchanged across an upgrade and a forced rollback.
-4. **RPC.** A packaged RPC node catches up from a published checkpoint and serves `status`, `account` and `tx`. Its read latency is published.
-5. **Connect.** One command binds the validator and Finance Hub opens. After the validator is removed from the registry, its access goes *lapsed*, then *revoked*, under the chosen rule.
-6. **Uptime.** A grant is made from the signed feed, and a second observer recomputes the same daily figures.
-7. **Status.** Over SSH, `postfiat-node top` shows live participation, Task Node's eligibility view and any upgrade-by height.
-8. **Scale.** The R8 benchmark and the maximum set size are published.
+3. **Signer soak.** All six Foundation validators run the two-user signer layout through a soak window set in advance. Missed votes are no worse than the key-file baseline, and an R13 bind succeeds.
+4. **Upgrade.** A signed rolling release applies; a tampered one is refused; short disk is refused before anything stops. An activation-height release warns before H and switches at H, and a failure after H halts instead of rolling back. The guard floor survives an upgrade and a forced rollback. Missed blocks per upgrade are published.
+5. **RPC.** A follower on a separate host stays on the tip through an observation window, and its lag is published. It serves `status`, `account` and `tx` in-process, and p50 and p95 are published and meet the target, if one is set. A private action sent through the public edge reaches a validator's admission, though the validator exposes no public port.
+6. **Connect and rotation.** One command binds the validator, without root in signer mode, and Finance Hub opens. After a ratified rotation the binding stays *active* and the next grant succeeds. After removal, access goes *lapsed*, then *revoked*, under the chosen rule.
+7. **Feed.** A grant is made from k-of-n signed feeds. Grants continue with one observer offline. A dissenting observer makes that day uncounted. A third party recomputes the figures with the published script.
+8. **Status.** As a non-root user, `top` shows participation, Task Node's view, pending ratifications and any upgrade-by height, still renders with the feed down, and never opens the store. A missed-precommit alert reaches a webhook.
+9. **Scale.** The R8 benchmark and the maximum set size are published.
+10. **Governance record.** The verdict and ratification from criterion 1 are published records cited by the Pillar 1 snapshot.
 
 ## Open questions for the founder
 
-1. **What do validators earn?** The options:
-    - **(a) $20 of Task Node credit,** as in today's code. Cheap, but it may not cover hosting.
-    - **(b) PFT over FastPay.** Visible on chain, but needs a budget and a cap.
-    - **(c) Research access only.** Simplest, and it matches the genesis spec's "no-reward" testnet.
+Grouped by what they block. Each mechanism above takes the answer as a parameter or a start gate.
 
-    Should the amount scale with participation?
+**Who joins, and when (Steps 3–5)**
 
-2. **Per validator or per operator?** Per validator matches the current code but rewards running more nodes. Per operator, through the Pillar 6 identity, resists farming but needs identity minting first.
-3. **Who gets in, and in what order?** Only the `G0` cohort at first, or open admission after genesis? Should Task Node standing count as evidence? A Task Node UNL scorer exists in shadow mode (`python/postfiat_rpc/tasknode_unl_v2.py`).
-4. **Must a validator stay active to keep research access?** The options:
+1. **Invited operators before Gate Zero closes?**
+    - **(a) Keep Gate Zero.** No outsider runs anything until Z1–Z3 close. Safest, slowest first phase.
+    - **(b) Invited followers once the rehearsal passes.** No consensus role. Their record and Pillar 5's endpoints start early, but strangers run a still-changing binary.
+    - **(c) Invited voters on the devnet after Z1, C4 and R7.** Outside validators early, with more activation-height upgrades while NAVCoin paths change.
+2. **Foundation seats at launch.** Proposed L3 counts the Foundation as one group with at most 2 of 12 seats. At least 10 seats must then come from other groups, and `G0` holds Foundation nodes only where the old-chain round selected them.
+    - **(a) Accept.** Launch waits for enough independent groups.
+    - **(b) Launch larger.** The cap rises with `n`: 4 at 20 seats, 7 at 35.
+    - **(c) A written Foundation exception to L3.** The Foundation could then stall registry changes alone.
+3. **Admission after genesis.** Open to anyone passing Policy V1, or by invitation? Does Task Node standing count? A Task Node UNL scorer runs in shadow mode (`python/postfiat_rpc/tasknode_unl_v2.py`). Stay stake-free, or add a bond? A bond prices hidden Sybils but excludes small operators.
+
+**Access and rewards (R15, R17)**
+
+4. **Access rule** (shared with Pillar 9's question 1).
     - **(a) Binding only,** as today. Generous, but open to bind-and-quit.
-    - **(b) In the registry with its current key.**
-    - **(c) Also meeting the participation rule,** with a grace window whose length you set.
-5. **Validator and top-30 overlap.** Should a validator also need Task Node standing, or are the two paths independent, as Pillar 9 assumes?
-6. **Maximum set size and group cap.** The launch minimum is 12 validators, with at most two seats per correlated group. The old chain caps its UNL at 35. Should the R8 benchmark set the maximum?
-7. **Removal for low participation.** An automatic removal proposal, a warning only, or a manual decision?
-8. **Stake or bond.** The protocol has none. Keep it that way, or add a bond for open admission?
-9. **Release signing.** One publisher key or m-of-n? And is auto-upgrade allowed, or is applying an upgrade always manual?
-10. **Public RPC and private admission.** Should a Foundation endpoint come first, or launch alongside outside operators? Pillar 5 needs two endpoints either way. Should serving them count toward rewards?
-    - **(a) No.** Serving stays a duty that goes with the research access. This is simplest, but nothing pays for the extra bandwidth.
-    - **(b) Yes, as an eligibility condition.** For example, validators must keep admission on. This guarantees endpoints, but raises the bar to join.
-    - **(c) A separate bonus or x402 fees** ([Pillar 2](02-message-protocol.md)). This pays for the load, but needs metering that can't be gamed.
-11. **When does Task Node's default flip?** At the rehearsal (Step 2), at the public-testnet decision (Step 3), or only after all five chain readiness gates?
-12. **Old-chain validators during the move.** Can they earn on both chains, or is it one grant per operator?
+    - **(b) New-chain registry members only,** with old-chain bindings ending at a step you pick.
+    - **(c) (b) plus the participation rule,** with a grace window you set. New operators wait for a record.
+    - **(d) (b) at once, with the participation rule after a ramp-in.**
+5. **Validator and top-30 overlap.** Pillar 9's question 2 owns this: are the top 30 drawn from all accounts or only non-validators?
+6. **Reward package.**
+    - **(a) Research access only on the testnet,** with money from production readiness. This matches the "no-reward" testnet.
+    - **(b) $20 of Task Node credit,** as coded. Cheap, but may not cover hosting.
+    - **(c) PFT over FastPay.** On chain, but needs a budget and a cap.
+
+    Within any option: per validator, or per operator through Pillar 6 (resists farming but needs identity first)? Scaled by participation? During the move, one grant per operator or one per chain?
+
+7. **Participation thresholds.** Does the admission floor apply after admission? What warns and what removes: an automatic removal proposal, a warning only, or a manual decision? Are announced upgrade windows excused?
+8. **Public endpoints.** Should the Foundation run the first two, or should they launch alongside outsiders? Should serving them count?
+    - **(a) No.** A duty that comes with access. Simple, but nothing pays for the extra host.
+    - **(b) Yes, as an eligibility condition.** Guarantees endpoints, but raises the bar to join.
+    - **(c) A bonus or x402 fees** ([Pillar 2](02-message-protocol.md)). Pays for load, but needs metering that can't be gamed.
+
+**Release and operations**
+
+9. **Release signing.** One publisher key or m-of-n? Is auto-upgrade allowed, or is it always manual?
+10. **Default flip.** At the rehearsal (Step 2), the genesis cohort (Step 4), or only after all five chain readiness gates?
+11. **Read-latency target.** (a) Publish the measured figure with no target. (b) A target such as p95 under 500 ms. (c) A tighter one, such as p95 under 200 ms for wallets and FastPay, which likely needs the fast-reads note's resident reader.
+12. **Binding and link key** (Pillar 6's question 6). (a) The validator key, through the signer's application contexts: nothing new to manage. (b) A separate operator key delegated once by the validator key: keeps the consensus key out of application signing, but adds a key to rotate.
 
 ## Code references
 
-- Node: [`cli_dispatch_parts/`](https://github.com/postfiatorg/postfiatl1v2/tree/main/crates/node/src/main_parts/cli_dispatch_parts) · [`validator_signer_guard.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/validator_signer_guard.rs) · [`crates/types/src/genesis_registry.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/genesis_registry.rs) · [`python/postfiat_rpc/genesis_registry.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/python/postfiat_rpc/genesis_registry.py)
+- Node: [`validator_signer_guard.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/validator_signer_guard.rs) · [`private_action_admission.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/private_action_admission.rs) · [`genesis_registry.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/genesis_registry.rs) · [`genesis_registry.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/python/postfiat_rpc/genesis_registry.py) · [`placement_preflight.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/python/postfiat_rpc/placement_preflight.py)
 - Docs: [`docs/validators/`](https://github.com/postfiatorg/postfiatl1v2/tree/main/docs/validators) · [`signature-size-and-certificates.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/quantum/signature-size-and-certificates.md) · [`mkdocs.yml`](https://github.com/postfiatorg/postfiatl1v2/blob/main/mkdocs.yml)
-- Task Node: [`server/repositories/validator-connect.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/validator-connect.js) · [`server/validator-connect-routes.js`](https://github.com/postfiatorg/tasknode/blob/main/server/validator-connect-routes.js) · [`fly.toml`](https://github.com/postfiatorg/tasknode/blob/main/fly.toml) · [`docs/wiki/operations/airdrop-recovery-and-l1-uptime.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/operations/airdrop-recovery-and-l1-uptime.md)
-- Old-chain setup, for contrast: [`postfiatd/docs/NodeSetup.md`](https://github.com/postfiatorg/postfiatd/blob/main/docs/NodeSetup.md) (minimum 2 cores and 4 GB RAM)
+- Task Node: [`validator-connect.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/validator-connect.js) · [`validator-connect-routes.js`](https://github.com/postfiatorg/tasknode/blob/main/server/validator-connect-routes.js) · [`fly.toml`](https://github.com/postfiatorg/tasknode/blob/main/fly.toml) · [`airdrop-recovery-and-l1-uptime.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/operations/airdrop-recovery-and-l1-uptime.md)
+- Old chain, for contrast: [`postfiatd/docs/NodeSetup.md`](https://github.com/postfiatorg/postfiatd/blob/main/docs/NodeSetup.md) (minimum 2 cores and 4 GB RAM)
 
-## Revision notes (review round 1)
+---
 
-| Item | Change |
-|---|---|
-| Gemini P1 | Admission path corrected (G0, Policy V1, registry-quorum ratification); R4–R7. The premise was partly wrong: self-service join was never the design, but the page had implied it. |
-| Gemini P2 | Economics section; R15 access states. Verified that access depends only on binding. Open questions 1, 2 and 4. |
-| Gemini P3 | R3 rewritten (classify, root, stop then back up, paired restore, guard untouched); R3a. Signing uses one ML-DSA-65 key; m-of-n is open question 9. |
-| Gemini P4 | R0 steps; default flip in R14 and open question 11; old-chain access kept throughout. |
-| Gemini P5 | Feed verified live but unsigned; R16. Overstated: a stale feed blocks binds and grants, not existing access. `top` reads the same feed (R12). |
-| Gemini P6 | RPC rows corrected; R10 adds profiles, checkpoint sync, follower mode and latency. |
-| Gemini P7 | Step 6 corrected: the script uses the network but the signer doesn't. Security table; R13. Single-use 30-minute token and Unbind confirmed in code. |
-| Gemini P8 | Gate table; interfaces to Pillars 1, 2, 5, 6 and 9. |
-| Gemini P9 | R11: tabs need `pymdownx.tabbed`, otherwise sections; postfiat.org face; hardware and RPC usage. |
-| Opus P1 | R0 steps; open question 11. |
-| Opus P2 | R3 classification; R3a activation heights. |
-| Opus P3 | Verified the signer guard exists. R3 and R9 exclude it from backup; acceptance 3. |
-| Opus P4 | Admission floors, removal and caps stated; R6 and R7; open questions 6 and 7. |
-| Opus P5 | R8; acceptance 8. |
-| Opus P6 | Security table; open question 9. |
-| Opus P7 | R16; failure list. |
-| Opus P8 | Verified $20 Task Node credit per validator id; open questions 1, 2 and 12. |
-| Opus P9 | R15; Pillar 9 interface; open questions 4 and 5. |
-| Opus P10 | R9 Keys section. |
-| Opus P11 | Verified: `account_info` doesn't exist and `tx` does. Acceptance 4 uses `account` and `tx`. Checkpoint anchor in R2 and R10. |
-| Opus P12 | Verified: only key rotations were ratified live. Stated; R7 rehearsal. |
-| Opus P13 | Story step 9; R18. |
-| Opus P14 | R11 postfiat.org page. |
-| Opus P15 | Disputed: founder rule, steps not dates. The R0 steps and the gate table give the order. |
-| Coordinator (Pillar 9) | Research-access row corrected. Finance Hub bundles and validator research API keys need a binding on either chain, and chat Deep Research is open to all. The registry is checked only at bind time, and participation affects credit only. |
-| Coordinator (Pillar 5) | Private-action admission added to the RPC row, R10 and the Pillar 5 interface; reward treatment is open question 10. |
-| Opus P16 | R11: measured hardware and cost; none committed today. |
+*Revision history: [changelog](../changelog/03-validator-program.md).*

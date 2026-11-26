@@ -74,7 +74,7 @@ def credit_left(key: str) -> float:
 
 
 def call_model(model: str, message: str, key: str) -> dict:
-    body = {"model": model, "max_tokens": 32000, "messages": [{"role": "user", "content": message}], "usage": {"include": True}}
+    body = {"model": model, "max_tokens": 96000, "messages": [{"role": "user", "content": message}], "usage": {"include": True}}
     # One sample per model. Retries cover transport and provider failures only;
     # a returned answer is never resampled.
     for attempt in range(3):
@@ -84,7 +84,10 @@ def call_model(model: str, message: str, key: str) -> dict:
             content = result["choices"][0]["message"].get("content") or ""
             if not content.strip():
                 raise RuntimeError("empty_response")
-            return {"model": model, "served_model": result.get("model"), "content": content,
+            finish = result["choices"][0].get("finish_reason")
+            if finish == "length":
+                raise RuntimeError("truncated_response")
+            return {"model": model, "served_model": result.get("model"), "content": content, "finish_reason": finish,
                     "usage": result.get("usage", {}), "latency_s": round(time.time() - started, 1)}
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, RuntimeError, KeyError) as error:
             detail = error.read().decode()[:300] if isinstance(error, urllib.error.HTTPError) else str(error)

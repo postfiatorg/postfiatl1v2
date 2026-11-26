@@ -2,7 +2,8 @@
 """Serve the big_milestone specs as a small browsable site.
 
 Pages are the markdown files in this folder: README.md is the index and
-pillars/*.md are the pillar specs. Rendering happens per request, so editing
+pillars/*.md are the pillar specs, changelog/*.md
+record how each review round was handled, feedback/ holds the reviews. Rendering happens per request, so editing
 a file and refreshing the browser is the whole publishing loop.
 
     python3 big_milestone/serve.py --host 100.89.219.44 --port 8844
@@ -43,6 +44,7 @@ def pages() -> list[dict]:
         files.append(ROOT / "feedback" / "README.md")
     for round_dir in rounds:
         files += sorted(round_dir.glob("[0-9]*.md"))
+    files += sorted((ROOT / "changelog").glob("*.md"))
     latest = rounds[-1].name if rounds else ""
     items = []
     for path in files:
@@ -53,7 +55,8 @@ def pages() -> list[dict]:
         items.append({"route": route_for(path), "path": path, "title": title,
                       "status": status.group(1).strip() if status else (f"{score.group(1)}/100" if score else ""),
                       "section": "Specs" if "feedback" not in path.parts else f"Feedback · {latest.replace('-', ' ')}",
-                      "in_nav": "feedback" not in path.parts or path.parent.name in ("feedback", latest)})
+                      "in_nav": "changelog" not in path.parts
+                      and ("feedback" not in path.parts or path.parent.name in ("feedback", latest))})
     return items
 
 
