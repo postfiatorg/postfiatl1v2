@@ -896,7 +896,7 @@ fn reduce_poly16_42(mut w: u64) -> u16 {
 
 /// ARMv8 PMULL (vmull_p64) branchless binary-field kernels for Apple Silicon and ARM64 servers/mobile.
 #[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
-#[inline(always)]
+#[inline]
 #[target_feature(enable = "aes")]
 unsafe fn pmull64(a: u64, b: u64) -> u128 {
     core::arch::aarch64::vmull_p64(a, b)
