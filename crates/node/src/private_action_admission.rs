@@ -586,10 +586,10 @@ impl PrivateActionAdmissionStore {
                 }
             }
         }
-        if !record
+        if record
             .outcome
             .as_ref()
-            .is_some_and(|o| o.code == "private_action_binding_mismatch")
+            .is_none_or(|o| o.code != "private_action_binding_mismatch")
         {
             self.index
                 .by_action_hash
