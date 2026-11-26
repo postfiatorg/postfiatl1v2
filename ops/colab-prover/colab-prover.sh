@@ -3,6 +3,7 @@
 #   colab-prover.sh up [deposits]   start a session, set it up, warm it, point the services at it
 #   colab-prover.sh down            point the services away and stop the session
 #   colab-prover.sh ensure          put back the local port and socket if the connection was lost
+#   colab-prover.sh check           alert if the window is not open (the 17:05 UTC timer)
 #   colab-prover.sh status
 # The services keep their own commands (ssh/scp to root@ssh8.vast.ai): while a window is open an
 # ssh_config stanza sends that name through one multiplexed connection to the Colab VM, because
@@ -129,6 +130,18 @@ EOF
   log "window open"
 }
 
+# The evening check after the opening time: a window that is not open is said the same evening,
+# also when the open never ran (the relay host down at its start) or failed without a word.
+check() {
+  local mode; mode=$(cat "$ROOT/window.mode" 2>/dev/null || true)
+  if [ -f "$STANZA" ] && { [ "$mode" = deposits ] || [ "$mode" = none ]; }; then
+    log "check: window open (deposits: $mode)"; return 0
+  fi
+  log "check: window not open (window.mode: ${mode:-absent})"
+  alert "Colab proving window is not open at its check time; deposits and withdrawals are closed. See $LOG"
+  return 1
+}
+
 down() {
   rm -f "$ROOT/window.mode"
   ssh -O exit -o ControlPath="$CM" root@colab-prover 2>/dev/null || true
@@ -142,6 +155,7 @@ case ${1:-} in
   up) shift; up "$@";;
   down) down;;
   ensure) ensure_watch;;
+  check) check;;
   status) $COLAB sessions 2>&1 | tail -3; $COLAB usage 2>&1 | head -3; ls -la "$STANZA" "$SOCK" 2>&1 | cut -c1-120;;
-  *) sed -n 2,5p "$0"; exit 2;;
+  *) sed -n 2,7p "$0"; exit 2;;
 esac
