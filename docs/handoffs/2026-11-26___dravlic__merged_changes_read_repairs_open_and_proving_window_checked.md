@@ -100,6 +100,7 @@ For the owner (date first asked):
 - Tonight's window: whether it is open by 17:05 UTC, and no Ethereum withdrawal outside it; #272 and #273 are not for tonight (2026-11-26).
 - tasknode #442 is merged. Could its setting `L1_PROVING_WINDOW_UTC` stay unset for now? Without the setting the three screens are exactly as before, so a deploy changes nothing for users. The setting waits for the follow-up, [tasknode #445](https://github.com/postfiatorg/tasknode/pull/445), which is a draft and not to be merged as it is (2026-11-26).
 - The reviewer follow-ups (private pull request 53): installed on the six hosts by the owner's side, as agreed in the meeting of 26 November. I say on that pull request when its last read is back, with the steps (2026-11-25).
+- The OpenRouter account the harness uses is out of credit since 18:02 UTC ("Insufficient credits"), after two full gates on the paper tonight. The harness cannot score anything until it has credit again (2026-11-26).
 - #249 and #251: I can bring #249 up to `main` (2026-11-26).
 - #232: the licence of `pft-binius-shielded`, and the two findings of the A666 recovery policy (2026-11-26).
 - The account history index rebuild and the full storage verification: I can run both, one host at a time (2026-11-25).
@@ -137,6 +138,6 @@ For the owner (date first asked):
 
 **#272 and #273.** The third read of #272 still said "not as it is", so it is a draft with its three open points listed. #273 is to be rebuilt on top of #277. Neither is to be installed.
 
-**The paper.** The full independent check of 17:34 UTC came back with no finding, with the Lean model and the explorer run again on a fresh copy. Its harness score is running.
+**The paper.** The full independent check of 17:34 UTC came back with no finding, with the Lean model and the explorer run again on a fresh copy. It has no harness score yet (18:06 UTC). I ran the full gate twice: the first run stopped on one judge answer that did not parse, with 14 of the 15 answers back, and the second ended when OpenRouter answered "Insufficient credits", with 13 of 15 back. The 27 answers that came back are between 86 and 93; that is not a gate score. Nothing in the paper was changed for the harness. Once the account has credit again, one more run gives the score.
 
 **`main`.** The long `test` job passed for every merge of the afternoon, up to `3ab7dd502`.
