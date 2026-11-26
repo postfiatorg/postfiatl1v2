@@ -873,7 +873,7 @@ mod pq_payment_local_chain_tests {
         assert!(cert.votes.iter().filter(|v| v.accept).count() >= cert.quorum);
         let receipt = store.read_receipts().unwrap().pop().unwrap();
         assert!(receipt.accepted);
-        assert_eq!(block.receipt_ids, [receipt.tx_id.clone()]);
+        assert_eq!(block.receipt_ids, std::slice::from_ref(&receipt.tx_id));
         let post = store.read_shielded().unwrap().pq_fixture.unwrap();
         assert_eq!(post.reserve, pre.reserve - 10);
         assert_eq!(post.commitments[..100], pre.commitments);
