@@ -4,6 +4,7 @@ burn starts failing and one when it gives up, every failure in the journal, prop
 import contextlib
 import fcntl
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -67,6 +68,23 @@ class Pass(unittest.TestCase):
             code, calls, out = self.once(0)
         self.assertEqual((code, calls), (0, []))
         self.assertIn("holds the lock", out)
+
+    def test_an_interrupted_pass_keeps_its_finished_attempts_and_the_cut_burn_goes_first_next(self):
+        burns = ["a1" * 48, "b2" * 48, "c3" * 48, "d4" * 48]
+
+        def cut(burn):
+            if burn == burns[3]:
+                raise KeyboardInterrupt  # the unit's time limit ends the pass during the fourth attempt
+            return False, "Validators disagree on the burn."
+
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(KeyboardInterrupt):
+            s.run_pass(0, lambda: list(burns), cut, self.state)
+        backoff = json.loads((self.state / "backoff.json").read_text())
+        self.assertEqual({b: backoff[b]["failures"] for b in burns[:3]}, {b: 1 for b in burns[:3]})
+        calls = []
+        with contextlib.redirect_stdout(io.StringIO()):
+            s.run_pass(10_000, lambda: list(burns), lambda b: (calls.append(b), (False, "no"))[1], self.state)
+        self.assertEqual(calls[0], burns[3], "the burn whose attempt was cut is tried first")
 
     def test_each_settlement_is_the_reviewed_restricted_path_and_bounded(self):
         with patch.object(s, "STATE", self.state), patch.object(s.subprocess, "run") as run:

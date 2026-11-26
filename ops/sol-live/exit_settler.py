@@ -69,8 +69,16 @@ def delay(failures):
     return min(FIRST_RETRY * 2 ** (failures - 1), MAX_RETRY)
 
 
+def save_backoff(path, backoff):
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(backoff, sort_keys=True))
+    os.replace(tmp, path)
+
+
 def run_pass(now=None, find=discover, propose=settle, state=None):
-    """One pass; returns 0 when nothing failed, 1 otherwise."""
+    """One pass; returns 0 when nothing failed, 1 otherwise. Each outcome is saved when it is known,
+    so a pass the unit's time limit ends keeps what it finished; the burns whose last attempt ended
+    longest ago (or never ended) go first, and a burn's backoff starts when its attempt ends."""
     state = Path(state or STATE)
     state.mkdir(mode=0o750, parents=True, exist_ok=True)
     with open(state / "lock", "a") as lock:
@@ -80,6 +88,7 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
             log("another settlement pass holds the lock; this one does nothing")
             return 0
         now = time.time() if now is None else now
+        started = time.monotonic()
         path = state / "backoff.json"
         backoff = json.loads(path.read_text()) if path.exists() else {}
         try:
@@ -88,7 +97,7 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
             log(f"ALERT discovery failed: {type(error).__name__}: {error}")
             return 1
         failed = False
-        for burn in burns:
+        for burn in sorted(burns, key=lambda b: backoff.get(b, {}).get("ended", -1)):
             entry = backoff.get(burn, dict(failures=0, next=0, gave_up=False))
             if entry["gave_up"]:
                 log(f"not settling {burn}: given up after {entry['failures']} attempts")
@@ -97,13 +106,16 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
                 continue
             log(f"settling {burn}")
             ok, last = propose(burn)
+            ended = now + int(time.monotonic() - started)  # whole seconds since the pass began
             if ok:
                 log(f"settled {burn}: {last}")
                 backoff.pop(burn, None)
+                save_backoff(path, backoff)
                 continue
             failed = True
             entry["failures"] += 1
-            entry["next"] = now + delay(entry["failures"])
+            entry["ended"] = ended
+            entry["next"] = ended + delay(entry["failures"])
             if entry["failures"] >= GIVE_UP:
                 entry["gave_up"] = True
                 log(f"ALERT settle {burn} gave up after {entry['failures']} attempts: {last}; "
@@ -114,11 +126,10 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
                 log(f"settle {burn} failed (attempt {entry['failures']}): {last}; "
                     f"next in {delay(entry['failures'])} s")
             backoff[burn] = entry
+            save_backoff(path, backoff)
         # A burn no longer pending (settled or refunded elsewhere) leaves the backoff.
         backoff = {b: e for b, e in backoff.items() if b in burns}
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(backoff, sort_keys=True))
-        os.replace(tmp, path)
+        save_backoff(path, backoff)
         return 1 if failed else 0
 
 
