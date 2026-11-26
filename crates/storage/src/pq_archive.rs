@@ -175,11 +175,13 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let store = NodeStore::new(&dir);
         let p1 = PqPayment::from_bytes(
-            include_bytes!("../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-pay.bin").to_vec(),
+            include_bytes!("../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-pay.bin")
+                .to_vec(),
         )
         .unwrap();
         let p2 = PqPayment::from_bytes(
-            include_bytes!("../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-exit.bin").to_vec(),
+            include_bytes!("../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-exit.bin")
+                .to_vec(),
         )
         .unwrap();
         let id1 = p1.digest();

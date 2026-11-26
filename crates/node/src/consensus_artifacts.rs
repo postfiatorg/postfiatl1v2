@@ -1803,8 +1803,9 @@ pub(super) fn check_pq_block<'a>(
                 ));
             }
             let inner_fee = u64::from_le_bytes(inner[104..112].try_into().unwrap());
-            let (fee, minimum) = pq_payment_actions::fee_terms(governance, &terms, inner_fee, height)
-                .map_err(|code| io::Error::new(io::ErrorKind::InvalidData, code))?;
+            let (fee, minimum) =
+                pq_payment_actions::fee_terms(governance, &terms, inner_fee, height)
+                    .map_err(|code| io::Error::new(io::ErrorKind::InvalidData, code))?;
             if fee < minimum {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_minimum_fee"));
             }
@@ -1832,8 +1833,7 @@ pub(super) fn verify_development_pq_payments(
         return Ok(());
     }
     let hash = genesis_hash(genesis);
-    if genesis.chain_id != pq_payment_fixture::CHAIN_ID
-        || hash != pq_payment_fixture::GENESIS_HASH
+    if genesis.chain_id != pq_payment_fixture::CHAIN_ID || hash != pq_payment_fixture::GENESIS_HASH
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -3309,7 +3309,9 @@ pub(super) fn verify_signed_governance_batch(
     proposal_slot: u64,
 ) -> io::Result<()> {
     for amendment in &batch.amendments {
-        if let Some((_, message)) = crate::execution_actions::pq_governance_domain_rejection(amendment, Some(genesis)) {
+        if let Some((_, message)) =
+            crate::execution_actions::pq_governance_domain_rejection(amendment, Some(genesis))
+        {
             return Err(io::Error::new(io::ErrorKind::InvalidData, message));
         }
     }

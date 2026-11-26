@@ -1793,10 +1793,12 @@ impl TransactionalStore {
                 )?;
                 let entry: BatchArchiveEntry = decode_json(&raw)?;
                 if entry.has_binary_references() {
-                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&entry.payload_json) {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&entry.payload_json)
+                    {
                         if let Some(actions) = val.get("actions").and_then(|a| a.as_array()) {
                             for action in actions {
-                                if let Some(id) = action.get("pq_body_v1").and_then(|s| s.as_str()) {
+                                if let Some(id) = action.get("pq_body_v1").and_then(|s| s.as_str())
+                                {
                                     retained_pq_ids.insert(id.to_owned());
                                 }
                             }

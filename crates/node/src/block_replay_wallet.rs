@@ -2999,8 +2999,13 @@ pub fn native_pft_supply_breakdown(
             format!("duplicate native custody {lane} key `{key}`"),
         )
     };
-    let mut total = pq_pool_v1.as_ref()
-        .and_then(|pool| pool.head.assets.get(postfiat_types::pq_payment::NATIVE_ASSET_HEX))
+    let mut total = pq_pool_v1
+        .as_ref()
+        .and_then(|pool| {
+            pool.head
+                .assets
+                .get(postfiat_types::pq_payment::NATIVE_ASSET_HEX)
+        })
         .map_or(0, |asset| u128::from(asset.reserve));
     let mut account_ids = std::collections::BTreeSet::new();
     for account in accounts {

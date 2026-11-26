@@ -665,7 +665,12 @@ pub fn global_issued_asset_supply(
         .asset_definition(asset_id)
         .expect("asset definition checked above");
     if definition.asset_family_id.is_empty() {
-        issued_asset_family_global_supply_after_inventory(ledger, &shielded_by_asset, asset_id, true)
+        issued_asset_family_global_supply_after_inventory(
+            ledger,
+            &shielded_by_asset,
+            asset_id,
+            true,
+        )
     } else {
         issued_asset_global_supply_after_inventory(ledger, &shielded_by_asset, asset_id, true)
     }
@@ -834,9 +839,14 @@ fn validate_issued_supply_custody_inventory(
 
     if let Some(pool) = pq_pool_v1 {
         for (id, _) in pool.issued_assets() {
-            if ledger.asset_definition(id).is_none_or(|asset| asset.source_series_id != id) {
-                return Err(io::Error::new(io::ErrorKind::InvalidData,
-                    format!("PQ reserve references unknown source series `{id}`")));
+            if ledger
+                .asset_definition(id)
+                .is_none_or(|asset| asset.source_series_id != id)
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("PQ reserve references unknown source series `{id}`"),
+                ));
             }
         }
     }
@@ -954,7 +964,10 @@ fn validate_issued_supply_custody_inventory(
 
     for (id, amount) in collected_private_fees {
         if *amount == 0 || id != postfiat_types::PQ_REHEARSAL_ISSUE || !known(id) {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid PQ collected private fees"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid PQ collected private fees",
+            ));
         }
     }
     for row in pftl_uniswap_source_custody {
@@ -1021,7 +1034,10 @@ pub(super) fn legacy_json_replicated_state_root(
     let genesis_hash_hex = genesis_hash(genesis);
     pq_payment_fixture::check_state_domain(&genesis_hash_hex, shielded)?;
     if shielded.pq_fixture.is_some() || shielded.pq_pool_v1.is_some() {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "legacy state root cannot commit the PQ fixture"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "legacy state root cannot commit the PQ fixture",
+        ));
     }
     let legacy_governance = LegacyJsonGovernanceState {
         active_validator_count: governance.active_validator_count,

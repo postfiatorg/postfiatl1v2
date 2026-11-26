@@ -69,7 +69,10 @@ fn serve(home: &Path, key: &Path) -> Result<()> {
         let Ok(mut socket) = stream else {
             continue;
         };
-        if socket.set_read_timeout(Some(Duration::from_secs(5))).is_err() {
+        if socket
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .is_err()
+        {
             continue;
         }
         if active

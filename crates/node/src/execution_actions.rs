@@ -1335,7 +1335,8 @@ pub(super) fn execute_governance_batch_with_replay(
                 message,
             ));
         } else if amendment.kind == postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1
-            && (amendment.quorum < postfiat_types::pq_exit_freeze_quorum(amendment.validators.len())
+            && (amendment.quorum
+                < postfiat_types::pq_exit_freeze_quorum(amendment.validators.len())
                 || amendment.support.len()
                     < postfiat_types::pq_exit_freeze_quorum(amendment.validators.len()))
         {
@@ -1358,8 +1359,11 @@ pub(super) fn execute_governance_batch_with_replay(
             && amendment.value != 0
             && governance.pq_fee_schedule_in_force(block_height)
         {
-            receipts.push(Receipt::rejected(amendment.amendment_id.clone(), "pq_fee_unconfigured",
-                "Supply the replacement fee or explicitly pause the pool with value zero"));
+            receipts.push(Receipt::rejected(
+                amendment.amendment_id.clone(),
+                "pq_fee_unconfigured",
+                "Supply the replacement fee or explicitly pause the pool with value zero",
+            ));
         } else if governance
             .amendments
             .iter()
@@ -2340,14 +2344,19 @@ pub(super) fn external_lane_amendment_authority_rejection(
 }
 
 pub(super) fn pq_governance_domain_rejection(
-    amendment: &GovernanceAmendment, genesis: Option<&Genesis>,
+    amendment: &GovernanceAmendment,
+    genesis: Option<&Genesis>,
 ) -> Option<(&'static str, String)> {
     if postfiat_types::pq_fee_governance_kind(&amendment.kind)
         && !(postfiat_types::pq_rehearsal_domain(&amendment.chain_id, &amendment.genesis_hash)
-            && genesis.is_some_and(|g| postfiat_types::pq_rehearsal_domain(&g.chain_id, &genesis_hash(g))))
+            && genesis.is_some_and(|g| {
+                postfiat_types::pq_rehearsal_domain(&g.chain_id, &genesis_hash(g))
+            }))
     {
-        return Some(("unsupported_governance_amendment_kind",
-            format!("unsupported governance amendment kind `{}`", amendment.kind)));
+        return Some((
+            "unsupported_governance_amendment_kind",
+            format!("unsupported governance amendment kind `{}`", amendment.kind),
+        ));
     }
     None
 }
@@ -2691,7 +2700,9 @@ pub(super) fn apply_governance_amendment_with_lifecycle_records(
 /// governance-only replay paths do not carry. `external_lane_info` reports
 /// the cap in force (`release_cap_schedule_at`).
 fn same_amendment_family(left: &str, right: &str) -> bool {
-    left == right || (postfiat_types::is_pq_rehearsal_kind(left) && postfiat_types::is_pq_rehearsal_kind(right))
+    left == right
+        || (postfiat_types::is_pq_rehearsal_kind(left)
+            && postfiat_types::is_pq_rehearsal_kind(right))
 }
 
 pub(super) fn governance_amendment_current_value(governance: &GovernanceState, kind: &str) -> u32 {
@@ -3905,9 +3916,11 @@ fn execute_shielded_batch_actions(
     governance: &GovernanceState,
     archive_replay: bool,
 ) -> Vec<Receipt> {
-    let isolated_pq_batch = batch.atomic && batch.actions.iter().all(
-        |action| matches!(action, ShieldedAction::PqPaymentV1(_)),
-    );
+    let isolated_pq_batch = batch.atomic
+        && batch
+            .actions
+            .iter()
+            .all(|action| matches!(action, ShieldedAction::PqPaymentV1(_)));
     if orchard_pool_paused && !isolated_pq_batch {
         return batch
             .actions
@@ -3929,15 +3942,24 @@ fn execute_shielded_batch_actions(
     let egress_policies = governance.asset_orchard_egress_policy_registry();
     for (index, action) in batch.actions.iter().enumerate() {
         let receipt = match action {
-            ShieldedAction::PqPaymentV1(payment) if batch.atomic => {
-                pq_payment_actions::apply(
-                    genesis, &genesis_hash_hex, ledger, shielded, payment, block_height,
-                    asset_execution_compatibility, governance, &egress_policies,
+            ShieldedAction::PqPaymentV1(payment) if batch.atomic => pq_payment_actions::apply(
+                genesis,
+                &genesis_hash_hex,
+                ledger,
+                shielded,
+                payment,
+                block_height,
+                asset_execution_compatibility,
+                governance,
+                &egress_policies,
+            )
+            .unwrap_or_else(|code| {
+                Receipt::rejected(
+                    shielded_action_rejection_id(&batch.batch_id, index, code),
+                    code,
+                    code,
                 )
-                .unwrap_or_else(|code| {
-                    Receipt::rejected(shielded_action_rejection_id(&batch.batch_id, index, code), code, code)
-                })
-            }
+            }),
             ShieldedAction::PqPaymentV1(_) => Receipt::rejected(
                 shielded_action_rejection_id(&batch.batch_id, index, "pq_settlement_inactive"),
                 "pq_settlement_inactive",
@@ -3947,7 +3969,9 @@ fn execute_shielded_batch_actions(
                 match pq_payment_fixture::apply(&genesis_hash_hex, shielded, payment_hex) {
                     Ok(id) => Receipt::accepted(id, "PFSH02 fixture hop"),
                     Err(code) => Receipt::rejected(
-                        shielded_action_rejection_id(&batch.batch_id, index, code), code, code,
+                        shielded_action_rejection_id(&batch.batch_id, index, code),
+                        code,
+                        code,
                     ),
                 }
             }

@@ -13,10 +13,10 @@ use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::Shake256;
 
 pub const RATE_BYTES: usize = 136; // SHAKE256 r = 1088 bits = 136 bytes
-pub const ADDR_BYTES: usize = 48;  // 384-bit owner address A
-pub const COIN_BYTES: usize = 48;  // 384-bit coin commitment
-pub const SN_BYTES: usize = 48;    // 384-bit nullifier SN
-pub const NODE_BYTES: usize = 48;  // 384-bit Merkle tree digest / anchor
+pub const ADDR_BYTES: usize = 48; // 384-bit owner address A
+pub const COIN_BYTES: usize = 48; // 384-bit coin commitment
+pub const SN_BYTES: usize = 48; // 384-bit nullifier SN
+pub const NODE_BYTES: usize = 48; // 384-bit Merkle tree digest / anchor
 pub const OWNER_SECRET_BYTES: usize = 48; // 384-bit note nullifier/blinding secret r_pk
 pub const PK_HASH_BYTES: usize = 48; // 384-bit ML-DSA-65 spend public-key hash pk_hash
 pub const BLIND_SECRET_BYTES: usize = 78; // 624-bit coin blinding R (1 + 48 + 8 + 78 = 135 B -> 1 perm!)
@@ -113,7 +113,8 @@ pub fn keccak_f1600_trace(state: &mut [u64; 25]) -> [[u64; 25]; 24] {
         b_trace[r] = b;
         for y in 0..5 {
             for x in 0..5 {
-                state[x + 5 * y] = b[x + 5 * y] ^ ((!b[((x + 1) % 5) + 5 * y]) & b[((x + 2) % 5) + 5 * y]);
+                state[x + 5 * y] =
+                    b[x + 5 * y] ^ ((!b[((x + 1) % 5) + 5 * y]) & b[((x + 2) % 5) + 5 * y]);
             }
         }
         state[0] ^= KECCAK_RC[r];
@@ -262,16 +263,22 @@ impl MerkleTree24 {
         let mut tree = Self::new();
         tree.leaves = leaves;
         for level in 0..MERKLE_DEPTH {
-            let parents = tree.level(level).chunks(2).map(|pair| {
-                merkle_node(&pair[0], pair.get(1).unwrap_or(&tree.empty[level]))
-            }).collect();
+            let parents = tree
+                .level(level)
+                .chunks(2)
+                .map(|pair| merkle_node(&pair[0], pair.get(1).unwrap_or(&tree.empty[level])))
+                .collect();
             tree.nodes[level] = parents;
         }
         tree
     }
 
     fn level(&self, level: usize) -> &[[u8; NODE_BYTES]] {
-        if level == 0 { &self.leaves } else { &self.nodes[level - 1] }
+        if level == 0 {
+            &self.leaves
+        } else {
+            &self.nodes[level - 1]
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -297,7 +304,10 @@ impl MerkleTree24 {
         for level in 0..MERKLE_DEPTH {
             let children = self.level(level);
             let left = pos & !1;
-            let parent = merkle_node(&children[left], children.get(left + 1).unwrap_or(&self.empty[level]));
+            let parent = merkle_node(
+                &children[left],
+                children.get(left + 1).unwrap_or(&self.empty[level]),
+            );
             pos >>= 1;
             let parents = &mut self.nodes[level];
             if pos == parents.len() {
@@ -312,7 +322,12 @@ impl MerkleTree24 {
     /// Return `(directions[0..24], siblings[0..24])` for leaf at `idx`.
     /// `dir[lvl] = ((idx >> lvl) & 1) as u8` (0 => current is left child, 1 => current is right child).
     pub fn auth_path(&self, idx: usize) -> ([u8; MERKLE_DEPTH], [[u8; NODE_BYTES]; MERKLE_DEPTH]) {
-        assert!(idx < self.leaves.len(), "leaf index {} out of range {}", idx, self.leaves.len());
+        assert!(
+            idx < self.leaves.len(),
+            "leaf index {} out of range {}",
+            idx,
+            self.leaves.len()
+        );
         let mut dirs = [0u8; MERKLE_DEPTH];
         let mut sibs = [[0u8; NODE_BYTES]; MERKLE_DEPTH];
         let mut pos = idx;
@@ -376,13 +391,22 @@ mod tests {
         for size in 0..=17 {
             let bulk = MerkleTree24::from_leaves(&tree.leaves[..size]);
             let mut incremental = MerkleTree24::new();
-            for leaf in &tree.leaves[..size] { incremental.append(*leaf); }
+            for leaf in &tree.leaves[..size] {
+                incremental.append(*leaf);
+            }
             assert_eq!(bulk.root(), incremental.root());
-            for i in 0..size { assert_eq!(bulk.auth_path(i), incremental.auth_path(i)); }
+            for i in 0..size {
+                assert_eq!(bulk.auth_path(i), incremental.auth_path(i));
+            }
         }
         for i in 0..17 {
             let (dirs, sibs) = tree.auth_path(i);
-            assert!(MerkleTree24::verify_path(&tree.leaves[i], &dirs, &sibs, &root));
+            assert!(MerkleTree24::verify_path(
+                &tree.leaves[i],
+                &dirs,
+                &sibs,
+                &root
+            ));
         }
     }
 }

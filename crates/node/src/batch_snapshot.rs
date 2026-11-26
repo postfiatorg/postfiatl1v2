@@ -1813,7 +1813,8 @@ fn export_snapshot_with_basis(
 
     let mut files = Vec::new();
     for &file_name in SNAPSHOT_FILES {
-        let bytes = snapshot_file_bytes(&store, &options.data_dir, &snapshot_dir, file_name, basis)?;
+        let bytes =
+            snapshot_file_bytes(&store, &options.data_dir, &snapshot_dir, file_name, basis)?;
         atomic_write(snapshot_dir.join(file_name), &bytes)?;
         files.push(SnapshotFile {
             name: (*file_name).to_string(),

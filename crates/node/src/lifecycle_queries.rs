@@ -4034,14 +4034,21 @@ pub(super) fn metric_increment(total: &mut u64, label: &str) -> io::Result<()> {
     metric_add(total, 1, label)
 }
 
-pub(super) fn asset_metrics(ledger: &LedgerState, shielded: &ShieldedState) -> io::Result<AssetMetrics> {
+pub(super) fn asset_metrics(
+    ledger: &LedgerState,
+    shielded: &ShieldedState,
+) -> io::Result<AssetMetrics> {
     let mut metrics = AssetMetrics {
         asset_count: ledger.asset_definitions.len() as u64,
         ..AssetMetrics::default()
     };
 
     for amount in ledger.collected_private_fees.values() {
-        metric_add(&mut metrics.total_outstanding_supply, *amount, "collected private fees")?;
+        metric_add(
+            &mut metrics.total_outstanding_supply,
+            *amount,
+            "collected private fees",
+        )?;
     }
     for asset in &ledger.asset_definitions {
         if asset.requires_authorization {
@@ -4136,7 +4143,11 @@ pub(super) fn asset_metrics(ledger: &LedgerState, shielded: &ShieldedState) -> i
 
     if let Some(pool) = &shielded.pq_pool_v1 {
         for (_, state) in pool.issued_assets() {
-            metric_add(&mut metrics.total_outstanding_supply, state.reserve, "PQ issued custody")?;
+            metric_add(
+                &mut metrics.total_outstanding_supply,
+                state.reserve,
+                "PQ issued custody",
+            )?;
         }
     }
     Ok(metrics)
@@ -4167,7 +4178,11 @@ pub(super) fn issued_asset_stats(
     ledger: &LedgerState,
     asset_id: &str,
 ) -> io::Result<(u64, u64, u64)> {
-    let mut outstanding_supply = ledger.collected_private_fees.get(asset_id).copied().unwrap_or(0);
+    let mut outstanding_supply = ledger
+        .collected_private_fees
+        .get(asset_id)
+        .copied()
+        .unwrap_or(0);
     let mut trustline_count = 0_u64;
     let mut holder_count = 0_u64;
     for line in ledger

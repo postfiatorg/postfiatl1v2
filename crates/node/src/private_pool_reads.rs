@@ -645,8 +645,15 @@ pub(super) fn private_pool_snapshot_from(
                     inclusion_height,
                     postfiat_types::pq_payment::Mode::Exit,
                 )
-                .map(|fee| (postfiat_types::PQ_REHEARSAL_ISSUE.to_owned(), fee.to_string()))
-        } else { None },
+                .map(|fee| {
+                    (
+                        postfiat_types::PQ_REHEARSAL_ISSUE.to_owned(),
+                        fee.to_string(),
+                    )
+                })
+        } else {
+            None
+        },
         pq_last_page: pq_read.then(|| pq_head.map_or(String::new(), |h| h.last_page.clone())),
         schema: PRIVATE_POOL_SNAPSHOT_SCHEMA.to_string(),
         chain_id: snapshot.genesis.chain_id.clone(),

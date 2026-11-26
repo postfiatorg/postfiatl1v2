@@ -234,7 +234,10 @@ impl Wallet {
         let count = self.recovery.count.max(1);
         let offset = self.next_change_offset % count;
         self.next_change_offset = offset.wrapping_add(1) % count;
-        Ok(self.recovery.key(self.recovery.first + offset)?.stealth_address())
+        Ok(self
+            .recovery
+            .key(self.recovery.first + offset)?
+            .stealth_address())
     }
     pub fn address(&self, index: u32) -> Result<String> {
         Ok(keys::address(

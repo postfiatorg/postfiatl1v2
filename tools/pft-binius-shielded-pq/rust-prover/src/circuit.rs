@@ -27,34 +27,34 @@ pub const V_SC1: usize = 19;
 pub const NUM_BITS_PER_POLY: usize = 1usize << V_SC1; // 524,288
 
 pub const ROW_MUX_BASE: usize = NUM_PERMS * 7680; // 430,080 (9,216 rows, 64-row aligned)
-pub const MUX_ROWS_PER_LEVEL: usize = 192;        // 384 bits / 2 bits per row = 3 * 64
+pub const MUX_ROWS_PER_LEVEL: usize = 192; // 384 bits / 2 bits per row = 3 * 64
 pub const ROW_SIB_BASE: usize = ROW_MUX_BASE + 2 * MERKLE_DEPTH * MUX_ROWS_PER_LEVEL; // 439,296 (6,144 rows, 64-row aligned)
-pub const SIB_ROWS_PER_LEVEL: usize = 128;        // 384 bits / 3 bits per row = 2 * 64
+pub const SIB_ROWS_PER_LEVEL: usize = 128; // 384 bits / 3 bits per row = 2 * 64
 pub const ROW_DUMMY_VAL_BASE: usize = ROW_SIB_BASE + 2 * MERKLE_DEPTH * SIB_ROWS_PER_LEVEL; // 445,440 (64 rows)
 pub const ROW_DUMMY_ROOT_BASE: usize = ROW_DUMMY_VAL_BASE + 2 * 32; // 445,504 (384 rows)
-pub const ROW_ADDER_LHS1: usize = ROW_DUMMY_ROOT_BASE + 2 * 192;    // 445,888 (64 rows: v_in0 + v_in1)
-pub const ROW_ADDER_LHS: usize = ROW_ADDER_LHS1 + 64;               // 445,952 (65 rows: s_in01 + v_mint)
-pub const ROW_ADDER_MID: usize = ROW_ADDER_LHS + 65;                // 446,017 (64 rows: v_out0 + v_out1)
-pub const ROW_ADDER_RHS: usize = ROW_ADDER_MID + 64;                // 446,081 (65 rows: s_out01 + pub_exit)
-pub const ROW_PRIV_BASE: usize = ROW_ADDER_RHS + 65;                // 446,146 (868 rows)
+pub const ROW_ADDER_LHS1: usize = ROW_DUMMY_ROOT_BASE + 2 * 192; // 445,888 (64 rows: v_in0 + v_in1)
+pub const ROW_ADDER_LHS: usize = ROW_ADDER_LHS1 + 64; // 445,952 (65 rows: s_in01 + v_mint)
+pub const ROW_ADDER_MID: usize = ROW_ADDER_LHS + 65; // 446,017 (64 rows: v_out0 + v_out1)
+pub const ROW_ADDER_RHS: usize = ROW_ADDER_MID + 64; // 446,081 (65 rows: s_out01 + pub_exit)
+pub const ROW_PRIV_BASE: usize = ROW_ADDER_RHS + 65; // 446,146 (868 rows)
 
 // Bit offsets inside the 4,338-bit private input region (starting at ROW_PRIV_BASE, 5 bits/row)
-pub const OFF_S_IN0: usize = 0;        // 384 bits (48 B)
-pub const OFF_S_IN1: usize = 384;      // 384 bits (48 B)
-pub const OFF_V_IN0: usize = 768;      // 64 bits  (8 B)
-pub const OFF_V_IN1: usize = 832;      // 64 bits  (8 B)
-pub const OFF_R_IN0: usize = 896;      // 624 bits (78 B)
-pub const OFF_R_IN1: usize = 1520;     // 624 bits (78 B)
-pub const OFF_A_OUT0: usize = 2144;    // 384 bits (48 B, PRIVATE stealth recipient address!)
-pub const OFF_A_OUT1: usize = 2528;    // 384 bits (48 B, PRIVATE stealth recipient address!)
-pub const OFF_V_OUT0: usize = 2912;    // 64 bits  (8 B)
-pub const OFF_V_OUT1: usize = 2976;    // 64 bits  (8 B)
-pub const OFF_R_OUT0: usize = 3040;    // 624 bits (78 B)
-pub const OFF_R_OUT1: usize = 3664;    // 624 bits (78 B)
+pub const OFF_S_IN0: usize = 0; // 384 bits (48 B)
+pub const OFF_S_IN1: usize = 384; // 384 bits (48 B)
+pub const OFF_V_IN0: usize = 768; // 64 bits  (8 B)
+pub const OFF_V_IN1: usize = 832; // 64 bits  (8 B)
+pub const OFF_R_IN0: usize = 896; // 624 bits (78 B)
+pub const OFF_R_IN1: usize = 1520; // 624 bits (78 B)
+pub const OFF_A_OUT0: usize = 2144; // 384 bits (48 B, PRIVATE stealth recipient address!)
+pub const OFF_A_OUT1: usize = 2528; // 384 bits (48 B, PRIVATE stealth recipient address!)
+pub const OFF_V_OUT0: usize = 2912; // 64 bits  (8 B)
+pub const OFF_V_OUT1: usize = 2976; // 64 bits  (8 B)
+pub const OFF_R_OUT0: usize = 3040; // 624 bits (78 B)
+pub const OFF_R_OUT1: usize = 3664; // 624 bits (78 B)
 pub const OFF_IS_DUMMY0: usize = 4288; // 1 bit
 pub const OFF_IS_DUMMY1: usize = 4289; // 1 bit
-pub const OFF_DIR0: usize = 4290;      // 24 bits
-pub const OFF_DIR1: usize = 4314;      // 24 bits
+pub const OFF_DIR0: usize = 4290; // 24 bits
+pub const OFF_DIR1: usize = 4314; // 24 bits
 pub const TOTAL_PRIV_BITS: usize = 4338;
 pub const PRIV_ROWS: usize = (TOTAL_PRIV_BITS + 4) / 5; // 868
 pub const ACTIVE_ROWS: usize = ROW_PRIV_BASE + PRIV_ROWS; // 447,014
@@ -182,20 +182,22 @@ pub fn perm_input_spec(p: usize, stmt: &PaymentStatement) -> Vec<InputBitSrc> {
             }
         }
     };
-    let set_priv = |spec: &mut [InputBitSrc], byte_off: usize, priv_bit_off: usize, nbytes: usize| {
-        for b in 0..(nbytes * 8) {
-            spec[byte_off * 8 + b] = InputBitSrc::Priv(priv_bit_off + b);
-        }
-    };
-    let set_perm_out = |spec: &mut [InputBitSrc], byte_off: usize, src_perm: usize, nbytes: usize| {
-        for b in 0..(nbytes * 8) {
-            let lane = b / 64;
-            let x = lane % 5;
-            let y = lane / 5;
-            let z = b % 64;
-            spec[byte_off * 8 + b] = InputBitSrc::PermOut(src_perm, x, y, z);
-        }
-    };
+    let set_priv =
+        |spec: &mut [InputBitSrc], byte_off: usize, priv_bit_off: usize, nbytes: usize| {
+            for b in 0..(nbytes * 8) {
+                spec[byte_off * 8 + b] = InputBitSrc::Priv(priv_bit_off + b);
+            }
+        };
+    let set_perm_out =
+        |spec: &mut [InputBitSrc], byte_off: usize, src_perm: usize, nbytes: usize| {
+            for b in 0..(nbytes * 8) {
+                let lane = b / 64;
+                let x = lane % 5;
+                let y = lane / 5;
+                let z = b % 64;
+                spec[byte_off * 8 + b] = InputBitSrc::PermOut(src_perm, x, y, z);
+            }
+        };
     let set_shake_pad = |spec: &mut [InputBitSrc], msg_len_bytes: usize| {
         for bit in 0..8 {
             spec[msg_len_bytes * 8 + bit] = InputBitSrc::Const((0x1F >> bit) & 1);
@@ -261,7 +263,11 @@ pub fn perm_input_spec(p: usize, stmt: &PaymentStatement) -> Vec<InputBitSrc> {
             let input_b = rel / MERKLE_DEPTH;
             let lvl = rel % MERKLE_DEPTH;
             let src_perm = if lvl == 0 {
-                if input_b == 0 { 1 } else { 4 }
+                if input_b == 0 {
+                    1
+                } else {
+                    4
+                }
             } else {
                 p - 1
             };
@@ -471,10 +477,22 @@ pub fn build_witness_bits(stmt: &PaymentStatement, wit: &PaymentWitness) -> Circ
             c_in = c_out;
         }
     };
-    fill_adder(&mut b, ROW_ADDER_LHS1, wit.v_in0 as u128, wit.v_in1 as u128, 64);
+    fill_adder(
+        &mut b,
+        ROW_ADDER_LHS1,
+        wit.v_in0 as u128,
+        wit.v_in1 as u128,
+        64,
+    );
     let lhs1_sum = (wit.v_in0 as u128) + (wit.v_in1 as u128);
     fill_adder(&mut b, ROW_ADDER_LHS, lhs1_sum, stmt.v_mint as u128, 65);
-    fill_adder(&mut b, ROW_ADDER_MID, wit.v_out0 as u128, wit.v_out1 as u128, 64);
+    fill_adder(
+        &mut b,
+        ROW_ADDER_MID,
+        wit.v_out0 as u128,
+        wit.v_out1 as u128,
+        64,
+    );
     let mid_sum = (wit.v_out0 as u128) + (wit.v_out1 as u128);
     fill_adder(&mut b, ROW_ADDER_RHS, mid_sum, stmt.pub_exit() as u128, 65);
 
@@ -565,7 +583,11 @@ pub fn build_group_c_constraints(stmt: &PaymentStatement) -> Vec<ScalarConstrain
         let dir_base = if input_b == 0 { OFF_DIR0 } else { OFF_DIR1 };
         for lvl in 0..MERKLE_DEPTH {
             let src_perm = if lvl == 0 {
-                if input_b == 0 { 1 } else { 4 }
+                if input_b == 0 {
+                    1
+                } else {
+                    4
+                }
             } else {
                 8 + input_b * MERKLE_DEPTH + lvl - 1
             };
@@ -577,8 +599,16 @@ pub fn build_group_c_constraints(stmt: &PaymentStatement) -> Vec<ScalarConstrain
                 let (lt1, qt1, rc1) = perm_out_term(src_perm, 2 * k + 1);
                 let (sx0, sr0) = sib_loc(input_b, lvl, 2 * k);
                 let (sx1, sr1) = sib_loc(input_b, lvl, 2 * k + 1);
-                cs.push(ScalarConstraint { lin: vec![(0, r_mux), d_term], quad: vec![], rhs: 1 });
-                cs.push(ScalarConstraint { lin: vec![(2, r_mux), d_term], quad: vec![], rhs: 1 });
+                cs.push(ScalarConstraint {
+                    lin: vec![(0, r_mux), d_term],
+                    quad: vec![],
+                    rhs: 1,
+                });
+                cs.push(ScalarConstraint {
+                    lin: vec![(2, r_mux), d_term],
+                    quad: vec![],
+                    rhs: 1,
+                });
                 cs.push(ScalarConstraint {
                     lin: vec![(1, r_mux), lt0, (sx0 as u8, sr0 as u32)],
                     quad: vec![qt0],
@@ -595,25 +625,57 @@ pub fn build_group_c_constraints(stmt: &PaymentStatement) -> Vec<ScalarConstrain
 
     // C3: Native is_dummy value zero-gating (384 constraints)
     for input_b in 0..2 {
-        let (dx, dr) = priv_loc(if input_b == 0 { OFF_IS_DUMMY0 } else { OFF_IS_DUMMY1 });
+        let (dx, dr) = priv_loc(if input_b == 0 {
+            OFF_IS_DUMMY0
+        } else {
+            OFF_IS_DUMMY1
+        });
         let d_term = (dx as u8, dr as u32);
         let v_base = if input_b == 0 { OFF_V_IN0 } else { OFF_V_IN1 };
         for k in 0..32 {
             let r_dv = dummy_val_row(input_b, k) as u32;
             let (vx0, vr0) = priv_loc(v_base + 2 * k);
             let (vx1, vr1) = priv_loc(v_base + 2 * k + 1);
-            cs.push(ScalarConstraint { lin: vec![(0, r_dv), d_term], quad: vec![], rhs: 1 });
-            cs.push(ScalarConstraint { lin: vec![(1, r_dv), (vx0 as u8, vr0 as u32)], quad: vec![], rhs: 0 });
-            cs.push(ScalarConstraint { lin: vec![], quad: vec![(4, r_dv)], rhs: 0 });
-            cs.push(ScalarConstraint { lin: vec![(2, r_dv), d_term], quad: vec![], rhs: 1 });
-            cs.push(ScalarConstraint { lin: vec![(3, r_dv), (vx1 as u8, vr1 as u32)], quad: vec![], rhs: 0 });
-            cs.push(ScalarConstraint { lin: vec![], quad: vec![(1, r_dv)], rhs: 0 });
+            cs.push(ScalarConstraint {
+                lin: vec![(0, r_dv), d_term],
+                quad: vec![],
+                rhs: 1,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![(1, r_dv), (vx0 as u8, vr0 as u32)],
+                quad: vec![],
+                rhs: 0,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![],
+                quad: vec![(4, r_dv)],
+                rhs: 0,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![(2, r_dv), d_term],
+                quad: vec![],
+                rhs: 1,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![(3, r_dv), (vx1 as u8, vr1 as u32)],
+                quad: vec![],
+                rhs: 0,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![],
+                quad: vec![(1, r_dv)],
+                rhs: 0,
+            });
         }
     }
 
     // C4: Native is_dummy anchor root-gating (2,304 constraints)
     for input_b in 0..2 {
-        let (dx, dr) = priv_loc(if input_b == 0 { OFF_IS_DUMMY0 } else { OFF_IS_DUMMY1 });
+        let (dx, dr) = priv_loc(if input_b == 0 {
+            OFF_IS_DUMMY0
+        } else {
+            OFF_IS_DUMMY1
+        });
         let d_term = (dx as u8, dr as u32);
         let root_perm = 8 + input_b * MERKLE_DEPTH + (MERKLE_DEPTH - 1);
         for k in 0..192 {
@@ -622,12 +684,36 @@ pub fn build_group_c_constraints(stmt: &PaymentStatement) -> Vec<ScalarConstrain
             let (lt1, qt1, rc1) = perm_out_term(root_perm, 2 * k + 1);
             let a0 = get_byte_bit(&stmt.anchor, 2 * k);
             let a1 = get_byte_bit(&stmt.anchor, 2 * k + 1);
-            cs.push(ScalarConstraint { lin: vec![(0, r_dr), d_term], quad: vec![], rhs: 0 });
-            cs.push(ScalarConstraint { lin: vec![(1, r_dr), lt0], quad: vec![qt0], rhs: a0 ^ rc0 });
-            cs.push(ScalarConstraint { lin: vec![], quad: vec![(4, r_dr)], rhs: 0 });
-            cs.push(ScalarConstraint { lin: vec![(2, r_dr), d_term], quad: vec![], rhs: 0 });
-            cs.push(ScalarConstraint { lin: vec![(3, r_dr), lt1], quad: vec![qt1], rhs: a1 ^ rc1 });
-            cs.push(ScalarConstraint { lin: vec![], quad: vec![(1, r_dr)], rhs: 0 });
+            cs.push(ScalarConstraint {
+                lin: vec![(0, r_dr), d_term],
+                quad: vec![],
+                rhs: 0,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![(1, r_dr), lt0],
+                quad: vec![qt0],
+                rhs: a0 ^ rc0,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![],
+                quad: vec![(4, r_dr)],
+                rhs: 0,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![(2, r_dr), d_term],
+                quad: vec![],
+                rhs: 0,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![(3, r_dr), lt1],
+                quad: vec![qt1],
+                rhs: a1 ^ rc1,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![],
+                quad: vec![(1, r_dr)],
+                rhs: 0,
+            });
         }
     }
 
@@ -635,13 +721,29 @@ pub fn build_group_c_constraints(stmt: &PaymentStatement) -> Vec<ScalarConstrain
     //   v_in0 + v_in1 + v_mint == v_out0 + v_out1 + (fee + v_unshield)
     let pub_exit = stmt.pub_exit();
     let add_adder = |cs: &mut Vec<ScalarConstraint>, base: usize, bits: usize| {
-        cs.push(ScalarConstraint { lin: vec![(2, base as u32)], quad: vec![], rhs: 1 });
+        cs.push(ScalarConstraint {
+            lin: vec![(2, base as u32)],
+            quad: vec![],
+            rhs: 1,
+        });
         for i in 0..bits {
             let row = (base + i) as u32;
-            cs.push(ScalarConstraint { lin: vec![(0, row), (1, row), (3, row)], quad: vec![], rhs: 1 });
-            cs.push(ScalarConstraint { lin: vec![(4, row)], quad: vec![(4, row), (1, row)], rhs: 0 });
+            cs.push(ScalarConstraint {
+                lin: vec![(0, row), (1, row), (3, row)],
+                quad: vec![],
+                rhs: 1,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![(4, row)],
+                quad: vec![(4, row), (1, row)],
+                rhs: 0,
+            });
             if i > 0 {
-                cs.push(ScalarConstraint { lin: vec![(2, row), (4, row - 1)], quad: vec![], rhs: 1 });
+                cs.push(ScalarConstraint {
+                    lin: vec![(2, row), (4, row - 1)],
+                    quad: vec![],
+                    rhs: 1,
+                });
             }
         }
     };
@@ -654,49 +756,104 @@ pub fn build_group_c_constraints(stmt: &PaymentStatement) -> Vec<ScalarConstrain
         let (xa0, ra0) = priv_loc(OFF_V_IN0 + i);
         let (xb0, rb0) = priv_loc(OFF_V_IN1 + i);
         let rl1 = (ROW_ADDER_LHS1 + i) as u32;
-        cs.push(ScalarConstraint { lin: vec![(0, rl1), (xa0 as u8, ra0 as u32)], quad: vec![], rhs: 1 });
-        cs.push(ScalarConstraint { lin: vec![(1, rl1), (xb0 as u8, rb0 as u32)], quad: vec![], rhs: 0 });
+        cs.push(ScalarConstraint {
+            lin: vec![(0, rl1), (xa0 as u8, ra0 as u32)],
+            quad: vec![],
+            rhs: 1,
+        });
+        cs.push(ScalarConstraint {
+            lin: vec![(1, rl1), (xb0 as u8, rb0 as u32)],
+            quad: vec![],
+            rhs: 0,
+        });
 
         let (xa1, ra1) = priv_loc(OFF_V_OUT0 + i);
         let (xb1, rb1) = priv_loc(OFF_V_OUT1 + i);
         let rm = (ROW_ADDER_MID + i) as u32;
-        cs.push(ScalarConstraint { lin: vec![(0, rm), (xa1 as u8, ra1 as u32)], quad: vec![], rhs: 1 });
-        cs.push(ScalarConstraint { lin: vec![(1, rm), (xb1 as u8, rb1 as u32)], quad: vec![], rhs: 0 });
+        cs.push(ScalarConstraint {
+            lin: vec![(0, rm), (xa1 as u8, ra1 as u32)],
+            quad: vec![],
+            rhs: 1,
+        });
+        cs.push(ScalarConstraint {
+            lin: vec![(1, rm), (xb1 as u8, rb1 as u32)],
+            quad: vec![],
+            rhs: 0,
+        });
     }
 
     for i in 0..65 {
         let rl = (ROW_ADDER_LHS + i) as u32;
-        let mint_bit = if i < 64 { ((stmt.v_mint >> i) & 1) as u8 } else { 0 };
-        cs.push(ScalarConstraint { lin: vec![(1, rl)], quad: vec![], rhs: mint_bit });
+        let mint_bit = if i < 64 {
+            ((stmt.v_mint >> i) & 1) as u8
+        } else {
+            0
+        };
+        cs.push(ScalarConstraint {
+            lin: vec![(1, rl)],
+            quad: vec![],
+            rhs: mint_bit,
+        });
         if i < 64 {
             let rl1 = (ROW_ADDER_LHS1 + i) as u32;
-            cs.push(ScalarConstraint { lin: vec![(0, rl), (3, rl1), (2, rl1)], quad: vec![], rhs: 0 });
+            cs.push(ScalarConstraint {
+                lin: vec![(0, rl), (3, rl1), (2, rl1)],
+                quad: vec![],
+                rhs: 0,
+            });
         } else {
             let rl1_63 = (ROW_ADDER_LHS1 + 63) as u32;
-            cs.push(ScalarConstraint { lin: vec![(0, rl), (4, rl1_63)], quad: vec![], rhs: 1 });
+            cs.push(ScalarConstraint {
+                lin: vec![(0, rl), (4, rl1_63)],
+                quad: vec![],
+                rhs: 1,
+            });
         }
     }
 
     for i in 0..65 {
         let rr = (ROW_ADDER_RHS + i) as u32;
-        let exit_bit = if i < 64 { ((pub_exit >> i) & 1) as u8 } else { 0 };
-        cs.push(ScalarConstraint { lin: vec![(1, rr)], quad: vec![], rhs: exit_bit });
+        let exit_bit = if i < 64 {
+            ((pub_exit >> i) & 1) as u8
+        } else {
+            0
+        };
+        cs.push(ScalarConstraint {
+            lin: vec![(1, rr)],
+            quad: vec![],
+            rhs: exit_bit,
+        });
         if i < 64 {
             let rm = (ROW_ADDER_MID + i) as u32;
-            cs.push(ScalarConstraint { lin: vec![(0, rr), (3, rm), (2, rm)], quad: vec![], rhs: 0 });
+            cs.push(ScalarConstraint {
+                lin: vec![(0, rr), (3, rm), (2, rm)],
+                quad: vec![],
+                rhs: 0,
+            });
         } else {
             let rm63 = (ROW_ADDER_MID + 63) as u32;
-            cs.push(ScalarConstraint { lin: vec![(0, rr), (4, rm63)], quad: vec![], rhs: 1 });
+            cs.push(ScalarConstraint {
+                lin: vec![(0, rr), (4, rm63)],
+                quad: vec![],
+                rhs: 1,
+            });
         }
     }
 
     for i in 0..65 {
         let rl = (ROW_ADDER_LHS + i) as u32;
         let rr = (ROW_ADDER_RHS + i) as u32;
-        cs.push(ScalarConstraint { lin: vec![(3, rl), (2, rl), (3, rr), (2, rr)], quad: vec![], rhs: 0 });
+        cs.push(ScalarConstraint {
+            lin: vec![(3, rl), (2, rl), (3, rr), (2, rr)],
+            quad: vec![],
+            rhs: 0,
+        });
     }
     cs.push(ScalarConstraint {
-        lin: vec![(4, (ROW_ADDER_LHS + 64) as u32), (4, (ROW_ADDER_RHS + 64) as u32)],
+        lin: vec![
+            (4, (ROW_ADDER_LHS + 64) as u32),
+            (4, (ROW_ADDER_RHS + 64) as u32),
+        ],
         quad: vec![],
         rhs: 0,
     });
@@ -811,7 +968,14 @@ pub fn build_prover_weights(
                         pub_rhs.add_assign(w);
                     }
                 }
-                InputBitSrc::MerkleLeft { src_perm, x, y, z, mux_x, mux_row: r_mux } => {
+                InputBitSrc::MerkleLeft {
+                    src_perm,
+                    x,
+                    y,
+                    z,
+                    mux_x,
+                    mux_row: r_mux,
+                } => {
                     let w = s.mul(u_curr[ix][64 * iy + iz], kt);
                     let orow = keccak_row(src_perm, 23, y, z);
                     wb[x][orow].add_assign(w);
@@ -821,7 +985,12 @@ pub fn build_prover_weights(
                         pub_rhs.add_assign(w);
                     }
                 }
-                InputBitSrc::MerkleRight { sib_x, sib_row, mux_x, mux_row: r_mux } => {
+                InputBitSrc::MerkleRight {
+                    sib_x,
+                    sib_row,
+                    mux_x,
+                    mux_row: r_mux,
+                } => {
                     let w = s.mul(u_curr[ix][64 * iy + iz], kt);
                     wb[sib_x][sib_row].add_assign(w);
                     wc[mux_x][r_mux].add_assign(w);
@@ -858,27 +1027,63 @@ fn group_c3_to_c5(stmt: &PaymentStatement) -> Vec<ScalarConstraint> {
         let y = lane / 5;
         let z = bit_idx % 64;
         let row = keccak_row(perm, 23, y, z) as u32;
-        let rc = if x == 0 && y == 0 { ((KECCAK_RC[23] >> z) & 1) as u8 } else { 0 };
+        let rc = if x == 0 && y == 0 {
+            ((KECCAK_RC[23] >> z) & 1) as u8
+        } else {
+            0
+        };
         ((x as u8, row), (x as u8, row), rc)
     };
     for input_b in 0..2 {
-        let (dx, dr) = priv_loc(if input_b == 0 { OFF_IS_DUMMY0 } else { OFF_IS_DUMMY1 });
+        let (dx, dr) = priv_loc(if input_b == 0 {
+            OFF_IS_DUMMY0
+        } else {
+            OFF_IS_DUMMY1
+        });
         let d_term = (dx as u8, dr as u32);
         let v_base = if input_b == 0 { OFF_V_IN0 } else { OFF_V_IN1 };
         for k in 0..32 {
             let r_dv = dummy_val_row(input_b, k) as u32;
             let (vx0, vr0) = priv_loc(v_base + 2 * k);
             let (vx1, vr1) = priv_loc(v_base + 2 * k + 1);
-            rest.push(ScalarConstraint { lin: vec![(0, r_dv), d_term], quad: vec![], rhs: 1 });
-            rest.push(ScalarConstraint { lin: vec![(1, r_dv), (vx0 as u8, vr0 as u32)], quad: vec![], rhs: 0 });
-            rest.push(ScalarConstraint { lin: vec![], quad: vec![(4, r_dv)], rhs: 0 });
-            rest.push(ScalarConstraint { lin: vec![(2, r_dv), d_term], quad: vec![], rhs: 1 });
-            rest.push(ScalarConstraint { lin: vec![(3, r_dv), (vx1 as u8, vr1 as u32)], quad: vec![], rhs: 0 });
-            rest.push(ScalarConstraint { lin: vec![], quad: vec![(1, r_dv)], rhs: 0 });
+            rest.push(ScalarConstraint {
+                lin: vec![(0, r_dv), d_term],
+                quad: vec![],
+                rhs: 1,
+            });
+            rest.push(ScalarConstraint {
+                lin: vec![(1, r_dv), (vx0 as u8, vr0 as u32)],
+                quad: vec![],
+                rhs: 0,
+            });
+            rest.push(ScalarConstraint {
+                lin: vec![],
+                quad: vec![(4, r_dv)],
+                rhs: 0,
+            });
+            rest.push(ScalarConstraint {
+                lin: vec![(2, r_dv), d_term],
+                quad: vec![],
+                rhs: 1,
+            });
+            rest.push(ScalarConstraint {
+                lin: vec![(3, r_dv), (vx1 as u8, vr1 as u32)],
+                quad: vec![],
+                rhs: 0,
+            });
+            rest.push(ScalarConstraint {
+                lin: vec![],
+                quad: vec![(1, r_dv)],
+                rhs: 0,
+            });
         }
     }
     for input_b in 0..2 {
-        let (dx, dr) = priv_loc(if input_b == 0 { OFF_IS_DUMMY0 } else { OFF_IS_DUMMY1 });
+        let (dx, dr) = priv_loc(if input_b == 0 {
+            OFF_IS_DUMMY0
+        } else {
+            OFF_IS_DUMMY1
+        });
         let d_term = (dx as u8, dr as u32);
         let root_perm = 8 + input_b * MERKLE_DEPTH + (MERKLE_DEPTH - 1);
         for k in 0..192 {
@@ -887,23 +1092,63 @@ fn group_c3_to_c5(stmt: &PaymentStatement) -> Vec<ScalarConstraint> {
             let (lt1, qt1, rc1) = perm_out_term(root_perm, 2 * k + 1);
             let a0 = get_byte_bit(&stmt.anchor, 2 * k);
             let a1 = get_byte_bit(&stmt.anchor, 2 * k + 1);
-            rest.push(ScalarConstraint { lin: vec![(0, r_dr), d_term], quad: vec![], rhs: 0 });
-            rest.push(ScalarConstraint { lin: vec![(1, r_dr), lt0], quad: vec![qt0], rhs: a0 ^ rc0 });
-            rest.push(ScalarConstraint { lin: vec![], quad: vec![(4, r_dr)], rhs: 0 });
-            rest.push(ScalarConstraint { lin: vec![(2, r_dr), d_term], quad: vec![], rhs: 0 });
-            rest.push(ScalarConstraint { lin: vec![(3, r_dr), lt1], quad: vec![qt1], rhs: a1 ^ rc1 });
-            rest.push(ScalarConstraint { lin: vec![], quad: vec![(1, r_dr)], rhs: 0 });
+            rest.push(ScalarConstraint {
+                lin: vec![(0, r_dr), d_term],
+                quad: vec![],
+                rhs: 0,
+            });
+            rest.push(ScalarConstraint {
+                lin: vec![(1, r_dr), lt0],
+                quad: vec![qt0],
+                rhs: a0 ^ rc0,
+            });
+            rest.push(ScalarConstraint {
+                lin: vec![],
+                quad: vec![(4, r_dr)],
+                rhs: 0,
+            });
+            rest.push(ScalarConstraint {
+                lin: vec![(2, r_dr), d_term],
+                quad: vec![],
+                rhs: 0,
+            });
+            rest.push(ScalarConstraint {
+                lin: vec![(3, r_dr), lt1],
+                quad: vec![qt1],
+                rhs: a1 ^ rc1,
+            });
+            rest.push(ScalarConstraint {
+                lin: vec![],
+                quad: vec![(1, r_dr)],
+                rhs: 0,
+            });
         }
     }
     let pub_exit = stmt.pub_exit();
     let add_adder = |cs: &mut Vec<ScalarConstraint>, base: usize, bits: usize| {
-        cs.push(ScalarConstraint { lin: vec![(2, base as u32)], quad: vec![], rhs: 1 });
+        cs.push(ScalarConstraint {
+            lin: vec![(2, base as u32)],
+            quad: vec![],
+            rhs: 1,
+        });
         for i in 0..bits {
             let row = (base + i) as u32;
-            cs.push(ScalarConstraint { lin: vec![(0, row), (1, row), (3, row)], quad: vec![], rhs: 1 });
-            cs.push(ScalarConstraint { lin: vec![(4, row)], quad: vec![(4, row), (1, row)], rhs: 0 });
+            cs.push(ScalarConstraint {
+                lin: vec![(0, row), (1, row), (3, row)],
+                quad: vec![],
+                rhs: 1,
+            });
+            cs.push(ScalarConstraint {
+                lin: vec![(4, row)],
+                quad: vec![(4, row), (1, row)],
+                rhs: 0,
+            });
             if i > 0 {
-                cs.push(ScalarConstraint { lin: vec![(2, row), (4, row - 1)], quad: vec![], rhs: 1 });
+                cs.push(ScalarConstraint {
+                    lin: vec![(2, row), (4, row - 1)],
+                    quad: vec![],
+                    rhs: 1,
+                });
             }
         }
     };
@@ -915,45 +1160,100 @@ fn group_c3_to_c5(stmt: &PaymentStatement) -> Vec<ScalarConstraint> {
         let (xa0, ra0) = priv_loc(OFF_V_IN0 + i);
         let (xb0, rb0) = priv_loc(OFF_V_IN1 + i);
         let rl1 = (ROW_ADDER_LHS1 + i) as u32;
-        rest.push(ScalarConstraint { lin: vec![(0, rl1), (xa0 as u8, ra0 as u32)], quad: vec![], rhs: 1 });
-        rest.push(ScalarConstraint { lin: vec![(1, rl1), (xb0 as u8, rb0 as u32)], quad: vec![], rhs: 0 });
+        rest.push(ScalarConstraint {
+            lin: vec![(0, rl1), (xa0 as u8, ra0 as u32)],
+            quad: vec![],
+            rhs: 1,
+        });
+        rest.push(ScalarConstraint {
+            lin: vec![(1, rl1), (xb0 as u8, rb0 as u32)],
+            quad: vec![],
+            rhs: 0,
+        });
         let (xa1, ra1) = priv_loc(OFF_V_OUT0 + i);
         let (xb1, rb1) = priv_loc(OFF_V_OUT1 + i);
         let rm = (ROW_ADDER_MID + i) as u32;
-        rest.push(ScalarConstraint { lin: vec![(0, rm), (xa1 as u8, ra1 as u32)], quad: vec![], rhs: 1 });
-        rest.push(ScalarConstraint { lin: vec![(1, rm), (xb1 as u8, rb1 as u32)], quad: vec![], rhs: 0 });
+        rest.push(ScalarConstraint {
+            lin: vec![(0, rm), (xa1 as u8, ra1 as u32)],
+            quad: vec![],
+            rhs: 1,
+        });
+        rest.push(ScalarConstraint {
+            lin: vec![(1, rm), (xb1 as u8, rb1 as u32)],
+            quad: vec![],
+            rhs: 0,
+        });
     }
     for i in 0..65 {
         let rl = (ROW_ADDER_LHS + i) as u32;
-        let mint_bit = if i < 64 { ((stmt.v_mint >> i) & 1) as u8 } else { 0 };
-        rest.push(ScalarConstraint { lin: vec![(1, rl)], quad: vec![], rhs: mint_bit });
+        let mint_bit = if i < 64 {
+            ((stmt.v_mint >> i) & 1) as u8
+        } else {
+            0
+        };
+        rest.push(ScalarConstraint {
+            lin: vec![(1, rl)],
+            quad: vec![],
+            rhs: mint_bit,
+        });
         if i < 64 {
             let rl1 = (ROW_ADDER_LHS1 + i) as u32;
-            rest.push(ScalarConstraint { lin: vec![(0, rl), (3, rl1), (2, rl1)], quad: vec![], rhs: 0 });
+            rest.push(ScalarConstraint {
+                lin: vec![(0, rl), (3, rl1), (2, rl1)],
+                quad: vec![],
+                rhs: 0,
+            });
         } else {
             let rl1_63 = (ROW_ADDER_LHS1 + 63) as u32;
-            rest.push(ScalarConstraint { lin: vec![(0, rl), (4, rl1_63)], quad: vec![], rhs: 1 });
+            rest.push(ScalarConstraint {
+                lin: vec![(0, rl), (4, rl1_63)],
+                quad: vec![],
+                rhs: 1,
+            });
         }
     }
     for i in 0..65 {
         let rr = (ROW_ADDER_RHS + i) as u32;
-        let exit_bit = if i < 64 { ((pub_exit >> i) & 1) as u8 } else { 0 };
-        rest.push(ScalarConstraint { lin: vec![(1, rr)], quad: vec![], rhs: exit_bit });
+        let exit_bit = if i < 64 {
+            ((pub_exit >> i) & 1) as u8
+        } else {
+            0
+        };
+        rest.push(ScalarConstraint {
+            lin: vec![(1, rr)],
+            quad: vec![],
+            rhs: exit_bit,
+        });
         if i < 64 {
             let rm = (ROW_ADDER_MID + i) as u32;
-            rest.push(ScalarConstraint { lin: vec![(0, rr), (3, rm), (2, rm)], quad: vec![], rhs: 0 });
+            rest.push(ScalarConstraint {
+                lin: vec![(0, rr), (3, rm), (2, rm)],
+                quad: vec![],
+                rhs: 0,
+            });
         } else {
             let rm63 = (ROW_ADDER_MID + 63) as u32;
-            rest.push(ScalarConstraint { lin: vec![(0, rr), (4, rm63)], quad: vec![], rhs: 1 });
+            rest.push(ScalarConstraint {
+                lin: vec![(0, rr), (4, rm63)],
+                quad: vec![],
+                rhs: 1,
+            });
         }
     }
     for i in 0..65 {
         let rl = (ROW_ADDER_LHS + i) as u32;
         let rr = (ROW_ADDER_RHS + i) as u32;
-        rest.push(ScalarConstraint { lin: vec![(3, rl), (2, rl), (3, rr), (2, rr)], quad: vec![], rhs: 0 });
+        rest.push(ScalarConstraint {
+            lin: vec![(3, rl), (2, rl), (3, rr), (2, rr)],
+            quad: vec![],
+            rhs: 0,
+        });
     }
     rest.push(ScalarConstraint {
-        lin: vec![(4, (ROW_ADDER_LHS + 64) as u32), (4, (ROW_ADDER_RHS + 64) as u32)],
+        lin: vec![
+            (4, (ROW_ADDER_LHS + 64) as u32),
+            (4, (ROW_ADDER_RHS + 64) as u32),
+        ],
         quad: vec![],
         rhs: 0,
     });
@@ -1011,7 +1311,11 @@ pub fn eval_verifier_weights_at_r1(
             let s = cur_scale;
             cur_scale = cur_scale.mul(stride, kt);
             let hi_next = keccak_row(p, r + 1, 0, 0) >> 6;
-            let target = if r == 22 { &mut sum_next_y } else { &mut interior };
+            let target = if r == 22 {
+                &mut sum_next_y
+            } else {
+                &mut interior
+            };
             for y in 0..5 {
                 target[y].add_assign(s.mul(eq_hi[hi_next + y], kt));
             }
@@ -1087,7 +1391,7 @@ pub fn eval_verifier_weights_at_r1(
 
     // Group B2: Factored 48 Merkle perms (p = 8..56)!
     // Precompute the level-independent dot-product templates ONCE (~800 E::muls total)!
-    let mut b_cur_dot = [E::ZERO; 6];      // lane 0..5 -> (x = lane%5, y = lane/5)
+    let mut b_cur_dot = [E::ZERO; 6]; // lane 0..5 -> (x = lane%5, y = lane/5)
     let mut b_mux_dot = [[E::ZERO; 2]; 3]; // blk 0..2, parity 0 (x=4) / 1 (x=1)
     let mut b_sib_dot = [[E::ZERO; 3]; 2]; // blk 0..1, x in 0..2
     let mut b_merkle_rhs = E::ZERO;
@@ -1146,7 +1450,11 @@ pub fn eval_verifier_weights_at_r1(
         let input_b = rel / MERKLE_DEPTH;
         let lvl = rel % MERKLE_DEPTH;
         let src_perm = if lvl == 0 {
-            if input_b == 0 { 1 } else { 4 }
+            if input_b == 0 {
+                1
+            } else {
+                4
+            }
         } else {
             p - 1
         };
@@ -1212,7 +1520,12 @@ pub fn eval_verifier_weights_at_r1(
         dot.add_assign(lane_stride.mul(eq_lo[z], kt));
         lane_stride = lane_stride.mul(ch.alpha, kt);
     }
-    for (perm, output) in [(2, &stmt.sn0), (5, &stmt.sn1), (6, &stmt.coin_out0), (7, &stmt.coin_out1)] {
+    for (perm, output) in [
+        (2, &stmt.sn0),
+        (5, &stmt.sn1),
+        (6, &stmt.coin_out0),
+        (7, &stmt.coin_out1),
+    ] {
         for (lane, bytes) in output.chunks_exact(8).enumerate() {
             let x = lane % 5;
             let hi = keccak_row(perm, 23, lane / 5, 0) >> 6;
@@ -1220,7 +1533,9 @@ pub fn eval_verifier_weights_at_r1(
             wb_eval[x].add_assign(term);
             wc_eval[x].add_assign(term);
             let mut bits = u64::from_le_bytes(bytes.try_into().unwrap());
-            if lane == 0 { bits ^= KECCAK_RC[23]; }
+            if lane == 0 {
+                bits ^= KECCAK_RC[23];
+            }
             let mut rhs = E::ZERO;
             while bits != 0 {
                 rhs.add_assign(powers[bits.trailing_zeros() as usize]);
@@ -1234,9 +1549,9 @@ pub fn eval_verifier_weights_at_r1(
     // C2 (1536 .. 1536 + 36864): Factored across all 48 Merkle levels!
     // Precompute 1-level template for alpha^0 .. alpha^767 ONCE (~768 E::muls total!)
     let mut c2_mux_dot = [[E::ZERO; 4]; 3]; // blk 0..2, x in 0..3 (B_0, B_1, B_2, B_3)
-    let mut c2_cur_dot = [E::ZERO; 6];      // lane 0..5
+    let mut c2_cur_dot = [E::ZERO; 6]; // lane 0..5
     let mut c2_sib_dot = [[E::ZERO; 3]; 2]; // blk 0..1, x in 0..2
-    let mut c2_dir_sum = E::ZERO;           // sum of weights on dir bit (also equals rhs=1 sum for B_0, B_2!)
+    let mut c2_dir_sum = E::ZERO; // sum of weights on dir bit (also equals rhs=1 sum for B_0, B_2!)
     let mut c2_rhs_total = E::ZERO;
     let mut pw = E::one();
     for k in 0..MUX_ROWS_PER_LEVEL {
@@ -1282,7 +1597,11 @@ pub fn eval_verifier_weights_at_r1(
             w = w.mul(c2_stride, kt);
             let rel = input_b * MERKLE_DEPTH + lvl;
             let src_perm = if lvl == 0 {
-                if input_b == 0 { 1 } else { 4 }
+                if input_b == 0 {
+                    1
+                } else {
+                    4
+                }
             } else {
                 8 + rel - 1
             };
@@ -1390,12 +1709,15 @@ mod tests {
         let r_out1 = [0x88u8; BLIND_SECRET_BYTES];
 
         for mode in 0..4 {
-            let (is_dummy0, is_dummy1, v_in0, v_in1, v_mint, v_unshield, v_out0, v_out1, fee) = match mode {
-                0 => (false, false, 700u64, 300u64, 0u64, 0u64, 650u64, 340u64, 10u64),   // 2-in/2-out
-                1 => (false, true,  700u64, 0u64,   0u64, 0u64, 400u64, 290u64, 10u64),   // 1-in+1-dummy
-                2 => (true,  true,  0u64,   0u64, 1000u64, 0u64, 990u64, 0u64,  10u64),   // ZK-shielded mint
-                _ => (false, true,  700u64, 0u64,   0u64, 150u64, 540u64, 0u64, 10u64),   // partial unshield
-            };
+            let (is_dummy0, is_dummy1, v_in0, v_in1, v_mint, v_unshield, v_out0, v_out1, fee) =
+                match mode {
+                    0 => (
+                        false, false, 700u64, 300u64, 0u64, 0u64, 650u64, 340u64, 10u64,
+                    ), // 2-in/2-out
+                    1 => (false, true, 700u64, 0u64, 0u64, 0u64, 400u64, 290u64, 10u64), // 1-in+1-dummy
+                    2 => (true, true, 0u64, 0u64, 1000u64, 0u64, 990u64, 0u64, 10u64), // ZK-shielded mint
+                    _ => (false, true, 700u64, 0u64, 0u64, 150u64, 540u64, 0u64, 10u64), // partial unshield
+                };
             let c0_eff = coin_commit(&a0, v_in0, &r_in0);
             let c1_eff = coin_commit(&a1, v_in1, &r_in1);
             let stmt = PaymentStatement {
@@ -1414,10 +1736,26 @@ mod tests {
             let wit = PaymentWitness {
                 is_dummy0,
                 is_dummy1,
-                dirs0: if is_dummy0 { [0u8; MERKLE_DEPTH] } else { dirs0 },
-                sibs0: if is_dummy0 { [[0u8; NODE_BYTES]; MERKLE_DEPTH] } else { sibs0 },
-                dirs1: if is_dummy1 { [0u8; MERKLE_DEPTH] } else { dirs1 },
-                sibs1: if is_dummy1 { [[0u8; NODE_BYTES]; MERKLE_DEPTH] } else { sibs1 },
+                dirs0: if is_dummy0 {
+                    [0u8; MERKLE_DEPTH]
+                } else {
+                    dirs0
+                },
+                sibs0: if is_dummy0 {
+                    [[0u8; NODE_BYTES]; MERKLE_DEPTH]
+                } else {
+                    sibs0
+                },
+                dirs1: if is_dummy1 {
+                    [0u8; MERKLE_DEPTH]
+                } else {
+                    dirs1
+                },
+                sibs1: if is_dummy1 {
+                    [[0u8; NODE_BYTES]; MERKLE_DEPTH]
+                } else {
+                    sibs1
+                },
                 s_in0: s0,
                 s_in1: s1,
                 v_in0,
@@ -1433,25 +1771,41 @@ mod tests {
             };
             let bits = build_witness_bits(&stmt, &wit);
             for x in 0..5 {
-                assert!(bits.b[x][ACTIVE_SUBROWS_PER_POLY * 16384..].iter().all(|&v| v == 0));
+                assert!(bits.b[x][ACTIVE_SUBROWS_PER_POLY * 16384..]
+                    .iter()
+                    .all(|&v| v == 0));
             }
             let ch = CircuitChallenge {
-                alpha: E { c: core::array::from_fn(|i| 0x1357_2468u32.wrapping_mul((i + 1) as u32)) },
+                alpha: E {
+                    c: core::array::from_fn(|i| 0x1357_2468u32.wrapping_mul((i + 1) as u32)),
+                },
             };
             let (wb, wc, pub_rhs) = build_prover_weights(&stmt, &ch, kt);
 
             let mut sum = E::ZERO;
             for i in 0..NUM_BITS_PER_POLY {
-                let b_row = [bits.b[0][i], bits.b[1][i], bits.b[2][i], bits.b[3][i], bits.b[4][i]];
+                let b_row = [
+                    bits.b[0][i],
+                    bits.b[1][i],
+                    bits.b[2][i],
+                    bits.b[3][i],
+                    bits.b[4][i],
+                ];
                 for x in 0..5 {
-                    if b_row[x] != 0 { sum.add_assign(wb[x][i]); }
-                    if ((1 ^ b_row[(x + 1) % 5]) & b_row[(x + 2) % 5]) != 0 { sum.add_assign(wc[x][i]); }
+                    if b_row[x] != 0 {
+                        sum.add_assign(wb[x][i]);
+                    }
+                    if ((1 ^ b_row[(x + 1) % 5]) & b_row[(x + 2) % 5]) != 0 {
+                        sum.add_assign(wc[x][i]);
+                    }
                 }
             }
             assert_eq!(sum, pub_rhs, "circuit zero-sum failed (mode={})", mode);
 
             let r1: [E; V_SC1] = core::array::from_fn(|k| E {
-                c: core::array::from_fn(|i| ((k * 13 + i * 7 + 3) as u32).wrapping_mul(0x9E37_79B9)),
+                c: core::array::from_fn(|i| {
+                    ((k * 13 + i * 7 + 3) as u32).wrapping_mul(0x9E37_79B9)
+                }),
             });
             let (vwb, vwc, vrhs) = eval_verifier_weights_at_r1(&stmt, &ch, &r1, kt);
             assert_eq!(vrhs, pub_rhs, "pub_rhs mismatch!");
@@ -1460,8 +1814,12 @@ mod tests {
                 let mut db = E::ZERO;
                 let mut dc = E::ZERO;
                 for i in 0..NUM_BITS_PER_POLY {
-                    if !wb[x][i].is_zero() { db.add_assign(wb[x][i].mul(eq_r1[i], kt)); }
-                    if !wc[x][i].is_zero() { dc.add_assign(wc[x][i].mul(eq_r1[i], kt)); }
+                    if !wb[x][i].is_zero() {
+                        db.add_assign(wb[x][i].mul(eq_r1[i], kt));
+                    }
+                    if !wc[x][i].is_zero() {
+                        dc.add_assign(wc[x][i].mul(eq_r1[i], kt));
+                    }
                 }
                 assert_eq!(vwb[x], db, "wb mismatch x={}", x);
                 assert_eq!(vwc[x], dc, "wc mismatch x={}", x);

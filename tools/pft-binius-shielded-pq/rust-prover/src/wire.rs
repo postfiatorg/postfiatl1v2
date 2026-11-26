@@ -3,7 +3,9 @@
 //! so spend authorization reduces directly to FIPS-204 EUF-CMA + unmodified-oracle extraction.
 use crate::binius_pcs::BiniusProof;
 use crate::circuit::PaymentStatement;
-use crate::shake256::{pk_hash, BLIND_SECRET_BYTES, COIN_BYTES, MERKLE_DEPTH, NODE_BYTES, SN_BYTES};
+use crate::shake256::{
+    pk_hash, BLIND_SECRET_BYTES, COIN_BYTES, MERKLE_DEPTH, NODE_BYTES, SN_BYTES,
+};
 use sha2::{Digest, Sha384};
 
 pub const ML_DSA_65_PK_BYTES: usize = 1952;
@@ -73,7 +75,8 @@ impl ShieldedTx {
     }
 
     pub fn verify_spend_auth(&self, statement_ctx: &[u8; 48]) -> Result<(), String> {
-        if !self.spend_auth0.verify(0, statement_ctx) || !self.spend_auth1.verify(1, statement_ctx) {
+        if !self.spend_auth0.verify(0, statement_ctx) || !self.spend_auth1.verify(1, statement_ctx)
+        {
             return Err("R0-SpendAuth: invalid ML-DSA-65 spend authorization".into());
         }
         Ok(())

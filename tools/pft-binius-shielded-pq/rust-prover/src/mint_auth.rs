@@ -177,7 +177,10 @@ mod tests {
             "R0-SpendAuth: invalid ML-DSA-65 spend authorization"
         );
         let mut swapped_spend = tx.clone();
-        std::mem::swap(&mut swapped_spend.spend_auth0, &mut swapped_spend.spend_auth1);
+        std::mem::swap(
+            &mut swapped_spend.spend_auth0,
+            &mut swapped_spend.spend_auth1,
+        );
         reject_mint(swapped_spend);
         assert!(ShieldedTx::from_bytes(&raw[..raw.len() - ml_dsa_65::SIG_LEN]).is_err());
     }

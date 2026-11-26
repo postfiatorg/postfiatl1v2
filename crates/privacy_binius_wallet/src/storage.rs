@@ -6,7 +6,6 @@ use aes_gcm::{
 };
 use rand::{rngs::OsRng, RngCore};
 use serde::{de::DeserializeOwned, Serialize};
-use zeroize::Zeroize;
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -16,6 +15,7 @@ use std::{
     },
     path::Path,
 };
+use zeroize::Zeroize;
 pub fn private_file(path: &Path) -> Result<File> {
     let f = OpenOptions::new()
         .read(true)
@@ -87,13 +87,7 @@ impl Store {
         let mut pt = serde_json::to_vec(record)?;
         let encrypted = self
             .cipher
-            .encrypt(
-                (&nonce).into(),
-                Payload {
-                    msg: &pt,
-                    aad: tag,
-                },
-            )
+            .encrypt((&nonce).into(), Payload { msg: &pt, aad: tag })
             .map_err(|_| "wallet encryption failed");
         pt.zeroize();
         let bytes = encrypted?;

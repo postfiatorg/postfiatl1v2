@@ -11,12 +11,11 @@
 //!     + 2 E-rows (B_pcs, B_prox) in ONE 384-bit-digest Merkle tree MT_1 (prefix of 3×SHA-512)
 //!   - Streaming 1,024-column L1-cache-resident ANTT prover with subtree-root MT_1 (192 KiB tree RAM)
 
-use crate::circuit::{
-    eval_verifier_weights_at_r1, CircuitChallenge,
-    PaymentStatement, ACTIVE_SUBROWS_PER_POLY, V_SC1,
-};
 #[cfg(feature = "prover")]
 use crate::circuit::{build_prover_weights, CircuitWitnessBits, NUM_BITS_PER_POLY};
+use crate::circuit::{
+    eval_verifier_weights_at_r1, CircuitChallenge, PaymentStatement, ACTIVE_SUBROWS_PER_POLY, V_SC1,
+};
 use crate::field::{
     eq_eval_point, eq_table, k_tables, KTables, RingSwitchLinearMap, E, E_BYTES, H_SIZE, L_SHIFT,
 };
@@ -72,10 +71,10 @@ mod wasm_seq_par {
         }
     }
 }
-#[cfg(all(feature = "prover", target_arch = "wasm32"))]
-use wasm_seq_par::IntoParIter;
 use sha2::{Digest, Sha512};
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(all(feature = "prover", target_arch = "wasm32"))]
+use wasm_seq_par::IntoParIter;
 
 pub const N_CODE: usize = 2_097_152;
 pub const MERKLE_HEIGHT: usize = 21;
@@ -86,35 +85,34 @@ pub const POW_NONCE_BYTES: usize = 48; // 384-bit nonce (hard-capped M_pow = 2^2
 pub const POW_MAX_ATTEMPTS: u64 = 1u64 << 27;
 pub const DEG_BOUND: usize = K_COLS + NUM_QUERIES + 1; // 565
 
-pub const HASH_BYTES: usize = 48;  // 384-bit MT_1 digest prefix of H = 3 x SHA-512
+pub const HASH_BYTES: usize = 48; // 384-bit MT_1 digest prefix of H = 3 x SHA-512
 pub const STATE_BYTES: usize = 64; // 512-bit internal Fiat-Shamir transcript state (ZERO wire bytes!)
 pub const V_SC2: usize = 8;
 pub const VIRTUAL_ROWS: usize = 1usize << V_SC2; // 256
 
 pub const M_WIT_ROWS: usize = 5 * ACTIVE_SUBROWS_PER_POLY; // 140 (trailing 4 zero subrows/poly omitted)
-pub const M_RS_MASK_ROWS: usize = 5;                       // 5 polys x 1 row (384 K-elems <= 512 cols)
-pub const M_G1_ROWS: usize = 2;                            // (4*19 + 2) = 78 E-elems = 936 K-elems <= 2*512
-pub const M_SC2_MASK_ROWS: usize = 2 * V_SC2;              // 16
+pub const M_RS_MASK_ROWS: usize = 5; // 5 polys x 1 row (384 K-elems <= 512 cols)
+pub const M_G1_ROWS: usize = 2; // (4*19 + 2) = 78 E-elems = 936 K-elems <= 2*512
+pub const M_SC2_MASK_ROWS: usize = 2 * V_SC2; // 16
 pub const M_NON_MASK_ROWS: usize = M_WIT_ROWS + M_RS_MASK_ROWS + M_G1_ROWS; // 147
-pub const M_K_ROWS: usize = M_NON_MASK_ROWS + M_SC2_MASK_ROWS;              // 163
+pub const M_K_ROWS: usize = M_NON_MASK_ROWS + M_SC2_MASK_ROWS; // 163
 
 pub const PROOF_MAGIC: &[u8; 8] = b"PFSHPK01";
 
 /// 8 pairwise-disjoint edges (a_d, b_d) in {0,1}^8 flipping bit d (MSB=0..LSB=7).
 /// Verified mechanically to yield full rank 17/17 with det degree <= 112 (SZ <= 112/2^384).
 pub const MASK2_PAIRS: [(usize, usize); V_SC2] = [
-    (0, 128),  // d=0 (flip 128)
-    (1, 65),   // d=1 (flip 64)
-    (2, 34),   // d=2 (flip 32)
-    (3, 19),   // d=3 (flip 16)
-    (4, 12),   // d=4 (flip 8)
-    (16, 20),  // d=5 (flip 4)
-    (8, 10),   // d=6 (flip 2)
-    (6, 7),    // d=7 (flip 1)
+    (0, 128), // d=0 (flip 128)
+    (1, 65),  // d=1 (flip 64)
+    (2, 34),  // d=2 (flip 32)
+    (3, 19),  // d=3 (flip 16)
+    (4, 12),  // d=4 (flip 8)
+    (16, 20), // d=5 (flip 4)
+    (8, 10),  // d=6 (flip 2)
+    (6, 7),   // d=7 (flip 1)
 ];
-pub const MASK2_ROWS: [usize; M_SC2_MASK_ROWS] = [
-    0, 1, 2, 3, 4, 6, 7, 8, 10, 12, 16, 19, 20, 34, 65, 128,
-];
+pub const MASK2_ROWS: [usize; M_SC2_MASK_ROWS] =
+    [0, 1, 2, 3, 4, 6, 7, 8, 10, 12, 16, 19, 20, 34, 65, 128];
 pub const ZETA1_K: u32 = 2;
 pub const ZETA2_K: u32 = 3;
 
@@ -208,7 +206,12 @@ fn oracle_leaf(col_idx: usize, k_vals: &[u32; M_K_ROWS], b_pcs: E, b_prox: E) ->
 }
 
 #[inline]
-fn oracle_node(level: u8, pos: usize, left: &[u8; HASH_BYTES], right: &[u8; HASH_BYTES]) -> [u8; HASH_BYTES] {
+fn oracle_node(
+    level: u8,
+    pos: usize,
+    left: &[u8; HASH_BYTES],
+    right: &[u8; HASH_BYTES],
+) -> [u8; HASH_BYTES] {
     let mut h = Sha512::new();
     h.update([0x00u8]);
     h.update(b"PFS-NODE");
@@ -279,7 +282,10 @@ impl Transcript {
 ///   - bits 0..20   : 20-bit PoW check (buf[0]==0 && buf[1]==0 && (buf[2]&0x0F)==0)
 ///   - bits 24..1116: 52 exact 21-bit query indices in [0, 2,097,151] (1,092 bits <= 1,512 remaining!)
 #[inline]
-pub fn eval_h_c4(tr_final: &[u8; STATE_BYTES], nonce: &[u8; POW_NONCE_BYTES]) -> (bool, [usize; NUM_QUERIES]) {
+pub fn eval_h_c4(
+    tr_final: &[u8; STATE_BYTES],
+    nonce: &[u8; POW_NONCE_BYTES],
+) -> (bool, [usize; NUM_QUERIES]) {
     let mut h0 = Sha512::new();
     h0.update([0x00u8]);
     h0.update(b"PFS-C4  ");
@@ -350,8 +356,8 @@ pub struct BiniusProof {
     pub s_mask2: E,
     pub sc2_rounds: [[E; 2]; V_SC2], // 8 rounds x (c_0, c_2)
     pub b_eval: E,
-    pub v_prox_coeffs: Vec<E>,       // DEG_BOUND = 565
-    pub v_open_coeffs: Vec<E>,       // DEG_BOUND = 565
+    pub v_prox_coeffs: Vec<E>, // DEG_BOUND = 565
+    pub v_open_coeffs: Vec<E>, // DEG_BOUND = 565
     pub pow_nonce: [u8; POW_NONCE_BYTES],
     pub opened_cols: Vec<OpenedColumn>,
     pub merkle_siblings: Vec<[u8; HASH_BYTES]>,
@@ -531,7 +537,10 @@ fn eval_g1_round(g1: &[[E; 4]; V_SC1], r_prev: &[E], d: usize, kt: &KTables) -> 
                 prod_excl = prod_excl.mul(r_prev[m], kt);
             }
         }
-        let gj = g1[j][0].add(rj.mul(g1[j][1].add(rj.mul(g1[j][2].add(rj.mul(g1[j][3], kt)), kt)), kt));
+        let gj = g1[j][0].add(rj.mul(
+            g1[j][1].add(rj.mul(g1[j][2].add(rj.mul(g1[j][3], kt)), kt)),
+            kt,
+        ));
         prefix_sum.add_assign(gj.mul(prod_excl, kt));
     }
     poly[1].add_assign(prefix_sum);
@@ -627,8 +636,8 @@ fn build_m_rs_matrix(
     eta3: E,
     kt: &KTables,
 ) -> Vec<Vec<E>> {
-    let eq_subrow = eq_table(&r1[0..5], kt);  // 32 (active 0..28)
-    let eq_col = eq_table(&r1[5..14], kt);    // 512
+    let eq_subrow = eq_table(&r1[0..5], kt); // 32 (active 0..28)
+    let eq_col = eq_table(&r1[5..14], kt); // 512
     let l_map = RingSwitchLinearMap::new(w_rs);
 
     let mut m_rs = vec![vec![E::ZERO; K_COLS]; VIRTUAL_ROWS];
@@ -725,10 +734,20 @@ fn karatsuba4_e(a: &[E; 4], b: &[E; 4], out: &mut [E; 7], kt: &KTables) {
 fn karatsuba8_e(a: &[E; 8], b: &[E; 8], out: &mut [E; 15], kt: &KTables) {
     let a0 = [a[0], a[1], a[2], a[3]];
     let a1 = [a[4], a[5], a[6], a[7]];
-    let as_ = [a[0].add(a[4]), a[1].add(a[5]), a[2].add(a[6]), a[3].add(a[7])];
+    let as_ = [
+        a[0].add(a[4]),
+        a[1].add(a[5]),
+        a[2].add(a[6]),
+        a[3].add(a[7]),
+    ];
     let b0 = [b[0], b[1], b[2], b[3]];
     let b1 = [b[4], b[5], b[6], b[7]];
-    let bs_ = [b[0].add(b[4]), b[1].add(b[5]), b[2].add(b[6]), b[3].add(b[7])];
+    let bs_ = [
+        b[0].add(b[4]),
+        b[1].add(b[5]),
+        b[2].add(b[6]),
+        b[3].add(b[7]),
+    ];
     let mut z0 = [E::ZERO; 7];
     let mut z1 = [E::ZERO; 7];
     let mut z2 = [E::ZERO; 7];
@@ -824,7 +843,12 @@ fn add_3x31_assign(dst: &mut [[E; 31]; 3], src: &[[E; 31]; 3]) {
     }
 }
 
-fn mul_3x2x16_e(a: &[[[E; 16]; 2]; 3], b: &[[[E; 16]; 2]; 3], out: &mut [[[E; 31]; 3]; 5], kt: &KTables) {
+fn mul_3x2x16_e(
+    a: &[[[E; 16]; 2]; 3],
+    b: &[[[E; 16]; 2]; 3],
+    out: &mut [[[E; 31]; 3]; 5],
+    kt: &KTables,
+) {
     let mut p0 = [[E::ZERO; 31]; 3];
     let mut p1 = [[E::ZERO; 31]; 3];
     let mut p2 = [[E::ZERO; 31]; 3];
@@ -834,9 +858,24 @@ fn mul_3x2x16_e(a: &[[[E; 16]; 2]; 3], b: &[[[E; 16]; 2]; 3], out: &mut [[[E; 31
     mul_2x16_e(&a[0], &b[0], &mut p0, kt);
     mul_2x16_e(&a[1], &b[1], &mut p1, kt);
     mul_2x16_e(&a[2], &b[2], &mut p2, kt);
-    mul_2x16_e(&add_2x16(&a[0], &a[1]), &add_2x16(&b[0], &b[1]), &mut q01, kt);
-    mul_2x16_e(&add_2x16(&a[0], &a[2]), &add_2x16(&b[0], &b[2]), &mut q02, kt);
-    mul_2x16_e(&add_2x16(&a[1], &a[2]), &add_2x16(&b[1], &b[2]), &mut q12, kt);
+    mul_2x16_e(
+        &add_2x16(&a[0], &a[1]),
+        &add_2x16(&b[0], &b[1]),
+        &mut q01,
+        kt,
+    );
+    mul_2x16_e(
+        &add_2x16(&a[0], &a[2]),
+        &add_2x16(&b[0], &b[2]),
+        &mut q02,
+        kt,
+    );
+    mul_2x16_e(
+        &add_2x16(&a[1], &a[2]),
+        &add_2x16(&b[1], &b[2]),
+        &mut q12,
+        kt,
+    );
     out[0] = p0;
     out[1] = q01;
     add_3x31_assign(&mut out[1], &p0);
@@ -851,13 +890,26 @@ fn mul_3x2x16_e(a: &[[[E; 16]; 2]; 3], b: &[[[E; 16]; 2]; 3], out: &mut [[[E; 31
     out[4] = p2;
 }
 
-fn mul_6x2x16_e(a: &[[[E; 16]; 2]; 6], b: &[[[E; 16]; 2]; 6], out: &mut [[[E; 31]; 3]; 11], kt: &KTables) {
+fn mul_6x2x16_e(
+    a: &[[[E; 16]; 2]; 6],
+    b: &[[[E; 16]; 2]; 6],
+    out: &mut [[[E; 31]; 3]; 11],
+    kt: &KTables,
+) {
     let a_lo = [a[0], a[1], a[2]];
     let a_hi = [a[3], a[4], a[5]];
-    let a_sum = [add_2x16(&a[0], &a[3]), add_2x16(&a[1], &a[4]), add_2x16(&a[2], &a[5])];
+    let a_sum = [
+        add_2x16(&a[0], &a[3]),
+        add_2x16(&a[1], &a[4]),
+        add_2x16(&a[2], &a[5]),
+    ];
     let b_lo = [b[0], b[1], b[2]];
     let b_hi = [b[3], b[4], b[5]];
-    let b_sum = [add_2x16(&b[0], &b[3]), add_2x16(&b[1], &b[4]), add_2x16(&b[2], &b[5])];
+    let b_sum = [
+        add_2x16(&b[0], &b[3]),
+        add_2x16(&b[1], &b[4]),
+        add_2x16(&b[2], &b[5]),
+    ];
     let mut z0 = [[[E::ZERO; 31]; 3]; 5];
     let mut z1 = [[[E::ZERO; 31]; 3]; 5];
     let mut z2 = [[[E::ZERO; 31]; 3]; 5];
@@ -916,7 +968,10 @@ fn eval_bilinear_rs_ip(
     for i in 0..5 {
         for z in 0..3 {
             for u in 0..31 {
-                c[6 + i][z][u] = z0[6 + i][z][u].add(z1[i][z][u]).add(z0[i][z][u]).add(z2[i][z][u]);
+                c[6 + i][z][u] = z0[6 + i][z][u]
+                    .add(z1[i][z][u])
+                    .add(z0[i][z][u])
+                    .add(z2[i][z][u]);
             }
         }
     }
@@ -928,7 +983,10 @@ fn eval_bilinear_rs_ip(
     for i in 0..5 {
         for z in 0..3 {
             for u in 0..31 {
-                c[12 + i][z][u] = z2[i][z][u].add(z1[6 + i][z][u]).add(z0[6 + i][z][u]).add(z2[6 + i][z][u]);
+                c[12 + i][z][u] = z2[i][z][u]
+                    .add(z1[6 + i][z][u])
+                    .add(z0[6 + i][z][u])
+                    .add(z2[6 + i][z][u]);
             }
         }
     }
@@ -1292,7 +1350,8 @@ pub fn prove(
         .collect();
 
     // Upper Merkle levels: upper_levels[0] = level 10 (2,048 nodes) .. upper_levels[11] = level 21 (root)
-    let mut upper_levels: Vec<Vec<[u8; HASH_BYTES]>> = Vec::with_capacity(MERKLE_HEIGHT - SUBTREE_LOG + 1);
+    let mut upper_levels: Vec<Vec<[u8; HASH_BYTES]>> =
+        Vec::with_capacity(MERKLE_HEIGHT - SUBTREE_LOG + 1);
     upper_levels.push(subtree_roots);
     for u_lvl in 0..(MERKLE_HEIGHT - SUBTREE_LOG) {
         let lvl = SUBTREE_LOG + u_lvl;
@@ -1406,7 +1465,10 @@ pub fn prove(
         let r_ch = tr.squeeze_e(b"C03");
         assert!(!r_ch.is_zero(), "zero SC1 challenge");
         r1[0] = r_ch;
-        claim1 = poly[0].add(r_ch.mul(poly[1].add(r_ch.mul(poly[2].add(r_ch.mul(poly[3], kt)), kt)), kt));
+        claim1 = poly[0].add(r_ch.mul(
+            poly[1].add(r_ch.mul(poly[2].add(r_ch.mul(poly[3], kt)), kt)),
+            kt,
+        ));
     }
 
     // Fold after Round 0 -> size 2^18 = 262,144, then immediately drop full 2^19 wb_full/wc_full!
@@ -1518,12 +1580,19 @@ pub fn prove(
         debug_assert_eq!(poly[1].add(poly[2]).add(poly[3]), claim1);
         sc1_rounds[d] = [poly[0], poly[2], poly[3]];
         let sc_tag = [b'S', b'1', b'0' + ((d / 10) as u8), b'0' + ((d % 10) as u8)];
-        let ch_tag = [b'C', b'0' + (((d + 3) / 10) as u8), b'0' + (((d + 3) % 10) as u8)];
+        let ch_tag = [
+            b'C',
+            b'0' + (((d + 3) / 10) as u8),
+            b'0' + (((d + 3) % 10) as u8),
+        ];
         tr.absorb_e(&sc_tag, &sc1_rounds[d]);
         let r_ch = tr.squeeze_e(&ch_tag);
         assert!(!r_ch.is_zero(), "zero SC1 challenge");
         r1[d] = r_ch;
-        claim1 = poly[0].add(r_ch.mul(poly[1].add(r_ch.mul(poly[2].add(r_ch.mul(poly[3], kt)), kt)), kt));
+        claim1 = poly[0].add(r_ch.mul(
+            poly[1].add(r_ch.mul(poly[2].add(r_ch.mul(poly[3], kt)), kt)),
+            kt,
+        ));
 
         for x in 0..5 {
             b_cur[x] = (0..half)
@@ -1568,7 +1637,10 @@ pub fn prove(
     let mut g1_r1 = E::ZERO;
     for d in 0..V_SC1 {
         let rd = r1[d];
-        let gd = g1[d][0].add(rd.mul(g1[d][1].add(rd.mul(g1[d][2].add(rd.mul(g1[d][3], kt)), kt)), kt));
+        let gd = g1[d][0].add(rd.mul(
+            g1[d][1].add(rd.mul(g1[d][2].add(rd.mul(g1[d][3], kt)), kt)),
+            kt,
+        ));
         let mut prod_excl = E::one();
         for j in 0..V_SC1 {
             if j != d {
@@ -1598,14 +1670,16 @@ pub fn prove(
     let eval_zg = g1_r1.add(tau.mul(m_g1, kt)).add(tau.sq(kt).mul(m_g2, kt));
     tr.absorb_e(
         b"DEG2Z",
-        &[eval_z[0], eval_z[1], eval_z[2], eval_z[3], eval_z[4], eval_zg],
+        &[
+            eval_z[0], eval_z[1], eval_z[2], eval_z[3], eval_z[4], eval_zg,
+        ],
     );
 
     // 7. Compressed ZK Ring-Switching (single gamma in Round 23, single rho_rs in Round 24)
     let gamma = tr.squeeze_e(b"C23");
     let gammas = expand_gammas(gamma, kt);
     let eq_subrow = eq_table(&r1[0..5], kt); // 32 (only 0..28 active)
-    let eq_col = eq_table(&r1[5..14], kt);   // 512
+    let eq_col = eq_table(&r1[5..14], kt); // 512
     let mut rs_s_prime = [E::ZERO; 32];
     for x in 0..5 {
         let gx = gammas[x];
@@ -1670,7 +1744,11 @@ pub fn prove(
         let c1 = claim2.add(c2);
         sc2_rounds[d] = [c0, c2];
         let sc2_tag = [b'S', b'2', b'0', b'0' + (d as u8)];
-        let ch_tag = [b'C', b'0' + (((d + 25) / 10) as u8), b'0' + (((d + 25) % 10) as u8)];
+        let ch_tag = [
+            b'C',
+            b'0' + (((d + 25) / 10) as u8),
+            b'0' + (((d + 25) % 10) as u8),
+        ];
         tr.absorb_e(&sc2_tag, &sc2_rounds[d]);
         let r_ch = tr.squeeze_e(&ch_tag);
         r_row_p[d] = r_ch;
@@ -1680,7 +1758,10 @@ pub fn prove(
             .into_par_iter()
             .map(|row| {
                 (0..K_COLS)
-                    .map(|col| u_cur[row][col].add(r_ch.mul(u_cur[row][col].add(u_cur[row + half][col]), kt)))
+                    .map(|col| {
+                        u_cur[row][col]
+                            .add(r_ch.mul(u_cur[row][col].add(u_cur[row + half][col]), kt))
+                    })
                     .collect()
             })
             .collect();
@@ -1688,7 +1769,10 @@ pub fn prove(
             .into_par_iter()
             .map(|row| {
                 (0..K_COLS)
-                    .map(|col| m_cur[row][col].add(r_ch.mul(m_cur[row][col].add(m_cur[row + half][col]), kt)))
+                    .map(|col| {
+                        m_cur[row][col]
+                            .add(r_ch.mul(m_cur[row][col].add(m_cur[row + half][col]), kt))
+                    })
                     .collect()
             })
             .collect();
@@ -1892,9 +1976,7 @@ pub fn verify_abortable(
     use std::sync::atomic::Ordering;
     let aborted = || abort.is_some_and(|flag| flag.load(Ordering::Relaxed));
 
-    if stmt.fee.checked_add(stmt.v_unshield).is_none()
-        || (stmt.v_mint > 0 && stmt.v_unshield > 0)
-    {
+    if stmt.fee.checked_add(stmt.v_unshield).is_none() || (stmt.v_mint > 0 && stmt.v_unshield > 0) {
         return Err("Rule R5: invalid public flow (overflow or simultaneous mint+unshield)".into());
     }
     if proof.v_prox_coeffs.len() != DEG_BOUND || proof.v_open_coeffs.len() != DEG_BOUND {
@@ -1917,7 +1999,11 @@ pub fn verify_abortable(
     for d in 0..V_SC1 {
         let [c0, c2, c3] = proof.sc1_rounds[d];
         let sc_tag = [b'S', b'1', b'0' + ((d / 10) as u8), b'0' + ((d % 10) as u8)];
-        let ch_tag = [b'C', b'0' + (((d + 3) / 10) as u8), b'0' + (((d + 3) % 10) as u8)];
+        let ch_tag = [
+            b'C',
+            b'0' + (((d + 3) / 10) as u8),
+            b'0' + (((d + 3) % 10) as u8),
+        ];
         tr.absorb_e(&sc_tag, &[c0, c2, c3]);
         let r_ch = tr.squeeze_e(&ch_tag);
         if r_ch.is_zero() {
@@ -1955,7 +2041,11 @@ pub fn verify_abortable(
     for d in 0..V_SC2 {
         let [c0, c2] = proof.sc2_rounds[d];
         let sc2_tag = [b'S', b'2', b'0', b'0' + (d as u8)];
-        let ch_tag = [b'C', b'0' + (((d + 25) / 10) as u8), b'0' + (((d + 25) % 10) as u8)];
+        let ch_tag = [
+            b'C',
+            b'0' + (((d + 25) / 10) as u8),
+            b'0' + (((d + 25) % 10) as u8),
+        ];
         tr.absorb_e(&sc2_tag, &[c0, c2]);
         r_row_p[d] = tr.squeeze_e(&ch_tag);
     }
@@ -2018,7 +2108,8 @@ pub fn verify_abortable(
         let xp1 = (x + 1) % 5;
         let xp2 = (x + 2) % 5;
         rhs_deg2.add_assign(wb_r1[x].mul(proof.eval_z[x], kt));
-        rhs_deg2.add_assign(wc_r1[x].mul(one.add(proof.eval_z[xp1]).mul(proof.eval_z[xp2], kt), kt));
+        rhs_deg2
+            .add_assign(wc_r1[x].mul(one.add(proof.eval_z[xp1]).mul(proof.eval_z[xp2], kt), kt));
     }
     if lhs_deg2 != rhs_deg2 {
         return Err("Degree-2 evaluation hiding check failed".into());
@@ -2164,11 +2255,19 @@ mod tests {
     fn published_hop_pins_circuit_and_initial_transcript() {
         use crate::circuit::{ACTIVE_ROWS, NUM_PERMS};
         assert_eq!((NUM_PERMS, ACTIVE_ROWS, V_SC1, V_SC2), (56, 447_014, 19, 8));
-        assert_eq!((N_CODE, K_COLS, NUM_QUERIES, POW_BITS), (2_097_152, 512, 52, 20));
+        assert_eq!(
+            (N_CODE, K_COLS, NUM_QUERIES, POW_BITS),
+            (2_097_152, 512, 52, 20)
+        );
         let raw = include_bytes!("../../payments/tx_hop1.bin");
         let tx = crate::wire::ShieldedTx::from_bytes(raw).unwrap();
         let p = &tx.proof;
-        let tr = Transcript::new(&encode_statement(&tx.statement()), &p.merkle_root, p.s_g1, p.s_mask2);
+        let tr = Transcript::new(
+            &encode_statement(&tx.statement()),
+            &p.merkle_root,
+            p.s_g1,
+            p.s_mask2,
+        );
         assert_eq!(hex::encode(tr.state), "cbade2b5a5c2fe01c372272dbef282113dc065771eeb5734bcb1f9062afab2fb994aca393e2c0cc954925ddf6d73b9eacf8764bb4cc5a1a4c1842c761927f621");
     }
 
@@ -2246,7 +2345,11 @@ mod tests {
             prove_ms,
             verify_ms
         );
-        assert!(bytes.len() + crate::wire::HEADER_OVERHEAD_BYTES <= crate::wire::W1_ARCHIVAL_BUDGET_BYTES, "exceeded PFSH03 archival budget!");
+        assert!(
+            bytes.len() + crate::wire::HEADER_OVERHEAD_BYTES
+                <= crate::wire::W1_ARCHIVAL_BUDGET_BYTES,
+            "exceeded PFSH03 archival budget!"
+        );
     }
 
     #[test]
@@ -2285,6 +2388,9 @@ mod tests {
                 naive.add_assign(ra.mul(vb, kt).mul(w_ab, kt));
             }
         }
-        assert_eq!(fast, naive, "3D-Karatsuba Ring-Switch inner product diverged from naive 384x384 sum!");
+        assert_eq!(
+            fast, naive,
+            "3D-Karatsuba Ring-Switch inner product diverged from naive 384x384 sum!"
+        );
     }
 }

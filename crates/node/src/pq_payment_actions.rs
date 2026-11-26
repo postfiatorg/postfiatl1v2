@@ -36,7 +36,9 @@ struct VerificationSlot {
 }
 impl VerificationSlot {
     fn acquire_consensus() -> Self {
-        let active = CONSENSUS_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner());
+        let active = CONSENSUS_VERIFIERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let mut active = CONSENSUS_SLOT_READY
             .wait_while(active, |n| *n >= postfiat_types::PQ_REHEARSAL_PROOFS)
             .unwrap_or_else(|e| e.into_inner());
@@ -46,7 +48,9 @@ impl VerificationSlot {
 
     fn acquire_admission() -> Self {
         let limit = (postfiat_types::PQ_REHEARSAL_PROOFS / 2).max(1);
-        let active = ADMISSION_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner());
+        let active = ADMISSION_VERIFIERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let mut active = ADMISSION_SLOT_READY
             .wait_while(active, |n| *n >= limit)
             .unwrap_or_else(|e| e.into_inner());
@@ -57,10 +61,14 @@ impl VerificationSlot {
 impl Drop for VerificationSlot {
     fn drop(&mut self) {
         if self.admission {
-            *ADMISSION_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+            *ADMISSION_VERIFIERS
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) -= 1;
             ADMISSION_SLOT_READY.notify_one();
         } else {
-            *CONSENSUS_VERIFIERS.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+            *CONSENSUS_VERIFIERS
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) -= 1;
             CONSENSUS_SLOT_READY.notify_one();
         }
     }

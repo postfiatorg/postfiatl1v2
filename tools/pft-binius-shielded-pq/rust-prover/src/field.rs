@@ -17,9 +17,9 @@ use std::sync::OnceLock;
 
 pub const POLY16: u32 = 0x1002B;
 pub const GEN16: u16 = 3;
-pub const C32: u16 = 0x0800;          // Z^2 + Z + 0x0800 is irreducible over GF(2^16)
+pub const C32: u16 = 0x0800; // Z^2 + Z + 0x0800 is irreducible over GF(2^16)
 pub const E_ALPHA: u32 = 0x0001_0002; // Y^12 + Y^3 + Y + 0x00010002 is irreducible over GF(2^32)
-pub const L_SHIFT: u32 = 1u32 << 21;  // 0x00200000, disjoint from V_21 and H = V_9
+pub const L_SHIFT: u32 = 1u32 << 21; // 0x00200000, disjoint from V_21 and H = V_9
 pub const H_LOG: usize = 9;
 pub const H_SIZE: usize = 1 << H_LOG; // 512
 
@@ -62,7 +62,8 @@ fn mul16_slow(mut a: u32, mut b: u32) -> u16 {
 
 impl KTables {
     fn build() -> Self {
-        let mut exp16: Box<[u16; 131072]> = vec![0u16; 131072].into_boxed_slice().try_into().unwrap();
+        let mut exp16: Box<[u16; 131072]> =
+            vec![0u16; 131072].into_boxed_slice().try_into().unwrap();
         let mut log16: Box<[u16; 65536]> = vec![0u16; 65536].into_boxed_slice().try_into().unwrap();
         let exp_ref: &mut [u16; 131072] = &mut exp16;
         let log_ref: &mut [u16; 65536] = &mut log16;
@@ -73,7 +74,8 @@ impl KTables {
             log_ref[v as usize] = i as u16;
             v = mul16_slow(v as u32, GEN16 as u32);
         }
-        let mut mul_c32: Box<[u16; 65536]> = vec![0u16; 65536].into_boxed_slice().try_into().unwrap();
+        let mut mul_c32: Box<[u16; 65536]> =
+            vec![0u16; 65536].into_boxed_slice().try_into().unwrap();
         let lc32 = log_ref[C32 as usize] as usize;
         for a in 1..65536usize {
             let la = log_ref[a] as usize;
@@ -231,7 +233,8 @@ impl KTables {
         assert!(a != 0, "division by zero in GF(2^32)");
         let a0 = (a & 0xFFFF) as u16;
         let a1 = (a >> 16) as u16;
-        let n = self.kmul16(a0, a0) ^ self.kmul16(a0, a1) ^ self.mul_c32[self.kmul16(a1, a1) as usize];
+        let n =
+            self.kmul16(a0, a0) ^ self.kmul16(a0, a1) ^ self.mul_c32[self.kmul16(a1, a1) as usize];
         let n_inv = self.exp16[65535 - self.log16[n as usize] as usize];
         let lo = self.kmul16(a0 ^ a1, n_inv);
         let hi = self.kmul16(a1, n_inv);
@@ -261,7 +264,9 @@ impl KTables {
         #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq") {
-                unsafe { self.antt_inverse_h_k_pclmul(a); }
+                unsafe {
+                    self.antt_inverse_h_k_pclmul(a);
+                }
                 return;
             }
         }
@@ -329,7 +334,9 @@ impl KTables {
         #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq") {
-                unsafe { self.antt_forward_block1024_k_pclmul(blk, out); }
+                unsafe {
+                    self.antt_forward_block1024_k_pclmul(blk, out);
+                }
                 return;
             }
         }
@@ -403,7 +410,9 @@ impl KTables {
         #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
         {
             if std::arch::is_x86_feature_detected!("pclmulqdq") {
-                unsafe { self.antt_forward_block1024_e_pclmul(blk, out); }
+                unsafe {
+                    self.antt_forward_block1024_e_pclmul(blk, out);
+                }
                 return;
             }
         }
@@ -520,15 +529,22 @@ fn product3(a: &[u32], b: &[u32], kt: &KTables) -> [u32; 5] {
     let p1 = kt.kmul_portable(a[1], b[1]);
     let p2 = kt.kmul_portable(a[2], b[2]);
     let cross = |i: usize, j: usize| kt.kmul_portable(a[i] ^ a[j], b[i] ^ b[j]);
-    [p0, cross(0, 1) ^ p0 ^ p1, cross(0, 2) ^ p0 ^ p1 ^ p2,
-        cross(1, 2) ^ p1 ^ p2, p2]
+    [
+        p0,
+        cross(0, 1) ^ p0 ^ p1,
+        cross(0, 2) ^ p0 ^ p1 ^ p2,
+        cross(1, 2) ^ p1 ^ p2,
+        p2,
+    ]
 }
 
 // Karatsuba in characteristic two. The two levels split 12 into 6 and 6
 // into 3, requiring 54 base-field multiplications for dense elements.
 #[inline]
 fn split_product<const HALF: usize, const PART: usize, const TOTAL: usize>(
-    a: &[u32], b: &[u32], kt: &KTables,
+    a: &[u32],
+    b: &[u32],
+    kt: &KTables,
     multiply: impl Fn(&[u32], &[u32], &KTables) -> [u32; PART],
 ) -> [u32; TOTAL] {
     let (a0, a1) = a.split_at(HALF);
@@ -628,17 +644,26 @@ impl E {
             let a1 = (a >> 16) as u16;
             let a01 = a0 ^ a1;
             let p0 = if a0 != 0 && b0 != 0 {
-                unsafe { *kt.exp16.get_unchecked(*kt.log16.get_unchecked(a0 as usize) as usize + lb0) }
+                unsafe {
+                    *kt.exp16
+                        .get_unchecked(*kt.log16.get_unchecked(a0 as usize) as usize + lb0)
+                }
             } else {
                 0
             };
             let p1 = if a1 != 0 && b1 != 0 {
-                unsafe { *kt.exp16.get_unchecked(*kt.log16.get_unchecked(a1 as usize) as usize + lb1) }
+                unsafe {
+                    *kt.exp16
+                        .get_unchecked(*kt.log16.get_unchecked(a1 as usize) as usize + lb1)
+                }
             } else {
                 0
             };
             let p2 = if a01 != 0 && b01 != 0 {
-                unsafe { *kt.exp16.get_unchecked(*kt.log16.get_unchecked(a01 as usize) as usize + lb01) }
+                unsafe {
+                    *kt.exp16
+                        .get_unchecked(*kt.log16.get_unchecked(a01 as usize) as usize + lb01)
+                }
             } else {
                 0
             };
@@ -822,12 +847,12 @@ impl E {
     /// Itoh-Tsujii inversion in E / K_32 (deg 12): 6 E::mul + 11 Frobenius maps + 1 K_32::inv.
     pub fn inv(self, kt: &KTables) -> E {
         assert!(!self.is_zero(), "division by zero in GF(2^384)");
-        let p2 = self.mul(self.pow_q(1, kt), kt);          // exp 0,1
-        let p3 = p2.pow_q(1, kt).mul(self, kt);            // exp 0,1,2
-        let p6 = p3.mul(p3.pow_q(3, kt), kt);              // exp 0..5
-        let p5 = p3.pow_q(2, kt).mul(p2, kt);              // exp 0..4
-        let r = p6.pow_q(6, kt).mul(p5.pow_q(1, kt), kt);  // exp 1..11
-        let norm = self.mul(r, kt);                        // exp 0..11 in K_32
+        let p2 = self.mul(self.pow_q(1, kt), kt); // exp 0,1
+        let p3 = p2.pow_q(1, kt).mul(self, kt); // exp 0,1,2
+        let p6 = p3.mul(p3.pow_q(3, kt), kt); // exp 0..5
+        let p5 = p3.pow_q(2, kt).mul(p2, kt); // exp 0..4
+        let r = p6.pow_q(6, kt).mul(p5.pow_q(1, kt), kt); // exp 1..11
+        let norm = self.mul(r, kt); // exp 0..11 in K_32
         debug_assert!(norm.c[1..].iter().all(|&x| x == 0));
         r.scale_k(kt.kinv(norm.c[0]), kt)
     }
@@ -858,7 +883,10 @@ fn reduce_poly16_31(mut w: u64) -> u16 {
     ((w & 0xFFFF) ^ h3 ^ (h3 << 1) ^ (h3 << 3) ^ (h3 << 5)) as u16
 }
 
-#[cfg(all(any(target_arch = "x86_64", target_arch = "aarch64"), not(feature = "portable")))]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    not(feature = "portable")
+))]
 #[inline(always)]
 fn reduce_poly16_42(mut w: u64) -> u16 {
     let h1 = w >> 32;
@@ -892,8 +920,12 @@ unsafe fn kmul32_pmull(a: u32, b: u32) -> u32 {
 #[inline]
 #[target_feature(enable = "pmull")]
 unsafe fn karatsuba3_pmull(
-    a0: u64, a1: u64, a2: u64,
-    b0: u64, b1: u64, b2: u64,
+    a0: u64,
+    a1: u64,
+    a2: u64,
+    b0: u64,
+    b1: u64,
+    b2: u64,
     out: &mut [u128; 5],
 ) {
     let p0 = pmull64(a0, b0);
@@ -919,8 +951,12 @@ unsafe fn karatsuba6_pmull(a: &[u64; 6], b: &[u64; 6], out: &mut [u128; 11]) {
     karatsuba3_pmull(a[0], a[1], a[2], b[0], b[1], b[2], &mut z0);
     karatsuba3_pmull(a[3], a[4], a[5], b[3], b[4], b[5], &mut z2);
     karatsuba3_pmull(
-        a[0] ^ a[3], a[1] ^ a[4], a[2] ^ a[5],
-        b[0] ^ b[3], b[1] ^ b[4], b[2] ^ b[5],
+        a[0] ^ a[3],
+        a[1] ^ a[4],
+        a[2] ^ a[5],
+        b[0] ^ b[3],
+        b[1] ^ b[4],
+        b[2] ^ b[5],
         &mut z1,
     );
     out[0] = z0[0];
@@ -1053,10 +1089,7 @@ unsafe fn kmul32_pclmul(a: u32, b: u32) -> u32 {
         0x00,
     );
     let mut pair = [0u64; 2];
-    core::arch::x86_64::_mm_storeu_si128(
-        pair.as_mut_ptr() as *mut core::arch::x86_64::__m128i,
-        p,
-    );
+    core::arch::x86_64::_mm_storeu_si128(pair.as_mut_ptr() as *mut core::arch::x86_64::__m128i, p);
     let p00 = pair[0] & 0x7FFF_FFFF;
     let pmid = pair[0] >> 32;
     let p11 = pair[1];
@@ -1070,7 +1103,11 @@ unsafe fn kmul32_pclmul(a: u32, b: u32) -> u32 {
 #[target_feature(enable = "pclmulqdq")]
 unsafe fn clmul_pair(a: u64, b: u64) -> core::arch::x86_64::__m128i {
     use core::arch::x86_64::{_mm_clmulepi64_si128, _mm_cvtsi64_si128};
-    _mm_clmulepi64_si128(_mm_cvtsi64_si128(a as i64), _mm_cvtsi64_si128(b as i64), 0x00)
+    _mm_clmulepi64_si128(
+        _mm_cvtsi64_si128(a as i64),
+        _mm_cvtsi64_si128(b as i64),
+        0x00,
+    )
 }
 
 /// 3x3 Karatsuba over packed K_32 lanes: 6 PCLMULQDQ instructions -> 5 outputs.
@@ -1078,8 +1115,12 @@ unsafe fn clmul_pair(a: u64, b: u64) -> core::arch::x86_64::__m128i {
 #[inline]
 #[target_feature(enable = "pclmulqdq")]
 unsafe fn karatsuba3_clmul(
-    a0: u64, a1: u64, a2: u64,
-    b0: u64, b1: u64, b2: u64,
+    a0: u64,
+    a1: u64,
+    a2: u64,
+    b0: u64,
+    b1: u64,
+    b2: u64,
     out: &mut [core::arch::x86_64::__m128i; 5],
 ) {
     use core::arch::x86_64::_mm_xor_si128;
@@ -1112,8 +1153,12 @@ unsafe fn karatsuba6_clmul(
     karatsuba3_clmul(a[0], a[1], a[2], b[0], b[1], b[2], &mut z0);
     karatsuba3_clmul(a[3], a[4], a[5], b[3], b[4], b[5], &mut z2);
     karatsuba3_clmul(
-        a[0] ^ a[3], a[1] ^ a[4], a[2] ^ a[5],
-        b[0] ^ b[3], b[1] ^ b[4], b[2] ^ b[5],
+        a[0] ^ a[3],
+        a[1] ^ a[4],
+        a[2] ^ a[5],
+        b[0] ^ b[3],
+        b[1] ^ b[4],
+        b[2] ^ b[5],
         &mut z1,
     );
     out[0] = z0[0];
@@ -1167,7 +1212,10 @@ unsafe fn karatsuba12_clmul(
     }
     out[11] = _mm_xor_si128(_mm_xor_si128(z1[5], z0[5]), z2[5]);
     for i in 0..5 {
-        out[i + 12] = _mm_xor_si128(_mm_xor_si128(z2[i], z1[i + 6]), _mm_xor_si128(z0[i + 6], z2[i + 6]));
+        out[i + 12] = _mm_xor_si128(
+            _mm_xor_si128(z2[i], z1[i + 6]),
+            _mm_xor_si128(z0[i + 6], z2[i + 6]),
+        );
     }
     for i in 5..11 {
         out[i + 12] = z2[i];
@@ -1259,7 +1307,8 @@ impl RingSwitchLinearMap {
                     for s in 0..8 {
                         let nib = ((w >> (s * 4)) & 0xF) as usize;
                         if nib != 0 {
-                            let row = unsafe { &self.table.get_unchecked(base + s).get_unchecked(nib).c };
+                            let row =
+                                unsafe { &self.table.get_unchecked(base + s).get_unchecked(nib).c };
                             for i in 0..12 {
                                 acc[i] ^= row[i];
                             }
@@ -1274,7 +1323,9 @@ impl RingSwitchLinearMap {
     #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
     #[inline(always)]
     unsafe fn apply_sse2(&self, z: E) -> E {
-        use core::arch::x86_64::{__m128i, _mm_loadu_si128, _mm_setzero_si128, _mm_storeu_si128, _mm_xor_si128};
+        use core::arch::x86_64::{
+            __m128i, _mm_loadu_si128, _mm_setzero_si128, _mm_storeu_si128, _mm_xor_si128,
+        };
         let mut a0 = _mm_setzero_si128();
         let mut a1 = _mm_setzero_si128();
         let mut a2 = _mm_setzero_si128();
@@ -1334,8 +1385,12 @@ mod tests {
             s as u32
         };
         for _ in 0..1000 {
-            let x = E { c: core::array::from_fn(|_| next_u32()) };
-            let y = E { c: core::array::from_fn(|_| next_u32()) };
+            let x = E {
+                c: core::array::from_fn(|_| next_u32()),
+            };
+            let y = E {
+                c: core::array::from_fn(|_| next_u32()),
+            };
             assert_eq!(x.mul(y, kt), x.mul_portable(y, kt));
         }
 

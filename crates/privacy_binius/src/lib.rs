@@ -147,7 +147,7 @@ mod tests {
         let mut bad_pow = valid.to_vec();
         let proof_start = 14_170;
         bad_pow[proof_start + 59_860] ^= 0x01; // flips pow_nonce inside fixed proof header
-        // 3. Valid ML-DSA-65 sigs + valid PoW + corrupted final Merkle sibling (worst-case DoS)
+                                               // 3. Valid ML-DSA-65 sigs + valid PoW + corrupted final Merkle sibling (worst-case DoS)
         let mut bad_merkle = valid.to_vec();
         let last = bad_merkle.len() - 1;
         bad_merkle[last] ^= 0x01;

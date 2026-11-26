@@ -6,11 +6,9 @@
 //!   (magic[8], anchor[48], fee[8], sn0[48], sn1[48], coin0[48], coin1[48], env0[1670], env1[1670], proof)
 //! Positive mints append a fixed ML-DSA-65 public key and signature after the proof.
 
-use crate::mint_auth::{spend_keypair_from_secret, MintAuth, SpendAuth};
-use fips204::ml_dsa_65;
-use fips204::traits::SerDes as DsaSerDes;
 use crate::binius_pcs::{prove, verify};
 use crate::circuit::{build_witness_bits, PaymentStatement, PaymentWitness};
+use crate::mint_auth::{spend_keypair_from_secret, MintAuth, SpendAuth};
 use crate::shake256::{
     coin_commit, nullifier, owner_addr, MerkleTree24, ADDR_BYTES, BLIND_SECRET_BYTES, COIN_BYTES,
     MERKLE_DEPTH, NODE_BYTES, OWNER_SECRET_BYTES, PK_HASH_BYTES, SN_BYTES,
@@ -19,14 +17,18 @@ use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use fips203::ml_kem_1024;
 use fips203::traits::{Decaps, Encaps, KeyGen, SerDes};
+use fips204::ml_dsa_65;
+use fips204::traits::SerDes as DsaSerDes;
 use hmac::{Hmac, Mac};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::Sha384;
 use std::collections::HashSet;
 
-pub use crate::wire::{ShieldedTx, TX_MAGIC, ENV_BYTES, HEADER_OVERHEAD_BYTES, KEM_CT_BYTES,
-    MAX_POOL_COINS, NOTE_CT_BYTES, NOTE_PT_BYTES, UNSHIELD_DEST_BYTES, W1_ARCHIVAL_BUDGET_BYTES};
+pub use crate::wire::{
+    ShieldedTx, ENV_BYTES, HEADER_OVERHEAD_BYTES, KEM_CT_BYTES, MAX_POOL_COINS, NOTE_CT_BYTES,
+    NOTE_PT_BYTES, TX_MAGIC, UNSHIELD_DEST_BYTES, W1_ARCHIVAL_BUDGET_BYTES,
+};
 pub const KEM_EK_BYTES: usize = ml_kem_1024::EK_LEN;
 pub const KEM_DK_BYTES: usize = ml_kem_1024::DK_LEN;
 
@@ -124,7 +126,8 @@ pub fn derive_aead_key_nonce(
     coin: &[u8; COIN_BYTES],
 ) -> ([u8; 32], [u8; 12]) {
     let derive = |label: &[u8]| {
-        let mut mac = <Hmac<Sha384> as Mac>::new_from_slice(ss).expect("HMAC accepts a 32-byte key");
+        let mut mac =
+            <Hmac<Sha384> as Mac>::new_from_slice(ss).expect("HMAC accepts a 32-byte key");
         mac.update(label);
         mac.update(ct_kem);
         mac.update(coin);
@@ -233,7 +236,9 @@ pub trait PaymentTree {
     fn opening(&self, index: usize, coin: &[u8; COIN_BYTES]) -> Option<Opening>;
 }
 impl PaymentTree for MerkleTree24 {
-    fn root(&self) -> [u8; NODE_BYTES] { self.root() }
+    fn root(&self) -> [u8; NODE_BYTES] {
+        self.root()
+    }
     fn opening(&self, index: usize, coin: &[u8; COIN_BYTES]) -> Option<Opening> {
         (self.leaves.get(index) == Some(coin)).then(|| self.auth_path(index))
     }
@@ -299,7 +304,9 @@ pub fn create_profiled_tx(
             } => {
                 let (pk_dsa, sk_dsa, pk_h, r_pk) = spend_keypair_from_secret(&spend_secret);
                 let coin = coin_commit(&owner_addr(&pk_h, &r_pk), value, &r_blind);
-                let (dirs, sibs) = tree.opening(leaf_index, &coin).ok_or("input opening unavailable")?;
+                let (dirs, sibs) = tree
+                    .opening(leaf_index, &coin)
+                    .ok_or("input opening unavailable")?;
                 if !MerkleTree24::verify_path(&coin, &dirs, &sibs, &anchor) {
                     return Err("input does not open at selected anchor".into());
                 }
@@ -387,7 +394,9 @@ pub fn create_profiled_tx(
     let statement_ctx = l1_context.map_or(tx_ctx, |bind| bind(tx_ctx));
     let spend_auth0 = SpendAuth::sign(0, &sk_in0, &statement_ctx)?;
     let spend_auth1 = SpendAuth::sign(1, &sk_in1, &statement_ctx)?;
-    let mint_auth = depositor.map(|key| MintAuth::sign(key, &tx_ctx)).transpose()?;
+    let mint_auth = depositor
+        .map(|key| MintAuth::sign(key, &tx_ctx))
+        .transpose()?;
     let stmt = PaymentStatement {
         anchor,
         sn0,
@@ -504,7 +513,11 @@ impl LedgerState {
     /// Resolve a global output index returned by settlement into a witness tree and local index.
     pub fn locate(&self, index: usize) -> Option<(&MerkleTree24, usize)> {
         let epoch = index / MAX_POOL_COINS;
-        let tree = if epoch == self.active_epoch() { &self.tree } else { self.frozen.get(epoch)? };
+        let tree = if epoch == self.active_epoch() {
+            &self.tree
+        } else {
+            self.frozen.get(epoch)?
+        };
         let local = index % MAX_POOL_COINS;
         (local < tree.len()).then_some((tree, local))
     }
@@ -518,14 +531,17 @@ impl LedgerState {
     fn finish_append(&mut self) {
         self.remember_anchor(self.tree.root());
         if self.tree.len() == MAX_POOL_COINS {
-            self.frozen.push(std::mem::replace(&mut self.tree, MerkleTree24::new()));
+            self.frozen
+                .push(std::mem::replace(&mut self.tree, MerkleTree24::new()));
             self.remember_anchor(self.tree.root());
         }
     }
 
     /// Bootstrap a snapshot from ordered commitments, retaining each epoch's terminal anchor.
     /// Historical intermediate anchors and nullifiers are restored separately by from_json.
-    pub fn from_coins(coins: impl IntoIterator<Item = Result<[u8; COIN_BYTES], String>>) -> Result<Self, String> {
+    pub fn from_coins(
+        coins: impl IntoIterator<Item = Result<[u8; COIN_BYTES], String>>,
+    ) -> Result<Self, String> {
         let mut state = Self::new();
         let iter = coins.into_iter();
         let size = iter.size_hint().0;
@@ -575,7 +591,9 @@ impl LedgerState {
         }
         // Rule R2: intra-transaction nullifier distinctness
         if tx.sn0 == tx.sn1 {
-            return Err("Rule R2 violation: duplicate nullifiers sn0 == sn1 within transaction".into());
+            return Err(
+                "Rule R2 violation: duplicate nullifiers sn0 == sn1 within transaction".into(),
+            );
         }
         // Rule R3: global nullifier freshness (double-spend prevention)
         if self.spent_sn.contains(&tx.sn0) {
@@ -587,7 +605,9 @@ impl LedgerState {
         // Rule R4: strict output coin uniqueness & non-zero sentinel exclusion (coin != 0^48)
         let zero_coin = [0u8; COIN_BYTES];
         if tx.coin_out0 == zero_coin || tx.coin_out1 == zero_coin {
-            return Err("Rule R4 violation: output coin commitment equals empty sentinel 0^48".into());
+            return Err(
+                "Rule R4 violation: output coin commitment equals empty sentinel 0^48".into(),
+            );
         }
         if tx.coin_out0 == tx.coin_out1 {
             return Err("Rule R4 violation: duplicate output coin commitments".into());
@@ -629,8 +649,13 @@ impl LedgerState {
 
     pub fn to_json(&self) -> LedgerJson {
         LedgerJson {
-            coins: self.frozen.iter().chain(std::iter::once(&self.tree))
-                .flat_map(|tree| &tree.leaves).map(hex::encode).collect(),
+            coins: self
+                .frozen
+                .iter()
+                .chain(std::iter::once(&self.tree))
+                .flat_map(|tree| &tree.leaves)
+                .map(hex::encode)
+                .collect(),
             anchors: self.anchor_list.iter().map(hex::encode).collect(),
             spent_sn: self.spent_sn_list.iter().map(hex::encode).collect(),
             leaf_count_override: self.leaf_count_override,
@@ -644,7 +669,9 @@ impl LedgerState {
         }))?;
         st.anchors.clear();
         st.anchor_list.clear();
-        if j.leaf_count_override.is_some_and(|n| n < st.tree.len() || n > MAX_POOL_COINS) {
+        if j.leaf_count_override
+            .is_some_and(|n| n < st.tree.len() || n > MAX_POOL_COINS)
+        {
             return Err("invalid simulated active leaf count".into());
         }
         st.leaf_count_override = j.leaf_count_override;
@@ -656,7 +683,12 @@ impl LedgerState {
             }
         }
         // Verify latest root matches computed tree root!
-        if !st.frozen.iter().chain(std::iter::once(&st.tree)).all(|t| st.anchors.contains(&t.root())) {
+        if !st
+            .frozen
+            .iter()
+            .chain(std::iter::once(&st.tree))
+            .all(|t| st.anchors.contains(&t.root()))
+        {
             return Err("ledger JSON anchors do not contain current Depth-24 Merkle root".into());
         }
         for sn_hex in &j.spent_sn {

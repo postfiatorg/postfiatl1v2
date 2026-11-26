@@ -316,7 +316,9 @@ impl PqPool {
             ),
         );
         head.last_page = page.clone();
-        next.indexes.ordered_pages.insert(self.head.pairs, page.clone());
+        next.indexes
+            .ordered_pages
+            .insert(self.head.pairs, page.clone());
         next.indexes
             .pages
             .insert((asset, pair.epoch, pair.first_index / 2), page);

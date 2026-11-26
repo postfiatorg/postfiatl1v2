@@ -1,4 +1,5 @@
 mod full_tree;
+use fips204::{ml_dsa_65, traits::KeyGen};
 use pft_binius_shielded::binius_pcs::{prove, verify};
 use pft_binius_shielded::circuit::{
     build_group_c_constraints, build_witness_bits, eval_verifier_weights_at_r1, CircuitChallenge,
@@ -13,7 +14,6 @@ use pft_binius_shielded::shake256::{
     coin_commit, nullifier, owner_addr, BLIND_SECRET_BYTES, MERKLE_DEPTH, NODE_BYTES,
     OWNER_SECRET_BYTES,
 };
-use fips204::{ml_dsa_65, traits::KeyGen};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use serde::Serialize;
@@ -135,7 +135,7 @@ fn cmd_generate(out_dir: &str) -> Result<(), String> {
         1000, // v_mint
         0,    // v_unshield
         zero_dest,
-        10,   // fee
+        10, // fee
         Some(&depositor),
         &mut rng,
     )?;
@@ -230,7 +230,9 @@ fn cmd_generate(out_dir: &str) -> Result<(), String> {
         .ok_or("Alice failed to scan her own change output")?;
     assert_eq!(alice_v_rec, 330);
     assert_eq!(alice_r_rec, r_alice_chg);
-    assert!(bob.try_scan_output(&tx_hop1.coin_out1, &tx_hop1.env1).is_none());
+    assert!(bob
+        .try_scan_output(&tx_hop1.coin_out1, &tx_hop1.env1)
+        .is_none());
 
     // Snapshot ledger BEFORE Scenario 2 (1-input native is_dummy spend!)
     fs::write(
@@ -547,7 +549,10 @@ fn cmd_adversarial(tx_path: &str, ledger_path: &str) -> Result<(), String> {
         check_reject("truncated_tx", ShieldedTx::from_bytes(&trunc).map(|_| ()))?;
         let mut trail = tx_bytes.clone();
         trail.push(0x00);
-        check_reject("trailing_bytes_tx", ShieldedTx::from_bytes(&trail).map(|_| ()))?;
+        check_reject(
+            "trailing_bytes_tx",
+            ShieldedTx::from_bytes(&trail).map(|_| ()),
+        )?;
     }
     // 28. Rule R4: zero coin output sentinel 0^48 rejected
     {
@@ -566,19 +571,28 @@ fn cmd_adversarial(tx_path: &str, ledger_path: &str) -> Result<(), String> {
         let mut tx = base_tx.clone();
         tx.v_mint = 10;
         tx.v_unshield = 10;
-        check_reject("rule_r5_mint_and_unshield_both_nonzero", base_ledger.verify_tx(&tx))?;
+        check_reject(
+            "rule_r5_mint_and_unshield_both_nonzero",
+            base_ledger.verify_tx(&tx),
+        )?;
     }
     // 31. Rule R5: fee + v_unshield u64 overflow rejected
     {
         let mut tx = base_tx.clone();
         tx.v_unshield = u64::MAX;
-        check_reject("rule_r5_fee_plus_unshield_overflow", base_ledger.verify_tx(&tx))?;
+        check_reject(
+            "rule_r5_fee_plus_unshield_overflow",
+            base_ledger.verify_tx(&tx),
+        )?;
     }
     // 32. Context binding: tampered unshield_dest caught by tx_ctx!
     {
         let mut tx = base_tx.clone();
         tx.unshield_dest[0] ^= 0x01;
-        check_reject("relayer_malleability_unshield_dest", base_ledger.verify_tx(&tx))?;
+        check_reject(
+            "relayer_malleability_unshield_dest",
+            base_ledger.verify_tx(&tx),
+        )?;
     }
     // 32b-e. PFSH03 External ML-DSA-65 Spend Authorization Attacks
     {
@@ -650,7 +664,10 @@ fn cmd_adversarial(tx_path: &str, ledger_path: &str) -> Result<(), String> {
         };
         let bits = build_witness_bits(&stmt, &wit);
         let bad_proof = prove(&stmt, &bits, &mut rng);
-        check_reject("soundness_dummy_inflation_attack", verify(&stmt, &bad_proof))?;
+        check_reject(
+            "soundness_dummy_inflation_attack",
+            verify(&stmt, &bad_proof),
+        )?;
     }
     // 29. Soundness attack: malicious prover tries `is_dummy=0` with forged Merkle path -> ZKP MUST REJECT!
     {
@@ -701,7 +718,10 @@ fn cmd_adversarial(tx_path: &str, ledger_path: &str) -> Result<(), String> {
         };
         let bits = build_witness_bits(&stmt, &wit);
         let bad_proof = prove(&stmt, &bits, &mut rng);
-        check_reject("soundness_forged_merkle_path_attack", verify(&stmt, &bad_proof))?;
+        check_reject(
+            "soundness_forged_merkle_path_attack",
+            verify(&stmt, &bad_proof),
+        )?;
     }
 
     // 150-trial deterministic structured byte fuzzer
@@ -745,11 +765,27 @@ fn cmd_bench(trials: usize, out_path: &str) -> Result<(), String> {
     let zero_dest = [0u8; UNSHIELD_DEST_BYTES];
     let (warm_tx, _, _) = create_shielded_tx(
         &ledger.tree,
-        SpendInput::Real { leaf_index: idx0, spend_secret: alice.spend_secret, value: 700, r_blind: r_in0 },
-        SpendInput::Real { leaf_index: idx1, spend_secret: alice.spend_secret, value: 300, r_blind: r_in1 },
-        &bob.stealth_address(), 650,
-        &alice.stealth_address(), 340,
-        0, 0, zero_dest, 10, None,
+        SpendInput::Real {
+            leaf_index: idx0,
+            spend_secret: alice.spend_secret,
+            value: 700,
+            r_blind: r_in0,
+        },
+        SpendInput::Real {
+            leaf_index: idx1,
+            spend_secret: alice.spend_secret,
+            value: 300,
+            r_blind: r_in1,
+        },
+        &bob.stealth_address(),
+        650,
+        &alice.stealth_address(),
+        340,
+        0,
+        0,
+        zero_dest,
+        10,
+        None,
         &mut rng,
     )?;
     ledger.verify_tx(&warm_tx)?;
@@ -761,11 +797,27 @@ fn cmd_bench(trials: usize, out_path: &str) -> Result<(), String> {
         let t0 = Instant::now();
         let (tx, _, _) = create_shielded_tx(
             &ledger.tree,
-            SpendInput::Real { leaf_index: idx0, spend_secret: alice.spend_secret, value: 700, r_blind: r_in0 },
-            SpendInput::Real { leaf_index: idx1, spend_secret: alice.spend_secret, value: 300, r_blind: r_in1 },
-            &bob.stealth_address(), 650,
-            &alice.stealth_address(), 340,
-            0, 0, zero_dest, 10, None,
+            SpendInput::Real {
+                leaf_index: idx0,
+                spend_secret: alice.spend_secret,
+                value: 700,
+                r_blind: r_in0,
+            },
+            SpendInput::Real {
+                leaf_index: idx1,
+                spend_secret: alice.spend_secret,
+                value: 300,
+                r_blind: r_in1,
+            },
+            &bob.stealth_address(),
+            650,
+            &alice.stealth_address(),
+            340,
+            0,
+            0,
+            zero_dest,
+            10,
+            None,
             &mut rng,
         )?;
         prove_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
@@ -843,7 +895,9 @@ fn cmd_dump_ir(tx_path: &str, out_path: &str) -> Result<(), String> {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: pft-binius-shielded <generate|verify|adversarial|bench|full-tree|dump-ir> ...");
+        eprintln!(
+            "Usage: pft-binius-shielded <generate|verify|adversarial|bench|full-tree|dump-ir> ..."
+        );
         std::process::exit(1);
     }
     let get_arg = |flag: &str| -> Option<String> {
@@ -864,10 +918,13 @@ fn main() {
             let ledger = get_arg("--ledger").expect("--ledger required");
             cmd_adversarial(&tx, &ledger)
         }
-        "full-tree" => get_arg("--out").ok_or_else(|| "--out required".to_string())
+        "full-tree" => get_arg("--out")
+            .ok_or_else(|| "--out required".to_string())
             .and_then(|out| full_tree::run(std::path::Path::new(&out))),
         "bench" => {
-            let trials: usize = get_arg("--trials").and_then(|s| s.parse().ok()).unwrap_or(10);
+            let trials: usize = get_arg("--trials")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10);
             let out = get_arg("--out").unwrap_or_else(|| "../bench_results.json".into());
             cmd_bench(trials, &out)
         }

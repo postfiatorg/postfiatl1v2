@@ -6,7 +6,9 @@ use postfiat_privacy_binius::{
 use postfiat_types::PqFixtureState;
 use std::sync::OnceLock;
 
-pub(super) use postfiat_types::{PQ_REHEARSAL_CHAIN_ID as CHAIN_ID, PQ_REHEARSAL_GENESIS_HASH as GENESIS_HASH};
+pub(super) use postfiat_types::{
+    PQ_REHEARSAL_CHAIN_ID as CHAIN_ID, PQ_REHEARSAL_GENESIS_HASH as GENESIS_HASH,
+};
 const LEDGER_DIGEST: &str = "481c8a8003e8385de5ef0c2fb32eb57136e13b655dfd2221eda3a8853bf9d91ec2de009f09dc1ace2ba1739ef1654c51";
 const HOP_CONTEXT: &str = "9916d8d7db2bded05446548dceeca76c29ed49253c9466fc3c477705cc4c999ac76d187cf46704ac6130b85ce63e18f9";
 const PRE_ROOT: &str = "1194a390c1710bdc9567ea92c9133802097036646a5fa0342c41ae2ba8c6b2db95f032d950c2607d81c5d291808826da";
