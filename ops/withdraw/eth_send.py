@@ -23,24 +23,35 @@ def balances(eth, block):
                 operator_wei=eth.get_balance(OPERATOR, block_identifier=block))
 
 
-def record_receipt(eth, mode, journal, out, recover=False):
+def journaled_intent(mode, journal):
     intent = json.loads(journal.read_text())
     destination = VERIFIER if mode == 'checkpoint' else VAULT
     if (intent['mode'], intent['chain_id'], intent['from'], intent['to']) != (mode, 1, OPERATOR, destination):
         raise ValueError('transaction journal does not match requested action')
+    return intent
+
+
+def rebroadcast_if_unknown(eth, intent):
+    """Replay the exact journaled bytes while the chain does not know them and their nonce is unused."""
+    try:
+        eth.get_transaction(intent['tx'])
+        return False
+    except TransactionNotFound:
+        raw = HexBytes(intent['signed'])
+        if Web3.to_hex(Web3.keccak(raw)) != intent['tx'] or Account.recover_transaction(raw) != OPERATOR:
+            raise ValueError('signed transaction does not match journal')
+        if eth.get_transaction_count(OPERATOR, 'pending') > intent['nonce']:
+            raise RuntimeError('unknown transaction at an occupied nonce; reconcile journal')
+        if Web3.to_hex(eth.send_raw_transaction(raw)) != intent['tx']:
+            raise RuntimeError('unexpected hash for journaled transaction')
+        return True
+
+
+def record_receipt(eth, mode, journal, out, recover=False):
+    intent = journaled_intent(mode, journal)
     # A crash can leave a signed transaction on disk before the first RPC send.
-    # Only replay those exact bytes, and only while the original nonce is unused.
     if recover:
-        try:
-            eth.get_transaction(intent['tx'])
-        except TransactionNotFound:
-            raw = HexBytes(intent['signed'])
-            if Web3.to_hex(Web3.keccak(raw)) != intent['tx'] or Account.recover_transaction(raw) != OPERATOR:
-                raise ValueError('signed transaction does not match journal')
-            if eth.get_transaction_count(OPERATOR, 'pending') > intent['nonce']:
-                raise RuntimeError('unknown transaction at an occupied nonce; reconcile journal')
-            if Web3.to_hex(eth.send_raw_transaction(raw)) != intent['tx']:
-                raise RuntimeError('unexpected hash for journaled transaction')
+        rebroadcast_if_unknown(eth, intent)
     # Recovery does not need the signing key, proof, or gas estimate.
     receipt = eth.wait_for_transaction_receipt(intent['tx'], timeout=60)
     if Web3.to_hex(receipt.transactionHash).lower() != intent['tx'].lower():
@@ -65,6 +76,9 @@ def submit(w, mode, d, out):
         raise ValueError('unexpected action or Ethereum network')
     if out.exists():
         read_eth_result(mode, out)
+        # A recorded transaction that a reorganisation dropped is sent again as the same bytes.
+        if intent_path(out).exists():
+            rebroadcast_if_unknown(w.eth, journaled_intent(mode, intent_path(out)))
         return
     journal = intent_path(out)
     if journal.exists():

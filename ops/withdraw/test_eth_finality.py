@@ -13,7 +13,7 @@ from web3.exceptions import TransactionNotFound
 import service
 from eth_finality import AwaitingFinality, confirm_action
 from eth_journal import ReconciliationRequired, durable_json
-from eth_send import VAULT
+from eth_send import VAULT, VERIFIER
 
 
 def terms(burn='11'*48):
@@ -38,7 +38,43 @@ def chain(expected=None, tx='0x'+'ab'*32, height=100):
     return eth, receipt, canonical, finalized
 
 
+def checkpoint_chain(event, accepted, prior='12'*48, target='34'*48, height=100):
+    """A finalized verifier call whose receipt logs `event` and whose target is `accepted`."""
+    eth, receipt, canonical, finalized = chain(height=height)
+    receipt['to'] = VERIFIER
+    log = receipt['logs'][0]
+    log.update(address=VERIFIER, data=(3).to_bytes(32, 'big') + bytes(32),
+               topics=[Web3.keccak(text=event+'(bytes32,bytes32,uint64,bytes32)'),
+                       Web3.keccak(hexstr=prior), Web3.keccak(hexstr=target)])
+    reads = []
+    def read(commitment):
+        def call(block_identifier):
+            reads.append((commitment, block_identifier))
+            return accepted.get(commitment, False)
+        return Mock(call=call)
+    eth.contract.return_value.functions.acceptedCheckpointCommitment.side_effect = read
+    return eth, receipt, finalized, reads, dict(prior=prior, target=target, height=3)
+
+
 class FinalityTests(unittest.TestCase):
+    def test_checkpoint_counts_when_its_target_is_accepted_at_the_finalized_block(self):
+        target = Web3.keccak(hexstr='34'*48)
+        for event in ('PFTLCheckpointAdvanced', 'PFTLHistoricalCheckpointRecognized'):
+            with self.subTest(event=event):
+                eth, receipt, finalized, reads, expected = checkpoint_chain(event, {target: True})
+                done = confirm_action(eth, 'checkpoint', receipt['transactionHash'], expected)
+                self.assertEqual(done['block'], 100)
+                self.assertEqual(reads, [(target, finalized['number'])])
+        # A matching event is not enough: the verifier must hold the target as accepted.
+        eth, receipt, _, _, expected = checkpoint_chain('PFTLCheckpointAdvanced', {})
+        with self.assertRaises(ReconciliationRequired):
+            confirm_action(eth, 'checkpoint', receipt['transactionHash'], expected)
+        for changes in (dict(status=0), dict(to=VAULT)):
+            eth, receipt, _, _, expected = checkpoint_chain('PFTLCheckpointAdvanced', {target: True})
+            receipt.update(changes)
+            with self.subTest(changes=changes), self.assertRaises(ReconciliationRequired):
+                confirm_action(eth, 'checkpoint', receipt['transactionHash'], expected)
+
     def test_reorg_until_same_transaction_reappears_in_a_finalized_block(self):
         expected = terms()
         eth, receipt, canonical, finalized = chain(expected)
@@ -93,6 +129,53 @@ class FinalityTests(unittest.TestCase):
             self.assertEqual(saved['ethereum_finality']['expected'],expected)
             self.assertEqual(saved['ethereum_finality']['block_hash'],Web3.to_hex(receipt['blockHash']))
             self.assertTrue((Path(tmp)/expected['burn_tx_id']/'eth-withdrawal.json').exists())
+            send.assert_not_called()
+            archive.assert_not_called()
+
+    def test_waiting_for_finality_records_one_history_entry(self):
+        expected = terms()
+        eth, receipt, _, finalized = chain(expected)
+        finalized['number'] = 98
+        tx = Web3.to_hex(receipt['transactionHash'])
+        with tempfile.TemporaryDirectory() as tmp, patch.object(service, 'JOBS', Path(tmp)), \
+             patch.object(service, 'ethereum_reader', return_value=eth), patch.object(service, 'eth_send') as send:
+            service.stage(dict(expected, journal_version=1), 'paying')
+            durable_json(Path(tmp)/expected['burn_tx_id']/'eth-withdrawal.json',
+                         dict(mode='withdraw', tx=tx, status=1, block=100))
+            seen = []
+            for minute in range(3):
+                with patch.object(service, 'now', return_value=f'2026-11-26T12:0{minute}:00+00:00'):
+                    service.run_jobs(startup=True)
+                seen.append(service.read_job(expected['burn_tx_id'])['updated_at'])
+            saved = service.read_job(expected['burn_tx_id'])
+            self.assertEqual(saved['stage'], 'awaiting_finality')
+            self.assertEqual([entry[1] for entry in saved['history']], ['paying', 'awaiting_finality'])
+            self.assertEqual(seen, [f'2026-11-26T12:0{m}:00+00:00' for m in range(3)], 'each check refreshes the retry clock')
+            send.assert_not_called()
+
+    def test_waiting_for_checkpoint_finality_records_one_history_entry(self):
+        eth, receipt, finalized, _, expected = checkpoint_chain('PFTLCheckpointAdvanced', {})
+        finalized['number'] = 98
+        tx = Web3.to_hex(receipt['transactionHash'])
+        burn = terms()['burn_tx_id']
+        with tempfile.TemporaryDirectory() as tmp, patch.object(service, 'JOBS', Path(tmp)), \
+             patch.object(service, 'ethereum_reader', return_value=eth), patch.object(service, 'eth_send') as send, \
+             patch.object(service, 'export_bundle') as archive:
+            service.stage(dict(terms(), journal_version=1), 'catching_up', 'Bringing the Ethereum checker up to date.')
+            folder = Path(tmp)/burn/'checkpoint-1-3'
+            folder.mkdir()
+            durable_json(folder/'witness.json', dict(prior_checkpoint_block_id=expected['prior'],
+                                                     block={'header': {'block_hash': expected['target'], 'height': 3}}))
+            durable_json(folder/'eth-result.json', dict(mode='checkpoint', tx=tx, status=1, block=100))
+            seen = []
+            for minute in range(3):
+                with patch.object(service, 'now', return_value=f'2026-11-26T12:0{minute}:00+00:00'):
+                    service.run_jobs(startup=True)
+                seen.append(service.read_job(burn)['updated_at'])
+            saved = service.read_job(burn)
+            self.assertEqual(saved['stage'], 'awaiting_finality')
+            self.assertEqual([entry[1] for entry in saved['history']], ['catching_up', 'awaiting_finality'])
+            self.assertEqual(seen, [f'2026-11-26T12:0{m}:00+00:00' for m in range(3)], 'each check refreshes the retry clock')
             send.assert_not_called()
             archive.assert_not_called()
 
