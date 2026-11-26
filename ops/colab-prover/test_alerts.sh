@@ -18,8 +18,10 @@ setup() {  # a scratch copy of the launcher and its stand-ins
   cat > "$HOME/.local/bin/colab" <<'EOS'
 #!/bin/sh
 for a; do case $a in
-  new) [ "${FAKE_MACHINE:-0}" = 1 ] && { touch "$T/session"; echo "Session READY"; }; exit 0;;
-  sessions) [ -e "$T/session" ] && echo "[pft-prover] G4"; exit 0;;
+  new) echo new >> "$T/news"; sleep "${FAKE_NEW_DELAY:-0}"
+       [ "${FAKE_MACHINE:-0}" = 1 ] && { touch "$T/session"; echo "Session READY"; }; exit 0;;
+  sessions) [ "${FAKE_LIST:-}" = fail ] && exit 1; [ "${FAKE_LIST:-}" = hang ] && exec sleep 60
+            [ -e "$T/session" ] && echo "[pft-prover] G4"; exit 0;;
   stop) echo stop >> "$T/stops"; [ "${FAKE_STOP:-0}" = 0 ] && rm -f "$T/session"; exit "${FAKE_STOP:-0}";;
 esac; done
 EOS
@@ -28,13 +30,16 @@ EOS
   cat > "$T/bin/ssh" <<'EOS'
 #!/bin/sh
 for a; do [ "$a" = -O ] && exit 0; done
+# A connection that starts a ControlPersist master leaves it running in the background, as ssh does.
+for a; do [ "$a" = ControlPersist=yes ] && [ -n "${FAKE_MASTER:-}" ] && { sleep 6 </dev/null >/dev/null 2>&1 & }; done
 for a; do last=$a; done
 case $last in
   *nvidia-smi*) [ -n "${FAKE_VRAM_FAIL:-}" ] && exit 23; echo 96000;;
   *provision.sh*) cat >/dev/null; echo PROVISIONED;;
   *warm.sh*) echo WARM;;
   *services-reach-colab*) echo services-reach-colab;;
-  pf-sol-exit-check) [ "${FAKE_DOOR:-0}" = hang ] && exec sleep 30; exit "${FAKE_DOOR:-0}";;
+  pf-sol-exit-check) [ "${FAKE_DOOR:-0}" = hang ] && exec sleep 30
+                     [ "${FAKE_DOOR:-0}" = slow ] && { sleep "${FAKE_DOOR_DELAY:-3}"; exit 0; }; exit "${FAKE_DOOR:-0}";;
 esac
 exit 0
 EOS
@@ -86,7 +91,7 @@ check "down whose session stop failed: not 'window closed', says what failed" \
 
 # A01: a step that hangs is cut at its own deadline, the other steps still run, and the count is kept.
 setup; open_window deposits
-for n in 1 2 3; do FAKE_DOOR=hang COLAB_PROVER_STEP_SECONDS=1 timeout 20 bash "$ROOT/colab-prover.sh" ensure >>"$T/out" 2>&1; done
+for n in 1 2 3; do FAKE_DOOR=hang COLAB_PROVER_STEP_SECONDS=1 COLAB_PROVER_DOOR_SECONDS=1 timeout 20 bash "$ROOT/colab-prover.sh" ensure >>"$T/out" 2>&1; done
 check "a hanging door check: three runs alert once" '[ "$(alerts)" = 1 ]'
 check "a hanging door check: the deposit socket is still put back" 'grep -q "deposit prover socket" "$ROOT/window.log"'
 setup; open_window none
@@ -112,6 +117,41 @@ check "down with a removal error still stops the session and alerts" '[ $rc != 0
 # A04: a failure inside a command substitution is handled once.
 setup; FAKE_MACHINE=1 FAKE_VRAM_FAIL=1 run up
 check "a failed GPU query alerts once and stops the session once" '[ "$(alerts)" = 1 ] && [ "$(grep -c stop "$T/stops")" = 1 ]'
+
+# R01: a second up never disables a window that is open; up, down and ensure share one lock.
+untouched() {  # the open window's state and session as open_window left them, and no stop
+  [ "$(cat "$ROOT/window.mode" 2>/dev/null)" = "$1" ] && [ -e "$HOME/.ssh/config.d/colab-prover.conf" ] &&
+  [ "$(cat "$ROOT/window.opened" 2>/dev/null)" = "$(date -u +%F)" ] && [ -e "$T/session" ] && [ ! -e "$T/stops" ]
+}
+setup; open_window deposits; FAKE_LIST=fail COLAB_PROVER_LIST_RETRY=0 COLAB_PROVER_UNTIL=00:00 run up deposits
+check "a second up with a failing session listing leaves the open window untouched" 'untouched deposits'
+setup; open_window none; FAKE_DOOR=slow FAKE_DOOR_DELAY=3 COLAB_PROVER_STEP_SECONDS=2 run up
+check "a second up with a slow healthy door leaves the open window untouched" 'untouched none'
+setup; FAKE_MACHINE=1 FAKE_NEW_DELAY=3 run up & first=$!; sleep 1
+FAKE_MACHINE=1 run up; rc2=$?; wait $first; rc1=$?
+check "two up at the same moment: one opens, the other exits on the lock" \
+  '[ $rc1 = 0 ] && [ $rc2 != 0 ] && grep -q "nothing changed" "$T/out" && [ "$(grep -c new "$T/news")" = 1 ] && [ -f "$ROOT/window.opened" ]'
+setup; open_window none; ( exec 9>>"$ROOT/window.lock"; flock 9; sleep 3 ) & holder=$!; sleep 0.5
+FAKE_DOOR=1 run ensure; rc=$?; wait $holder
+check "ensure skips quietly while up or down holds the lock" '[ $rc = 0 ] && [ ! -e "$ROOT/window.ensure-failures" ]'
+setup; FAKE_MACHINE=1 FAKE_MASTER=1 run up
+check "a connection master started by up does not keep the lock" 'flock -n "$ROOT/window.lock" true'
+setup; open_window none; COLAB_PROVER_STEP_SECONDS=1 FAKE_DOOR=slow FAKE_DOOR_DELAY=2 run ensure; rc=$?
+check "a door check slower than the step deadline but healthy passes ensure" '[ $rc = 0 ]'
+
+# R02: a hanging session listing is cut early enough for the check to alert inside its unit's limit.
+setup; open_window none; FAKE_LIST=hang COLAB_PROVER_LIST_SECONDS=1 timeout 8 bash "$ROOT/colab-prover.sh" check >>"$T/out" 2>&1
+check "check with a hanging session listing alerts inside its deadline" '[ "$(alerts)" = 1 ]'
+unit_s() { local v; v=$(sed -n 's/^TimeoutStartSec=//p' "$HERE/systemd/$1"); case $v in *min) echo $(( ${v%min} * 60 ));; *) echo "${v%s}";; esac; }
+default() { sed -n "s/.*\${$1:-\([0-9]*\)}.*/\1/p" "$HERE/colab-prover.sh" | head -1; }
+L=$(default COLAB_PROVER_LIST_SECONDS); S=$(default COLAB_PROVER_STEP_SECONDS); D=$(default COLAB_PROVER_DOOR_SECONDS)
+check "the check unit leaves 30 s for the alert after the listing's deadline" '[ -n "$L" ] && [ $((L + 2 + 30)) -le "$(unit_s colab-prover-check.service)" ]'
+check "the ensure unit leaves 30 s after the documented ensure budget" \
+  '[ -n "$S" ] && [ -n "$D" ] && b=$(( 5 * (S + 2) + (D + 2) + 8 )) && [ $((b + 30)) -le "$(unit_s colab-prover-ensure.service)" ] && grep -q "at most $b s" "$HERE/README.md"'
+
+# R03: down stops the session whatever the log does.
+setup; open_window none; mkdir "$ROOT/window.log"; run down
+check "down with an unwritable log still stops the session" 'grep -q stop "$T/stops" && [ ! -e "$T/session" ]'
 
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
