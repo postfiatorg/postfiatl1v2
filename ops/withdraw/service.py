@@ -521,9 +521,22 @@ def reconciliation_due(job, directory, startup):
     return any(intent_path(result).exists() and not result.exists() for result in results)
 
 
-def journaled(directory):
-    """Whether any Ethereum transaction of this job was journaled or recorded (and so may be sent)."""
-    return any(directory.glob('**/*.intent.json')) or any(directory.glob('**/eth-*.json'))
+def has_ethereum_action(job, directory):
+    """Whether this job has, or may have, an Ethereum action: a journal or result of a checkpoint
+    or payout, a recorded transaction identity, a paid history, or a send history from before the
+    journal (no journal_version). Such a job is never parked by the proving window."""
+    if any(directory.glob('**/*.intent.json')) or any(directory.glob('**/eth-*.json')):
+        return True
+    if job.get('ethereum_tx') or job.get('reconcile_paid_only') or job.get('ethereum_finality'):
+        return True
+    stages = {entry[1] for entry in job.get('history', [])} | {job.get('stage')}
+    if stages & {'paid', 'awaiting_finality', 'reconciliation_required'}:
+        return True
+    return 'paying' in stages and job.get('journal_version') != 1
+
+
+def since_update(job):
+    return (datetime.now(timezone.utc) - datetime.fromisoformat(job['updated_at'])).total_seconds()
 
 
 def run_jobs(startup=False):
@@ -531,10 +544,12 @@ def run_jobs(startup=False):
         try:
             stored=load(path);job=classify_failure(dict(stored))
             closed = window_closed()
+            acting = closed and has_ethereum_action(job, path.parent)
             if job.get('stage') == 'waiting_for_window':
-                if closed:
+                # A parked job with an Ethereum action keeps its recovery, at the reconciliation pace.
+                if closed and (not acting or (not startup and since_update(job) < 300)):
                     continue
-            elif closed and job.get('stage') == 'queued' and not journaled(path.parent):
+            elif closed and job.get('stage') == 'queued' and not acting:
                 # Nothing of it was sent: it waits for the next proving window instead of failing.
                 restage(job, 'waiting_for_window', 'Waiting for the next proving window.')
                 continue
@@ -551,7 +566,8 @@ def run_jobs(startup=False):
                 job['error_scope'] = 'burn' if isinstance(error, IneligibleBurn) else 'route'
                 new_stage = ('awaiting_finality' if isinstance(error, AwaitingFinality) else
                              'reconciliation_required' if isinstance(error, ReconciliationRequired) else 'failed')
-                if new_stage == 'failed' and job['error_scope'] == 'route' and window_closed():
+                if (new_stage == 'failed' and job['error_scope'] == 'route' and window_closed()
+                        and not has_ethereum_action(job, path.parent)):
                     # Cut by the window's close, or no prover outside the window: a wait, not a failure.
                     job['error'] = None
                     restage(job, 'waiting_for_window', 'Waiting for the next proving window: ' + detail)

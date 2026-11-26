@@ -101,5 +101,32 @@ class WindowTest(unittest.TestCase):
             process.assert_called_once()
 
 
+
+class EthereumActionTest(WindowTest):
+    """A job that has, or may have, an Ethereum action is never parked by the window (B01)."""
+
+    def test_a_route_failure_of_a_job_with_a_checkpoint_result_is_not_parked(self):
+        folder = self.jobs / BURN / 'checkpoint-1-3'
+        folder.mkdir(parents=True)
+        (folder / 'eth-result.json').write_text('{}')
+        service.stage(dict(burn_tx_id=BURN, journal_version=1), 'catching_up')
+        with patch.object(service, 'process', side_effect=RuntimeError('archive export failed')):
+            service.run_jobs()
+        self.assertNotEqual(service.read_job(BURN)['stage'], 'waiting_for_window')
+
+    def test_a_recorded_payout_without_files_is_reconciled_while_closed(self):
+        job = dict(burn_tx_id=BURN, ethereum_tx='0x' + '11' * 32)
+        service.stage(job, 'paid')
+        service.stage(job, 'queued')
+        with patch.object(service, 'process') as process:
+            service.run_jobs(startup=True)
+        process.assert_called_once()
+
+    def test_a_parked_row_with_a_recorded_identity_recovers_by_itself(self):
+        service.stage(dict(burn_tx_id=BURN, ethereum_tx='0x' + '11' * 32, reconcile_paid_only=True), 'waiting_for_window')
+        with patch.object(service, 'process') as process:
+            service.run_jobs(startup=True)
+        process.assert_called_once()
+
 if __name__ == '__main__':
     unittest.main()
