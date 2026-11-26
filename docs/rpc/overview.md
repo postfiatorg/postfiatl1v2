@@ -89,10 +89,16 @@ and network namespace. The lookup also works for a transaction the worker has
 never seen. Its RPC event records the height and block hash of the snapshot,
 including when the result is empty. It returns historical occurrences in block
 order, with the requested limit. The validator processes one receipt request
-at a time and enforces a query deadline and byte budget.
+at a time and enforces a query deadline and byte budget. If the snapshot cannot
+answer (its deadline, the byte budget, or a listener under another uid), the
+worker takes the ordinary bounded direct read instead. The snapshot keeps the
+validator's store open until the read ends.
 
 A warmed `status` can return a cached report during contention for up to 30
-seconds from the read. Its event identifies the cached height and hash. Other
+seconds from the read. Its event identifies the cached height and hash. It can
+therefore be older than a receipt snapshot answered in the same window: compare
+the heights in the two events rather than reading a receipt above the cached
+status tip as a contradiction. Other
 worker reads and mixed releases can still encounter the ordinary writer
 deadline. An expired or unprimed status cache can also report a read failure.
 
