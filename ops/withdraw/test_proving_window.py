@@ -128,5 +128,51 @@ class EthereumActionTest(WindowTest):
             service.run_jobs(startup=True)
         process.assert_called_once()
 
+
+class UnsentWorkTest(WindowTest):
+    """Nothing unsent starts proof work or a new Ethereum action while the window is closed (B02)."""
+
+    def test_restarted_unsent_jobs_in_every_active_stage_wait(self):
+        for stage in ('reading', 'catching_up', 'proving', 'paying'):
+            with self.subTest(stage=stage):
+                service.stage(dict(burn_tx_id=BURN, journal_version=1), stage)
+                with patch.object(service, 'process') as process:
+                    service.run_jobs(startup=True)
+                process.assert_not_called()
+                self.assertEqual(service.read_job(BURN)['stage'], 'waiting_for_window')
+
+    def test_a_due_route_retry_waits_without_using_an_attempt(self):
+        service.stage(dict(burn_tx_id=BURN, journal_version=1, error_scope='route', route_attempts=1,
+                           retry_at='2000-01-01T00:00:00+00:00', retry_exhausted=False), 'failed')
+        with patch.object(service, 'process') as process:
+            service.run_jobs()
+        process.assert_not_called()
+        job = service.read_job(BURN)
+        self.assertEqual((job['stage'], job['route_attempts']), ('waiting_for_window', 1))
+
+    def test_no_new_proof_and_no_new_send_while_closed_but_recovery_goes_on(self):
+        folder = self.jobs / BURN
+        folder.mkdir()
+        with patch.object(service.subprocess, 'run') as run:
+            with self.assertRaises(service.WindowClosed):
+                service.prove('withdrawal', folder / 'w.json', folder / 'proof', 'x')
+            with self.assertRaises(service.WindowClosed):
+                service.eth_send('withdraw', folder / 'proof', folder / 'eth-withdrawal.json')
+            run.assert_not_called()
+            (folder / 'eth-withdrawal.intent.json').write_text('{}')  # a journaled payout: its recovery runs
+            run.return_value.returncode = 0
+            with patch.object(service, 'read_eth_result', return_value={}):
+                service.eth_send('withdraw', folder / 'proof', folder / 'eth-withdrawal.json')
+            run.assert_called_once()
+
+    def test_a_proof_that_ends_as_the_window_closes_waits_before_its_send(self):
+        service.stage(dict(burn_tx_id=BURN, journal_version=1), 'queued')
+        self.mode.write_text('none\n')
+        with patch.object(service, 'process', side_effect=service.WindowClosed('the send waits')):
+            service.run_jobs()
+        job = service.read_job(BURN)
+        self.assertEqual(job['stage'], 'waiting_for_window')
+        self.assertNotIn('route_attempts', job)
+
 if __name__ == '__main__':
     unittest.main()

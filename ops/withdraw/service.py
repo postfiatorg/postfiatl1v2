@@ -154,6 +154,16 @@ def window_refusal(window):
     return None
 
 
+class WindowClosed(RuntimeError):
+    """New proof work or a new Ethereum action was reached while the proving window is closed."""
+
+
+def require_window(what):
+    """The gate before new proof work and before a new Ethereum action (not a recovery)."""
+    if window_closed():
+        raise WindowClosed(f'Waiting for the next proving window before {what}.')
+
+
 def window_closed():
     window = proving_window()
     return window is not None and not window['open']
@@ -238,6 +248,7 @@ def prover_window():
     """The daily Schwab reading proves between about 18:10 and 18:25 UTC. Stay out of its way."""
     while 1803<=int(datetime.now(timezone.utc).strftime('%H%M'))<1827:time.sleep(20)
 def prove(kind,witness,directory,name):
+    require_window(f'the {kind} proof')
     prover_window();directory.mkdir(parents=True,exist_ok=True)
     run([HOST_BIN,kind,ELF,witness,directory/'native','native'])
     run(['ssh','-o','BatchMode=yes']+VAST+[f'mkdir -p {REMOTE}/jobs'])
@@ -249,6 +260,10 @@ def prove(kind,witness,directory,name):
     assert (directory/'public-values.bin').read_bytes()==(directory/'native/native-public-values.bin').read_bytes()
     return directory
 def eth_send(mode, proof_dir, out):
+    # The sender authorizes a new transaction only when neither its receipt nor its journal exists;
+    # that new action waits for the window. Recovering a journaled one always goes on.
+    if not out.exists() and not intent_path(out).exists():
+        require_window(f'a new Ethereum {mode} transaction')
     result = subprocess.run(
         [PY, str(HERE / 'eth_send.py'), mode, str(proof_dir), str(out)],
         capture_output=True, text=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'),
@@ -549,8 +564,8 @@ def run_jobs(startup=False):
                 # A parked job with an Ethereum action keeps its recovery, at the reconciliation pace.
                 if closed and (not acting or (not startup and since_update(job) < 300)):
                     continue
-            elif closed and job.get('stage') == 'queued' and not acting:
-                # Nothing of it was sent: it waits for the next proving window instead of failing.
+            elif closed and not acting and (job.get('stage') in ACTIVE_STAGES or route_retry_due(job)):
+                # Nothing of it was sent: unsent work waits for the next proving window, from any stage.
                 restage(job, 'waiting_for_window', 'Waiting for the next proving window.')
                 continue
             elif (job.get('stage') not in ACTIVE_STAGES and not reconciliation_due(job, path.parent, startup)
@@ -560,6 +575,10 @@ def run_jobs(startup=False):
                 continue
             try:
                 process(job)
+            except WindowClosed as error:
+                job['error'] = None
+                restage(job, 'waiting_for_window', str(error)[:400])
+                continue
             except Exception as error:
                 detail = str(error)[:400]
                 job['error'] = detail
