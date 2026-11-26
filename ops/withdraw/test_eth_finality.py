@@ -153,6 +153,32 @@ class FinalityTests(unittest.TestCase):
             self.assertEqual(seen, [f'2026-11-26T12:0{m}:00+00:00' for m in range(3)], 'each check refreshes the retry clock')
             send.assert_not_called()
 
+    def test_waiting_for_checkpoint_finality_records_one_history_entry(self):
+        eth, receipt, finalized, _, expected = checkpoint_chain('PFTLCheckpointAdvanced', {})
+        finalized['number'] = 98
+        tx = Web3.to_hex(receipt['transactionHash'])
+        burn = terms()['burn_tx_id']
+        with tempfile.TemporaryDirectory() as tmp, patch.object(service, 'JOBS', Path(tmp)), \
+             patch.object(service, 'ethereum_reader', return_value=eth), patch.object(service, 'eth_send') as send, \
+             patch.object(service, 'export_bundle') as archive:
+            service.stage(dict(terms(), journal_version=1), 'catching_up', 'Bringing the Ethereum checker up to date.')
+            folder = Path(tmp)/burn/'checkpoint-1-3'
+            folder.mkdir()
+            durable_json(folder/'witness.json', dict(prior_checkpoint_block_id=expected['prior'],
+                                                     block={'header': {'block_hash': expected['target'], 'height': 3}}))
+            durable_json(folder/'eth-result.json', dict(mode='checkpoint', tx=tx, status=1, block=100))
+            seen = []
+            for minute in range(3):
+                with patch.object(service, 'now', return_value=f'2026-11-26T12:0{minute}:00+00:00'):
+                    service.run_jobs(startup=True)
+                seen.append(service.read_job(burn)['updated_at'])
+            saved = service.read_job(burn)
+            self.assertEqual(saved['stage'], 'awaiting_finality')
+            self.assertEqual([entry[1] for entry in saved['history']], ['catching_up', 'awaiting_finality'])
+            self.assertEqual(seen, [f'2026-11-26T12:0{m}:00+00:00' for m in range(3)], 'each check refreshes the retry clock')
+            send.assert_not_called()
+            archive.assert_not_called()
+
     def test_paid_row_with_another_burns_cached_receipt_is_reconciled_without_sending(self):
         expected = terms()
         eth, receipt, _, _ = chain(terms('09'*48))
