@@ -11,7 +11,7 @@ Listens on 127.0.0.1 only; the Task Node server is the only caller.
 """
 import json,os,re,shlex,subprocess,sys,threading,time,uuid,hashlib
 from web3 import Web3
-from datetime import datetime,timezone
+from datetime import datetime,timedelta,timezone
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
@@ -36,15 +36,46 @@ worker_started=threading.Event()
 ACTIVE_STAGES = {'queued', 'reading', 'catching_up', 'proving', 'paying'}
 
 
+# A route failure (prover, SSH, Ethereum send) is retried after 5, 10 and 20 minutes.
+# After the last attempt the job stays failed but no longer gates other burns.
+ROUTE_RETRY_ATTEMPTS = 4
+ROUTE_RETRY_BASE_SECONDS = 300
+# Messages that IneligibleBurn carries, and carried before burn failures were scoped.
+BURN_FAILURE_MESSAGES = ('This burn is not finalized on the network.',
+                         'This burn is not for the Ethereum mainnet USDC vault.')
+
+
 class IneligibleBurn(RuntimeError):
     """This request cannot proceed, independently of payout infrastructure health."""
 
 
 
+def utcnow():return datetime.now(timezone.utc)
 def now():return datetime.now(timezone.utc).isoformat(timespec='seconds')
 def job_path(burn):return JOBS/burn/'job.json'
+def classify_failure(job):
+    """Give a failed row written before failures were scoped the scope its error implies."""
+    if job.get('stage') == 'failed' and 'error_scope' not in job:
+        job['error_scope'] = 'burn' if job.get('error') in BURN_FAILURE_MESSAGES else 'route'
+        if job['error_scope'] == 'route':
+            job.setdefault('route_attempts', 1)
+            job.setdefault('retry_at', job.get('updated_at'))
+    return job
+def load_job(path):return classify_failure(load(path))
 def read_job(burn):
-    p=job_path(burn);return load(p) if p.exists() else None
+    p=job_path(burn);return load_job(p) if p.exists() else None
+def route_retry_pending(job):
+    return job.get('stage') == 'failed' and job.get('error_scope') == 'route' and not job.get('retry_exhausted')
+def route_retry_due(job):
+    return route_retry_pending(job) and utcnow() >= datetime.fromisoformat(job['retry_at'])
+def record_route_failure(job):
+    attempts = job.get('route_attempts', 0) + 1
+    job['route_attempts'] = attempts
+    if attempts >= ROUTE_RETRY_ATTEMPTS:
+        job.update(retry_exhausted=True, retry_at=None)
+    else:
+        delay = ROUTE_RETRY_BASE_SECONDS * 2 ** (attempts - 1)
+        job.update(retry_exhausted=False, retry_at=(utcnow()+timedelta(seconds=delay)).isoformat(timespec='seconds'))
 def write_job(job):
     with lock:
         p=job_path(job['burn_tx_id']);ensure_directory(p.parent);durable_json(p,job)
@@ -83,8 +114,10 @@ def readiness():
     s=bridge_status();route=call('vault_bridge_route',{'asset_id':FAMILY})
     profile_hash=route['beacon_finality_anchor']['route_profile_hash']
     buckets=[b for b in s['buckets'] if b['policy_hash']==profile_hash and b.get('status','active')=='active']
-    jobs = [load(path) for path in JOBS.glob('*/job.json')]
-    blocked = [j['burn_tx_id'] for j in jobs if j['stage'] in ('failed', 'reconciliation_required') and j.get('error_scope') != 'burn']
+    jobs = [load_job(path) for path in JOBS.glob('*/job.json')]
+    blocked = [j['burn_tx_id'] for j in jobs if (j['stage'] == 'reconciliation_required' and j.get('error_scope') != 'burn')
+               or route_retry_pending(j)]
+    exhausted = [j['burn_tx_id'] for j in jobs if j['stage'] == 'failed' and j.get('retry_exhausted')]
     payments = [j['updated_at'] for j in jobs if j['stage'] == 'paid' and proven_paid(j)]
     awaiting = [j['burn_tx_id'] for j in jobs if j['stage'] == 'awaiting_finality' or
                 (j['stage'] == 'paid' and not proven_paid(j))]
@@ -94,7 +127,7 @@ def readiness():
     payout_ready = not (blocked or stalled or preflight_error)
     health = dict(ok=True, bucket_ready=len(buckets)==1, payout_ready=payout_ready,
                   payout_preflight_error=preflight_error, last_payment_recorded_at=max(payments, default=None),
-                  blocked_jobs=blocked, stalled_jobs=stalled, awaiting_finality_jobs=awaiting)
+                  blocked_jobs=blocked, stalled_jobs=stalled, awaiting_finality_jobs=awaiting, exhausted_jobs=exhausted)
     if len(buckets)!=1:return dict(**health,ready=False,message='No single active deposit bucket for the current bridge setting.')
     if not payout_ready:
         health['message'] = preflight_error or 'The withdrawal worker has blocked or stalled jobs.'
@@ -388,8 +421,11 @@ def reconciliation_due(job, directory, startup):
 def run_jobs(startup=False):
     for path in sorted(JOBS.glob('*/job.json'),key=lambda p:p.stat().st_mtime):
         try:
-            job=load(path)
-            if job.get('stage') not in ACTIVE_STAGES and not reconciliation_due(job, path.parent, startup):
+            job=load_job(path)
+            if (job.get('stage') not in ACTIVE_STAGES and not reconciliation_due(job, path.parent, startup)
+                    and not route_retry_due(job)):
+                if job.get('stage') == 'failed' and 'error_scope' not in load(path):
+                    write_job(job)
                 continue
             try:
                 process(job)
@@ -399,7 +435,9 @@ def run_jobs(startup=False):
                 job['error_scope'] = 'burn' if isinstance(error, IneligibleBurn) else 'route'
                 new_stage = ('awaiting_finality' if isinstance(error, AwaitingFinality) else
                              'reconciliation_required' if isinstance(error, ReconciliationRequired) else 'failed')
-                if job.get('stage') != new_stage or job.get('detail') != detail:
+                if new_stage == 'failed' and job['error_scope'] == 'route':
+                    record_route_failure(job)
+                if job.get('stage') != new_stage or job.get('detail') != detail or new_stage == 'failed':
                     stage(job, new_stage, detail)
         except (ValueError, OSError) as error:
             print(now(), path, error, file=sys.stderr, flush=True)
@@ -445,6 +483,7 @@ class Handler(BaseHTTPRequestHandler):
                 job=read_job(burn)
                 if job is None or job.get('stage') in ('failed','reconciliation_required'):
                     job=dict(job or {},burn_tx_id=burn,created_at=(job or {}).get('created_at',now()),error=None)
+                    for key in ('error_scope','route_attempts','retry_at','retry_exhausted'):job.pop(key,None)
                     stage(job,'queued','Waiting for the withdrawal worker.')
             queue_event.set();self.reply(200,dict(ok=True,**self.public(job)))
         except Exception as error:self.reply(503,dict(ok=False,code='withdrawal_service_error',message=str(error)[:200]))
