@@ -1263,15 +1263,14 @@ where
         .tip_height
         .checked_add(1)
         .ok_or_else(|| refused("height_overflow", "candidate height overflow"))?;
-    if record.domain.pool_id == postfiat_types::pq_payment::POOL_ID {
-        if !pinned
+    if record.domain.pool_id == postfiat_types::pq_payment::POOL_ID
+        && (!pinned
             || read_chain_tip_or_reconstruct_for_genesis_read_only(
                 &NodeStore::new(data_dir),
                 &state.genesis,
-            )? != state.tip
-        {
-            return Ok(steps);
-        }
+            )? != state.tip)
+    {
+        return Ok(steps);
     }
     let release =
         if pq && next_height.saturating_sub(record.received_height) > PQ_QUEUE_LIFETIME_BLOCKS {
