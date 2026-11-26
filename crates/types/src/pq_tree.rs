@@ -178,7 +178,7 @@ impl PqPool {
     ) -> Option<[Node; PQ_DEPTH]> {
         let id = node(asset).ok()?;
         let actual = self.tree(asset, epoch)?.count;
-        if count > actual || index >= count || count % 2 != 0 {
+        if count > actual || index >= count || !count.is_multiple_of(2) {
             return None;
         }
         let mut path = [[0; 48]; PQ_DEPTH];
