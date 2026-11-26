@@ -426,6 +426,87 @@ current evidence window. If partial-history pruning is enabled, retain RPC logs
 through the archive handoff window so `tx`, `ledger`, and `history-status`
 answers can be correlated with archive evidence.
 
+### Checking the event log
+
+`scripts/rpc-events-report` reads `rpc-events.ndjson` (one
+`postfiat-rpc-serve-event-v1` record per request) and never writes to it. It
+needs only Python 3 and streams the file line by line (the test reads a
+300,000-line log in under 20 MB of memory); tables keep at most `--max-keys` distinct keys (default 10000) and
+pool the rest under `(other)`.
+
+```bash
+# what is in the log now, including rotated copies
+scripts/rpc-events-report summary --top 10 \
+  /var/log/postfiat/validator-N/rpc-events.ndjson \
+  /var/log/postfiat/validator-N/rpc-events.ndjson.1.gz
+
+# only what was appended since the previous run, with limits
+scripts/rpc-events-report check \
+  --state /var/lib/postfiat-rpc-events/validator-N.state \
+  --max-peer-method 600 --max-error-ratio 0.5 --min-events 50 \
+  /var/log/postfiat/validator-N/rpc-events.ndjson
+```
+
+| Exit | Meaning |
+| ---: | --- |
+| `0` | Every limit held. |
+| `1` | A limit was exceeded, or the log was rotated and the previous position was not found in any rotated copy (`continuity`). Each breach line names the peer and/or method. |
+| `2` | Usage error, unreadable log, corrupt gzip, or a state file that is invalid, locked by another run, or belongs to another log. The state is not changed. |
+
+Limits: `--max-peer-method`, `--max-method`, `--max-peer`, `--max-errors`,
+`--max-error-ratio` (skipped below `--min-events`) and `--max-bad-lines`
+(invalid JSON, other schemas, torn or oversize lines). `--method` counts only
+the named methods. `--json` prints the full report
+(`postfiat-rpc-events-report-v1`).
+
+With `--state` the tool keeps the log's inode, byte offset and a hash of its
+first 4 KiB. When the file was rotated (the `copytruncate` and `compress`
+rule installed by `ops/validator-host/logrotate`, or a rename), it finds the
+old position in `rpc-events.ndjson.N[.gz]` or `-DATE[.gz]` by that hash,
+reads the rest of that copy, every newer copy and then the live file, so each
+complete line is counted once. A line still being written is left for the
+next run. Lines that `copytruncate` itself loses between its copy and its
+truncate cannot be seen by any reader. Use `--start-at-end` on the first run
+to skip the existing history.
+
+The records carry no timestamp, so limits apply per run: run `check` from a
+timer and size limits for that interval from a few days of `summary` output.
+`peer_addr` is the address that connected to the loopback listener, so behind
+an edge proxy all public clients appear as the proxy's address; per-method
+limits are the useful ones there. A one-shot unit and timer:
+
+```ini
+# /etc/systemd/system/postfiat-rpc-events-check@.service
+[Unit]
+Description=Check rpc-events.ndjson of validator-%i
+
+[Service]
+Type=oneshot
+StateDirectory=postfiat-rpc-events
+ExecStart=/opt/postfiatl1v2/scripts/rpc-events-report check \
+  --state /var/lib/postfiat-rpc-events/validator-%i.state \
+  --max-peer-method 600 --max-error-ratio 0.5 --min-events 50 \
+  /var/log/postfiat/validator-%i/rpc-events.ndjson
+
+# /etc/systemd/system/postfiat-rpc-events-check@.timer
+[Timer]
+OnCalendar=*:0/10
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Exit 1 or 2 leaves the unit failed, which shows in
+`systemctl --failed` and in any failed-unit alert; the report is in the
+unit's journal. Example: the `owned_apply_v3` resend loop recorded in
+`docs/status/handoff-2026-11-26.md` (three certificates, each resent every two
+seconds, 4.1 million calls) is 900 calls per 10 minutes from one peer and
+method, so `--max-peer-method 600` fails the first full interval after it
+starts.
+The record has no certificate field, so the report cannot tell which
+certificate repeats.
+
 ## Edge And Firewall Posture
 
 Do not open the validator RPC port publicly. A public load balancer or reverse
