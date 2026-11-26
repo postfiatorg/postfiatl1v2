@@ -24,7 +24,7 @@ alert() { "$HOME/.local/bin/b24-alert" "$*" || true; }
 direct() { ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile="$KNOWN" -o LogLevel=ERROR \
   -o ControlMaster=auto -o ControlPath="$CM" -o ControlPersist=yes -o ServerAliveInterval=20 \
   -o ProxyCommand="$COLAB ssh --proxy-mode -s $NAME" root@colab-prover "$@"; }
-bounded_direct() { timeout --kill-after=2 "${COLAB_PROVER_STEP_SECONDS:-30}" ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+bounded_direct() { timeout --kill-after=2 "${COLAB_PROVER_STEP_SECONDS:-15}" ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
   -o UserKnownHostsFile="$KNOWN" -o LogLevel=ERROR -o ControlMaster=auto -o ControlPath="$CM" -o ControlPersist=yes \
   -o ServerAliveInterval=20 -o ProxyCommand="$COLAB ssh --proxy-mode -s $NAME" root@colab-prover "$@"; }
 
@@ -32,9 +32,10 @@ bounded_direct() { timeout --kill-after=2 "${COLAB_PROVER_STEP_SECONDS:-30}" ssh
 # on the one connection; if it was lost they are put back. Safe to run at any time in a window.
 # Each step runs whatever the others did (a failing door check does not keep the deposit socket from
 # being put back); the steps that failed are named, and ensure fails if any did.
-# Each remote operation of a step has a whole-command deadline; the three steps' sum (3 x 30 s by
-# default) fits inside the ensure unit's two-minute limit, and a timeout is an ordinary failed step.
-STEP_SECONDS=${COLAB_PROVER_STEP_SECONDS:-30}
+# Each remote command of a step has a whole-command deadline (COLAB_PROVER_STEP_SECONDS, 15 s). A step
+# runs at most two of them (the deposit step also an 8 s socket probe): 30 + 30 + 38 s, inside the ensure
+# unit's two-minute limit. A timeout is an ordinary failed step.
+STEP_SECONDS=${COLAB_PROVER_STEP_SECONDS:-15}
 bounded() { timeout --kill-after=2 "$STEP_SECONDS" "$@"; }
 ensure_connection() {
   bounded ssh -O check -o ControlPath="$CM" root@colab-prover 2>/dev/null || bounded_direct true || return 1

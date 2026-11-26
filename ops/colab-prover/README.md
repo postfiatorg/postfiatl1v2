@@ -21,7 +21,7 @@ Solana deposits, Solana and Ethereum withdrawals, and the B24 daily proof.
   from another day before it asks for a machine, and also when no GPU came before the limit.
 - `colab-prover.sh ensure` (every two minutes) puts back the connection, the withdrawal door and the
   deposit socket, each step whatever the others did and each remote command bounded
-  (`COLAB_PROVER_STEP_SECONDS`, 30 s; three steps fit in the unit's two minutes). A run counts as failed
+  (`COLAB_PROVER_STEP_SECONDS`, 15 s per command, at most 30 + 30 + 38 s for the three steps, inside the unit's two minutes). A run counts as failed
   until it succeeds, so one the unit's limit cuts short is counted too; after three failed runs in a row in
   an open window it sends the B24 alert once, and once more when a run works again
   (`window.ensure-failures` and `window.ensure-alerted` beside `window.mode`).
