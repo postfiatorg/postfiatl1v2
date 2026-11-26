@@ -54,12 +54,13 @@ def utcnow():return datetime.now(timezone.utc)
 def now():return datetime.now(timezone.utc).isoformat(timespec='seconds')
 def job_path(burn):return JOBS/burn/'job.json'
 def classify_failure(job):
-    """Give a failed row written before failures were scoped the scope its error implies."""
-    if job.get('stage') == 'failed' and 'error_scope' not in job:
-        job['error_scope'] = 'burn' if job.get('error') in BURN_FAILURE_MESSAGES else 'route'
-        if job['error_scope'] == 'route':
+    """Give a failed row written before scoped retries the scope and retry its error implies."""
+    if job.get('stage') == 'failed':
+        if 'error_scope' not in job:
+            job['error_scope'] = 'burn' if job.get('error') in BURN_FAILURE_MESSAGES else 'route'
+        if job['error_scope'] == 'route' and not job.get('retry_exhausted') and not job.get('retry_at'):
             job.setdefault('route_attempts', 1)
-            job.setdefault('retry_at', job.get('updated_at'))
+            job['retry_at'] = job['updated_at']
     return job
 def load_job(path):return classify_failure(load(path))
 def read_job(burn):
@@ -446,10 +447,10 @@ def reconciliation_due(job, directory, startup):
 def run_jobs(startup=False):
     for path in sorted(JOBS.glob('*/job.json'),key=lambda p:p.stat().st_mtime):
         try:
-            job=load_job(path)
+            stored=load(path);job=classify_failure(dict(stored))
             if (job.get('stage') not in ACTIVE_STAGES and not reconciliation_due(job, path.parent, startup)
                     and not route_retry_due(job)):
-                if job.get('stage') == 'failed' and 'error_scope' not in load(path):
+                if job != stored:
                     write_job(job)
                 continue
             try:

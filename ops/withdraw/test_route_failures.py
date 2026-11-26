@@ -69,6 +69,14 @@ class RouteFailureTests(unittest.TestCase):
         self.assertEqual(service.read_job('bb'*48)['error_scope'], 'burn')
         self.assertEqual(service.read_job('cc'*48)['route_attempts'], 2, 'the legacy failure counts as the first attempt')
 
+    def test_route_rows_written_before_retries_are_retried_once_loaded(self):
+        # The first scoped release wrote error_scope 'route' without retry fields.
+        service.stage(dict(burn_tx_id='ff'*48, error='SSH failed', error_scope='route'), 'failed', 'SSH failed')
+        with patch.object(service, 'process', side_effect=RuntimeError('SSH failed')) as process:
+            service.run_jobs()
+        self.assertEqual(process.call_count, 1)
+        self.assertEqual(service.read_job('ff'*48)['route_attempts'], 2)
+
     def test_burn_failures_and_reconciliation_keep_their_meaning(self):
         service.stage(dict(burn_tx_id='dd'*48), 'queued')
         service.stage(dict(burn_tx_id='ee'*48), 'queued')
