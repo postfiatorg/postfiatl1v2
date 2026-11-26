@@ -26,24 +26,53 @@ direct() { ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFil
 
 # The local ends of the window: the withdrawal door's port and the deposit prover's socket. Both ride
 # on the one connection; if it was lost they are put back. Safe to run at any time in a window.
-ensure() {
-  [ -f "$STANZA" ] || return 0
-  ssh -O check -o ControlPath="$CM" root@colab-prover 2>/dev/null || direct true
+# Each step runs whatever the others did (a failing door check does not keep the deposit socket from
+# being put back); the steps that failed are named, and ensure fails if any did.
+ensure_connection() {
+  ssh -O check -o ControlPath="$CM" root@colab-prover 2>/dev/null || direct true || return 1
+}
+ensure_door() {
   if ! ss -ltn | grep -q "127.0.0.1:20628 "; then
-    ssh -O forward -o ControlPath="$CM" -L 127.0.0.1:20628:127.0.0.1:2223 root@colab-prover
+    ssh -O forward -o ControlPath="$CM" -L 127.0.0.1:20628:127.0.0.1:2223 root@colab-prover || return 1
     log "withdrawal door forwarded"
   fi
   ssh -F /dev/null -oIdentitiesOnly=yes -i "$ROOT/solexit/testkey" -oStrictHostKeyChecking=yes -oGlobalKnownHostsFile=/dev/null \
     -oUserKnownHostsFile="$ROOT/solexit/known_hosts.colab" -oBatchMode=yes -oConnectTimeout=8 -oHostKeyAlias='[ssh8.vast.ai]:20628' \
-    -p 20628 root@127.0.0.1 pf-sol-exit-check
-  if [ "$(cat "$ROOT/window.mode" 2>/dev/null)" = deposits ]; then
-    systemctl --user stop pft-sol-prover-tunnel.service 2>/dev/null || true
-    if ! python3 -c "import socket,sys;s=socket.socket(socket.AF_UNIX);s.settimeout(8);s.connect(sys.argv[1])" "$SOCK" 2>/dev/null; then
-      mkdir -p -m 700 "$(dirname "$SOCK")"; rm -f "$SOCK"
-      ssh -O forward -o ControlPath="$CM" -L "$SOCK:/workspace/sol-ingress/speed-i2/prover.sock" root@colab-prover
-      log "deposit prover socket forwarded"
-    fi
+    -p 20628 root@127.0.0.1 pf-sol-exit-check || return 1
+}
+ensure_deposits() {
+  [ "$(cat "$ROOT/window.mode" 2>/dev/null)" = deposits ] || return 0
+  systemctl --user stop pft-sol-prover-tunnel.service 2>/dev/null || true
+  if ! python3 -c "import socket,sys;s=socket.socket(socket.AF_UNIX);s.settimeout(8);s.connect(sys.argv[1])" "$SOCK" 2>/dev/null; then
+    mkdir -p -m 700 "$(dirname "$SOCK")" || return 1
+    rm -f "$SOCK"
+    ssh -O forward -o ControlPath="$CM" -L "$SOCK:/workspace/sol-ingress/speed-i2/prover.sock" root@colab-prover || return 1
+    log "deposit prover socket forwarded"
   fi
+}
+ensure() {
+  [ -f "$STANZA" ] || return 0
+  local failed=()
+  ensure_connection || failed+=("connection")
+  ensure_door || failed+=("withdrawal door")
+  ensure_deposits || failed+=("deposit socket")
+  [ ${#failed[@]} = 0 ] || { log "ensure failed: ${failed[*]}"; return 1; }
+}
+
+# The timer's ensure: after three failed runs in a row in an open window it alerts once, and once
+# more when a run works again. The count of failed runs lives beside window.mode.
+FAILS=$ROOT/window.ensure-failures
+ensure_watch() {
+  [ -f "$STANZA" ] || { rm -f "$FAILS"; return 0; }
+  local before; before=$(cat "$FAILS" 2>/dev/null || echo 0)
+  if ensure; then
+    [ "$before" -ge 3 ] && { log "ensure recovered after $before failed runs"; alert "Colab proving window recovered after $before failed checks. See $LOG"; }
+    rm -f "$FAILS"
+    return 0
+  fi
+  echo $((before + 1)) > "$FAILS"
+  [ $((before + 1)) = 3 ] && alert "Colab proving window has failed three checks in a row; deposits and withdrawals may be closed. See $LOG"
+  return 1
 }
 
 up() {
@@ -112,7 +141,7 @@ down() {
 case ${1:-} in
   up) shift; up "$@";;
   down) down;;
-  ensure) ensure;;
+  ensure) ensure_watch;;
   status) $COLAB sessions 2>&1 | tail -3; $COLAB usage 2>&1 | head -3; ls -la "$STANZA" "$SOCK" 2>&1 | cut -c1-120;;
   *) sed -n 2,5p "$0"; exit 2;;
 esac

@@ -12,6 +12,10 @@ Solana deposits, Solana and Ethereum withdrawals, and the B24 daily proof.
   runtime). The Solana withdrawal service runs as its own user: `/etc/hosts` points that name at a
   local port that is forwarded to a second SSH daemon on the session, which has a fixed host key and
   admits only that service's key with its forced command (`colab-sol-withdraw.sh`, run once with sudo).
+- `colab-prover.sh ensure` (every two minutes) puts back the connection, the withdrawal door and the
+  deposit socket, each step whatever the others did. After three failed runs in a row in an open
+  window it sends the B24 alert once, and once more when a run works again
+  (`window.ensure-failures` beside `window.mode` holds the count).
 - The prover files are not in this repository. They are kept on the relay host in
   `~/var/colab-prover/bundle` (506 MB); `bundle.SHA256SUMS` lists them. The session's fixed host key
   and the launcher's self-test key are in `~/var/colab-prover/solexit` on that host only.
