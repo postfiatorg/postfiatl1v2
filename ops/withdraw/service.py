@@ -100,12 +100,13 @@ def parse_window_hours(value):
     """None when unset; else (start, end) minutes and their text, or an error naming the setting."""
     if value is None:
         return None
-    m = re.fullmatch(r'([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)', value)
-    if not m or m.group(1, 2) == m.group(3, 4):
-        return dict(error=f'WITHDRAW_PROVING_WINDOW_HOURS={value!r} is invalid: it must be HH:MM-HH:MM in UTC '
-                          'with two different times')
-    return dict(start=int(m[1]) * 60 + int(m[2]), end=int(m[3]) * 60 + int(m[4]),
-                text=f'{m[1]}:{m[2]} to {m[3]}:{m[4]} UTC')
+    m = re.fullmatch(r'([01][0-9]|2[0-3]):([0-5][0-9])-([01][0-9]|2[0-3]):([0-5][0-9])', value)
+    if m:
+        start, end = int(m[1]) * 60 + int(m[2]), int(m[3]) * 60 + int(m[4])
+        if start != end:
+            return dict(start=start, end=end, text=f'{m[1]}:{m[2]} to {m[3]}:{m[4]} UTC')
+    return dict(error=f'WITHDRAW_PROVING_WINDOW_HOURS={value!r} is invalid: it must be HH:MM-HH:MM in UTC '
+                      'with two different times')
 
 
 WINDOW = parse_window_hours(os.environ.get('WITHDRAW_PROVING_WINDOW_HOURS'))

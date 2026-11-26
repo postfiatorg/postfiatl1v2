@@ -78,6 +78,16 @@ class Door(unittest.TestCase):
                 self.assertIn('WITHDRAW_PROVING_WINDOW_HOURS', ready['message'])
                 self.assertIn('invalid', ready['message'])
 
+    def test_mixed_digit_equal_endpoints_are_closed_all_day(self):
+        for hours in ('17:0\u0660-17:00', '1\uff17:00-17:00'):
+            for hour in (0, 12, 17, 23):
+                with self.subTest(hours=hours, hour=hour):
+                    ready = self.answer(hours, at(hour, 0))
+                    self.assertFalse(ready['ready'])
+                    self.assertFalse(ready['proving_window_open'])
+                    self.assertIn('WITHDRAW_PROVING_WINDOW_HOURS', ready['message'])
+                    self.assertIn('invalid', ready['message'])
+
     def test_unset_gives_the_answer_of_main_whole(self):
         ready = self.answer(None, at(12, 0))
         self.assertFalse({'proving_window_open', 'next_window_opens_at'} & set(ready))
