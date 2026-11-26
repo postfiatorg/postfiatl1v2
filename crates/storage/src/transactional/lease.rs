@@ -155,8 +155,7 @@ pub(super) fn acquire_transactional_store(
             if let Some(store) = stores.get(&database_path).and_then(Weak::upgrade) {
                 return Ok(store);
             }
-            match TransactionalStore::open_writable(&canonical_dir, integrity_key.clone(), create)
-            {
+            match TransactionalStore::open_writable(&canonical_dir, integrity_key.clone(), create) {
                 Ok(store) => {
                     let store = Arc::new(store);
                     stores.insert(database_path, Arc::downgrade(&store));
