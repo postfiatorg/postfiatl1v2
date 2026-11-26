@@ -21,14 +21,16 @@ machine-checkable reserve packets. The design is in the
 
 ## What changed this week
 
-25 November 2026. Sources: [Current State](status/chain-state-current.md) and the
+26 November 2026. Sources: [Current State](status/chain-state-current.md) and the
 [handoffs](handoffs/index.md).
 
 - **21 November.** All six validators moved to `main-r64-20261121`; `main` became the only long-lived branch ([Master State](status/master-state.md)).
 - **23 November.** The first Solana withdrawal release (rules from block 1841); first real withdrawals; the deposit route re-anchored at block 1847.
 - **24 November.** The second Solana exit release (rules from block 1890): every Solana deposit batch can be withdrawn, a refund path for a burn that cannot be paid, each validator reviews a settlement itself. Real withdrawals of 0.30, 0.30 and 4.00 USDC were paid and settled.
 - **25 November.** Read-only read: all six validators at height 1897, one state root, build `04600868` (the second Solana exit release). B24 epoch 10 subsequently finalized at 1902.
-- **Limits.** A controlled devnet with small caps, not announced: one withdrawal spends one deposit batch, the minimum is 0.30 USDC, the vault accepts 25 USDC more, a withdrawal takes about four minutes ([Network Status](status/network-status.md#usdc-bridges)).
+- **25 November, evening.** The validators moved to `sol-exit-r3` (`2356caf1`), rolled 20:59 to 21:32 UTC: one settlement path for Solana exits, and a Solana exit payout or refund settles with five of six validators. Solana withdrawals were closed from 21:03 to 21:32 UTC while the roll was interrupted.
+- **26 November.** Proofs are made only during a daily proving session, planned for 17:00 to 19:00 UTC; outside it Solana deposits and both withdrawal paths are closed on purpose. Read-only read at 10:13 UTC: all six validators at height 1906, one state root, build `2356caf1`. Ten pull requests merged to `main` after that build were not deployed on 26 November.
+- **Limits.** A controlled devnet with small caps, not announced: one withdrawal spends one deposit batch, the minimum is 0.30 USDC, the vault accepts 25 USDC more, a withdrawal takes about four minutes once a proving session runs, and deposits and withdrawals wait outside the daily window ([Network Status](status/network-status.md#usdc-bridges)).
 
 ## Start here
 
@@ -48,7 +50,7 @@ Codenames such as A666, BMNRC, Z3 or G4 are defined in the
 
 | Component and evidence | Chain / height | Last observed | Result |
 | --- | --- | --- | --- |
-| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/ops/b24-live/known-releases.txt) | postfiat-wan-devnet-2 / 1903 | 2026-11-25 20:15 UTC | Six validators reported on sol-exit-r2 |
+| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/615d3d37e5c3d911454dc6533a880855e02a6ecf/docs/status/handoff-2026-11-26.md) | postfiat-wan-devnet-2 / 1906 | 2026-11-26 10:13 UTC | Six validators on sol-exit-r3, one state root |
 | [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
 | [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45701171620) | Source build / n/a | 2026-11-25T21:22:27Z | Verified (workflow success, comparison success) |
 

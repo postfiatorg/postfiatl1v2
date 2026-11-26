@@ -16,15 +16,19 @@ means independently audited" ([Whitepaper](../whitepaper.md)).
 
 The only running network is a controlled devnet run by six
 Foundation-administered validators
-([Network Status](../status/network-status.md)). On 25 November 2026 all six
-were at height 1897 with one state root, on build `04600868`, which is cut
-from the release branch `release/sol-exit-r2`
-([handoff of 25 November](../status/handoff-2026-11-25.md)).
+([Network Status](../status/network-status.md)). On 26 November 2026 all six
+were at height 1906 with one state root, on build `2356caf1` (release
+`sol-exit-r3`, cut from `main`); pull requests merged to `main` after it were
+not deployed on that date
+([Current State](../status/chain-state-current.md),
+[handoff of 26 November](../status/handoff-2026-11-26.md)).
 
 Since 23 November 2026 the devnet also carries USDC between Solana mainnet and
 pfUSDC in both directions, under small caps: one withdrawal burns from one backing
 bucket (one pfUSDC series), withdrawals below 0.30 USDC are refused, and on 24 November the vault
-accepted 25 USDC more (same handoff). A cancel and refund of a Solana withdrawal has not
+accepted 25 USDC more (same handoff). Since 26 November deposits and withdrawals are
+proved, and so open, only during a daily proving session
+([Network Status](../status/network-status.md#usdc-bridges)). A cancel and refund of a Solana withdrawal has not
 been run on the live chain. No external audit of the Solana vault, deposit
 programs or exit verifier is recorded in this repository; the
 [Bridge Audit Map](../status/bridge-audit-map.md) records what public source
