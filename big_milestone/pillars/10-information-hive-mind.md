@@ -1,183 +1,117 @@
 # Pillar 10 — Information Hive Mind
 
-> **Status:** Early. Contributor profiles (which already list 5–10 public companies each user's work maps to), expert badges, capability profiles and context documents are live. Per-company agent tables exist as a migration, built for an operator editing a model. There is no interviewing agent, contribution store, compliance screening, link between users and the coverage universe, or triangulation.
+> **Status:** Early. Task Node already builds contributor diagnostic profiles (which map users' work to 5–10 companies/domains), Expert badges, capability profiles, and context documents, and migration `158_finance_agent.sql` defines initial per-company agent tables. What is missing: the two-phase triangulating interview agent, MNPI/confidentiality screening, the per-company claim pool & reviewer agent, Finance Hub coverage-universe matching, and accelerated alpha rewards.
 >
-> **Bubbles up to:** [Outcome A · Post-human governance in public](../README.md#three-outcomes). *Post-human activity*. The network turns what its members know into better models, and pays them for it.
+> **Outcome:** [A · Post-human governance in public](../README.md#three-outcomes) — turning the distributed knowledge of Post Fiat's contributors into sharper, corroborated research models and rewarding genuine alpha fast.
 
-## In one paragraph
+## What this pillar is (in plain English)
 
-Task Node knows its contributors: their tasks, skills and context. Finance Hub holds a coverage universe of company models. This pillar connects the two. Each covered company or protocol gets an **agent** ramped up on its history. The agent **triangulates the person** first: how far their experience could give them useful information about this company. Then it asks targeted questions. Every answer is **screened**, so the network never solicits or stores material non-public or confidential information. Claims from many contributors are pooled per company, where they are corroborated or contested; that pooling is the *hive mind*. Rewards are paid mainly **once a claim is checked**, not when an LLM likes it.
+Task Node already knows what its contributors are genuinely good at from their completed tasks, and Finance Hub maintains ~60 live models across crypto protocols and liquid megacap equities with perps. This pillar connects the two into a living **Information Hive Mind**:
 
-## User story
+1. **Match any eligible contributor to the coverage universe:** Task Node automatically maps eligible contributors (any Expert-badged or domain-verified user — not restricted to Finance Hub members) to covered **crypto protocols/tokens and liquid megacap equities that have perps in the Finance Hub coverage universe** (no random illiquid small-cap equities). Users always confirm or remove suggested knowledge areas before matching runs.
+2. **Triangulate first, then ask sharp questions:** Each covered company or protocol gets an AI research agent ramped up on its history and open model questions. In Task Node chat, **Phase 1** checks what the contributor can actually observe directly (operator, builder, customer, trader, public-data analyst), and **Phase 2** asks targeted questions tied to the model's live blind spots. *(Non-Finance-Hub contributors see only a public company brief — zero gated model targets ever leak.)*
+3. **Strict MNPI & confidentiality firewall:** Before any interview starts, the contributor declares their relationship to the company and attests they will not share inside or confidential information (current employees/insiders with MNPI or NDA duties on that name are blocked from interviewing on it). Every answer is screened before storage; anything looking like inside or NDA information is immediately refused and **never stored** (only an audit hash + reason code is logged).
+4. **Pool & cross-check claims across contributors:** Accepted claims go into a per-company claim store where a reviewer agent clusters corroborating or conflicting claims and weights them by contributors' real track records. Human model owners decide whether to update the model and cite the contribution in the model `CHANGELOG`, surfacing verified **Contributor insights** back on Finance Hub.
+5. **Accelerated rewards for alpha:** High-signal, novel, non-consensus claims earn **accelerated payouts** — a fast acceptance payout when cited/applied in a model update **plus an accelerated alpha bonus multiplier** when checkable claims prove out against real-world outcomes (especially well-argued contrarian `challenges` that improve model accuracy).
 
-**Founder's story** (Deliverable 10, quoted as written except one typo fixed):
-
-> I have done a large number of tasks on the task node. I am classified to contribute specific types of information to the task node and this can be done via chat. An agent who is ramped up on a company's history can triangulate with you based on your experience to what extent you could have useful information about a company or protocol. The coverage universe in finance hub is linked to specific users
-
-The last sentence ends the deliverable without a full stop. It may be complete, or the start of a longer thought. Everything below it is **interpretation**, and how users are linked stays an open question.
-
-**Augmented story (interpretation).**
-
-1. **Classified.** My long rewarded task record makes me eligible. My profile lists **knowledge areas** (*Solana infrastructure*, *GPU compute markets*) and **information types**: how I know things, such as operator, builder, customer, trader or public-data analyst. I confirm or remove each. Only I see why each was suggested.
-2. **Matched.** The coverage universe maps companies and protocols to areas. Task Node shows me **"You may know something about: NVDA, Solana"**.
-3. **Attested.** Before the first question I declare my relationship to the company (none, customer, supplier, employee, former employee, investor). I confirm I won't share non-public information, or anything I owe an employer or client confidentiality on. If my relationship rules me out, the interview doesn't start.
-4. **Triangulated.** In Task Node chat, the agent first works out what I can observe: "You've rented GPUs for training. Do you track public rental prices, and for which chips?" Then it asks two or three questions tied to the model's open questions: "The model assumes H100 rental prices hold next year. What have the public rates you track done?" It never asks about my employer's or clients' internal matters.
-5. **Screened and pooled.** If an answer looks like inside or confidential information, the agent stops that line, says why, and stores nothing. Accepted claims join the company's claim store beside other contributors' claims that agree or disagree.
-6. **Credited.** A reviewer agent groups and scores claims. The model owner applies any model change, and the CHANGELOG cites my contribution. Most of my reward is released when the claim is checked, for example at the next earnings release. Checked claims build my track record.
-7. **Visible.** Finance Hub's company page shows *Contributor insights*: corroborated and contested claims, credited by name, minted identity or verified pseudonym.
-
-## What exists today
-
-| Component | Where | State |
-|---|---|---|
-| Contributor diagnostic profiles | [`network-task-profile-worker.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/network-task-profile-worker.md) · [`network_task_profile_v2.md`](https://github.com/postfiatorg/tasknode/blob/main/prompts/memory/network_task_profile_v2.md) · [`024_network_task_profiles.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/024_network_task_profiles.sql) | Live. Built from **Deep Memory and the context document** plus rewarded and refused tasks. Outputs `primary_contribution_ability` (the prompt asks whether the user "has important information") and `domain_expertise` (5–10 public companies). Derived from private sources, so it must not go into an agent directly. |
-| Expert badges | [`server/expert-badge.js`](https://github.com/postfiatorg/tasknode/blob/main/server/expert-badge.js) (at least 20 completed personal tasks, score at least 80) | Live. A ready-made eligibility bar. |
-| Badge definitions with caps | [`072_network_badges_identity_approvals.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/072_network_badges_identity_approvals.sql) (`max_payout_pft`, `payout_policy_json`, `eligibility_policy_json`) · [`badge-based-network-task-routing.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/badge-based-network-task-routing.md) | First enforcement slice live: an eligibility gate and payout and work-type caps for Network Task executors ([`network-badges.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/network-badges.js)). The routing spec requires checks before an offer and again before a reward. |
-| Capability profiles | [`capability-profiles.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/capability-profiles.js) (`declared` → `verifying` → `verified`) | Live, used by board managers |
-| Profile matching | [`recommended-connections.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/recommended-connections.js) (embeddings over a packet including `domain_expertise`, for non-private, discoverable profiles) | Live, people-to-people only |
-| Context documents | [`context.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/surfaces/context.md) · [`context_edit_jobs_v1.xml`](https://github.com/postfiatorg/tasknode/blob/main/prompts/context/context_edit_jobs_v1.xml) | Live. The closest thing to an interview is the editor's one "calibration question". |
-| Verification and rewards | [`task-review-reward-worker.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/task-review-reward-worker.md) | Live. A verification request precedes every reward. Payouts settle on the ledger, so they are public. |
-| Sybil review | [`sybil-review-detection.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/sybil-review-detection.md) | Live, recommend-only: it raises flags for people to review. |
-| Per-company agent tables | [`158_finance_agent.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/158_finance_agent.sql) (`finance_agent_threads`, `_messages` with `cost_usd`, `_proposals`) | **Migration only**; no code uses it. Designed for "an allowlisted operator" and an agent on the model host that reads a sealed model copy and proposes changes applied after approval. No fields for contributor claims, scores, attestation, attribution, verification or rewards. |
-| Finance Hub coverage | [Pillar 9](09-finance-hub.md) | Validator-gated encrypted bundle built on the research host; top-30 access is planned. "Coverage universe" appears nowhere in Task Node code. |
-| Privacy boundary | [`server/hive-group-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-worker.js) ("Private chat, task evidence and memory are not included here") | Live, and must be kept |
-
-## Architecture
+## How the Information Hive Mind loop works
 
 ```mermaid
 flowchart TB
-    subgraph Contributor side
-      P["Profile + badges + context"] --> KA["Confirmed areas and information types"]
-      KA --> CB["Contributor brief - approved fields only"]
+    subgraph Contributor["Any Eligible Contributor (Expert / Verified)"]
+      P["Task History + Badges + Context"] --> KA["User-Confirmed Knowledge Areas & Info Types"]
+      KA --> CB["Sanitized Contributor Brief<br/>(zero Deep Memory or private chat)"]
     end
-    subgraph Coverage universe
-      CU["Coverage manifest from hub build"] --> CA[Area tags]
-      CU --> AG["Company agent - brief + open questions"]
+    subgraph Universe["Finance Hub Coverage Universe (Crypto + Perp-Backed Megacap Equities)"]
+      CU["Coverage Manifest"] --> TAGS["Area Tags + Open Model Questions"]
+      CU --> AG["Company Research Agent<br/>(public brief for non-members; member brief for Hub members)"]
     end
-    KA --> MATCH{"Match areas x companies"}
-    CA --> MATCH
-    MATCH --> ATT["Eligibility + attestation"]
-    ATT --> Q1["Phase 1 - what can this person observe"]
+    KA --> MATCH{"Automatic Matching"}
+    TAGS --> MATCH
+    MATCH --> ATT["Eligibility + Relationship & No-MNPI Attestation"]
+    ATT --> Q1["Phase 1: Triangulate what contributor observes"]
     CB --> Q1
     AG --> Q1
-    Q1 --> Q2["Phase 2 - targeted questions"]
-    Q2 --> SCR{"Screening - non-public or confidential?"}
-    SCR -- refused --> LOG[("Audit record")]
-    SCR -- passed --> CS[("Claim store per company")]
-    CS --> RA["Reviewer agent - group, corroborate, score"]
-    RA --> OWN["Model owner applies change"]
-    OWN --> CL["CHANGELOG cites contribution"]
-    CS --> CHK["Check event resolves claim"]
-    CHK --> RW["Deferred reward + track record"]
-    RA --> FH["Finance Hub - Contributor insights"]
+    Q1 --> Q2["Phase 2: Targeted questions on open model gaps"]
+    Q2 --> SCR{"MNPI / NDA Screening"}
+    SCR -- "refused (text discarded)" --> LOG[("Hash-Only Compliance Audit Log")]
+    SCR -- "passed" --> CS[("Per-Company Claim Store")]
+    CS --> RA["Reviewer Agent<br/>(cluster, corroborate/contest, track-record weight)"]
+    RA --> OWN["Human Model Owner approves edits"]
+    OWN --> CL["Model CHANGELOG cites contribution"]
+    OWN --> FH["Finance Hub: Contributor Insights"]
+    CS --> CHK["Check Event / Citation"]
+    CHK --> RW["Accelerated Alpha Rewards + Track Record"]
 ```
 
-## Technical requirements
+## Locked-in design decisions
 
-### Classification and matching
+- **Coverage-to-user linking:** **Open automatic matching across any eligible Task Node users** (not limited to Finance Hub members and not bottlenecked on assigning one named owner per company; high-trust contributors can still build domain reputation on specific names). Non-Finance-Hub contributors receive a strictly public company brief with zero gated model numbers or price targets.
+- **Asset classes in scope:** **Crypto protocols/tokens + liquid megacap equities that have perps in the Finance Hub coverage universe** (explicitly excluding random non-perp / illiquid equities). Paid interviews on listed equities enable once counsel signs off on the attestation wording and restricted-relationship rules.
+- **Reward design (accelerated rewards for alpha):** Use Task Node's verified-task reward pipeline (bounded by existing badge payout caps and Sybil review) with **accelerated payouts for real alpha**:
+  - Fast payout upon acceptance/citation in an applied model update;
+  - **Accelerated alpha bonus multiplier** when a checkable claim is verified by a real-world event (earnings, on-chain data, public release), weighted extra for novel, non-consensus `challenges` that move model estimates closer to reality;
+  - Uncheckable claims earn only if cited in an applied model update (preventing Sybil corroboration farming);
+  - Falsified claims earn no further payout and lower the contributor's domain weight.
+- **Safety, privacy & governance defaults locked in:**
+  - **Eligibility:** Existing Task Node **Expert badge** (`>= 20` completed personal tasks, score `>= 80`) or a verified capability profile in the matched domain.
+  - **Refused MNPI/NDA content:** Discard rejected text immediately — log **only** `(account, company, timestamp, reason, SHA-256 hash)` so the platform never holds rejected inside information.
+  - **Relationship exclusions:** Block current employees and anyone bound by MNPI/NDA duties on a covered company from interviewing on that specific company; allow ordinary public observers, customers, builders, and analysts with explicit attestation.
+  - **Model change authority:** **Human model owner approves every model edit** via `finance_agent_proposals` (falls back to Finance Hub operator queue if unowned).
+  - **Privacy & pseudonymity:** Raw Deep Memory, private chat, context docs, and task evidence **never** reach company agents, reviewers, or Finance Hub. Attribution supports real handle, minted [Pillar 6](06-hive-identity.md) identity, or verified pseudonym (*hidden from public Finance Hub readers, known to Task Node operators* in v1; UI states this plainly).
 
-- **R1.** Each hub build publishes a **coverage manifest** ([Pillar 9](09-finance-hub.md) already produces `coverage` data): each company or protocol, its asset class (listed equity, token, protocol) and tags from a small controlled vocabulary. Task Node reads it rather than keeping its own list.
-- **R2.** Two axes per contributor: **knowledge areas** and **information types**. Candidates come from the profile's `domain_expertise` and `primary_contribution_ability`, badges and verified capability profiles. A candidate is used only once the contributor **confirms** it, and can be removed at any time.
-- **R3.** Matching combines confirmed tags with embedding similarity (the recommended-connections stack) against each company's open questions. It is weighted by **evidence** (rewarded tasks, past checked claims), not self-confirmation alone. Invitations rotate, and concurrent interviews per contributor are limited.
+## What exists today
 
-### Privacy
+| Piece | Current state | Where |
+|---|---|---|
+| Diagnostic profiles & matching | Live: `network_task_profiles` already extracts `domain_expertise` (5–10 companies) and `primary_contribution_ability`; embeddings match profiles (`recommended-connections.js`) | [`024_network_task_profiles.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/024_network_task_profiles.sql), [`recommended-connections.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/recommended-connections.js) |
+| Eligibility, badges & Sybil review | Live: Expert badge (`>= 20` tasks, `>= 80` score), badge payout caps (`max_payout_pft`, `eligibility_policy_json`), capability profiles, and Sybil flagging | [`server/expert-badge.js`](https://github.com/postfiatorg/tasknode/blob/main/server/expert-badge.js), [`network-badges.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/network-badges.js) |
+| Per-company agent tables | Migration `158_finance_agent.sql` (`finance_agent_threads`, `_messages`, `_proposals`) exists, **no code uses it yet**, and it lacks claim/screening/attestation/reward tables | [`158_finance_agent.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/158_finance_agent.sql) |
+| Privacy boundary | Live rule: private chat, task evidence, and Deep Memory never leak into public surfaces | [`server/hive-group-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-worker.js) |
 
-- **R4.** The agent sees only a **contributor brief**: confirmed areas and types, the declared relationship and a short experience summary the contributor approved. Raw profile text, Deep Memory, the context document, chat and task evidence never reach the agent, claim store, reviewers or Finance Hub.
-- **R5.** Match reasons and suggested areas appear only on the contributor's private surfaces.
+## Detailed specification
 
-### Safeguards against non-public and confidential information
+### 1. Coverage manifest, classification & privacy-safe matching
+- **Coverage manifest (from [Pillar 9](09-finance-hub.md)):** Every Finance Hub build exports `hub/coverage_manifest.json` listing each covered crypto protocol and perp-backed megacap equity, its asset class, area tags, and enabled interview mode.
+- **User-confirmed areas & info types:** Task Node suggests knowledge areas and information types (operator, builder, customer, trader, public-data analyst) privately from profiles/badges; nothing activates until the contributor confirms it, and match reasons are visible only to that user.
+- **Sanitized contributor brief:** Company agents receive *only* confirmed areas/types, declared relationship, and a user-approved summary — never raw Deep Memory, context docs, or private chat.
+- **Evidence-weighted matching:** Combines confirmed tags + embedding similarity against **public-safe topic tags** (never leaking gated model questions), weighted by completed tasks and past verified claims, with rotation and concurrent-interview caps. Contributors can also self-initiate an interview (including from Finance Hub's **Ask the agent** button) under the exact same eligibility, attestation, and screening rules.
 
-- **R6. What the agent never asks.** Instructions plus an output check forbid questions seeking:
-    - non-public information about a covered company: unreleased results, guidance, deals, orders, pricing, product plans, audits or legal matters
-    - anything learned under a duty of confidentiality to an employer, client or counterparty
-    - internal matters of the contributor's current or recent employer or clients
+### 2. True in-memory MNPI firewall & strictly isolated two-phase interviews
+- **Strict non-MNPI guardrails:** System instructions + output filter block questions asking about unreleased earnings, guidance, deals, internal orders/pricing, product plans, legal matters, or employer/client confidential info — targeting strictly public/market-participant observations.
+- **Pre-interview attestation:** Logs relationship declaration + no-MNPI attestation and blocks excluded relationships before Phase 1 starts.
+- **In-memory pre-storage screening (zero-retention pipeline):** Every user message is screened **in RAM on the API handler BEFORE writing to `finance_agent_messages` or forwarding to any LLM** (using zero-data-retention model endpoints). Messages classify as `pass`, `redact` (user previews remaining text before saving), or `refuse` (raw text is discarded immediately in memory, never written to DB or chat history, and **only** `(account, company, timestamp, reason_code, sha256)` is written to the compliance log).
+- **Strictly isolated member vs non-member two-phase interviews:**
+  - **Non-Finance-Hub contributors** run exclusively against `agent_brief_public.json` + a build-checked public question list — **never** seeing gated model targets, member open model questions, or existing member pooled claims (preventing indirect extraction of Finance Hub research via Phase 2 prompts!).
+  - **Finance Hub members** run against `agent_brief_members.json` and may also be asked to independently corroborate or challenge existing anonymized pooled claims.
+  - **Phase 1 (Triangulation)** scores what the contributor directly observes; **Phase 2 (Targeted questions)** probes bounded open questions (capped turns/tokens per interview).
 
-    Questions target what the contributor observes in public or as an ordinary market participant: public prices and datasets, products bought openly, open-source code, on-chain data.
+### 3. Claim store, objective alpha baseline, model bridge & accelerated rewards
+- **Claims table (schema delta on migration `158`):** Stores company, contributor, client-signed claim text (signed by the contributor's [Pillar 6](06-hive-identity.md) identity or pseudonymous key **at submission time**, never offline later!), info type, stance (`confirms` | `refines` | `challenges`), evidence/mechanism, **snapshotted `model_estimate_before` & `market_consensus_before` at submission time** (so alpha is objectively measurable!), dated public `check_event`, screening result, attestation, attribution, cluster ID, status (`pending` | `accepted` | `rejected` | `verified` | `falsified` | `unresolvable`), and reward link.
+- **Reviewer agent (prompt-injection hardened) & human approval:** Untrusted claim text is wrapped in strict quoted-data delimiters before entering the Reviewer Agent, which clusters duplicate claims, marks consensus vs contested, scores novelty/evidence/checkability, and queues `finance_agent_proposals` for the human model owner (auto-escalating to the Finance Hub operator queue after 7 days and expiring to `unresolvable` after 30 days if unreviewed). **Conflict-of-interest rule:** a model owner cannot approve or trigger payouts on their own submitted claims.
+- **Research host bridge & instant takedown:** Research host pulls approved proposals via read-only service token; on `CHANGELOG` merge, the research host posts a signed webhook back to Task Node (`proposal_applied` + commit/CHANGELOG ref) that unlocks citation payouts and publishes `contributor_insights.json` (wrapped by Pillar 9's `< 1s` server-side MNPI takedown filter). Accepted claims also emit encrypted [Pillar 2](02-message-protocol.md) packets (transcripts stay private).
+- **Concrete accelerated alpha reward bounds & anti-gaming:**
+  - **Fast citation payout:** `$10–$50` PFT equivalent immediately when cited in an applied model `CHANGELOG` (split proportionally among corroborated duplicate claims in the same cluster).
+  - **Accelerated alpha bonus multiplier:** **`2×–5×`** bonus upon check-event verification (highest for contrarian `challenges` that move model estimates closer to reported reality), capped by existing badge per-claim/monthly limits (`max_payout_pft`) and Sybil review.
+  - **Anti-hedging & falsification:** Submitting contradictory stances on the same company + check event is blocked; falsified claims pay zero bonus and lower the contributor's domain weight. Tracked on an operator ROI dashboard (spend, acceptance rate, verification rate, cost per verified insight, and post-citation forecast accuracy delta).
 
-- **R7. Attestation.** Each interview records a relationship declaration and a no-non-public-information attestation. Relationships the founder's policy excludes block the interview for that company. Wording and exclusions are founder and counsel decisions.
-- **R8. Screening and refusal.** Every answer is screened before storage: **pass**, **redact** (the contributor sees what remains) or **refuse**. On refuse, the agent drops that line, says why and asks no follow-up. Refused content never enters the claim store, agent context or reviewer queues. An audit record (account, company, time, reason, content hash) goes to the compliance reviewer.
-- **R9. Asset-class modes.** Each manifest entry carries an interview mode by asset class. Paid interviews run only where the founder has approved that mode.
+## Milestones & completion checklist
 
-### Interview
+### Build milestones
+- [ ] **M1 · Coverage manifest, user confirmation & matching:** Consume `hub/coverage_manifest.json` (filtered to crypto protocols + perp-backed megacap equities), build private knowledge-area/info-type confirmation UI, sanitized contributor briefs, and evidence-weighted matching for any Expert/verified user.
+- [ ] **M2 · Compliance firewall, attestation & red-team tests:** Build relationship/no-MNPI attestation, pre-storage `pass`/`redact`/`refuse` screening (hash-only refusal audit log), and complete legal counsel sign-off for perp-backed equity interviews; pass MNPI/NDA + prompt-injection + privacy-leak red-team suites.
+- [ ] **M3 · Two-phase company agents & claim store:** Implement Phase 1 triangulation + Phase 2 targeted interviews on `finance_agent_threads` (using public vs member briefs cleanly) and add the claims/clustering schema delta on migration `158`.
+- [ ] **M4 · Reviewer agent, model-owner proposals & Finance Hub insights:** Ship claim clustering/scoring, human model-owner approval queue (`finance_agent_proposals`), research-host service-token pull, `CHANGELOG` citation, and Finance Hub `Contributor insights` + **Ask the agent** integration.
+- [ ] **M5 · Accelerated alpha rewards, Pillar 2 packets & ROI dashboard:** Wire badge-capped accelerated payouts (fast citation payout + verified alpha bonus multiplier + falsification weight penalty), encrypted [Pillar 2](02-message-protocol.md) claim packets, and the operator alpha/ROI dashboard.
 
-- **R10.** Interviews run in Task Node chat on `finance_agent_threads` and `_messages` (`account_id`, `model`, `cost_usd`), in two phases:
-    - **Phase 1** triangulates the person: what can they observe, how directly, how recently. It yields a per-company relevance score that feeds back into matching.
-    - **Phase 2** asks adaptive questions from the company's open questions and existing claims. A contributor may be asked to corroborate a claim, never told whose it is.
-
-    Turns and tokens per interview have a configurable cap. Contributors can also start an interview themselves, under the same eligibility, attestation and screening.
-
-- **R11.** Each company's agent context is a **brief** rebuilt and cached at every hub publish: public facts, a model and changelog summary, and open questions, limited to what this contributor may see. Without Finance Hub access the brief carries no model numbers or targets, so prompt injection has nothing gated to extract. Agents start lazily.
-
-### Contributions
-
-- **R12.** A contribution table, as a schema delta on 158. Per claim: company, contributor, text, information type, stance (`confirms`, `refines`, `challenges`), evidence or mechanism, **check event** (a dated public event, or none), screening result, attestation, attribution, cluster, status (`pending`, `accepted`, `rejected`, `verified`, `falsified`, `unresolvable`) and reward link.
-- **R13.** **Scoring:** novelty against the brief and claim store, evidence quality, checkability and **corroboration** by independent contributors. Agreement with the model is not a criterion, so a well-argued `challenges` claim can score highest.
-- **R14.** **Pooling.** The reviewer agent clusters similar claims, marks clusters as consensus or contested, and weights them by contributors' track records. Two people making one claim yield one cluster with two supporters.
-- **R15.** **Roles.**
-    - The **reviewer agent** screens, clusters and scores, and drops duplicates and weak claims.
-    - The **model owner** decides only on model changes, via `finance_agent_proposals`.
-    - A **compliance reviewer** handles refusals and flags.
-    - A company with no owner, or an owner who doesn't act, falls back to a Finance Hub operator queue.
-- **R16.** **Bridge to the research host.** The model host pulls approved proposals and accepted clusters with its service token, as the 158 design describes. The CHANGELOG cites contribution IDs, and the next bundle carries a `contributor_insights` file.
-- **R17.** **Information packets.** Each accepted claim is written as a [Pillar 2](02-message-protocol.md) packet, encrypted by default and signed with the contributor's [Pillar 6](06-hive-identity.md) identity or a pseudonymous key. Its hash is referenced from the proposal and CHANGELOG. Until Pillar 2 runs on the new chain, the database row is the record. Transcripts are not published by default.
-
-### Economics
-
-- **R18.** **Deferred rewards.** Rewards use the normal Task Node path (task, verification request, ledger payout), in up to two parts: an optional small credit on acceptance and the main amount on a **verification event**. That event is the check event confirming the claim, or the claim being cited in an applied model change. Falsified claims earn nothing more and lower the contributor's weight in that area.
-- **R19.** **Caps in code.** Eligibility and per-period caps live in a badge definition (`eligibility_policy_json`, `max_payout_pft`, `payout_policy_json`), checked before the interview and again before the reward, as the badge-routing spec requires. Contributors pass through Sybil review.
-- **R20.** **Measured value.** A dashboard shows spend, accepted claims, share verified, spend per verified claim, share of model changes citing contributions, and whether estimates moved toward reported outcomes after cited changes.
-
-### Attribution and surfaces
-
-- **R21.** Attribution by name, minted identity or **verified pseudonym** with a credential ("12 checked claims in GPU markets"). Until shielded payouts exist ([Pillar 5](05-local-task-node.md)), the UI says plainly that a pseudonym hides the contributor from Finance Hub readers only. Operators know who they are, and ledger payouts can be linked by timing.
-- **R22.** The contributor's private profile shows areas, types, suggested companies and track record. Interviews run in Task Node chat. Finance Hub company pages show *Contributor insights* and **Ask the agent** for members ([Pillar 9](09-finance-hub.md)).
-
-## Dependencies
-
-| Depends on | Why |
-|---|---|
-| [Pillar 9 — Finance Hub](09-finance-hub.md) | Coverage manifest, briefs, access tiers, insights surface. |
-| [Pillar 6 — Hive identity on chain](06-hive-identity.md) | Attribution and claim signing. |
-| [Pillar 2 — Message protocol](02-message-protocol.md) | Encrypted contribution packets. |
-| [Pillar 5 — Local Task Node](05-local-task-node.md) | Shielded payouts, if pseudonymous rewards must be unlinkable. |
-| Research host model pipeline | Applying proposals, CHANGELOG citations, publishing insights. |
-| Profile, badge, capability, Sybil and reward systems | Classification, eligibility, caps, payout. |
-
-## Acceptance criteria
-
-1. An eligible contributor confirms two suggested areas and is matched to at least one entry with an approved interview mode. An ineligible account can neither be invited nor start an interview.
-2. Phase 1 produces a relevance score. Phase 2's questions cite the contributor's confirmed areas and the company's open questions.
-3. **Screening test:** a red-team set of answers (unreleased results, employer internal data, NDA material) is refused, none of it reaches the claim store, agent context or reviewers, and each refusal leaves an audit record. A red-team set of prompts never draws a question R6 forbids.
-4. **Privacy test:** no Deep Memory, context-document, chat or task-evidence text reaches the agent, other users' views of matching, the claim store or Finance Hub without consent.
-5. **Gating test:** prompt-injection attempts by a contributor without Finance Hub access return no model numbers or targets.
-6. Two independent contributors making the same claim produce one corroborated cluster.
-7. One claim is cited in a CHANGELOG through an applied proposal, and its main reward is released only after its verification event. A falsified claim releases nothing further and lowers the contributor's weight.
-8. The R20 dashboard shows real figures for the first cycle.
-
-## Open questions for the founder
-
-1. **"Linked to specific users."** Assignment (a named owner per company: accountable, but needs people), matching (this spec: scales, but nobody owns a company), or both? Or did you mean something else, such as each user having their own coverage list?
-2. **Legal review.** Should counsel review before any paid interview, for which jurisdictions, and who writes the attestation?
-3. **Asset classes in scope.** Protocols and tokens first; listed equities restricted to public questions; or everything under one set of rules? Protocols carry less securities-law risk, but token insider rules still apply.
-4. **Use of outputs.** Do Finance Hub models inform any trading, NAVCoin or personal positions? If so, a stricter regime is needed, such as a restricted list or barring contributors linked to held positions.
-5. **Relationship rules.** May current employees, former employees (after what gap), suppliers or customers of a covered company take part?
-6. **Refused content.** Keep only a hash, or keep the text in a restricted log? The log helps audits, but holding the material is itself a risk.
-7. **Eligibility.** What is "a large number of tasks": the Expert badge, a minimum count of rewarded tasks, a top-N rank, or a verified capability in the area?
-8. **Reward shape and budget.** Pay everything on verification, or a small credit plus a deferred amount? Per claim, or folded into ordinary tasks? What are the funding source and the per-person and per-company caps? Do falsified claims only lower weight, or also forfeit earlier credit?
-9. **Who approves.** Must a person approve every model change, or may the reviewer agent accept low-impact claims (more post-human, more risk)? Who is the compliance reviewer? Is owner review paid work or part of the role?
-10. **Access.** Can contributors without Finance Hub access be interviewed, which widens the hive but limits what they can see? Or is this members-only?
-11. **Pseudonymity.** Is "hidden from readers, known to operators" enough? Or should pseudonymous payouts wait for batched or shielded payouts?
-12. **Unresolvable claims.** With no check event, should the reward come from citation in an applied change only, or also from corroboration?
+### Required ship gates
+- [ ] **1. Executed:** All M1–M5 code, screening guardrails, model-host bridge, and accelerated alpha payout logic merged and live in production.
+- [ ] **2. Tested by user:** Founder tests matching on a crypto protocol and a perp-backed megacap equity (as both a Finance Hub member and a non-member verifying zero model-target leakage), triggers an intentional MNPI refusal confirming zero text stored, runs a two-contributor corroboration cycle, approves a model `CHANGELOG` citation, and verifies accelerated alpha payout + dashboard metrics.
+- [ ] **3. Added to docs:** Contributor interview guide, MNPI/compliance policy, attribution/pseudonymity rules, and accelerated alpha reward docs published in Post Fiat docs.
+- [ ] **4. Public blog post document:** Public blog post written and published introducing the **Post Fiat Information Hive Mind** — how AI company agents triangulate distributed expertise, filter out noise/MNPI, and pay accelerated rewards for verified alpha.
 
 ## Code references
 
-- Profiles: [`024_network_task_profiles.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/024_network_task_profiles.sql) · [`prompts/memory/network_task_profile_v2.md`](https://github.com/postfiatorg/tasknode/blob/main/prompts/memory/network_task_profile_v2.md) · [`network-task-profile-worker.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/network-task-profile-worker.md)
-- Badges and caps: [`server/expert-badge.js`](https://github.com/postfiatorg/tasknode/blob/main/server/expert-badge.js) · [`072_network_badges_identity_approvals.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/072_network_badges_identity_approvals.sql) · [`badge-based-network-task-routing.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/badge-based-network-task-routing.md)
-- Capability profiles and matching: [`capability-profiles.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/capability-profiles.js) · [`recommended-connections.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/recommended-connections.js)
-- Finance agent tables: [`158_finance_agent.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/158_finance_agent.sql)
-- Rewards and Sybil review: [`task-review-reward-worker.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/task-review-reward-worker.md) · [`sybil-review-detection.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/sybil-review-detection.md)
-- Privacy boundary: [`server/hive-group-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-worker.js)
-
----
-
-*Revision history: [changelog](../changelog/10-information-hive-mind.md).*
+- Contributor profiles & matching: [`024_network_task_profiles.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/024_network_task_profiles.sql) · [`recommended-connections.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/recommended-connections.js) · [`capability-profiles.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/capability-profiles.js)
+- Badges, caps & Sybil review: [`server/expert-badge.js`](https://github.com/postfiatorg/tasknode/blob/main/server/expert-badge.js) · [`network-badges.js`](https://github.com/postfiatorg/tasknode/blob/main/server/repositories/network-badges.js) · [`072_network_badges_identity_approvals.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/072_network_badges_identity_approvals.sql)
+- Finance agent tables & privacy boundary: [`158_finance_agent.sql`](https://github.com/postfiatorg/tasknode/blob/main/server/db/migrations/158_finance_agent.sql) · [`server/hive-group-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/hive-group-worker.js)

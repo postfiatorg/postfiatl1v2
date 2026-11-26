@@ -1,196 +1,191 @@
 # Post Fiat — The Big Milestone
 
-> **What this is:** the master spec for taking Post Fiat from zero to hero. This page answers one question and organises the answer into ten pillars. Each pillar has its own spec page with a user story, technical requirements, dependencies, acceptance criteria, diagrams and code references. Each page stands on its own, and each one feeds the outcomes below.
+> **What this is:** The master execution spec and milestone tracker for taking Post Fiat from zero to production. Every open founder decision across all 10 pillars has been resolved and locked in — **zero open questions remain**. Every pillar has concrete `[ ]` build milestones plus the four mandatory ship gates: **1) Executed, 2) Tested by user, 3) Added to docs, 4) Public blog post document**.
 
-## The question
+## The goal
 
-> **What set of activities must be completed to maximise the likelihood of success for Post Fiat?**
+**Post-human governance is a new primitive, and Post Fiat is actively building it in public.**
 
-## The story we want people to understand
+The core loop is simple: **information packets are published, acted on, and audited in public.** Anyone who encounters Post Fiat should immediately see a real, working post-human network running on a fast, quantum-safe chain with an open financial primitive anyone can build on.
 
-**Post-human governance is a new primitive, and Post Fiat is actively exploring it.**
+That breaks down into **three outcomes** across **ten pillars**:
 
-The essence is simple. **Information packets are uploaded and acted on.** Someone publishes a packet describing the state of the protocol. The network, made up of people, agents and validators, discusses it, decides and acts. Once a packet has been acted on, things kick into gear: tasks are issued, rewards flow and code ships.
-
-Anyone who encounters Post Fiat should come away thinking: *"I see. This is an exploration of what truly post-human activity looks like."*
-
-For that to be true, the activity has to be **public**, **on a chain that works** and **open for anyone to build on**. Those are the three outcomes.
-
-## Three outcomes
-
-| Outcome | What it means | Pillars |
+| Outcome | What it delivers | Pillars |
 |---|---|---|
-| **A. Post-human governance, in public** | Governance runs as a visible loop of packet → public conversation → minutes → deliverables, with an on-chain record and a fixed cadence. | [1 Hive governance](pillars/01-hive-governance.md) · [6 Hive identity](pillars/06-hive-identity.md) · [10 Information hive mind](pillars/10-information-hive-mind.md) |
-| **B. A production-ready new chain** | postfiatl1v2 replaces the old chain. It is fast, private and quantum-safe, has NFTs and a message protocol, and outside validators run it. | [2 Message protocol](pillars/02-message-protocol.md) · [3 Validators](pillars/03-validator-program.md) · [4 NFTs](pillars/04-nft-system.md) · [5 Local Task Node](pillars/05-local-task-node.md) · [9 Finance Hub](pillars/09-finance-hub.md) (the reason validators and contributors join) |
-| **C. NAVCoins as a primitive anyone can build** | Anyone can mint a NAVCoin with proven reserves, transparent fees and optional KYC, and swap it through pfUSDC and Uniswap. | [7 NAVCoin fees](pillars/07-navcoin-fees.md) · [8 On-chain identity](pillars/08-onchain-identity.md) |
+| **A. Post-human governance, in public** | On-demand public governance sessions with direct carry-over accountability, verifiable on-chain Nostr identity, and an Information Hive Mind rewarding real alpha. | [1 · Hive Governance](pillars/01-hive-governance.md) · [6 · Hive Identity](pillars/06-hive-identity.md) · [10 · Information Hive Mind](pillars/10-information-hive-mind.md) |
+| **B. A production-ready new chain (`postfiatl1v2`)** | Replaces the old XRPL-fork chain with sub-second FastPay, post-quantum messaging, NFTs, outside validators, local Mac privacy (`PFSH03`), and Finance Hub. | [2 · Message Protocol](pillars/02-message-protocol.md) · [3 · Validators](pillars/03-validator-program.md) · [4 · NFTs](pillars/04-nft-system.md) · [5 · Local Task Node](pillars/05-local-task-node.md) · [9 · Finance Hub](pillars/09-finance-hub.md) |
+| **C. NAVCoins anyone can build** | An open NAVCoin SDK with optional deterministic fees (zero hedge-fund clutter when off), permissionless-by-default assets, and opt-in KYC credentials. | [7 · NAVCoin Fees & SDK](pillars/07-navcoin-fees.md) · [8 · On-chain Identity & KYC](pillars/08-onchain-identity.md) |
 
 ```mermaid
 flowchart LR
-    P1[1 Hive Chat governance] --> A
-    P6[6 Hive identity on chain] --> A
-    P10[10 Information hive mind] --> A
-    P2[2 Message protocol] --> B
-    P3[3 Validator program] --> B
-    P4[4 NFT system] --> B
-    P5[5 Local Task Node + privacy] --> B
-    P7[7 Transparent NAVCoin fees] --> C
-    P8[8 On-chain identity · KYC] --> C
-    P9[9 Finance Hub] --> B
-    A[A · Post-human governance in public] --> S
-    B[B · Production-ready new chain] --> S
-    C[C · NAVCoins anyone can build] --> S
-    S((Post Fiat succeeds))
+    P1[1 · Hive Governance] --> A
+    P6[6 · Hive Identity] --> A
+    P10[10 · Information Hive Mind] --> A
+    P2[2 · Message Protocol] --> B
+    P3[3 · Validator Program] --> B
+    P4[4 · NFT System] --> B
+    P5[5 · Local Task Node + PFSH03] --> B
+    P9[9 · Finance Hub] --> B
+    P7[7 · Optional NAVCoin Fees & SDK] --> C
+    P8[8 · On-chain Identity & Optional Trust Lines] --> C
+    A[A · Post-human Governance in Public] --> S((Post Fiat Succeeds))
+    B[B · Production-Ready New Chain] --> S
+    C[C · Open NAVCoin Primitive] --> S
 ```
 
-## The ten pillars
+*Naming note: Task Node's legacy code calls the **old** XRPL-fork chain "PFTL", while the new chain repo uses `pftl_*` for the **new** chain. Across all 10 specs, **old chain** means the XRPL fork and **new chain (`postfiatl1v2`)** means Post Fiat L1v2.*
 
-| # | Pillar | In one line | Status |
-|---|---|---|---|
-| 1 | [Hive Chat governance module](pillars/01-hive-governance.md) | Upload a protocol-state packet and run a timed public governance session that publishes minutes and deliverables on chain. | Partial |
-| 2 | [Message protocol spec](pillars/02-message-protocol.md) | One standard: protobuf messages, post-quantum encryption, IPFS pinning, FastPay carriage and explorer rendering, plus an x402 profile. | Partial |
-| 3 | [Validator rewards program](pillars/03-validator-program.md) | Signed releases, one-command upgrades, an RPC node, a single docs page, an SSH dashboard and one-click Task Node connect. | Early |
-| 4 | [NFT system](pillars/04-nft-system.md) | A quantum-safe NFT spec on the message protocol, migration of historical NFTs and new mints on the new chain. | Partial |
-| 5 | [Task Node local experience](pillars/05-local-task-node.md) | A local Task Node app that proves shielded transactions on the device and never sends them through the Task Node server. | Early |
-| 6 | [Hive Chat identity on chain](pillars/06-hive-identity.md) | "I minted my Task Node identity": an on-chain record tying the new-chain account, Nostr key, handle and validator keys together. | Early |
-| 7 | [Transparent NAVCoin fees](pillars/07-navcoin-fees.md) | Deterministic management and performance fees, computed in consensus from on-chain reserve value and block heights, and shown on the explorer. | Partial |
-| 8 | [On-chain identity: DID, KYC, optional trust lines](pillars/08-onchain-identity.md) | Permissionless by default, with credential-gated assets for issuers who need KYC. | Partial |
-| 9 | [Finance Hub user spec](pillars/09-finance-hub.md) | A daily "Today" research desk for validators and the top 30 contributors. | Partial |
-| 10 | [Information hive mind](pillars/10-information-hive-mind.md) | Company agents interview the contributors most likely to know something, then credit and reward what they add. | Early |
+---
 
-*Partial* means a meaningful part is built or live. *Early* means building blocks exist but the user-facing product does not.
+## Master milestone checklist (all 10 pillars)
 
-## What has to be true first
+Every pillar is complete **only** when all four ship gates are checked off:
 
-### The deterministic governance framework
+### Pillar 1 — [Hive Chat Governance Module](pillars/01-hive-governance.md)
+*Founder-triggered 30-min public Hive sessions with auto-snapshot, direct carry-over accountability from the previous session (no auto PFT bounties), `postfiatl1v2` anchoring, and optional flagged deterministic rulings on our Google setup or Vast.*
 
-Formalising the deterministic governance framework is the **core of the project**. Today the pipeline is a typed ruleset and deterministic policy, with Cobalt ratification. It runs in research and shadow mode, and authority transfer is not active ([overview](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/deterministic-governance-overview.md), [verifiable constitution](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/verifiable-constitution.md)).
+- [ ] **1. Executed** — Multi-channel Hive, collector, fast facilitator, transcript/minutes anchoring on `postfiatl1v2`, public archive, explorer view, verifier.
+- [ ] **2. Tested by user** — Founder runs a full live 30-min session with prior-session carry-over and verifies third-party audit script.
+- [ ] **3. Added to docs** — Governance packet schema, snapshot method, and verification guide published.
+- [ ] **4. Public blog post document** — Public blog post published and linked from the session archive.
 
-No single pillar owns formalising the framework itself. [Pillar 1](pillars/01-hive-governance.md) defines how a session's decision becomes a ruling request and uses the snapshot as its evidence (its R27). No pillar yet requires two separate hosts to replay a ruling to the same result, or says what a disagreement records. The wider framework, meaning the ruleset, policy and authority transfer, still needs an owner.
+### Pillar 2 — [Message Protocol Spec](pillars/02-message-protocol.md)
+*Canonical protobuf + post-quantum X-Wing encryption + IPFS pinning, Sui-inspired FastPay fee & new-object spam protection, Task Node default FastPay payouts (`"Task reward"` badge on explorer), and x402 (+ MCP helper) agent payments.*
 
-Its scoring runs need **rented GPUs** (Vast and RunPod H200s, roughly $2–4 an hour; past campaigns cost $5–80). [Pillar 1](pillars/01-hive-governance.md) keeps the public conversation off GPUs. The deterministic scoring that ratifies decisions still needs a cheaper, repeatable home.
+- [ ] **1. Executed** — `.proto` SDKs (JS/Python/Rust), L1 FastPay fees + `account_tx` history, Task Node FastPay payout cutover, Explorer Message panel, x402 facilitator + MCP helper.
+- [ ] **2. Tested by user** — Live FastPay reward payout verified on explorer, decrypted locally, legacy v4 history tested, and end-to-end x402 `402 → pay → 200` run.
+- [ ] **3. Added to docs** — `docs/specs/message-protocol-v1.md` with worked byte examples published.
+- [ ] **4. Public blog post document** — Public blog post explaining Post Fiat's post-quantum message protocol, FastPay, and x402.
 
-> **Your draft trails off here:** "though we have migrated that –". Fill in what was migrated and to where, so this page can state the current cost.
+### Pillar 3 — [Validator Rewards Program](pillars/03-validator-program.md)
+*Same `postfiat-node` binary for validator + RPC, signed releases, `postfiat-node upgrade`, `postfiat-node top` SSH dashboard, one "Run a Validator" docs page, active-liveness enforcement (95% / 14d grace), and `$20/mo` per-operator credit + Finance Hub/API keys (no stake/bond).*
 
-### A fixed governance timeline
+- [ ] **1. Executed** — Signed releases, `upgrade`, `top`, packaged RPC profiles + 2 Foundation public RPCs, signed multi-observer uptime feed, Task Node connect + grace/revocation.
+- [ ] **2. Tested by user** — Fresh-host rehearsal following only the docs page, `top` dashboard check, signed upgrade, Task Node connect, and offline grace/revocation test.
+- [ ] **3. Added to docs** — Single canonical **Run a Validator** guide (including RPC setup & hardware specs) live on `postfiat.org` and MkDocs.
+- [ ] **4. Public blog post document** — Public blog post announcing the Post Fiat L1v2 Validator & RPC Program.
 
-Governance needs a **fixed cadence**, so the public knows when the next packet and session happen. [Pillar 1](pillars/01-hive-governance.md) supplies the mechanism. The cadence itself is your decision.
+### Pillar 4 — [The NFT System](pillars/04-nft-system.md)
+*Signed Pillar 2 metadata (`pf.nft.metadata.v1`), keyed storage lookups, founder inventory + burn-first migration for old Post Fiat chain NFTs (official Task Node issuer with `ISSUER_BURNABLE` off, transferable, `0` fee), new-chain minting, and Explorer NFT page.*
 
-### A method for capturing protocol state
+- [ ] **1. Executed** — Metadata schema, L1 keyed NFT lookups, `wallet_wasm` NFT signing, burn-first batch migrator, dual-chain Task Node UI, Explorer NFT view.
+- [ ] **2. Tested by user** — Founder reviews inventory, runs burn-first batch migration (verifying zero duplicates on re-run), mints a fresh NFT on `postfiatl1v2`, and inspects Explorer.
+- [ ] **3. Added to docs** — `docs/specs/nft-v1.md` (policy, test vectors, migration guide, post-quantum threat model) published.
+- [ ] **4. Public blog post document** — Public blog post explaining Post Fiat's quantum-resistant NFT protocol and burn-first migration.
 
-There must be one defined way to gather the protocol's current state into a packet: chain height and state root, validators and their admission verdicts, NAV reserve-proof status, bridge state, board budgets, steward-supplied open P0s and changes since the last packet. Each field carries a trust level. That packet is pinned to IPFS. [Pillar 1](pillars/01-hive-governance.md) defines `pf.governance.packet.v1`, though its snapshot does not yet carry admission verdicts, reserve-proof status, board budgets or a trust level per field, and [Pillar 2](pillars/02-message-protocol.md) defines its envelope.
+### Pillar 5 — [The Task Node Local Experience](pillars/05-local-task-node.md)
+*Native SwiftUI + Rust Mac app (`tasknode-apple`) with local post-quantum `PFSH03` shielded payments (**already proved live on devnet-2 Blocks 1912–1914 on Nov 26, 2026!**), direct public validator RPC default, notarized release, native tab parity, and external audit.*
 
-## Chain readiness gates
+- [ ] **1. Executed** — Merge PRs `#280`/`#444`/`#39`, unified BIP-39 recovery across clients, direct public validator RPC + leak-capture proof, notarized Mac build, native SwiftUI parity, external audit closed.
+- [ ] **2. Tested by user** — Clean-Mac install of notarized `TaskNode.app`, seed restore, one-click *Make private* on FastPay payout, Shield → Send → Receive → Unshield directly via public validator RPC.
+- [ ] **3. Added to docs** — Mac install/privacy guide, honest privacy model, MacBook Air + M5 benchmarks, Lean scope statement, and pause/exit runbook published.
+- [ ] **4. Public blog post document** — Public blog post announcing local post-quantum private payments (`PFSH03`) in the native Post Fiat Mac app.
 
-People can't be moved off the old chain until the new chain performs well enough. In your spec, "performant" means:
+### Pillar 6 — [Hive Chat Identity on Chain](pillars/06-hive-identity.md)
+*Native `identity_set` transaction tying ML-DSA account, Nostr `npub` (keeping existing v1 `npub`s intact + shipping browser signing guard first), `@tasknode.postfiat.org` or custom NIP-05 handle, validator/old-chain/agent links, Explorer Identity card, and first-party `relay.postfiat.org`.*
 
-| Gate | Where it stands today | Owner |
-|---|---|---|
-| **1. Supports NFTs in a smart way** | `nft_mint`, `nft_transfer` and `nft_burn` are built and signed with ML-DSA-65. Metadata standard, migration and explorer view are missing. Storage does not scale yet: every NFT transaction copies the ledger and re-checks every NFT ever minted. [Pillar 4](pillars/04-nft-system.md) R16 benchmarks this and swaps the linear scans for keyed lookups before Task Node switches over if cost grows with the number of NFTs. Paginated lists are not yet specified. | [Pillar 4](pillars/04-nft-system.md) |
-| **2. Works with existing memo-type private payments** | Memos ride on `payment_v2` and are signed into FastPay orders, at most 256 decoded bytes per memo and 512 bytes across all memos, in plaintext. Today's encrypted-memo payments (`pf.ptr` with an encrypted CID) run on the old chain only. | [Pillar 2](pillars/02-message-protocol.md) |
-| **3. FastPay as the default for Task Node payouts** | FastPay p50 is 183 ms to quorum across 6 validators on 3 continents, and the epoch-2 committee has been live since height 1123. FastPay carries PFT only, and memos on FastPay certificates don't appear in account history yet. Task Node payouts still send XRPL `Payment`s on the old chain and never touch FastPay. | [Pillar 2](pillars/02-message-protocol.md) · readiness |
-| **4. Cobalt understood: simulations, blog posts, Lean proofs** | The adversarial campaign E1–E6 concluded **KEEP_ACTIVE**: 10,240 oracle cases, 442,368 schedules with zero conflicts, +0.45% latency. Live rotation committed at height 924. There is **no Lean model of Cobalt yet**. Lean exists for the PFSH02 privacy work only, on an unmerged branch. | Readiness: more blog posts and iterative Lean studies |
-| **5. Every option adversarially stress-tested across multiple models** | Cobalt has an adversarial oracle and harnesses (`crates/cobalt_*`). Other subsystems have no record of cross-model adversarial review. | Readiness |
-| **Privacy working locally** | The Mac app proves post-quantum **PFSH03** payments on the device on an open branch (tasknode-apple PR 39, about 2.2 s per action on an M5 MacBook Pro). It depends on unmerged chain PRs 232, 271 and 280; PR 232 supersedes PR 207. Validator admission for user-proven actions is built on `main` but not deployed. Shielded submission is off on every validator. | [Pillar 5](pillars/05-local-task-node.md) |
-| **Smooth validator onboarding** | Task Node's validator connect still defaults to the old chain. The new chain has no public release, genesis or registration tool. | [Pillar 3](pillars/03-validator-program.md) |
-| **Public RPC** | There is no public RPC endpoint. Local wallets need at least two public endpoints with private admission switched on to submit shielded actions without going through Task Node. | [Pillar 3](pillars/03-validator-program.md) · [Pillar 5](pillars/05-local-task-node.md) |
+- [ ] **1. Executed** — Client signing guard, shared v2 seed KDF, `identity_set` consensus + `wallet_wasm`, handle reservations (`goodalexander`, `hive-board@`), Explorer card, `relay.postfiat.org`.
+- [ ] **2. Tested by user** — Founder mints `goodalexander@tasknode.postfiat.org` (same `npub` & history), links validator + old-chain key, checks Explorer Identity card, tests `rotate` + SDK lookup.
+- [ ] **3. Added to docs** — On-chain identity spec, v1/v2 test vectors, registrar policy, custom NIP-05 guide, and quantum boundary published.
+- [ ] **4. Public blog post document** — Public blog post announcing *"Mint Your Task Node Identity"* with native Nostr & Hive integration.
 
-## Moving from the old chain to the new chain
+### Pillar 7 — [Optional Deterministic Fees for NAVCoins](pillars/07-navcoin-fees.md)
+*100% optional fee schedules with neutral non-security framing (caps: `5%/yr` annual, `50%` HWM gain, `5%` spread, `1%` fix, `7d` min hike notice), atomic unit accrual inside epoch finalization, strict `floor(V × U / S)` NAV check, Explorer view, and open NAVCoin SDK.*
 
-This is a staged transition. Each stage starts only when the one before it holds.
+- [ ] **1. Executed** — `NavFeeScheduleV1` consensus ops + 100+ exact-atom Rust/Python vectors, optional Task Node UI + Explorer fee views, packaged NAVCoin SDK.
+- [ ] **2. Tested by user** — Founder launches both a zero-fee NAVCoin (zero clutter) and a fee-enabled NAVCoin on devnet via SDK, verifies exact atom recomputation, tests pending hike notice + cancel, inspects Explorer.
+- [ ] **3. Added to docs** — **"Create a NAVCoin"** guide (SDK usage, neutral fee formulas, worked example, accounting docs) published on `postfiatorg.github.io`.
+- [ ] **4. Public blog post document** — Public blog post announcing the open NAVCoin SDK and optional deterministic on-chain fee schedules.
+
+### Pillar 8 — [On-chain Identity: DID, KYC & Optional Trust Lines](pillars/08-onchain-identity.md)
+*Permissionless by default everywhere (no trust lines needed for NAVCoins or DEX offers), fixes the 6-path gating-bypass bug first, adds zero-PII XRPL-style Credentials + `did:pftl` with creator-chosen issuers (Return-only default exit), bridge holds, and W3C VC / ZK-passport adapters.*
+
+- [ ] **1. Executed** — Gating-bypass fix + single `asset_gate(...)` + bridge holds, permissionless DEX/escrow, Issuer Registry + Credentials + `did_resolve`, W3C VC + ZK-passport adapters, Explorer views.
+- [ ] **2. Tested by user** — Founder tests both a permissionless NAVCoin (zero `trust_set` on DEX) and a gated NAVCoin end-to-end with sandbox ZK-passport/VC credential, revocation + Return-only exit, and bridge hold claim.
+- [ ] **3. Added to docs** — `did:pftl` spec, optional trust-lines guide, credential policy & issuer adapter docs published.
+- [ ] **4. Public blog post document** — Public blog post explaining Post Fiat's *"permissionless by default, optional compliance"* identity & credential layer.
+
+### Pillar 9 — [Finance Hub User Spec](pillars/09-finance-hub.md)
+*Daily **Today** morning desk (~60 models + Goodbrief + GoodAlexander Library) for active Pillar 3 validators and Top-30 non-validator Task Node users (existing leaderboard, daily snapshot, 7d grace / keep-until rank 35), sandboxed Goodbrief isolation, signed Publish API, and Pillar 10 bridge.*
+
+- [ ] **1. Executed** — Whole-bundle leak closure + Goodbrief sandbox + watermarks, Today view + search/watchlist/visit markers, signed Publish API + Goodbrief split, daily Top-30 snapshot, Pillar 10 briefs.
+- [ ] **2. Tested by user** — Founder reviews live Today page on laptop + phone, tests validator + Top-30 + rank-31/grace states, verifies sandbox isolation and bad-signature publish rejection.
+- [ ] **3. Added to docs** — Finance Hub access guide (validator & Top-30 rules, perks, Library/API keys) and signed-publishing runbook published.
+- [ ] **4. Public blog post document** — Public blog post showcasing Post Fiat Finance Hub for validators and Top-30 contributors.
+
+### Pillar 10 — [Information Hive Mind](pillars/10-information-hive-mind.md)
+*Automatic coverage matching for any eligible Expert/verified user across covered crypto protocols and perp-backed liquid megacap equities, two-phase triangulating AI company agents, strict hash-only MNPI refusal firewall, human model-owner approval, and accelerated rewards for verified alpha.*
+
+- [ ] **1. Executed** — Coverage manifest matching, MNPI attestation + hash-only screening + legal sign-off for perp equities, two-phase company agents, claim store + reviewer clustering, model-host bridge, accelerated alpha payouts + ROI dashboard.
+- [ ] **2. Tested by user** — Founder tests member + non-member interviews (confirming zero leaked model targets), intentional MNPI refusal (zero text stored), two-user corroboration, `CHANGELOG` citation, and accelerated alpha reward payout.
+- [ ] **3. Added to docs** — Contributor interview guide, MNPI/compliance policy, attribution rules, and accelerated alpha reward docs published.
+- [ ] **4. Public blog post document** — Public blog post introducing the Post Fiat Information Hive Mind and accelerated alpha rewards.
+
+---
+
+## Near-term NAVCoin product & chain readiness gates
+
+Two high-priority items from the master brief sit alongside the ten pillars and have their own checklists so nothing falls through the cracks:
+
+### Near-term product: Hyperliquid NAVCoin on Solana & Scheduled FX Fix
+Every NAVCoin builds on five core parts: (1) Uniswap ERC-20 wrapper + NAV guard (live on B24), (2) on-chain `postfiatl1v2` asset + offer book (built), (3) USDC → pfUSDC Solana/Ethereum bridges (live), (4) Uniswap → actual asset exit routes (built), and (5) **Scheduled London-style FX Fix** (`FxFixPacketV1` exists; scheduled execution still needed) plus **tracking a Hyperliquid NAVCoin on Solana**.
+
+- [ ] **1. Executed** — Wire Hyperliquid reserve attestation (`HyperCoreReserveReader` + non-issuer attestor) to Solana NAVCoin swaps and ship scheduled `FxFixPacketV1` settlement.
+- [ ] **2. Tested by user** — End-to-end live dust swap of Hyperliquid NAVCoin on Solana and one live scheduled FX Fix fill.
+- [ ] **3. Added to docs** — Operator & user guide for Hyperliquid NAVCoin swaps and scheduled FX Fix windows published.
+- [ ] **4. Public blog post document** — Public blog post announcing live Hyperliquid NAVCoin swaps and the scheduled Post Fiat FX Fix.
+
+### Chain readiness & migration gates (Old Chain → `postfiatl1v2`)
+
+- [ ] **Cobalt formal studies:** Publish iterative Lean formal-verification studies and deep-dive blog posts on Cobalt (building on the completed E1–E6 442,368-schedule adversarial campaign).
+- [ ] **Cross-model adversarial stress-testing:** Complete multi-model adversarial reviews across NFT migration (Pillar 4), PFSH03 privacy (Pillar 5), `identity_set` (Pillar 6), and NAVCoin fee/gating execution (Pillars 7–8).
+- [ ] **Staged migration execution:**
+  - [ ] Stage 1 — Outside validators onboard onto `postfiatl1v2` (Pillar 3).
+  - [ ] Stage 2 — Task Node switches default payouts (FastPay), messages (Pillar 2), and new NFT mints (Pillar 4) to `postfiatl1v2`.
+  - [ ] Stage 3 — Users migrate NFTs (Pillar 4), mint identities (Pillar 6), and execute token/balance migration plan.
+  - [ ] Stage 4 — Old chain freezes to read-only archive with a published final ledger hash (closing classical-key NFT claims).
+
+---
+
+## How the pillars depend on each other & build order
 
 ```mermaid
 flowchart LR
-    S1[Stage 1<br/>Outside validators<br/>join the new chain] --> S2[Stage 2<br/>Task Node writes to<br/>the new chain: payouts on FastPay,<br/>messages, NFT mints]
-    S2 --> S3[Stage 3<br/>Users and assets migrate:<br/>NFTs, identity, balances]
-    S3 --> S4[Stage 4<br/>Old chain is read-only<br/>for history and replay]
-```
-
-| Stage | What must hold | Specs |
-|---|---|---|
-| **1. Validators** | Public genesis and signed releases. The genesis cohort comes from the old chain's Dynamic UNL scoring plus a signed `IdentityReceiptV1` binding each old key to a new ML-DSA key. Later validators pass the admission policy and are ratified by the current set. Making Cobalt the only path for registry changes (gate Z1) is still open. | [Pillar 3](pillars/03-validator-program.md) · [genesis spec](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/architecture/l1v2-testnet-genesis-and-launch-spec.md) · [testnet path](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/testnet-path.md) |
-| **2. Task Node on the new chain** | Payouts on FastPay, the message protocol and NFT mints on the new chain. | [Pillar 2](pillars/02-message-protocol.md) · [Pillar 4](pillars/04-nft-system.md) |
-| **3. Users and assets** | NFT migration and identity minting. **The token and balance migration plan does not exist yet**; the genesis spec marks token migration out of scope. | [Pillar 4](pillars/04-nft-system.md) · [Pillar 6](pillars/06-hive-identity.md) |
-| **4. Old chain archived** | Old `pf.ptr` v4 pointers stay decodable for replay. No pillar yet requires a final old-chain ledger hash at the freeze, which NFT provenance checks need once the old chain is gone. | [Pillar 2](pillars/02-message-protocol.md) · [Pillar 4](pillars/04-nft-system.md) |
-
-## NAVCoins: the near-term product
-
-The nearest deliverable is **NAVCoin swaps**, probably by tracking a Hyperliquid NAVCoin on Solana. NAVCoins are not a fixed set of coins. They are a **primitive any user can build**, through a NAVCoin SDK in postfiatl1v2 and a guide on postfiatorg.github.io. Every NAVCoin is built from five parts:
-
-1. **A Uniswap asset.** An ERC-20 wrapper and pool with a NAV guard. B24 is live with real money.
-2. **An on-chain PFTL asset** that can be swapped into. Built: NAV-tracked asset, offer book and atomic swaps.
-3. **USDC → pfUSDC.** Built: Solana and Ethereum vault bridges. Solana opens in the daily proving window.
-4. **Uniswap asset → actual asset.** Built: export, import and primary cash-out routes.
-5. **The fix.** A pfUSDC liquidity pool ready at a set time, like the London FX fix. A packet type exists (`FxFixPacketV1`), but the scheduled settlement does not.
-
-Creation is **operator-only** today by release rule (not a consensus rule), and the SDK is a set of Python builders (`python/postfiat_rpc/navcoin.py`). [Pillar 7](pillars/07-navcoin-fees.md) adds fees, and [Pillar 8](pillars/08-onchain-identity.md) adds optional KYC. Together they make third-party NAVCoins viable.
-
-> **Gap:** none of the ten deliverables owns the **Hyperliquid NAVCoin on Solana** or the **scheduled fix settlement**, though both are named above. Pillar 7 lists them as an open question. They may need their own spec page.
-
-## How the pillars depend on each other
-
-```mermaid
-flowchart LR
-    P2[2 Message protocol] --> P1[1 Hive governance]
-    P2 --> P4[4 NFTs]
-    P2 --> P6[6 Hive identity]
-    P2 -.optional.-> P7[7 NAVCoin fees]
-    P6 -.upgrade.-> P1
-    P6 --> P8[8 DID · KYC]
-    P3[3 Validators] --> P6
-    P3 --> P9[9 Finance Hub]
+    P2[2 · Message Protocol] --> P1[1 · Hive Governance]
+    P2 --> P4[4 · NFTs]
+    P2 --> P6[6 · Hive Identity]
+    P3[3 · Validators] --> P5[5 · Local Task Node]
+    P3 --> P6
+    P3 --> P9[9 · Finance Hub]
     P4 --> P6
-    P8 --> P7
-    P9 --> P10[10 Hive mind]
+    P6 --> P8[8 · DID & KYC]
+    P8 --> P7[7 · NAVCoin Fees & SDK]
+    P9 --> P10[10 · Hive Mind]
     P6 --> P10
-    P5[5 Local Task Node] -.uses.-> P2
 ```
 
-**Pillar 2 is the keystone.** Governance packets, NFT metadata and fee disclosures are message types in it. Identity records ([6](pillars/06-hive-identity.md)) and credentials ([8](pillars/08-onchain-identity.md)) are native ledger transaction types. The explorer renders them directly, and they reuse Pillar 2's key and hash conventions without waiting on it. Dotted lines are optional or later upgrades, not blockers.
+- **Wave 1 (Foundations — run in parallel):**
+  - Merge live `PFSH03` PRs (`#280`, `#444`, `#39`) & unify seed recovery ([Pillar 5](pillars/05-local-task-node.md)).
+  - Fix the 6-path trust-line gating bypass + cross-chain holds ([Pillar 8](pillars/08-onchain-identity.md) M1).
+  - Ship canonical `.proto` specs, FastPay fees + `account_tx` history ([Pillar 2](pillars/02-message-protocol.md) M1–M2).
+  - Ship signed validator releases, `upgrade`, `top`, and first 2 Foundation public RPCs ([Pillar 3](pillars/03-validator-program.md) M1–M4).
+  - Ship Finance Hub security lockdown, Today page, and signed Publish API ([Pillar 9](pillars/09-finance-hub.md) M1–M3).
+- **Wave 2 (New Chain as Default):**
+  - Cut Task Node payouts to FastPay + Explorer Message panel + x402 ([Pillar 2](pillars/02-message-protocol.md) M3–M6).
+  - Ship client signing guard + native `identity_set` + `relay.postfiat.org` ([Pillar 6](pillars/06-hive-identity.md)).
+  - Ship on-demand Hive Governance anchored on `postfiatl1v2` ([Pillar 1](pillars/01-hive-governance.md)).
+  - Ship NFT inventory, burn-first migration & Explorer NFT view ([Pillar 4](pillars/04-nft-system.md)).
+  - Open Top-30 Finance Hub tier ([Pillar 9](pillars/09-finance-hub.md) M4–M5).
+- **Wave 3 (Open Ecosystem Primitives):**
+  - Ship optional NAVCoin fees + open NAVCoin SDK ([Pillar 7](pillars/07-navcoin-fees.md)) and zero-PII Credentials / `did:pftl` ([Pillar 8](pillars/08-onchain-identity.md) M2–M5).
+  - Launch notarized `TaskNode.app` direct-RPC beta → external audit → uncapped `PFSH03` ([Pillar 5](pillars/05-local-task-node.md) M2–M5).
+  - Launch the Information Hive Mind with accelerated alpha rewards ([Pillar 10](pillars/10-information-hive-mind.md)).
 
-## Suggested order
+---
 
-These are steps, not dates. Within a step, the work can run in parallel.
-
-- **Step 1: foundations.**
-    - The message protocol `.proto` files and schema registry ([2](pillars/02-message-protocol.md)).
-    - Fix the trust-line gating bug ([8](pillars/08-onchain-identity.md), R0), together with holds for bridge credits that fail the gate (R11). The gated NAVCoin A666 uses the PFTL–Uniswap route, so the fix can't ship without them.
-    - The validator release channel and registration tool ([3](pillars/03-validator-program.md)).
-    - The governance session MVP on the existing pointer flow ([1](pillars/01-hive-governance.md)). That flow writes to the old chain today, so which chain holds governance anchors is an open question in Pillar 1.
-- **Step 2: the new chain becomes the default.**
-    - Task Node payouts on FastPay.
-    - Identity minting ([6](pillars/06-hive-identity.md)), after the client-side signing guard (its R1) ships.
-    - NFT spec and migration ([4](pillars/04-nft-system.md)).
-    - Finance Hub: content isolation and leak fixes, then the Today page, then the top-30 tier ([9](pillars/09-finance-hub.md)).
-- **Step 3: open the primitives.**
-    - NAVCoin SDK with fees ([7](pillars/07-navcoin-fees.md)) and credentials ([8](pillars/08-onchain-identity.md)).
-    - The local app with post-quantum privacy ([5](pillars/05-local-task-node.md)), after PFSH03's gates pass.
-    - The information hive mind ([10](pillars/10-information-hive-mind.md)).
-
-## Findings from writing and reviewing these specs
-
-- **Trust-line gating can be bypassed.** One shared function creates implicit holding lines with `authorized = true` even when the asset has `requires_authorization` set. It is called from six movement paths: payments and atomic swaps, NAV mint, the PFTL–Uniswap route, the vault bridge, the Solana bridge and shielded-pool exit. Revocation doesn't work either: an issuer-approved line stays approved after its credential is revoked or expires. And because offers and escrow need lines on default assets, one ineligible resting offer can fail every taker that crosses it. All of this must be fixed before any KYC NAVCoin ([Pillar 8](pillars/08-onchain-identity.md), R0).
-- **The message protocol has no canonical schema.** `pf.ptr` v4 is hand-encoded protobuf in JS and Python. The only `.proto` file, `pf_ptr_v1.proto` in `postfiatorg/explorer`, uses a different field layout ([Pillar 2](pillars/02-message-protocol.md)).
-- **Task Node's memos won't move to the new chain as they are.** Task Node writes memo hex in upper case, which the new chain rejects. Its encryption (X25519 with XChaCha20-Poly1305) is not post-quantum ([Pillar 2](pillars/02-message-protocol.md)).
-- **The browser wallet can't sign NFT transactions or generic messages.** `wallet_wasm` lacks both, which affects Pillars [2](pillars/02-message-protocol.md), [4](pillars/04-nft-system.md) and [6](pillars/06-hive-identity.md).
-- **Task Node's collaboration signer signs any challenge the server sends.** `signedCollaborationProof` signs server-supplied text with the same deterministic old-chain key from which today's Nostr messaging key is derived. A compromised server could ask for the derivation statement as a "challenge" and rebuild a user's Nostr key. Pillar 6 R1 adds a client-side guard that must ship before any identity mint ([Pillar 6](pillars/06-hive-identity.md)).
-- **FastPay accepts fee 0,** so memo spam on FastPay is free today; Pillar 2 R27 adds a governed minimum fee ([Pillar 2](pillars/02-message-protocol.md)).
-- **ML-DSA signing is randomised,** so a Nostr key can't be derived by hashing a new-chain signature. Today's npubs come from the old-chain secp256k1 wallet, which signs deterministically, so they can carry over ([Pillar 6](pillars/06-hive-identity.md)).
-- **`ISSUER_BURNABLE` is stored but not enforced,** and NFT transactions carry no memos ([Pillar 4](pillars/04-nft-system.md)).
-- **Only the SP1 proof profile checks NAV against reserves.** On other profiles an issuer can state NAV below reserves, which would hide fees ([Pillar 7](pillars/07-navcoin-fees.md), R8).
-- **Validator rewards are Task Node credit, behind two switches.** The reward is $20 of Task Node USD credit per validator, and needs both `TASKNODE_L1_UPTIME_REWARDS_ENABLED` and `TASKNODE_VALIDATOR_REWARDS_ENABLED`. Validator connect defaults to the old chain (`network: "ledger"`), and any binding on either chain unlocks Finance Hub ([Pillar 3](pillars/03-validator-program.md), [Pillar 9](pillars/09-finance-hub.md)).
-- **Post-quantum privacy is not merged.** PFSH03 (PR 232, superseding PR 207) is open, and the Mac app's PFSH03 branch depends on it ([Pillar 5](pillars/05-local-task-node.md)).
-- **Pillar 10's user story is cut off** at "linked to specific users". The spec completes it, labels the completion as interpretation and keeps it as an open question.
-
-### A note on "PFTL"
-
-Task Node's code and docs use "PFTL" (PFT Ledger) for the **old** chain, for example `server/pftl-pointer.js`. The chain repo uses `pftl_*` names for the **new** chain. These pages say "new chain (postfiatl1v2)" and "old chain" wherever the difference matters.
-
-## Reading and serving these pages
-
-The pages are plain markdown in `big_milestone/`, and they read correctly on GitHub too. To browse them as a site:
+## Serving these pages locally
 
 ```bash
-python3 big_milestone/serve.py --host <tailscale-ip> --port 8844
+python3 big_milestone/serve.py --host 100.89.219.44 --port 8844
 ```
-
-Diagrams render from `mermaid` blocks. For offline use, put `mermaid.min.js` (v11) in `big_milestone/_vendor/`; it is untracked. Without it, pages load Mermaid from a pinned CDN.
+Pages render live from Markdown on every request (with interactive-styled `- [ ]` milestone checkboxes and Mermaid diagrams).

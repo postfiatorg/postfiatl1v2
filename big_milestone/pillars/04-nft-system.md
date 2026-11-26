@@ -1,247 +1,115 @@
 # Pillar 4 — The NFT System
 
-> **Status:** Partial. Native NFT transactions are built on the new chain (`nft_mint`, `nft_transfer`, `nft_burn`), signed with ML-DSA-65. Task Node still mints on the old chain, and its browser wallet can't sign new-chain NFT transactions. There is no inventory or migration tool, no metadata schema, no link to the message protocol and no NFT view in the explorer.
+> **Status:** Partial. Native post-quantum NFTs (`nft_mint`, `nft_transfer`, `nft_burn`, signed with ML-DSA-65) are already built on `postfiatl1v2`. What still needs to be built: the Pillar 2 metadata schema, browser/Mac wallet NFT signing, the founder inventory and burn-first migration tool, Task Node new-chain minting, keyed storage lookups (replacing linear scans), and the block explorer NFT page.
 >
-> **Bubbles up to:** [Outcome B · A production-ready new chain](../README.md#three-outcomes). *A production-ready new chain*. "Supports NFTs in a smart way" is a readiness gate, and NFTs are the first user-owned assets that have to move.
+> **Outcome:** [B · A production-ready new chain](../README.md#three-outcomes) — satisfying the *"supports NFTs in a smart way"* chain readiness gate and moving historical Task Node NFTs onto post-quantum `postfiatl1v2`.
 
-## In one paragraph
+## What this pillar is (in plain English)
 
-Task Node users, the founder among them, minted profile NFTs on the old XRPL-fork chain. Each one was minted by the user's own wallet, so the user is both its issuer and its owner. Task Node's database holds 79 public CIDs (metadata, thumbnail and image files together), and all of them resolve. Nobody has yet counted the NFTs themselves, which number fewer than 79, or looked for NFTs held outside Task Node's records. The new chain already has native NFTs with ML-DSA-65 ownership, SHA3-384 ids, issuer-scoped collections, policy flags and an optional fixed issuer fee. This pillar adds the parts around them:
+Task Node users (including you) minted historical profile NFTs on the old XRPL-fork chain. Today Task Node tracks 79 public IPFS CIDs (images, thumbnails, and metadata), all resolving cleanly, but nobody has yet run a full inventory of the NFTs themselves or moved them to `postfiatl1v2`.
 
-- a **metadata standard**, written as a signed [Pillar 2](02-message-protocol.md) message;
-- an **inventory** of what the founder actually holds;
-- a **migration** that retires each old NFT *before* re-issuing it, with provenance anyone can check;
-- **Task Node minting** and an **explorer** view on the new chain;
-- a spec and a blog post that state the quantum-safety argument, including its weak point: claims made with classical keys.
+`postfiatl1v2` already has native NFTs secured by post-quantum ML-DSA-65 signatures and SHA3-384 IDs. This pillar adds everything needed to make them real and usable:
 
-## User story
+1. **Standardized, signed metadata (`pf.nft.metadata.v1`):** Built natively on [Pillar 2](02-message-protocol.md)'s message protocol so every NFT's image, attributes, and origin record are cryptographically signed by the issuer and verified against the on-chain `metadata_hash`.
+2. **Full inventory first:** A read-only tool scans your old Post Fiat chain wallets and joins Task Node / PFTasks records so you can review the exact list before migrating a single NFT.
+3. **Burn-first migration (zero duplicate live copies):** Your new-chain key signs a claim, your old wallet burns the old NFT with that claim hash in its memo, and once validated, `postfiatl1v2` mints the post-quantum replacement directly to your new-chain account with the exact same image CID and verifiable provenance. *(An optional "pin-only" mode lets you leave an NFT untouched on its original chain and record a provenance reference instead.)*
+4. **Native Task Node minting & block explorer view:** Once a user has a new-chain account, new profile NFTs mint straight onto `postfiatl1v2`, and the block explorer displays the artwork, issuer, collection, metadata hash verification, and checked origin history.
+5. **Storage scaling & honest post-quantum docs:** Replaces today's linear-scan NFT `Vec` with keyed lookups so NFTs scale cleanly, and publishes both the technical spec and blog post explaining the quantum-resistance guarantees — including why the old classical-key migration window must eventually close.
 
-**Founder's story.** Right now XRPL has NFTs, and I have a large number of historical NFTs that I minted on Task Node. I need a way to bring these NFTs onto the new chain, or pin them there. The chain should also come with an intelligible, quantum-resistant NFT protocol spec that I can review in the documentation and in a blog post. This NFT system should fit natively with the message protocol spec.
-
-**Augmented story.**
-
-1. **Review.** I read `docs/specs/nft-v1.md` and a blog post. The owner signs with ML-DSA-65. The metadata is a signed `pf.nft.metadata.v1` message on IPFS, and the on-chain `metadata_hash` is the SHA3-384 hash of those exact bytes. The spec also says how the window for claims signed with old, classical keys closes.
-2. **Inventory.** Task Node → Profile → NFTs lists every NFT my wallets hold, on both chains, grouped by chain, issuer and taxon.
-3. **Claim and retire.** I sign a claim with my new-chain key. My old wallet then burns the old NFT, with the claim's hash in the burn memo. The old copy is gone before the new one exists.
-4. **Re-issue.** Once the burn is validated, the NFT is minted straight to my new-chain account with the same image CID. Its `origin` names the old NFTokenID, issuer, mint transaction and burn transaction. One batch run handles my whole inventory and reports what was done, skipped or failed.
-5. **Pin instead.** I can choose to keep an NFT on its original chain. It is then recorded on the new chain as a *provenance record* and is never shown as the asset.
-6. **New mints.** Once I have a new-chain account, new profile NFTs mint straight onto the new chain.
-7. **See.** The explorer shows the image, issuer and collection, a metadata hash check, the origin (*checked* or *not checked*) and the history.
-
-## What exists today
-
-| Component | Where | State |
-|---|---|---|
-| NFT transactions, ledger object, id | [`transactions_mempool_receipts.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/transactions_mempool_receipts.rs) (`NftMintOperation`, `NftTransferOperation`, `NftBurnOperation`) · [`market_nav_asset_types.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/market_nav_asset_types.rs) (`NftDefinition`, `nft_id`, `NftIndexes`) · limits in [`core_chain.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/core_chain.rs) | Built. Collection id ≤64 bytes, metadata hash 1–64 bytes, URI ≤256 bytes. NFT flags are `TRANSFERABLE` and `ISSUER_BURNABLE`. Collection flags are `TRANSFER_LOCKED` and `BURN_LOCKED`. |
-| Execution, fees, RPC | [`nft_escrow_asset_execution.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/execution/src/nft_escrow_asset_execution.rs) · [`fees_offer_planning.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/execution/src/fees_offer_planning.rs) · [`entrypoints.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/execution/src/entrypoints.rs) · `nft_info`, `account_nfts`, `issuer_nfts` in [`rpc_dispatch.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/rpc_dispatch.rs) | Built. Semantics are listed below. The [parity tracker](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/xrpl-feature-parity-burndown.md) shows NFT-001 to NFT-008 complete. A marketplace, royalties and auctions are out of scope. |
-| Signing | [`crypto_provider`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/crypto_provider/src/lib.rs) · Python `mint_nft`, `transfer_nft`, `burn_nft` in [`wallet.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/python/postfiat_rpc/wallet.py) · [`wallet_wasm`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/wallet_wasm/src/lib.rs) | ML-DSA-65 (FIPS 204). Python runs the full lifecycle. **The browser wallet has no NFT signing.** |
-| Task Node minting (old chain) | [`server/pftl-submit.js`](https://github.com/postfiatorg/tasknode/blob/main/server/pftl-submit.js) (`preparePftNftMintTransaction`) · [`server/profile-nft-mint.js`](https://github.com/postfiatorg/tasknode/blob/main/server/profile-nft-mint.js) (`metadataForNft`, `schema:"erc721"`) · [`pftl.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/pftl.md) | Live. `NFTokenMint` from the user's wallet, with `Flags: 9` (burnable and transferable) and `TransferFee: 0`. Task Node stores `txHash` and `nftTokenId`. *Task Node's code calls the old chain "PFTL"; on this page PFTL means the new chain.* |
-| Inventory, repin, import | [`server/pftl-nfts.js`](https://github.com/postfiatorg/tasknode/blob/main/server/pftl-nfts.js) · [`profile-nft-cid-repin.mjs`](https://github.com/postfiatorg/tasknode/blob/main/scripts/profile-nft-cid-repin.mjs) · [`import-pftasks-profile-nfts.mjs`](https://github.com/postfiatorg/tasknode/blob/main/scripts/import-pftasks-profile-nfts.mjs) | Live, old chain only. Imports rows from the earlier PFTasks app, with `tx_hash` where present. All 79 CIDs resolve ([IPFS rebuild](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/ipfs-infrastructure-rebuild.md)). |
-| Private prompt assets | `pf.asset.nft_prompt_series.v1`, `pf.profile.nft_generation_run.v1` ([`ipfs.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/ipfs.md)) | Live. Classical encryption to Task Node's service and prompt-authority keys, **not to the holder**. Public metadata carries only `prompt_digest`. |
-| New-chain explorer | [`docs/explorer-spec.md`](https://github.com/postfiatorg/postfiatorg.github.io/blob/main/docs/explorer-spec.md) | Live, new chain only. Profile NFTs are listed as "not on the new chain yet". |
-
-### Chain semantics this design relies on (checked in code)
-
-- **Mint.** The **issuer** signs. `owner` can be any existing account, so the issuer mints straight to the user. No transfer is needed afterwards, even for non-transferable NFTs. If the owner account doesn't exist, the mint fails with `missing_owner`.
-- **Id and collection.** `nft_id` is SHA3-384 over (`postfiat.nft_id.v1`, chain, issuer, collection id, serial). A repeat is rejected with `duplicate_nft`.
-    - A collection is identified by **issuer plus collection id**. Its first mint fixes the collection flags.
-    - Anyone can use the name `tasknode.profile.v1` under their own issuer.
-- **Transfer.** Needs `TRANSFERABLE`, and the collection must not be `TRANSFER_LOCKED`. This applies to the issuer too.
-- **Burn.** Only the **current owner** can burn, and not in a `BURN_LOCKED` collection. **`ISSUER_BURNABLE` is stored and reported, but execution never lets the issuer burn.**
-- **Issuer fee.** A fixed amount of native PFT, set at mint. It is charged on every transfer that the issuer doesn't send, including moves between your own wallets. There is no sale price, no percentage royalty and no NFT offer primitive.
-- **Network fees.** The fee is `max(1, ceil(bytes/512))` base units. A mint adds a one-time 10-unit state-expansion fee. Fees are burned. There is no ongoing per-NFT reserve.
-- **No memos** on NFT transactions. The message-protocol link is carried by `metadata_uri` and `metadata_hash`.
-- **Scale.** NFTs live in a `Vec` and every lookup is a linear scan.
-
-## Architecture
+## How burn-first migration & minting work
 
 ```mermaid
 flowchart LR
-    subgraph OLD["Old chain (XRPL fork)"]
-      O1["NFToken<br/>issuer = user wallet"]
-      OB["NFTokenBurn by owner<br/>memo = claim hash"]
+    subgraph OLD["Old Post Fiat Chain (XRPL fork)"]
+      O1["Historical NFToken"]
+      OB["Owner burns old NFT<br/>(memo = claim hash)"]
     end
     subgraph TN["Task Node"]
-      INV["Inventory<br/>both chains"]
-      CL["Claim pf.nft.claim.v1<br/>signed by new-chain key"]
-      MS[Migration service]
-      GEN[Profile NFT generator]
+      INV["Dual-chain Inventory"]
+      CL["Signed Claim pf.nft.claim.v1<br/>(new ML-DSA-65 key)"]
+      MS["Migration Service"]
+      GEN["New Profile NFT Mint"]
     end
     subgraph IPFS
-      IMG[("image CID<br/>unchanged")]
-      ENV[("pf.msg.v1 envelope<br/>body pf.nft.metadata.v1")]
+      IMG[("Image CID<br/>(unchanged)")]
+      ENV[("Signed pf.msg.v1 Envelope<br/>(pf.nft.metadata.v1)")]
     end
-    subgraph NEW["New chain (PFTL)"]
-      N1["nft_mint to owner<br/>metadata_hash = SHA3-384 of envelope<br/>metadata_uri = envelope CID"]
+    subgraph NEW["New Chain (postfiatl1v2)"]
+      N1["nft_mint to owner<br/>metadata_uri = envelope CID<br/>metadata_hash = SHA3-384(envelope)"]
     end
     O1 --> INV --> CL --> OB
-    OB -->|"validated, read from history RPC"| MS
+    OB -->|"validated via history RPC"| MS
     MS --> ENV
     GEN --> ENV
     ENV -.->|references| IMG
     ENV --> N1
-    N1 --> EX["Explorer NFT page<br/>checks hash and origin"]
+    N1 --> EX["Explorer NFT Page<br/>(checks hash + origin)"]
 ```
 
-## What "smart" means here
+## Locked-in design decisions
 
-The chain already matches XRPL's NFT features. On top of that, this pillar commits to four things:
+- **Migration scope:** **Old Post Fiat chain (Task Node / PFTasks) NFTs** in v1. External XRPL mainnet NFTs are out of scope for burn-migration (optional pin-only provenance records can reference them without burning anything on XRPL mainnet).
+- **Retirement mode:** **Burn-first** by default (guarantees the old copy is destroyed before the new post-quantum copy is minted), with an optional **pin-only** mode for items you want to leave untouched on the old chain as a provenance record only.
+- **Collection issuer & transferability:**
+  - **One official Task Node collection issuer** on `postfiatl1v2`, giving one clean verified collection on the explorer and chain-enforced duplicate prevention — with **`ISSUER_BURNABLE` turned OFF** so Task Node can never burn a user's NFT.
+  - **Transferable** (`TRANSFERABLE = true`), preserving what holders already had on the old chain.
+  - **Issuer fee = `0` PFT** on profile NFTs (a fixed fee charges users even when moving between their own wallets).
+- **Operational & rollout defaults locked in:**
+  - **Gas & pinning:** Task Node sponsors the tiny migration gas/account-creation cost for users and pins all Post Fiat / Task Node NFT metadata and images long-term (per [Pillar 2](02-message-protocol.md)); third-party issuers pin their own.
+  - **Rollout & claim window:** Migrate the founder's full inventory first, then open migration to all users. Close the classical-key claim window and stop old-chain minting when the old chain moves to read-only archive (Stage 4), closing the classical-key quantum attack surface.
+  - **Unsolicited spam NFTs:** Keep minting permissionless on chain (matching [Pillar 8](08-onchain-identity.md)), have wallets hide unfollowed issuers by default, and block unsolicited mints that are *both* `BURN_LOCKED` and `TRANSFER_LOCKED` so nobody can permanently glue junk onto another wallet.
+  - **Credentials stay separate:** KYC, validator, and top-30 credentials live in [Pillar 8](08-onchain-identity.md)'s native credential system rather than duplicating them inside NFTs; `pf.nft.metadata.v1` remains cleanly extensible.
+  - **`ISSUER_BURNABLE` flag:** Enforce it cleanly in execution (only when explicitly enabled on a non-profile collection) so no flag is stored without working.
 
-- **Typed metadata.** It is signed by the issuer and machine-readable by agents and the explorer.
-- **Provenance.** It can be checked against both ledgers.
-- **Policy fixed at mint.** Transfer and burn rules can't change later.
-- **Private prompts.** They are committed by digest, so they can be revealed later.
+## What exists today
 
-Credential, identity and gated-content uses are open questions. The schema (R1) leaves room for them without a breaking `v2`.
-
-## Technical requirements
-
-### Specification
-
-- **R1. Metadata message.** `pf.nft.metadata.v1` is a Pillar 2 type with a `.proto` file. Unknown fields are preserved.
-    - Core fields: `name`, `description`, `image` (`ipfs://` CID), `media[]` (typed attachments, each optionally an encrypted Pillar 2 payload), `attributes[]`, `collection`, `content_hashes` (SHA3-384 of each referenced file), `prompt_digest` and `license`.
-    - Optional `origin`: source chain (e.g. `xrpl:2025`), NFTokenID, original issuer and URI, `mint_tx` if known, retirement mode, `burn_tx` or `snapshot_ledger_index`, and `claim_hash`.
-- **R2. One byte stream, one hash.**
-    - `metadata_uri` points to a public Pillar 2 `pf.msg.v1` envelope, signed by the issuer and pinned as CIDv1 raw.
-    - `metadata_hash` is SHA3-384 over **exactly those bytes**. Verifiers hash what they fetch and never re-encode.
-    - Encoders emit deterministic protobuf, so the test vectors reproduce.
-    - JSON, including an XLS-24 or ERC-721-style view for other wallets, is a display projection and is never hashed.
-    - Pillar 2's chain-side commitments (its R5) must use the same function.
-- **R3. Spec and blog.** `docs/specs/nft-v1.md` covers:
-    - the id domain and issuer-scoped collections;
-    - the exact flag and fee semantics above;
-    - the commitment, with test vectors;
-    - the migration protocol;
-    - a **threat model and post-quantum section**: ML-DSA-65 ownership; SHA3-384 for ids and commitments, with SHA-256 CIDs used as locators only; the classical-key risk during migration, and how the claim window closes (R9).
-
-    It lists what is out of scope. A companion blog post goes on postfiatorg.github.io.
-- **R4. Profile collection policy.** The spec states the issuer, collection id, flags and issuer fee for migrated and new profile NFTs. The values come from the founder's answers. No flag that does nothing is advertised.
-
-### Inventory and migration
-
-- **R5. Inventory first.** A read-only tool runs `account_nfts` over the founder's wallets on each in-scope chain and groups the results by issuer and taxon. It joins Task Node and PFTasks records and fills `mint_tx` from them or from the old-chain history RPC. The founder reviews the report before any migration.
-- **R6. Claim.** `pf.nft.claim.v1` names the source chain, the NFTokenIDs and the destination account, and is signed by the destination ML-DSA key. Control of the old wallet is proven in one of two ways:
-    - the retirement transaction, with `claim_hash` in its memo (this works with any wallet);
-    - an old-wallet signature from `signWalletChallenge` (Task Node mnemonic wallets).
-- **R7. Retire, then re-issue.** A mint happens only after the retirement is **validated** on the old chain. A memo alone never counts as retirement. The modes are below, and the founder chooses which apply.
-    - **(a) Burn-first.** The owner burns, with the claim hash in the memo.
-    - **(b) Snapshot.** The owner at a published old-chain ledger index can claim, and later transfers are ignored. This is safe only once the old chain is frozen (README Stage 4).
-    - **(c) Pin-only.** The NFT gets a provenance record (R10).
-- **R8. Mint and idempotency.** The service mints straight to the claimant with `origin` filled in.
-    - Serial = the first 8 bytes of SHA3-384 over (`postfiat.nft_migration_serial.v1`, source chain, NFTokenID), with 0 mapped to 1. The chain then rejects a second mint, even if the service's database is lost. A collision is reported as a failure.
-    - Batch mode reports done, skipped and failed items with reasons, and is safe to re-run. A missing owner account stops that row with a "create account" step.
-- **R9. Claim window.** The service rejects claims backed by classical old-chain keys once the founder's close condition is met.
-- **R10. Provenance records.** A pin-only item gets a `pf.nft.provenance.v1` message, or an NFT in a separately labelled collection. It is never shown as the live asset.
-
-### Task Node
-
-- **R11. Dual-read inventory.** While migration is open, Task Node merges both chains. Old NFTs are badged *Not migrated* (with the claim action), *Migrated* (matched by `origin.nftoken_id`) or *Recorded*.
-- **R12. New mints, per user.** A user's new profile NFTs move to the new chain once that user has a funded new-chain account (README Stage 2). `metadataForNft` emits `pf.nft.metadata.v1`. Other users keep minting on the old chain, and those NFTs stay migration-eligible.
-- **R13. Wallet signing.** `wallet_wasm` gains NFT signing and Pillar 2 envelope signing. The local app ([Pillar 5](05-local-task-node.md)) shares that code, so keys stay on the device. Old-chain burns use the existing `signPreparedPftlTransaction`.
-- **R14. Prompt assets.** These move to the Pillar 2 post-quantum suite once it exists. They are encrypted to Task Node keys, not to holders, so a transfer needs no re-encryption.
-
-### Explorer and chain
-
-- **R15. Explorer NFT view.** Shows:
-    - image, **issuer and collection** (never the name alone);
-    - the `metadata_hash` check and the envelope signature;
-    - flags, any issuer fee and history.
-
-    Origin is *checked* only after the burn or snapshot has been read from an old-chain history node. Otherwise it shows *not checked*, as the explorer's no-overclaim rule requires.
-- **R16. Scale.** Benchmark mint, transfer and burn at the measured inventory size and at a stress size, against the chain's latency targets. If cost grows with the number of NFTs, replace the linear scans with keyed lookups before Task Node switches over.
-- **R17. Unsolicited NFTs.** Any issuer can mint into any existing account. A collection that is both `BURN_LOCKED` and `TRANSFER_LOCKED` can never be removed by its holder. The spec documents this, and wallets handle it as the founder decides.
-
-### Adversarial testing
-
-- **R18.** Tests for each of these:
-    - a forged claim;
-    - a claim by someone who isn't the owner;
-    - a transfer after the snapshot;
-    - concurrent claims;
-    - a burn memo that doesn't match the claim;
-    - a re-run after the service's database is wiped;
-    - a metadata hash mismatch;
-    - a spoofed collection name;
-    - oversized fields;
-    - a gateway outage;
-    - a stolen migration-issuer key, where NFTs without a checkable origin are flagged.
-
-    The migration design also gets the multi-model adversarial review required by the readiness gates, before the founder's batch runs.
-
-## Security model
-
-| Threat | Defence |
-|---|---|
-| Old and new copies both live | Burn-first, or a snapshot with the old chain frozen. A memo alone never counts (R7). |
-| Claim by someone who isn't the owner | A retirement signed by the old owner, plus the ML-DSA claim (R6). |
-| Double migration | A deterministic serial, which the chain rejects if repeated (R8). |
-| Spoofed official collection | Issuer-scoped ids, and the issuer is always displayed (R15). |
-| Metadata swapped after mint | The SHA3-384 hash over the pinned bytes, plus the issuer's signature (R2). |
-| Quantum forgery of old keys | ML-DSA-65 ownership, and a close condition for classical claims (R9). |
-| Theft of the migration-issuer key | Checkable origin. NFTs without one are flagged (R15). |
-| Art lost from IPFS | A two-replica cluster plus Pinata today. `content_hashes` let anyone re-pin and verify. |
-
-## Economics
-
-The chain charges small byte-based fees that are burned, plus a one-time fee per mint. There is no ongoing reserve. NFTs need no trust lines, so anyone can mint, in line with Deliverable 8's "permissionless by default". The founder decides who pays, who pins, transferability, fees and spam handling (see Open questions). Any issuer fee is displayed the same way as NAVCoin fees ([Pillar 7](07-navcoin-fees.md)).
-
-## Dependencies
-
-| Depends on | Why | State |
+| Piece | Current state | Where |
 |---|---|---|
-| [Pillar 2 — Message protocol](02-message-protocol.md) | Envelope, schema registry, NFT types, post-quantum suite, hash choice. | Not built |
-| `wallet_wasm` NFT and envelope signing · [Pillar 5](05-local-task-node.md) | Users sign on their own device. | Not built |
-| Funded new-chain accounts | `nft_mint` needs the owner account to exist. | Funding policy open |
-| New-chain explorer | NFT view and origin checks. | Live, no NFT view |
-| Old-chain history RPC ([`pftl_history_rpc`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/pftl-history-rpc-and-archive-wss.md)) | Validating burns and snapshots, filling `mint_tx`. | Configured. History depth not yet confirmed |
-| [Pillar 6 — Hive identity](06-hive-identity.md) | Profile NFT as avatar (optional). | Not built |
+| Native NFTs on `postfiatl1v2` | `nft_mint`, `nft_transfer`, `nft_burn`, ML-DSA-65 signatures, SHA3-384 IDs, RPC (`nft_info`, `account_nfts`, `issuer_nfts`) all built. **Gaps:** stored in a `Vec` with linear scans; `ISSUER_BURNABLE` stored but not enforced; no memos on NFT txs (metadata links via `metadata_uri`/`metadata_hash`) | [`transactions_mempool_receipts.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/transactions_mempool_receipts.rs), [`nft_escrow_asset_execution.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/execution/src/nft_escrow_asset_execution.rs) |
+| Wallet NFT signing | Works in Python (`wallet.py`), **missing in `wallet_wasm`** (browser & Mac app cannot sign new-chain NFT txs yet) | [`wallet_wasm/src/lib.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/wallet_wasm/src/lib.rs) |
+| Task Node minting & IPFS | Live on the **old** chain (`NFTokenMint`); 79 public CIDs repinned and resolving cleanly across Pinata + first-party cluster | [`server/profile-nft-mint.js`](https://github.com/postfiatorg/tasknode/blob/main/server/profile-nft-mint.js), [`server/pftl-nfts.js`](https://github.com/postfiatorg/tasknode/blob/main/server/pftl-nfts.js) |
+| Block explorer NFT view | Not built yet ("not on the new chain yet") | [`docs/explorer-spec.md`](https://github.com/postfiatorg/postfiatorg.github.io/blob/main/docs/explorer-spec.md) |
 
-## Acceptance criteria
+## Detailed specification
 
-1. `docs/specs/nft-v1.md`, with its threat model and test vectors, and the blog post are published and reviewed by the founder.
-2. The founder has reviewed the inventory report for every in-scope chain.
-3. The founder migrates the in-scope inventory in one batch:
-    - every item is on the new chain with the same image CID and an origin marked *checked*;
-    - every old copy is retired in the chosen mode;
-    - the report accounts for every item.
-4. Re-running the batch after wiping the service's database mints nothing.
-5. On minting:
-    - a user with a new-chain account mints a profile NFT on the new chain from the browser;
-    - a user without one still mints on the old chain;
-    - Task Node shows both inventories.
-6. The explorer shows the issuer, the collection, the hash check, the origin status and the history.
-7. The R18 tests pass, the multi-model review is closed, and R16 meets the latency targets.
+### 1. Metadata standard (`pf.nft.metadata.v1`) & one-hash rule
+- **Pillar 2 protobuf schema (`pf.nft.metadata.v1`):** Includes `name`, `description`, `image` (`ipfs://` CID), typed `media[]` attachments, `attributes[]`, `collection`, `content_hashes` (SHA3-384 of each referenced asset), `prompt_digest`, `license`, and optional `origin` (`source_chain`, `nftoken_id`, `original_issuer`, `original_uri`, `mint_tx`, `retirement_mode`, `burn_tx`, `claim_cid`, `claim_hash`). Storing **`claim_cid`** (not just `claim_hash`) lets any verifier fetch and verify the exact ML-DSA signed claim offline!
+- **One byte stream, one hash:** `metadata_uri` points to the public signed [Pillar 2](02-message-protocol.md) `pf.msg.v1` envelope (pinned as CIDv1 raw) whose `sender_pubkey` **must match the on-chain `nft.issuer`**. On-chain `metadata_hash` is `SHA3-384` of those exact raw envelope bytes. JSON (ERC-721/XLS-24) is a display projection only.
+- **Private prompt assets:** Move Task Node's encrypted prompt generation assets to Pillar 2's post-quantum X-Wing suite (encrypted to Task Node keys, not holders, so transfers never require re-encryption).
 
-## Open questions for the founder
+### 2. Allowlisted inventory, pre-validated burn-first migration & key separation
+- **Step 1 — Frozen pre-cutoff allowlist:** A read-only inventory tool scans old Post Fiat chain wallets (`account_nfts`), joins Task Node and PFTasks DB records, and freezes a **signed pre-cutoff eligibility allowlist** (only NFTs minted *before* the cutoff ledger index and matching verified Task Node/PFTasks records or founder-approved inventory qualify). This completely blocks attackers from minting cheap junk on the old chain to pollute the official Task Node collection or drain sponsored migration gas (gas sponsorship is also capped per user account).
+- **Step 2 — Pre-validate & durably persist claim BEFORE burn:** Before prompting any irreversible old-chain burn, the migration service verifies the `NFTokenID` is on the allowlist and unmigrated, has the user sign `pf.nft.claim.v1` with their new ML-DSA-65 key, **durably stores and pins the signed claim (`claim_cid`) to IPFS**, and only *then* prompts `NFTokenBurn` with `claim_hash` in its memo. Verification confirms `burn_tx.account == old_owner` (not merely that a burn exists).
+- **Step 3 — Replay-proof idempotent mint & partitioned serials:** Once old-chain history RPC confirms the validated burn, the **dedicated migration issuer key** (kept separate from the ongoing fresh-mint issuer key and **permanently retired** when the migration window closes) mints straight to the claimant. Serial numbers are partitioned cleanly (`bit 63 = 1` for deterministic hash-derived migrated serials; `bit 63 = 0` for sequential fresh mints), and `postfiatl1v2` records a permanent **`used_nft_serials` tombstone** so even burning a migrated NFT on `postfiatl1v2` can **never** allow re-minting the same old NFT!
+- **Optional pin-only mode:** Anchors a signed `pf.nft.provenance.v1` message via a [Pillar 2](02-message-protocol.md) self-payment (proving ownership via old-wallet signature or burn-free attestation) and renders strictly as a *Recorded Provenance* note — never as a migrated live NFT.
 
-- **Scope.** Old Post Fiat chain only, or also XRPL mainnet and other issuers' NFTs? A wider scope means more source readers and more provenance cases.
-- **Retirement mode.** Which mode applies, to everything or per class of NFT?
-    - **Burn-first** is the strongest, but each owner must sign an irreversible burn.
-    - **Snapshot** needs no action from users, but is safe only once the old chain is frozen.
-    - **Pin-only** keeps the original, and the new-chain item is only a record.
-- **New-chain issuer.** Who issues on the new chain?
-    - **One Task Node migration issuer:** one official collection and chain-enforced uniqueness across all users, but the platform holds issuer powers.
-    - **Each user's own account:** mirrors the old chain, but gives many collections and uniqueness only per user.
-- **Transferable or soulbound?** Old profile NFTs were transferable. Soulbound suits identity, but removes a property holders had.
-- **Issuer fee.** Zero, or a fixed PFT amount? A fixed amount is also charged on self-moves. Percentage royalties would need a sale primitive.
-- **Who pays** fees and account creation for migration and new mints: Task Node, the user, or a sponsored budget?
-- **Who pins** long-term: Task Node for its collections, each issuer, validators, or a paid service?
-- **Claim window close.** At a published old-chain ledger, when the old chain goes read-only, or never (accepting the quantum risk)? What happens to unclaimed NFTs?
-- **Rollout.** Founder only first, or every user from the start?
-- **"Smart" scope.** Should NFTs also be credentials (for example validator or top-30 badges that gate Finance Hub), identity anchors, or carriers of encrypted content for holders?
-- **`ISSUER_BURNABLE`.** Implement issuer burn, which revocable credentials need, or document the flag as reserved?
-- **Unsolicited NFTs.** Require consent on chain before minting to another account, or have wallets hide issuers the user doesn't follow?
-- **Old-chain minting.** Stop it when the claim window closes, or keep it?
+### 3. Task Node dual-chain UI, wallet signing & offline-verifiable Explorer
+- **Dual-chain inventory:** While migration is open, Task Node → Profile → NFTs merges both chains and badges old NFTs as *Not migrated* (with one-click Migrate), *Migrated*, or *Recorded*.
+- **Automatic new-chain minting:** Once a user has a funded `postfiatl1v2` account, new profile NFTs mint straight onto `postfiatl1v2` under the **ongoing profile-mint issuer key** (separate from the migration key, with documented rotation and daily rate caps) using `pf.nft.metadata.v1`.
+- **Wallet signing:** Add NFT signing (`nft_mint`, `nft_transfer`, `nft_burn`) + Pillar 2 envelope signing to `wallet_wasm` and the local Mac app ([Pillar 5](05-local-task-node.md)).
+- **Explorer NFT page (survives Stage 4 shutdown):** Displays artwork, **issuer + collection** (never collection name alone), live `metadata_hash` + `envelope.sender == nft.issuer` signature check, flags, transfer history, and origin status (*checked* against an archived, founder-signed old-chain burn-proof bundle pinned to IPFS so provenance verification keeps working even after old-chain RPC nodes shut down at Stage 4!).
+
+### 4. Governed L1 scaling & adversarial security tests
+- **Activation-gated storage & spam fixes:** Behind a **governed consensus activation height** (with deterministic state migration so historical replay stays byte-identical), replace linear NFT `Vec` scans with keyed lookups, add paginated `account_nfts` / `issuer_nfts` RPCs (eliminating `O(N)` RPC dumps), enforce `ISSUER_BURNABLE`, record permanent `used_nft_serials` tombstones, and reject unsolicited `BURN_LOCKED + TRANSFER_LOCKED` mints.
+- **Adversarial test suite:** Test forged/hijacked claims, non-allowlisted old-chain junk mints, burn-then-remint replay after burning on `postfiatl1v2`, concurrent claims, mismatched burn memos, re-runs after DB wipe, `envelope.sender != nft.issuer` spoofing, oversized fields, and IPFS gateway outages.
+
+## Milestones & completion checklist
+
+### Build milestones
+- [ ] **M1 · `pf.nft.metadata.v1` schema & L1 scaling fixes:** Define `pf.nft.metadata.v1` and `pf.nft.claim.v1` on [Pillar 2](02-message-protocol.md); replace linear NFT `Vec` scans with keyed lookups in `postfiatl1v2`; enforce `ISSUER_BURNABLE` and block unsolicited permanent-lock spam mints.
+- [ ] **M2 · Wallet signing & inventory tool:** Add NFT + envelope signing to `wallet_wasm` and the Mac app; build the read-only inventory tool and generate the founder's full historical NFT report.
+- [ ] **M3 · Burn-first migration service & adversarial tests:** Ship the idempotent burn-first (plus optional pin-only) batch migration service with deterministic chain-enforced serials; pass the full adversarial test suite and multi-model review.
+- [ ] **M4 · Task Node dual-chain UI & new-chain minting:** Ship dual-chain Profile → NFTs view (Migrate / Migrated / Recorded badges) and route new profile NFT mints straight to `postfiatl1v2` for funded accounts.
+- [ ] **M5 · Block explorer NFT view:** Ship the explorer NFT page displaying issuer, collection, verified `metadata_hash` + signature, flags, transfer history, and checked origin provenance.
+
+### Required ship gates
+- [ ] **1. Executed:** All M1–M5 code merged and live across `postfiatl1v2`, Task Node, `wallet_wasm`, and the block explorer.
+- [ ] **2. Tested by user:** Founder reviews the historical inventory report, runs the batch burn-first migration on their own NFTs, verifies zero duplicates on re-run, mints a fresh profile NFT directly on `postfiatl1v2`, and inspects both on the block explorer.
+- [ ] **3. Added to docs:** `docs/specs/nft-v1.md` (including collection policy, test vectors, migration guide, and honest post-quantum threat model) published in Post Fiat docs.
+- [ ] **4. Public blog post document:** Public blog post written and published explaining Post Fiat's quantum-resistant NFT protocol, Pillar 2 metadata integration, and burn-first migration from the old chain.
 
 ## Code references
 
-- Types and id: [`transactions_mempool_receipts.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/transactions_mempool_receipts.rs) · [`market_nav_asset_types.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/market_nav_asset_types.rs) · [`core_chain.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/core_chain.rs)
-- Execution and fees: [`nft_escrow_asset_execution.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/execution/src/nft_escrow_asset_execution.rs) · [`fees_offer_planning.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/execution/src/fees_offer_planning.rs) · [`entrypoints.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/execution/src/entrypoints.rs)
-- Wallets: [`wallet_wasm/src/lib.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/wallet_wasm/src/lib.rs) · [`python/postfiat_rpc/wallet.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/python/postfiat_rpc/wallet.py) · Task Node [`src/wallet-core.js`](https://github.com/postfiatorg/tasknode/blob/main/src/wallet-core.js) (`signWalletChallenge`, `signPreparedPftlTransaction`)
-- Task Node NFT flow: [`server/profile-routes.js`](https://github.com/postfiatorg/tasknode/blob/main/server/profile-routes.js) (`/api/profile/nfts`, `/api/profile/nft/generate`, `/mint`, `/select`) · [`server/profile-nft-render-worker.js`](https://github.com/postfiatorg/tasknode/blob/main/server/profile-nft-render-worker.js)
-- IPFS: [`docs/wiki/architecture/ipfs.md`](https://github.com/postfiatorg/tasknode/blob/main/docs/wiki/architecture/ipfs.md)
+- L1 NFT types & execution: [`transactions_mempool_receipts.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/transactions_mempool_receipts.rs) · [`market_nav_asset_types.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/types/src/market_nav_asset_types.rs) · [`nft_escrow_asset_execution.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/execution/src/nft_escrow_asset_execution.rs)
+- Wallets & Task Node: [`wallet_wasm/src/lib.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/wallet_wasm/src/lib.rs) · [`server/profile-nft-mint.js`](https://github.com/postfiatorg/tasknode/blob/main/server/profile-nft-mint.js) · [`server/pftl-nfts.js`](https://github.com/postfiatorg/tasknode/blob/main/server/pftl-nfts.js) · [`server/profile-routes.js`](https://github.com/postfiatorg/tasknode/blob/main/server/profile-routes.js)
 - Explorer: [`docs/explorer-spec.md`](https://github.com/postfiatorg/postfiatorg.github.io/blob/main/docs/explorer-spec.md)
-
----
-
-*Revision history: [changelog](../changelog/04-nft-system.md).*

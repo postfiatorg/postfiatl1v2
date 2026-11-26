@@ -44,6 +44,7 @@ def pages() -> list[dict]:
         files.append(ROOT / "feedback" / "README.md")
     files += sorted((page for round_dir in rounds for page in round_dir.glob("[0-9]*.md")),
                     key=lambda page: (page.name, int(page.parent.name.split("-")[1])))
+    files += sorted(round_dir / "HOLES_SUMMARY.md" for round_dir in rounds if (round_dir / "HOLES_SUMMARY.md").exists())
     files += sorted((ROOT / "changelog").glob("*.md"))
     # Each pillar's feedback entry in the nav is its latest surviving review:
     # a reverted revision's review is deleted, so later rounds can be partial.

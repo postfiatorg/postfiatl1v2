@@ -74,40 +74,43 @@ Checked against Task Node `main` (`204d238`) and `postfiatl1v2`:
 
 ## Detailed specification
 
-### 1. Protocol-state snapshot & carry-over packet
-- **Automatic collector (`pf-gov-collector`):** Generates `pf.governance.snapshot.v1`. Every field stores its exact source (RPC call, API endpoint, or repo commit), timestamp/block height, and SHA-256 hash of the raw response. Raw responses are pinned alongside the snapshot so any third party can re-verify every number.
+### 1. Protocol-state snapshot, authority binding & carry-over packet
+- **Pinned founder authority & offline key binding:** The founder's official `postfiatl1v2` address is pinned in the explorer and verifier config, and every wallet-signed `pf.governance.packet.v1` explicitly embeds the founder's authorized `nostr_pubkey` (upgrading seamlessly to [Pillar 6](06-hive-identity.md) on-chain identity once minted). The block explorer **only** renders `GOVERNANCE` sessions anchored by the pinned founder authority key — outsider spam memos with `kind = 12` are ignored.
+- **Automatic collector (`pf-gov-collector`):** Pins all L1 RPC reads to **one finalized `block_height`** (preventing torn reads across blocks) and generates `pf.governance.snapshot.v1`. Every field stores its exact source, block height/UTC timestamp, and SHA-256 hash of the raw response (capped well within the 16 MiB IPFS limit). Raw responses are pinned alongside the snapshot so third parties can re-derive every field.
 - **What the snapshot pulls automatically:**
-  - `postfiatl1v2` status, active validator set, ledger tip, bridge status, and NAVCoin supply status.
+  - `postfiatl1v2` status, active validator set, ledger tip, bridge status, and NAVCoin supply status at the pinned height.
   - Current Cobalt status and latest dynamic-UNL scoring verdict.
   - Task Node `/api/system/status`.
   - **Previous session's deliverables list** (loaded automatically from the last published governance minutes so each item must be marked `done`, `in_progress`, `not_done`, or `dropped`).
 - **Founder brief (`pf.governance.packet.v1`):** Attaches the read-only snapshot by CID + hash, plus your editable brief: `title`, `summary`, `previous_deliverables_status[]`, `open_questions[]`, `proposed_decisions[]`, and optional IPFS attachments (text/Markdown/JSON only for agents).
-- **Canonical JSON:** Before pinning, Task Node sorts keys deterministically (RFC 8785 / JCS) so the same packet always produces the exact same SHA-256 hash and IPFS CID.
+- **Canonical JSON inside Pillar 2 envelopes:** Before pinning, Task Node sorts keys deterministically (RFC 8785 / JCS) and wraps every governance artifact in a signed [Pillar 2](02-message-protocol.md) `pf.msg.v1` envelope (`body_encoding = CANONICAL_JSON`), anchored via **`pf.ptr` v5** (binary 36-byte `cid_bin` + `kind = GOVERNANCE (12)` + `thread_id = session_id`, ~110 bytes total — comfortably inside `postfiatl1v2`'s 256-byte memo cap).
 
-### 2. Dedicated session room & live facilitation
+### 2. Dedicated session room, Sybil defense & live facilitation
+- **Session state machine:** Every session follows explicit states: `Draft → Live → Frozen → InReview → Anchoring → Published` (plus `Aborted` if cancelled before publish, and `RulingPending → RulingAnchored` for optional flagged deterministic rulings). Minutes edits increment a revision number without ever rebuilding the frozen transcript.
 - **One room per session:** Starting a session creates a new `hive_group_channels` room and posts an announcement card in the main Hive room (main chat is never locked).
-- **Session-open toggles** (signed by your Nostr key):
-  - **Who can post:** `founder_only`, `allowlist` (e.g., validators), or `all_members`.
+- **Session-open toggles** (signed by your bound Nostr key):
+  - **Who can post:** `founder_only`, `allowlist` (e.g., validators), or `all_members` (restricted to registered Task Node accounts, never arbitrary free Nostr pubkeys). When `allowlist` or `all_members` is active, the session-open event commits the CID/hash of the pinned eligible-pubkey snapshot so third parties can verify eligibility offline without trusting Task Node's database.
   - **AI facilitator mode:** `off`, `agenda` (walks through the packet's questions in order), or `interactive` (also asks follow-ups).
   - **Session length:** 30 minutes default (founder can extend or close early).
-- **Anti-spam & engineering defaults:**
-  - Posting rate limit: 1 message per 15 seconds per pubkey (founder exempt).
+- **Anti-spam & turn-budget isolation:**
+  - Rate limit: 1 message per 15 seconds per registered account, max 10 messages per non-founder account per session (blocks Sybil floods in `all_members` mode; founder exempt).
   - AI facilitator latency target: under 10 seconds per reply (event-driven on new messages, replacing the old 60-second poll loop).
-  - AI facilitator turn cap: max 25 turns per 30-minute session (bounded inference cost, zero GPU rental).
-  - Relay ingest starts at session-open time so a brief Task Node hiccup never drops messages.
-- **Prompt-injection boundary:** The AI prompt separates the packet, founder messages, and community messages into distinct blocks. Community text is always treated as quoted data, never as instructions, and the validator rejects any drafted decision or deliverable that doesn't cite a founder or agenda message ID.
+  - Reserved turn budget: max 25 facilitator turns total — **15 turns reserved exclusively for founder/agenda questions**, max **10 turns** for community follow-ups, so community traffic can never exhaust the facilitator.
+  - Relay catch-up: before freezing, Task Node runs a final relay EOSE catch-up back to session-open time (applying rate limits strictly by the event's position inside the live window) so brief outages never drop messages.
+- **Structural prompt-injection boundary (two-pass minutes drafting):**
+  - **Pass 1 (`previous_deliverables_review[]`, `decisions[]`, `next_deliverables[]`):** Runs over **ONLY** the founder-signed packet, agenda prompts, and founder-signed messages — community messages and attachments are completely excluded from Pass 1's context so citation-spoofing prompt injection is structurally impossible.
+  - **Pass 2 (`community_input[]`):** Summarizes community messages separately as quoted data.
 
-### 3. Frozen transcript, signed minutes & anchoring
-- **Canonical inclusion rule:** When the session freezes, a message is included in the official transcript only if its Nostr signature is valid, it targets the session room, the author was allowed by the session toggle, and Task Node received it between open and freeze within the rate limit. Ordering uses Task Node's server receipt sequence (so users cannot backdate timestamps). Excluded messages are listed by ID with reason codes.
-- **Self-contained bundle:** Task Node pins the transcript manifest, every raw signed Nostr event, and a readable Markdown transcript to IPFS so history never depends on third-party Nostr relays staying online.
-- **Minutes (`pf.governance.minutes.v1`):** Four clean sections — `previous_deliverables_review[]`, `decisions[]`, `next_deliverables[]`, and `community_input[]`. Every item is labeled `human`, `agent`, or `deterministic` and cites exact message IDs.
-- **Founder approval & new-chain anchoring:** You edit the draft if needed and sign the approval with your wallet (the server never signs on your behalf). Task Node verifies every CID is readable on at least two IPFS gateways, then your wallet submits idempotent `pf.ptr` v4 memos (`kind = GOVERNANCE` / `12`, grouped by `thread_id = session_id`, fitting inside `postfiatl1v2`'s 256-byte memo limit) on `postfiatl1v2`. An anchor is marked complete only after an **accepted** chain receipt.
-- **Optional deterministic ruling:** Only decisions you explicitly check as `run_deterministic_ruling` are exported with the snapshot to the deterministic governance runner (Google setup or Vast on demand). The resulting ruling + replay hashes are pinned to IPFS and anchored to the same `session_id`.
+### 3. Frozen transcript, signed minutes & custody-safe anchoring
+- **Canonical inclusion rule:** At freeze, a message enters the official transcript only if its Nostr signature is valid, it targets the session room, the author is in the session-open eligible-pubkey snapshot, and Task Node received it between open and freeze within per-account limits. Ordering uses Task Node's server receipt sequence (so clients cannot backdate timestamps), and the founder's approval signature commits to that exact ordered manifest. Excluded events are listed by ID with reason codes.
+- **Self-contained bundle:** Task Node pins the transcript manifest, eligible-pubkey snapshot, every raw signed Nostr event, and a readable Markdown transcript to IPFS so history never depends on third-party Nostr relays.
+- **Founder approval & idempotent `postfiatl1v2` anchoring:** You edit the draft if needed and sign the approval with your wallet (the server never signs on your behalf). Anchors are tracked idempotently by `(session_id, schema, sha256)`; if an anchor transaction expires before inclusion, retry builds a fresh transaction with the current account sequence over the exact same pinned CID. An anchor succeeds only after an **accepted** chain receipt and confirmation on at least two independent pinners/gateways.
+- **Custody-safe deterministic rulings (Google setup / Vast):** Only decisions you explicitly check as `run_deterministic_ruling` are exported with **(snapshot + founder brief + signed minutes)** to the deterministic governance runner. The runner on Google/Vast is **read-only compute and never holds a founder signing key** — it returns the replayable ruling + replay hashes to `RulingPending`, and your wallet signs the `RulingAnchored` transaction on review.
 
-### 4. Public archive, verifier & block explorer
+### 4. Public archive, honest verifier & block explorer
 - **Public session page (no login required):** Shows the live or completed session, previous-session scorecard, every pinned artifact with CID + `postfiatl1v2` transaction link, facilitator latency stats, and a **Verify** link.
-- **Independent verifier script (`verify-governance-session`):** Anyone can run it using only public IPFS gateways and `postfiatl1v2` RPC to check every signature, hash, snapshot raw-response derivation, transcript inclusion rule, and ruling replay hash.
-- **Block explorer view:** Groups `GOVERNANCE` memos by `thread_id` so each governance session renders as a clean timeline directly on the explorer.
+- **Independent verifier script (`verify-governance-session`):** Separates **deterministic offline verification** (using only public IPFS gateways + `postfiatl1v2` RPC to check pinned founder key binding, eligible-pubkey snapshot, all hashes/signatures, snapshot raw-response derivation, and ruling replay hashes) from an optional **best-effort `--check-relays` audit** that compares live Nostr relays against the manifest to spot potential server censorship.
+- **Block explorer view:** Groups `pf.ptr` v5 `GOVERNANCE` memos anchored by the pinned founder authority key by `thread_id` so each governance session renders as a spoof-proof timeline directly on the explorer.
 
 ## Security summary
 
