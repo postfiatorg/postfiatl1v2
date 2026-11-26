@@ -132,6 +132,27 @@ class FinalityTests(unittest.TestCase):
             send.assert_not_called()
             archive.assert_not_called()
 
+    def test_waiting_for_finality_records_one_history_entry(self):
+        expected = terms()
+        eth, receipt, _, finalized = chain(expected)
+        finalized['number'] = 98
+        tx = Web3.to_hex(receipt['transactionHash'])
+        with tempfile.TemporaryDirectory() as tmp, patch.object(service, 'JOBS', Path(tmp)), \
+             patch.object(service, 'ethereum_reader', return_value=eth), patch.object(service, 'eth_send') as send:
+            service.stage(dict(expected, journal_version=1), 'paying')
+            durable_json(Path(tmp)/expected['burn_tx_id']/'eth-withdrawal.json',
+                         dict(mode='withdraw', tx=tx, status=1, block=100))
+            seen = []
+            for minute in range(3):
+                with patch.object(service, 'now', return_value=f'2026-11-26T12:0{minute}:00+00:00'):
+                    service.run_jobs(startup=True)
+                seen.append(service.read_job(expected['burn_tx_id'])['updated_at'])
+            saved = service.read_job(expected['burn_tx_id'])
+            self.assertEqual(saved['stage'], 'awaiting_finality')
+            self.assertEqual([entry[1] for entry in saved['history']], ['paying', 'awaiting_finality'])
+            self.assertEqual(seen, [f'2026-11-26T12:0{m}:00+00:00' for m in range(3)], 'each check refreshes the retry clock')
+            send.assert_not_called()
+
     def test_paid_row_with_another_burns_cached_receipt_is_reconciled_without_sending(self):
         expected = terms()
         eth, receipt, _, _ = chain(terms('09'*48))

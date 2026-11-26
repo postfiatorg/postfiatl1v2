@@ -81,6 +81,11 @@ def write_job(job):
         p=job_path(job['burn_tx_id']);ensure_directory(p.parent);durable_json(p,job)
 def stage(job,name,detail=''):
     job.update(stage=name,detail=detail,updated_at=now());job.setdefault('history',[]).append([now(),name,detail]);write_job(job);print(now(),job['burn_tx_id'][:12],name,detail,flush=True)
+def restage(job,name,detail=''):
+    # A repeated check of the same state refreshes its clock without growing the history.
+    if job.get('stage')==name and job.get('detail')==detail:
+        job['updated_at']=now();write_job(job)
+    else:stage(job,name,detail)
 
 def run(args,**kw):return subprocess.run([str(a) for a in args],check=True,capture_output=True,text=True,**kw)
 
@@ -326,7 +331,7 @@ def recover_payment(job, directory):
     except (ReconciliationRequired, OSError, ValueError, TypeError, KeyError) as error:
         if not isinstance(error, ReconciliationRequired):
             error = ReconciliationRequired('Unusable withdrawal evidence; reconcile '+str(error)[:160])
-        stage(job, 'awaiting_finality' if isinstance(error, AwaitingFinality) else 'reconciliation_required', str(error))
+        restage(job, 'awaiting_finality' if isinstance(error, AwaitingFinality) else 'reconciliation_required', str(error))
         raise error
     job.update(ethereum_tx=done['tx'], ethereum_block=done['block'], ethereum_finality=done['finality'], error=None)
     stage(job, 'paid', 'USDC payout finalized on Ethereum.')
