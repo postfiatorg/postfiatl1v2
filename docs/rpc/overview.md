@@ -89,9 +89,12 @@ and network namespace. The lookup also works for a transaction the worker has
 never seen. Its RPC event records the height and block hash of the snapshot,
 including when the result is empty. It returns historical occurrences in block
 order, with the requested limit. The validator processes one receipt request
-at a time and enforces a query deadline and byte budget. If the snapshot cannot
-answer (its deadline, the byte budget, or a listener under another uid), the
-worker takes the ordinary bounded direct read instead. The snapshot keeps the
+at a time and enforces a query deadline and byte budget. If the snapshot is only
+unavailable (its deadline, the byte budget, or a listener under another uid),
+the worker takes the ordinary bounded direct read instead, and its event says
+the receipts were read directly. A storage error the snapshot reports, such as
+an integrity failure, is returned as the query's error. An older validator's
+untyped error counts as unavailable only for those known texts. The snapshot keeps the
 validator's store open until the read ends.
 
 A warmed `status` can return a cached report during contention for up to 30

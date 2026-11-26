@@ -10,6 +10,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::{receipts, ReceiptQueryOptions, MAX_READ_QUERY_LIMIT};
+use postfiat_storage::transactional::{StorageError, StorageErrorCode};
 use postfiat_storage::NodeStore;
 use postfiat_types::Receipt;
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,35 @@ struct ReceiptPage {
     rows: Vec<Receipt>,
 }
 
-type Reply = Result<Option<ReceiptPage>, String>;
+/// Why the validator's snapshot gave no page. `Unavailable` (its deadline, the
+/// reply budget) means try the direct read; `Fatal` (integrity, corruption,
+/// any other storage error) is the answer. On the wire:
+/// `{"Err":{"kind":"unavailable"|"fatal","message":"..."}}`.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "message", rename_all = "snake_case")]
+enum SnapshotError {
+    Unavailable(String),
+    Fatal(String),
+}
+
+type Reply = Result<Option<ReceiptPage>, SnapshotError>;
+
+/// The texts an older validator's untyped error carries when its snapshot was
+/// only unavailable. Any other untyped error is taken as fatal.
+const AVAILABILITY_TEXTS: [&str; 3] = [
+    "receipt snapshot deadline exhausted",
+    "receipt reply exceeds the RPC frame limit",
+    "storage_size_limit: canonical JSON exceeds",
+];
+
+fn storage_error(error: StorageError) -> SnapshotError {
+    // A size limit inside the read is its deadline or byte budget.
+    if error.code() == StorageErrorCode::SizeLimit {
+        SnapshotError::Unavailable(error.to_string())
+    } else {
+        SnapshotError::Fatal(error.to_string())
+    }
+}
 
 fn address(data_dir: &Path) -> io::Result<SockAddr> {
     // Namespace by actual directory identity; relative paths, bind mounts and
@@ -102,34 +131,35 @@ fn write_frame(stream: &mut UnixStream, body: &[u8]) -> io::Result<()> {
 fn handle(store: &NodeStore, stream: &mut UnixStream) -> io::Result<()> {
     check_peer(stream)?;
     let query: Query = serde_json::from_slice(&read_frame(stream, MAX_REQUEST)?)?;
-    let answer = (|| -> io::Result<Option<ReceiptPage>> {
+    let answer = (|| -> Reply {
         if !(1..=MAX_READ_QUERY_LIMIT).contains(&query.limit) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "invalid receipt query limit",
-            ));
+            return Err(SnapshotError::Fatal("invalid receipt query limit".into()));
         }
-        let Some(snapshot) = store.held_transactional_read_snapshot()? else {
+        let Some(snapshot) = store
+            .held_transactional_read_snapshot()
+            .map_err(storage_error)?
+        else {
             return Ok(None);
         };
-        let rows = snapshot.receipts_tail(
-            query.tx_id.as_deref(),
-            query.limit,
-            MAX_REPLY,
-            Instant::now() + WAIT,
-        )?;
+        let rows = snapshot
+            .receipts_tail(
+                query.tx_id.as_deref(),
+                query.limit,
+                MAX_REPLY,
+                Instant::now() + WAIT,
+            )
+            .map_err(storage_error)?;
         Ok(Some(ReceiptPage {
             height: snapshot.meta().finalized_height,
             block_hash: snapshot.meta().finalized_block_hash.clone(),
             rows,
         }))
-    })()
-    .map_err(|e| e.to_string());
+    })();
     let mut body = serde_json::to_vec(&answer)?;
     if body.len() > MAX_REPLY {
-        body = serde_json::to_vec(&Reply::Err(
+        body = serde_json::to_vec(&Reply::Err(SnapshotError::Unavailable(
             "receipt reply exceeds the RPC frame limit; request fewer rows".into(),
-        ))?;
+        )))?;
     }
     write_frame(stream, &body)
 }
@@ -174,9 +204,34 @@ impl Drop for Service {
     }
 }
 
-fn read_held(data_dir: &Path, query: &Query) -> io::Result<Option<ReceiptPage>> {
-    let socket = Socket::new(Domain::UNIX, Type::STREAM, None)?;
-    let mut stream = match socket.connect_timeout(&address(data_dir)?, WAIT) {
+/// The validator's reply: a page, `Ok(None)` when it does not hold the store,
+/// or why it gave none. A reply in an older validator's untyped form is an
+/// availability error only when its text is a known availability text.
+fn classify_reply(bytes: &[u8]) -> Result<Option<ReceiptPage>, SnapshotError> {
+    let value: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|e| SnapshotError::Unavailable(format!("unreadable snapshot reply: {e}")))?;
+    match value.get("Err") {
+        Some(serde_json::Value::String(text)) => Err(
+            if AVAILABILITY_TEXTS.iter().any(|known| text.contains(known)) {
+                SnapshotError::Unavailable(text.clone())
+            } else {
+                SnapshotError::Fatal(text.clone())
+            },
+        ),
+        Some(typed) => Err(serde_json::from_value::<SnapshotError>(typed.clone())
+            .unwrap_or_else(|_| SnapshotError::Fatal(format!("unknown snapshot error {typed}")))),
+        None => serde_json::from_value(value.get("Ok").cloned().unwrap_or_default())
+            .map_err(|e| SnapshotError::Unavailable(format!("unreadable snapshot reply: {e}"))),
+    }
+}
+
+/// Ask the validator for its snapshot. Every failure to reach it or to read
+/// its reply (no listener, a listener under another uid, a timeout, a closed
+/// stream) is only unavailability.
+fn read_held(data_dir: &Path, query: &Query) -> Result<Option<ReceiptPage>, SnapshotError> {
+    let unavailable = |e: io::Error| SnapshotError::Unavailable(e.to_string());
+    let socket = Socket::new(Domain::UNIX, Type::STREAM, None).map_err(unavailable)?;
+    let mut stream = match socket.connect_timeout(&address(data_dir).map_err(unavailable)?, WAIT) {
         Ok(()) => UnixStream::from(OwnedFd::from(socket)),
         Err(e)
             if matches!(
@@ -186,19 +241,15 @@ fn read_held(data_dir: &Path, query: &Query) -> io::Result<Option<ReceiptPage>> 
         {
             return Ok(None)
         }
-        Err(e) => return Err(e),
+        Err(e) => return Err(unavailable(e)),
     };
-    check_peer(&stream)?;
-    let body = serde_json::to_vec(query)?;
+    check_peer(&stream).map_err(unavailable)?;
+    let body = serde_json::to_vec(query).map_err(|e| unavailable(e.into()))?;
     if body.len() > MAX_REQUEST {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "oversize receipt query",
-        ));
+        return Err(SnapshotError::Unavailable("oversize receipt query".into()));
     }
-    write_frame(&mut stream, &body)?;
-    let reply: Reply = serde_json::from_slice(&read_frame(&mut stream, MAX_REPLY)?)?;
-    reply.map_err(io::Error::other)
+    write_frame(&mut stream, &body).map_err(unavailable)?;
+    classify_reply(&read_frame(&mut stream, MAX_REPLY).map_err(unavailable)?)
 }
 
 pub fn read(options: ReceiptQueryOptions) -> io::Result<(Vec<Receipt>, Option<String>)> {
@@ -220,17 +271,33 @@ pub fn read(options: ReceiptQueryOptions) -> io::Result<(Vec<Receipt>, Option<St
         tx_id: options.tx_id.clone(),
         limit: options.limit.unwrap_or(MAX_READ_QUERY_LIMIT),
     };
-    // A snapshot that cannot answer (its deadline, the reply budget, a
+    // A snapshot that is only unavailable (its deadline, the reply budget, a
     // listener under another uid) is no answer: take the ordinary bounded
-    // direct read, as a validator without the reader would.
-    if let Ok(Some(page)) = read_held(&options.data_dir, &query) {
-        return Ok((
-            page.rows,
-            Some(format!(
-                "receipt snapshot at height {} block {}",
-                page.height, page.block_hash
-            )),
-        ));
-    }
-    direct().map(|rows| (rows, None))
+    // direct read, as a validator without the reader would, and say so. A
+    // storage error the snapshot reports is the answer.
+    let unavailable = match read_held(&options.data_dir, &query) {
+        Ok(Some(page)) => {
+            return Ok((
+                page.rows,
+                Some(format!(
+                    "receipt snapshot at height {} block {}",
+                    page.height, page.block_hash
+                )),
+            ))
+        }
+        Ok(None) => None,
+        Err(SnapshotError::Unavailable(reason)) => Some(reason),
+        Err(SnapshotError::Fatal(error)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("validator receipt snapshot: {error}"),
+            ))
+        }
+    };
+    direct().map(|rows| {
+        let event = unavailable.map(|reason| {
+            format!("receipts read directly; the validator's snapshot was unavailable: {reason}")
+        });
+        (rows, event)
+    })
 }
