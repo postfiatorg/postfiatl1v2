@@ -26,6 +26,9 @@ if [[ -n $settler_key ]]; then
     settler_line=$(<"$settler_key")
     [[ $(wc -l <"$settler_key") -le 1 && $settler_line =~ ^ssh-ed25519\ [A-Za-z0-9+/]+=*(\ [A-Za-z0-9@._-]+)?$ ]] \
         || fail "$settler_key is not one ssh-ed25519 public key line"
+    # The line's form is not enough: the key itself must decode, or no login with it can work.
+    ssh-keygen -l -f "$settler_key" 2>/dev/null | grep -q '(ED25519)$' \
+        || fail "$settler_key is not a valid ssh-ed25519 public key"
 fi
 user=pf-sol-exit-review
 app=$root/opt/postfiat/sol-exit-review
