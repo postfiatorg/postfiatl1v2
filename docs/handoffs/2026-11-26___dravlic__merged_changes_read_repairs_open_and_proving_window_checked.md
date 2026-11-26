@@ -54,7 +54,7 @@ Ten are on `main`; #249, #250 and #251 were merged into other branches. My note 
 **Docs and Task Node**
 
 - **#264, merged:** the status pages carry `sol-exit-r3`, the 10:13 UTC fleet read and the interrupted roll; [Network Status](../status/network-status.md) has a paragraph for users on when deposits and withdrawals are open; 17 files. No page that code pins by hash is touched.
-- **tasknode #442:** one setting, `L1_PROVING_WINDOW_UTC=17:00-19:00`; the Solana deposit screen and both withdrawal screens show the hours in the reader's time zone, the time to the next opening, and a plain line when the window should be open and is not. Its hosted checks pass. It needs a deploy and the setting.
+- **tasknode #442:** one setting, `L1_PROVING_WINDOW_UTC=17:00-19:00`; the Solana deposit screen and both withdrawal screens show the hours in the reader's time zone, the time to the next opening, and a plain line when the window should be open and is not. Its hosted checks pass. It is merged since 16:27 UTC. The setting is to stay unset for now: see "After the session" at the end.
 
 **#232**
 
@@ -98,7 +98,7 @@ For the owner (date first asked):
 
 - The work server: it has not answered since about 12:25 UTC; is that known on your side (2026-11-26).
 - Tonight's window: whether it is open by 17:05 UTC, and no Ethereum withdrawal outside it; #272 and #273 are not for tonight (2026-11-26).
-- tasknode #442: a deploy and the setting (2026-11-26).
+- tasknode #442 is merged. Could its setting `L1_PROVING_WINDOW_UTC` stay unset for now? Without the setting the three screens are exactly as before, so a deploy changes nothing for users. The setting waits for the follow-up, [tasknode #445](https://github.com/postfiatorg/tasknode/pull/445), which is a draft and not to be merged as it is (2026-11-26).
 - The reviewer follow-ups (private pull request 53): installed on the six hosts by the owner's side, as agreed in the meeting of 26 November. I say on that pull request when its last read is back, with the steps (2026-11-25).
 - #249 and #251: I can bring #249 up to `main` (2026-11-26).
 - #232: the licence of `pft-binius-shielded`, and the two findings of the A666 recovery policy (2026-11-26).
@@ -111,7 +111,7 @@ For the owner (date first asked):
 
 - **Status:** [26 November handoff](../status/handoff-2026-11-26.md), [Master State](../status/master-state.md), [Current State](../status/chain-state-current.md), [Network Status](../status/network-status.md).
 - **Public PRs:** #232, #244 to #257, #263 to #267, #270 to #274, as linked above.
-- **Task Node PRs:** #442.
+- **Task Node PRs:** #442, #445.
 - **Private repository:** PR #53.
 - **Previous handoff:** [2026-11-25: Docs updated, exit release on main and first paper drafted](2026-11-25___dravlic__docs_updated_exit_release_on_main_and_first_paper_drafted.md).
 
@@ -130,3 +130,13 @@ For the owner (date first asked):
 - tasknode #442: its second read came back "fine to merge after" three points (the withdrawal screens keep a stale clock and readiness, the local hours are off across a daylight-saving change, one test calls the configured service). The fix round is next; after it the pull request can be merged by either side.
 
 **Other.** #271 has six more mechanical commits for the `cargo clippy` step. The paper's newest check found four points, which are being corrected. A one-page note of the recorded times per step on the two USDC routes is on the work server at `~/.cache/eth-bridge-facts-20261126.md`.
+
+## After the session (18:03 UTC)
+
+**The Task Node's opening hours: the setting stays off.** [tasknode #442](https://github.com/postfiatorg/tasknode/pull/442) is merged since 16:27 UTC. Two reads confirmed that without the setting `L1_PROVING_WINDOW_UTC` all three screens behave exactly as before the feature, so the merge changes nothing for users. With the setting on, the two reads after the merge found cases where a withdrawal that was already under way when the window closed still goes on. The follow-up, [tasknode #445](https://github.com/postfiatorg/tasknode/pull/445), closes the ones of the first read: a late quote no longer offers Confirm, and a late recipient check no longer reaches the signer. Its own read found four more, so I set it to draft: a withdrawal can still be sent while the wallet opens its connection again, a rejection that arrives after a send can stay hidden on the Solana screen, the cleanup of one tab can remove a withdrawal ID that another tab saved, and a newer "open" answer can drop a valid Review without a word. The points are in its comment. Next on my side: one complete pass over everything between a readiness answer and the actual send, then one fix round and a read.
+
+**#272 and #273.** The third read of #272 still said "not as it is", so it is a draft with its three open points listed. #273 is to be rebuilt on top of #277. Neither is to be installed.
+
+**The paper.** The full independent check of 17:34 UTC came back with no finding, with the Lean model and the explorer run again on a fresh copy. Its harness score is running.
+
+**`main`.** The long `test` job passed for every merge of the afternoon, up to `3ab7dd502`.
