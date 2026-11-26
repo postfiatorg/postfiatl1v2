@@ -608,3 +608,58 @@ fn held_receipt_snapshot_keeps_the_store_open_after_the_validator_releases_it() 
     );
     fs::remove_dir_all(root).unwrap();
 }
+
+/// A snapshot reply that is an error (here a deadline from a reader bound at
+/// the validator's address) falls back to the ordinary bounded direct read.
+#[cfg(target_os = "linux")]
+#[test]
+fn receipt_snapshot_error_falls_back_to_the_direct_read() {
+    use postfiat_rpc_sdk::receipts_request;
+    use std::io::Read;
+    use std::os::linux::net::SocketAddrExt;
+    use std::os::unix::fs::MetadataExt;
+    use std::os::unix::net::{SocketAddr, UnixListener};
+    let (root, data_dir) = committed_transactional_node("snapshot-fallback");
+    let port = free_port();
+    let ready = root.join("rpc.ready.json");
+    let mut rpc = spawn_rpc_serving(&data_dir, &ready, port, false, 1);
+    wait_for_file(&ready);
+    let meta = fs::metadata(&data_dir).unwrap();
+    // SAFETY: geteuid has no arguments or preconditions.
+    let uid = unsafe { libc::geteuid() };
+    let name = format!("postfiat.receipts.v1.{uid}.{}.{}", meta.dev(), meta.ino());
+    let listener =
+        UnixListener::bind_addr(&SocketAddr::from_abstract_name(name.as_bytes()).unwrap()).unwrap();
+    let reader = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut header = [0; 4];
+        stream.read_exact(&mut header).unwrap();
+        let mut query = vec![0; u32::from_be_bytes(header) as usize];
+        stream.read_exact(&mut query).unwrap();
+        let body = br#"{"Err":"receipt snapshot deadline exhausted"}"#;
+        stream
+            .write_all(&(body.len() as u32).to_be_bytes())
+            .unwrap();
+        stream.write_all(body).unwrap();
+    });
+    let lease = postfiat_storage::NodeStore::new(&data_dir)
+        .transactional_store_lease()
+        .unwrap()
+        .unwrap();
+    let release = thread::spawn(move || {
+        thread::sleep(Duration::from_secs(2));
+        drop(lease);
+    });
+    let reply = rpc_call(port, &receipts_request("fallback", None, Some(1)));
+    release.join().unwrap();
+    reader.join().unwrap();
+    assert!(reply.ok, "{:?}", reply.error);
+    assert_eq!(reply.result.unwrap().as_array().map(Vec::len), Some(1));
+    assert!(reply
+        .events
+        .iter()
+        .any(|event| event.message == "receipts queried"));
+    drop(rpc.kill());
+    let _ = rpc.wait();
+    fs::remove_dir_all(root).unwrap();
+}

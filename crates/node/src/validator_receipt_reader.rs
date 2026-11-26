@@ -220,7 +220,10 @@ pub fn read(options: ReceiptQueryOptions) -> io::Result<(Vec<Receipt>, Option<St
         tx_id: options.tx_id.clone(),
         limit: options.limit.unwrap_or(MAX_READ_QUERY_LIMIT),
     };
-    if let Some(page) = read_held(&options.data_dir, &query)? {
+    // A snapshot that cannot answer (its deadline, the reply budget, a
+    // listener under another uid) is no answer: take the ordinary bounded
+    // direct read, as a validator without the reader would.
+    if let Ok(Some(page)) = read_held(&options.data_dir, &query) {
         return Ok((
             page.rows,
             Some(format!(
