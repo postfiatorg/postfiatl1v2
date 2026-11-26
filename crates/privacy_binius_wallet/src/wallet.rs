@@ -168,6 +168,15 @@ impl Recovery {
     pub fn new(birthday: Point, account: u32, first: u32, count: u32) -> Result<Self> {
         let mut seed = [0; 48];
         OsRng.fill_bytes(&mut seed);
+        Self::from_seed(seed, birthday, account, first, count)
+    }
+    pub fn from_seed(
+        seed: [u8; 48],
+        birthday: Point,
+        account: u32,
+        first: u32,
+        count: u32,
+    ) -> Result<Self> {
         let r = Self {
             version: 1,
             seed: hex::encode(seed),
@@ -284,6 +293,25 @@ impl Wallet {
         json!({"quarantined":self.quarantined.as_ref().map(|p| json!({"asset":p.asset, "message":"Retired issued spend saved locally. Check finalized history and the original order before making another payment."})), "attempts":attempts,"finalized":totals,"pending":delta,"height":self.point.height,"pairs":self.point.pairs,"keys":self.recovery.count})
     }
     pub fn sync(&mut self, target: Point, rows: &Path) -> Result<Value> {
+        let mut reader = BufReader::new(private_file(rows)?);
+        let mut line = String::new();
+        let mut page_rows = Vec::new();
+        while {
+            line.clear();
+            reader.by_ref().take(1_048_577).read_line(&mut line)? != 0
+        } {
+            if line.len() > 1_048_576 {
+                return Err("oversize public page".into());
+            }
+            let pairs: Vec<PqPair> = serde_json::from_str(&line)?;
+            if pairs.is_empty() {
+                return Err("empty intermediate page".into());
+            }
+            page_rows.push(pairs);
+        }
+        self.sync_pages(target, &page_rows)
+    }
+    pub fn sync_pages(&mut self, target: Point, page_rows: &[Vec<PqPair>]) -> Result<Value> {
         self.import_pending()?;
         target.validate()?;
         if target.network != self.point.network
@@ -306,21 +334,11 @@ impl Wallet {
         let mut appended = BTreeMap::<(String, u64), History>::new();
         let mut note_changes = BTreeMap::new();
         let mut resolutions = BTreeMap::new();
-        let mut reader = BufReader::new(private_file(rows)?);
-        let mut line = String::new();
-        while {
-            line.clear();
-            reader.by_ref().take(1_048_577).read_line(&mut line)? != 0
-        } {
-            if line.len() > 1_048_576 {
-                return Err("oversize public page".into());
-            }
-            let pairs: Vec<PqPair> = serde_json::from_str(&line)?;
+        for pairs in page_rows {
             if pairs.is_empty() {
                 return Err("empty intermediate page".into());
             }
-            let last =
-                postfiat_rpc_sdk::validate_pq_pairs(&pairs, &point.last_page, target.height)?;
+            let last = postfiat_rpc_sdk::validate_pq_pairs(pairs, &point.last_page, target.height)?;
             for pair in pairs {
                 if pair.height <= self.recovery.birthday.height
                     || pair.height < point.height
@@ -330,7 +348,7 @@ impl Wallet {
                 }
                 let terminal = crate::tree::advance(
                     point.assets.entry(pair.asset.clone()).or_default(),
-                    &pair,
+                    pair,
                 )?;
                 let base_count = self
                     .trees
@@ -548,6 +566,9 @@ struct SigningKey {
 }
 impl Wallet {
     pub fn prove(&mut self, o: Order) -> Result<Value> {
+        self.prove_with_key(o, None)
+    }
+    pub fn prove_with_key(&mut self, o: Order, inline_key: Option<(&str, &str)>) -> Result<Value> {
         self.import_pending()?;
         if o.also_replace.is_some() && (o.replace.is_none() || o.also_replace == o.replace) {
             return Err("select two distinct payments for joint recovery".into());
@@ -667,30 +688,47 @@ impl Wallet {
         } else {
             [0; 32]
         };
-        let signing =
-            match (&o.account_key, &o.payer, o.sequence, public) {
-                (Some(path), Some(payer), Some(seq), true) if seq > 0 => {
-                    let key: SigningKey = serde_json::from_reader(private_file(path)?.take(32768))
-                        .map_err(|_| "invalid local signing key")?;
-                    let pk = hex::decode(key.public_key_hex)?;
-                    if address_from_public_key(&pk) != *payer {
-                        return Err("public payer mismatch".into());
-                    }
-                    Some((
-                        pq::Account {
-                            id: pq::destination(payer)?[12..].try_into()?,
-                            sequence: seq,
-                            public_key: Box::new(pk.try_into().map_err(|_| "invalid payer key")?),
-                        },
-                        hex::decode(key.private_key_hex)?,
-                    ))
+        let signing = match (&o.account_key, inline_key, &o.payer, o.sequence, public) {
+            (Some(path), None, Some(payer), Some(seq), true) if seq > 0 => {
+                let key: SigningKey = serde_json::from_reader(private_file(path)?.take(32768))
+                    .map_err(|_| "invalid local signing key")?;
+                let pk = hex::decode(key.public_key_hex)?;
+                if address_from_public_key(&pk) != *payer {
+                    return Err("public payer mismatch".into());
                 }
-                (None, None, None, false) => None,
-                _ => return Err(
-                    "supply exactly the required public payer, signing key path and next sequence"
+                Some((
+                    pq::Account {
+                        id: pq::destination(payer)?[12..].try_into()?,
+                        sequence: seq,
+                        public_key: Box::new(pk.try_into().map_err(|_| "invalid payer key")?),
+                    },
+                    hex::decode(key.private_key_hex)?,
+                ))
+            }
+            (None, Some((public_key_hex, private_key_hex)), Some(payer), Some(seq), true)
+                if seq > 0 =>
+            {
+                let pk = hex::decode(public_key_hex)?;
+                if address_from_public_key(&pk) != *payer {
+                    return Err("public payer mismatch".into());
+                }
+                Some((
+                    pq::Account {
+                        id: pq::destination(payer)?[12..].try_into()?,
+                        sequence: seq,
+                        public_key: Box::new(pk.try_into().map_err(|_| "invalid payer key")?),
+                    },
+                    hex::decode(private_key_hex)?,
+                ))
+            }
+            (None, None, None, None, false) => None,
+            _ => {
+                return Err(
+                    "supply exactly the required public payer, signing key and next sequence"
                         .into(),
-                ),
-            };
+                )
+            }
+        };
         let mint = if o.mode == Mode::Shield { o.amount } else { 0 };
         let exit = if o.mode == Mode::Exit { o.amount } else { 0 };
         let spend = if mint > 0 {

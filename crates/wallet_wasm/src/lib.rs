@@ -279,15 +279,26 @@ pub fn wallet_sign_pftl_swap_intent(
 #[wasm_bindgen]
 pub fn wallet_sign_transfer(
     backup_json: &str,
-    quote_json: &str,
-    intent_json: &str,
+    quote_json: Option<String>,
+    intent_json: Option<String>,
 ) -> Result<JsValue, JsValue> {
+    let (Some(quote_json), Some(intent_json)) = (quote_json, intent_json) else {
+        return Err(JsValue::from_str(
+            "transfer quote and intent must be valid JSON",
+        ));
+    };
     let backup: WalletBackupFile = serde_json::from_str(backup_json)
         .map_err(|e| JsValue::from_str(&format!("backup parse: {e}")))?;
-    let quote: TransferFeeQuoteSummary = serde_json::from_str(quote_json)
-        .map_err(|e| JsValue::from_str(&format!("quote parse: {e}")))?;
-    let intent: BrowserTransferIntent = serde_json::from_str(intent_json)
-        .map_err(|e| JsValue::from_str(&format!("transfer intent parse: {e}")))?;
+    let quote: TransferFeeQuoteSummary = serde_json::from_str(&quote_json).map_err(|e| {
+        JsValue::from_str(&format!(
+            "transfer quote and intent must be valid JSON: {e}"
+        ))
+    })?;
+    let intent: BrowserTransferIntent = serde_json::from_str(&intent_json).map_err(|e| {
+        JsValue::from_str(&format!(
+            "transfer quote and intent must be valid JSON: {e}"
+        ))
+    })?;
 
     let identity =
         wallet_identity_from_backup(&backup).map_err(|e| JsValue::from_str(&e.to_string()))?;

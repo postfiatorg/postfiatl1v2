@@ -78,8 +78,8 @@ EXPECTED = {
     "wallet-extension/icons/icon128.png": "4e05b9a7cc8d83b110b6d0ce7dc98702a705f8c8427d98e8a6284cc6cbfd0c39",
     "wallet-extension/icons/icon16.png": "3caf5822b89ea2d234e250e4445dc63b854be6ed4b20681e27ed84196d847e8b",
     "wallet-extension/icons/icon48.png": "b2a4f3d0e8204e866c5e05d157ae734b3e84467087620b5920e1ffe32ea886a2",
-    "wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882",
-    "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882",
+    "wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm": "efdf4e2758cb8dcbe65eb523952f37e27db0d4326322bb6151954d018ed31abc",
+    "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm": "efdf4e2758cb8dcbe65eb523952f37e27db0d4326322bb6151954d018ed31abc",
     # Hash-pinned new-NAVCoin proof fixtures and receipt-qualification evidence.
     "ops/new-navcoin/evidence/gpu-fixture/fixture-proof/proof-calldata.bin": "b3d950c859846746ed0a5ed4d88215acf7bc579bf57ae53c028058c617f2066a",
     "ops/new-navcoin/evidence/gpu-fixture/fixture-proof/proof.bin": "5951668359ed1ff16fb22b30938fd841cfead2855b338193586fe05c828634b9",
@@ -88,6 +88,26 @@ EXPECTED = {
     "ops/new-navcoin/receipt-qualification/canonical-checkpoint/public-values.bin": "e6737d595da650fd9d15f547795c91ea63b9d1568c4d5bae3be04301c67301cf",
     "ops/new-navcoin/receipt-qualification/proof-calldata.bin": "b3d950c859846746ed0a5ed4d88215acf7bc579bf57ae53c028058c617f2066a",
     "ops/new-navcoin/receipt-qualification/public-values.bin": "f0af21de8e93e90c6c79e7ca23c1ae950916da88a29299384512eeb8757c33c9",
+    # Hash-pinned PFSH03 post-quantum payment test fixtures and vectors.
+    "crates/privacy_binius/tests/fixtures/pre-profile-2-issued-exit.bin": "1bdb28fc8083827be35a523aa49b44d4817946b6dbfe6cc5ae6ba21ed04ba946",
+    "crates/privacy_binius_wallet/vectors/delivery.bin": "f699505a6314dd8b173c6f5d47a2a73699e89e2ab66ad2576e087ad89de7eab3",
+    "tools/pft-binius-shielded-pq/l1-vectors/pft-exit.bin": "5a97f0c5be4c5a16274b3dd07ad9a28be553b249b202e5764bad7aa2c2789b9a",
+    "tools/pft-binius-shielded-pq/l1-vectors/pft-pay.bin": "9b378b6d0392b68d22fd30f4557bcabc869debd3b140102ff2367a3f1e57465d",
+    "tools/pft-binius-shielded-pq/l1-vectors/pft-shield.bin": "427b9b2d748e2653686d7dffbbb059411c7a80b748b42137f600a573154ea4fc",
+    "tools/pft-binius-shielded-pq/l1-vectors/pft-topup.bin": "91e70de8a8ccbedc77192d0a829fe1b8f4f39b249121113f22aee1f738afb2b9",
+    "tools/pft-binius-shielded-pq/l1-vectors/pfusdc-exit.bin": "9607ff800089886615938cf3bfb89a7bc9bb06854beeb3cdbf7505fb7d3f4054",
+    "tools/pft-binius-shielded-pq/l1-vectors/pfusdc-pay.bin": "a16b9f205cabda99e8616ad531310c4bdbfe62dc10c0474a6cae39ab55261d50",
+    "tools/pft-binius-shielded-pq/l1-vectors/pfusdc-shield.bin": "5f19999779dc5e89f93bfbdc78e0378a2cc20ed2c2ebba56fd92dadddf6178e2",
+    "tools/pft-binius-shielded-pq/l1-vectors/pfusdc-topup.bin": "f74ea2aa208547587b4d807b2a68267396cd93bcae02710d91f7422022cff95a",
+    "tools/pft-binius-shielded-pq/payments/tx_dummy_1in.bin": "b62acf2facfa120dfeee43176604a7fc036ef725d3034c61f525ddcece18629d",
+    "tools/pft-binius-shielded-pq/payments/tx_hop1.bin": "ce82c2bc96b63a69dfc244c7b1555d83c31001de66a0a3a92015f6f22016eae5",
+    "tools/pft-binius-shielded-pq/payments/tx_hop2.bin": "2a8109e7f73fde7392bfbd33e5d1bcbfe45392fc55246cd29235a64e3b989ecb",
+    "tools/pft-binius-shielded-pq/payments/tx_mint.bin": "c9d070d79e5385d5351641b7a82ccbf6f29d27ef2107b0c7cdcf9fc79d7a4d26",
+    "tools/pft-binius-shielded-pq/rollover-vectors/boundary-0.bin": "029be3797a810afed35bf104e015f5ccd5f47d34f3fbcc13693286284e71cef8",
+    "tools/pft-binius-shielded-pq/rollover-vectors/boundary-1.bin": "881051b190ea5669e7866da202d7b19aac41c68d019d7c7d2405e11b743ebe0f",
+    "tools/pft-binius-shielded-pq/rollover-vectors/mixed-inputs.bin": "3e811b1e246ca6d668353df43414f1e63b3674a0508f91439046fa396f5cbe64",
+    "tools/pft-binius-shielded-pq/rollover-vectors/old-spend.bin": "437f3cd6606c4b623b336e0e0e7f0a338fa5fe4e803bf1bf52ffd867720a0e4f",
+    "tools/pft-binius-shielded-pq/rollover-vectors/successor-spend.bin": "e9f9e3bd159e98b4cd6df8174c07ed32b012dd8113189c586330b00decab6fbd",
 }
 
 

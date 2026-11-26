@@ -185,7 +185,7 @@ export function wallet_sign_pftl_swap_intent(backup_json: string, intent_json: s
  * intent_json: closed object with the reviewed `from`, `to`, and `amount`
  * Returns: SignedTransfer as JS object
  */
-export function wallet_sign_transfer(backup_json: string, quote_json: string, intent_json: string): any;
+export function wallet_sign_transfer(backup_json: string, quote_json?: string | null, intent_json?: string | null): any;
 
 /**
  * Sign a transfer from explicit fields (no quote needed).

@@ -419,13 +419,12 @@ mod pq_payment_local_chain_tests {
             )],
         )
         .unwrap();
-        // No pfUSDC tree holds the vector's root, so the pool check refuses the
-        // corrupt body before any proof work, in the proposer and in the voter.
+        // Corrupting the final proof byte is refused by both the proposer and the voter.
         assert!(
             propose_batch_with_timings(proposal(proposer, &fleet.root, &bad))
                 .unwrap_err()
                 .to_string()
-                .contains("pq_unknown_anchor")
+                .contains("PQ L1 verification failed")
         );
         let mut foreign = genesis.clone();
         foreign.chain_id.push('x');
@@ -467,7 +466,7 @@ mod pq_payment_local_chain_tests {
         assert!(create_block_vote(vote.clone())
             .unwrap_err()
             .to_string()
-            .contains("pq_unknown_anchor"));
+            .contains("PQ L1 verification failed"));
         fs::remove_file(bad_opts.batch_file).unwrap();
         assert!(create_block_vote(vote).is_err());
         assert!(!vote_file.exists());
@@ -795,7 +794,7 @@ mod pq_payment_local_chain_tests {
         assert_eq!(pre.reserve, 54_743);
         let ledger =
             include_bytes!("../../../../../tools/pft-binius-shielded-pq/payments/ledger_hop1.json");
-        assert_eq!(bytes_to_hex(&Sha384::digest(ledger)), "2b0a19667f50562ff66c075a3a323c604c37115e1f77eb3a985c6ff05b45768775d68ece9bd167af2dabbe05181b7731");
+        assert_eq!(bytes_to_hex(&Sha384::digest(ledger)), "481c8a8003e8385de5ef0c2fb32eb57136e13b655dfd2221eda3a8853bf9d91ec2de009f09dc1ace2ba1739ef1654c51");
         let source: serde_json::Value = serde_json::from_slice(ledger).unwrap();
         assert_eq!(serde_json::json!(pre.commitments), source["coins"]);
         assert_eq!(serde_json::json!(pre.spent_serials), source["spent_sn"]);

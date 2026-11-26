@@ -166,14 +166,14 @@ function parsePublicAction(actionJson, domain) {
     if (!KIND_SPECS[kind]) throw refusal(400, 'private_action_malformed');
     const canonical = serializeObject(value, KIND_SPECS[kind], 'action');
     if (kind === 'pq_payment_v1') {
-        if (value.body.length > Math.ceil(149130 / 3) * 4) throw refusal(413, 'private_action_too_large');
+        if (value.body.length > Math.ceil(160000 / 3) * 4) throw refusal(413, 'private_action_too_large');
         const wire = Buffer.from(value.body, 'base64');
-        if (wire.length < 72 || wire.length > 149130 || wire.toString('base64') !== value.body
+        if (wire.length < 72 || wire.length > 160000 || wire.toString('base64') !== value.body
             || wire.subarray(0, 5).toString('hex') !== '5046505101' || wire[71] > 1) throw refusal(400, 'private_action_malformed');
         const prefix = 72 + (wire[71] ? 20 + 8 + 1952 : 0);
         const inner = prefix + (wire[71] ? 3309 : 0);
-        if (wire.length - inner > 140476 || wire.length <= inner + 3648 || !wire.subarray(inner, inner + 8).equals(Buffer.from('5046534830320000', 'hex'))
-            || wire.readUInt32LE(inner + 3644) !== wire.length - inner - 3648) throw refusal(400, 'private_action_malformed');
+        if (wire.length - inner > 150998 || wire.length <= inner + 14170 || !wire.subarray(inner, inner + 8).equals(Buffer.from('5046534830330000', 'hex'))
+            || wire.readUInt32LE(inner + 14166) !== wire.length - inner - 14170) throw refusal(400, 'private_action_malformed');
         const mode = wire[6], issued = wire.subarray(7, 55).some(Boolean);
         const publicFee = wire.readBigUInt64LE(63);
         const mint = wire.readBigUInt64LE(inner + 56), exit = wire.readBigUInt64LE(inner + 64);
@@ -189,15 +189,15 @@ function parsePublicAction(actionJson, domain) {
         // The configured domain and pool are checked separately. Only the
         // signature, proof length and proof can differ on an idempotent retry.
         const statement = crypto.createHash('sha384').update(wire.subarray(0, prefix))
-            .update(wire.subarray(inner, inner + 3644)).digest('hex');
+            .update(wire.subarray(inner, inner + 7548)).digest('hex');
         let statementId;
         if (domain) {
             const chain = Buffer.from(domain.chain_id, 'utf8');
             const length = Buffer.alloc(8), version = Buffer.alloc(4);
             length.writeBigUInt64LE(BigInt(chain.length));
             version.writeUInt32LE(domain.protocol_version);
-            const raw = crypto.createHash('sha384').update('PFT-SH-TXCTX-V2')
-                .update(wire.subarray(inner, inner + 3644)).digest();
+            const raw = crypto.createHash('sha384').update('PFT-SH-TXCTX-V3')
+                .update(wire.subarray(inner, inner + 7548)).digest();
             statementId = crypto.createHash('sha384').update('PFT-SH-L1-CONTEXT-V1')
                 .update(length).update(chain).update(Buffer.from(domain.genesis_hash, 'hex'))
                 .update(version).update(PQ_POOL).update(wire.subarray(0, prefix)).update(raw).digest('hex');

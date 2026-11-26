@@ -620,17 +620,17 @@ export function wallet_sign_pftl_swap_intent(backup_json, intent_json) {
  * intent_json: closed object with the reviewed `from`, `to`, and `amount`
  * Returns: SignedTransfer as JS object
  * @param {string} backup_json
- * @param {string} quote_json
- * @param {string} intent_json
+ * @param {string | null} [quote_json]
+ * @param {string | null} [intent_json]
  * @returns {any}
  */
 export function wallet_sign_transfer(backup_json, quote_json, intent_json) {
     const ptr0 = passStringToWasm0(backup_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(quote_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passStringToWasm0(intent_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len2 = WASM_VECTOR_LEN;
+    var ptr1 = isLikeNone(quote_json) ? 0 : passStringToWasm0(quote_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    var len1 = WASM_VECTOR_LEN;
+    var ptr2 = isLikeNone(intent_json) ? 0 : passStringToWasm0(intent_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    var len2 = WASM_VECTOR_LEN;
     const ret = wasm.wallet_sign_transfer(ptr0, len0, ptr1, len1, ptr2, len2);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
