@@ -82,8 +82,8 @@ Accepted `pq_payment_v1` actions expose the public deposit or exit account and t
 
 | Account history role | Amount | Fee and sequence |
 | --- | --- | --- |
-| `shielded_deposit` | Exact public debit into the pool | The native fee comes from the deposited value. A pfUSDC depositor pays the PFT fee separately. The row records the depositor's sequence. |
-| `shielded_withdrawal` | Exact credit from the pool | Private notes pay the fee in atoms of the selected asset. The credit uses sequence zero. |
+| Deposit (`shielded_deposit`) | Exact public debit into the pool | The native fee comes from the deposited value. A pfUSDC depositor pays the PFT fee separately. The row records the depositor's sequence. |
+| Withdrawal (`shielded_withdrawal`) | Exact credit from the pool | Private notes pay the fee in atoms of the selected asset. The credit uses sequence zero. |
 
 Internal payments have no account history row. Their asset, fee, inclusion time and tree are public. The PQ pair records the fee. Native fees burn and issued fees enter the series collector. The receipt's chain-wide burn fields count PFT only.
 
