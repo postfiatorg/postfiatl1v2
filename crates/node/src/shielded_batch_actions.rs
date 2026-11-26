@@ -243,7 +243,7 @@ pub fn create_shielded_atomic_batch(
         ));
     }
 
-    let priced = genesis_hash(&genesis) == pq_payment_fixture::GENESIS_HASH
+    let priced = postfiat_types::pq_rehearsal_domain(&genesis.chain_id, &genesis_hash(&genesis))
         && governance.pq_fee_schedule_in_force(execution_height);
     let mut actions = Vec::with_capacity(options.source_batch_files.len());
     for source_path in &options.source_batch_files {

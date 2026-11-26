@@ -3391,7 +3391,7 @@ pub(super) fn replay_archived_payload(
                 &state.governance,
                 true,
             );
-            if genesis_hash(genesis) == pq_payment_fixture::GENESIS_HASH
+            if postfiat_types::pq_rehearsal_domain(&genesis.chain_id, &genesis_hash(genesis))
                 && state
                     .governance
                     .pq_fee_schedule_in_force(block.header.height)

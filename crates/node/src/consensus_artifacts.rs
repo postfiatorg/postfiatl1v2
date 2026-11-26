@@ -1754,7 +1754,7 @@ pub(super) fn check_pq_block<'a>(
                 .parts()
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             let digest = hash.get_or_init(|| genesis_hash(genesis));
-            if digest != pq_payment_fixture::GENESIS_HASH {
+            if !postfiat_types::pq_rehearsal_domain(&genesis.chain_id, digest) {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "pq_settlement_inactive",
@@ -1833,11 +1833,10 @@ pub(super) fn verify_development_pq_payments(
         return Ok(());
     }
     let hash = genesis_hash(genesis);
-    if genesis.chain_id != pq_payment_fixture::CHAIN_ID || hash != pq_payment_fixture::GENESIS_HASH
-    {
+    if !postfiat_types::pq_rehearsal_domain(&genesis.chain_id, &hash) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "PQ L1 profile is restricted to the disposable development genesis",
+            "PQ L1 profile is restricted to enabled PQ domains",
         ));
     }
     let genesis_bytes: [u8; 48] = hex_to_bytes(&hash)
