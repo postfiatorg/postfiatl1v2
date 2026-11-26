@@ -4443,8 +4443,11 @@ mod tests {
         );
         let mut substituted = pointer;
         substituted.migration_packet_root = "22".repeat(48);
-        node.write_json(node_dir.0.join(TRANSACTIONAL_GENERATION_POINTER_FILE), &substituted)
-            .unwrap();
+        node.write_json(
+            node_dir.0.join(TRANSACTIONAL_GENERATION_POINTER_FILE),
+            &substituted,
+        )
+        .unwrap();
         assert!(verify_existing_generation(&node_dir.0, &genesis.chain_id, &hash).is_err());
         assert!(!node_dir.0.join(TRANSACTIONAL_DATABASE_FILE).exists());
     }
