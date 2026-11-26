@@ -6,11 +6,11 @@ sampling): (1) the founder's original prompt and (2) the pillar page. It is
 asked the founder's question: how well the page corresponds to the founder's
 intention and how likely it is to produce something that works (technically
 robust, economically coherent), with reasoning that enumerates problems for
-later agents. Results are written to feedback/<pillar>.md, feedback/README.md
-and feedback/raw/*.json.
+later agents. Results are written to feedback/round-N/<pillar>.md, raw JSON and
+scores.json, and feedback/README.md compares rounds.
 
     python3 big_milestone/review.py --prompt-file big_milestone/_private/original_prompt.md \
-        --key-file ~/repos/open2.txt [--wait-for-credit 5]
+        --key-file ~/repos/open2.txt --round 2 [--wait-for-credit 5]
 
 The original prompt stays outside git (big_milestone/_private/ is ignored).
 """
@@ -116,16 +116,16 @@ def page_title(path: Path) -> str:
     return next(line[2:].strip() for line in path.read_text().splitlines() if line.startswith("# "))
 
 
-def write_feedback(pillar: Path, reviews: list[dict], run_at: str) -> dict:
+def write_feedback(pillar: Path, reviews: list[dict], run_at: str, out_dir: Path, round_no: int) -> dict:
     title = page_title(pillar)
     scores = {r["model"]: parse_score(r["content"]) for r in reviews}
     valid = [s for s in scores.values() if s is not None]
     mean = round(sum(valid) / len(valid)) if valid else None
-    lines = [f"# Feedback — {title}", "",
+    lines = [f"# Feedback — {title}", "", f"*Review round {round_no}.*", "",
              f"> **Mean score:** {mean if mean is not None else 'n/a'}/100 · "
              + " · ".join(f"{MODELS[r['model']]} {scores[r['model']] if scores[r['model']] is not None else 'n/a'}" for r in reviews),
              ">",
-             f"> **Method:** each model received (1) the founder's original prompt and (2) [this pillar's spec](../pillars/{pillar.name}), "
+             f"> **Method:** each model received (1) the founder's original prompt and (2) [this pillar's spec](../../pillars/{pillar.name}), "
              f"once, with the question below. Run {run_at} via OpenRouter.", "",
              "## The question", "", "> " + QUESTION.replace("\n\n", "\n>\n> "), ""]
     for review in reviews:
@@ -134,26 +134,43 @@ def write_feedback(pillar: Path, reviews: list[dict], run_at: str) -> dict:
         lines += [f"## {MODELS[review['model']]} — {score if score is not None else 'n/a'}/100", "",
                   f"*Model `{review.get('served_model') or review['model']}` · {review['usage'].get('completion_tokens', '?')} output tokens*", "",
                   demote_headings(body.strip()), ""]
-    out = ROOT / "feedback" / pillar.name
-    out.write_text("\n".join(lines))
-    return {"pillar": pillar, "title": title, "scores": scores, "mean": mean}
+    (out_dir / pillar.name).write_text("\n".join(lines))
+    return {"pillar": pillar.name, "title": title, "scores": scores, "mean": mean}
 
 
-def write_overview(rows: list[dict], run_at: str) -> None:
-    head = "| Pillar | " + " | ".join(MODELS.values()) + " | Mean |"
-    sep = "|---|" + "---|" * len(MODELS) + "---|"
-    table = [head, sep]
-    for row in rows:
-        cells = [str(row["scores"].get(m)) if row["scores"].get(m) is not None else "n/a" for m in MODELS]
-        table.append(f"| [{row['title']}]({row['pillar'].name}) | " + " | ".join(cells) + f" | **{row['mean']}** |")
-    means = [r["mean"] for r in rows if r["mean"] is not None]
+def write_overview() -> None:
+    rounds = sorted((int(p.parent.name.split("-")[1]), json.loads(p.read_text()))
+                    for p in (ROOT / "feedback").glob("round-*/scores.json"))
+    if not rounds:
+        return
+    latest_no, latest = rounds[-1]
+    head = ["Pillar"] + [f"Round {n} mean" for n, _ in rounds] + [f"R{latest_no} {name}" for name in MODELS.values()]
+    if len(rounds) > 1:
+        head.append(f"Change R{rounds[0][0]}→R{latest_no}")
+    table = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
+    for name, row in latest["pillars"].items():
+        cells = [f"[{row['title']}](round-{latest_no}/{name})"]
+        for n, data in rounds:
+            mean = data["pillars"].get(name, {}).get("mean")
+            cells.append(f"[{mean}](round-{n}/{name})" if mean is not None else "n/a")
+        cells += [str(row["scores"].get(m)) if row["scores"].get(m) is not None else "n/a" for m in MODELS]
+        if len(rounds) > 1:
+            first = rounds[0][1]["pillars"].get(name, {}).get("mean")
+            cells.append(f"**{row['mean'] - first:+d}**" if None not in (first, row["mean"]) else "n/a")
+        table.append("| " + " | ".join(cells) + " |")
+    overall = []
+    for n, data in rounds:
+        means = [r["mean"] for r in data["pillars"].values() if r["mean"] is not None]
+        overall.append(f"round {n}: **{round(sum(means) / len(means))}**/100 ({data['run_at']})")
+    latest_means = [r["mean"] for r in latest["pillars"].values() if r["mean"] is not None]
     text = ["# Feedback — Overview", "",
-            f"> **Mean score:** {round(sum(means) / len(means)) if means else 'n/a'}/100 across {len(rows)} pillars",
+            f"> **Mean score:** {round(sum(latest_means) / len(latest_means))}/100 in round {latest_no} across {len(latest_means)} pillars",
             ">",
             f"> **Method:** for each pillar, {' and '.join(MODELS.values())} each received the founder's original prompt and that "
-            f"pillar's spec once, and scored 0–100 how well it matches the founder's intention and how likely it is to "
-            f"work (technically robust, economically coherent). Run {run_at}. Each pillar's page has both reviews in full, "
-            "with numbered problems for follow-up agents.", "", *table, ""]
+            "pillar's spec once, and scored 0–100 how well it matches the founder's intention and how likely it is to "
+            "work (technically robust, economically coherent). Each round's pages hold both reviews in full, with "
+            "numbered problems for follow-up agents. Pillars are revised from one round's problems before the next round.",
+            "", "Overall: " + " · ".join(overall), "", *table, ""]
     (ROOT / "feedback" / "README.md").write_text("\n".join(text))
 
 
@@ -161,8 +178,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--prompt-file", required=True)
     parser.add_argument("--key-file", required=True)
+    parser.add_argument("--round", type=int, required=True, help="review round number; output goes to feedback/round-N/")
+    parser.add_argument("--overview-only", action="store_true", help="only rebuild feedback/README.md from saved rounds")
     parser.add_argument("--wait-for-credit", type=float, default=0.0, help="poll until this many USD of credit are available")
     args = parser.parse_args()
+    if args.overview_only:
+        write_overview()
+        return
     key = Path(args.key_file).expanduser().read_text().split()[0]
     prompt = Path(args.prompt_file).read_text()
     if args.wait_for_credit:
@@ -170,7 +192,8 @@ def main() -> None:
             print(f"waiting for credit: ${left:.2f} < ${args.wait_for_credit:.2f}", flush=True)
             time.sleep(60)
     pillars = sorted((ROOT / "pillars").glob("*.md"))
-    (ROOT / "feedback" / "raw").mkdir(parents=True, exist_ok=True)
+    out_dir = ROOT / "feedback" / f"round-{args.round}"
+    (out_dir / "raw").mkdir(parents=True, exist_ok=True)
     run_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     jobs = {}
     with cf.ThreadPoolExecutor(max_workers=10) as pool:
@@ -183,12 +206,13 @@ def main() -> None:
             pillar, model = jobs[future]
             review = future.result()
             results[(pillar, model)] = review
-            raw = ROOT / "feedback" / "raw" / f"{pillar.stem}--{model.split('/')[-1]}.json"
+            raw = out_dir / "raw" / f"{pillar.stem}--{model.split('/')[-1]}.json"
             raw.write_text(json.dumps({**review, "pillar": pillar.name, "run_at": run_at}, indent=2))
             print(f"done {pillar.stem} {model} score={parse_score(review['content'])} "
                   f"out={review['usage'].get('completion_tokens')} cost={review['usage'].get('cost')}", flush=True)
-    rows = [write_feedback(p, [results[(p, m)] for m in MODELS], run_at) for p in pillars]
-    write_overview(rows, run_at)
+    rows = [write_feedback(p, [results[(p, m)] for m in MODELS], run_at, out_dir, args.round) for p in pillars]
+    (out_dir / "scores.json").write_text(json.dumps({"run_at": run_at, "pillars": {r["pillar"]: r for r in rows}}, indent=2))
+    write_overview()
     total = sum(float(r["usage"].get("cost") or 0) for r in results.values())
     print(f"wrote {len(rows)} feedback pages; total cost ${total:.2f}")
 

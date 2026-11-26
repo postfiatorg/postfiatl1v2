@@ -1,8 +1,10 @@
 # Feedback — Pillar 3 — Validator Rewards Program
 
+*Review round 1.*
+
 > **Mean score:** 65/100 · Gemini 4 Neon 58 · Claude Opus 5.5 72
 >
-> **Method:** each model received (1) the founder's original prompt and (2) [this pillar's spec](../pillars/03-validator-program.md), once, with the question below. Run 2026-11-26 20:13 UTC via OpenRouter.
+> **Method:** each model received (1) the founder's original prompt and (2) [this pillar's spec](../../pillars/03-validator-program.md), once, with the question below. Run 2026-11-26 20:13 UTC via OpenRouter.
 
 ## The question
 

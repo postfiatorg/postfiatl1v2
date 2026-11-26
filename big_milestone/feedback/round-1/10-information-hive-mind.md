@@ -1,8 +1,10 @@
 # Feedback — Pillar 10 — Information Hive Mind
 
+*Review round 1.*
+
 > **Mean score:** 54/100 · Gemini 4 Neon 46 · Claude Opus 5.5 62
 >
-> **Method:** each model received (1) the founder's original prompt and (2) [this pillar's spec](../pillars/10-information-hive-mind.md), once, with the question below. Run 2026-11-26 20:13 UTC via OpenRouter.
+> **Method:** each model received (1) the founder's original prompt and (2) [this pillar's spec](../../pillars/10-information-hive-mind.md), once, with the question below. Run 2026-11-26 20:13 UTC via OpenRouter.
 
 ## The question
 

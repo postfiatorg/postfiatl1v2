@@ -38,8 +38,12 @@ def route_for(path: Path) -> str:
 
 def pages() -> list[dict]:
     files = [ROOT / "README.md", *sorted((ROOT / "pillars").glob("*.md"))]
+    rounds = sorted((ROOT / "feedback").glob("round-*"), key=lambda d: int(d.name.split("-")[1]))
     if (ROOT / "feedback" / "README.md").exists():
-        files += [ROOT / "feedback" / "README.md", *sorted((ROOT / "feedback").glob("[0-9]*.md"))]
+        files.append(ROOT / "feedback" / "README.md")
+    for round_dir in rounds:
+        files += sorted(round_dir.glob("[0-9]*.md"))
+    latest = rounds[-1].name if rounds else ""
     items = []
     for path in files:
         text = path.read_text(encoding="utf-8")
@@ -48,7 +52,8 @@ def pages() -> list[dict]:
         score = SCORE_RE.search(text)
         items.append({"route": route_for(path), "path": path, "title": title,
                       "status": status.group(1).strip() if status else (f"{score.group(1)}/100" if score else ""),
-                      "section": "Feedback" if path.parent.name == "feedback" else "Specs"})
+                      "section": "Specs" if "feedback" not in path.parts else f"Feedback · {latest.replace('-', ' ')}",
+                      "in_nav": "feedback" not in path.parts or path.parent.name in ("feedback", latest)})
     return items
 
 
@@ -81,9 +86,9 @@ def render(item: dict, nav: list[dict]) -> str:
     body = rewrite_links(md.convert(text), item["path"])
     links = []
     section = ""
-    for entry in nav:
-        if entry["section"] != section and entry["section"] == "Feedback":
-            links.append('<div class="nav-section">Feedback</div>')
+    for entry in (e for e in nav if e["in_nav"]):
+        if entry["section"] != section and entry["section"].startswith("Feedback"):
+            links.append(f'<div class="nav-section">{html.escape(entry["section"])}</div>')
         section = entry["section"]
         active = " is-active" if entry["route"] == item["route"] else ""
         title = entry["title"].replace("Feedback — ", "")
