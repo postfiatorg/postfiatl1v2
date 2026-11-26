@@ -43,3 +43,17 @@ in 96 s and credited on six validators 151 s after sending.
 
 Not done: the Task Node does not yet show the window's hours; a session that dies inside a window is
 not restarted; a real Ethereum withdrawal and a real Solana withdrawal have not been made through it.
+
+## Deposits when Colab has no large GPU
+
+Deposits need a G4. When the window has none, `vast-deposit-fallback.timer` (every 5 minutes from
+16:45 to 18:30 UTC) runs `vast-deposit-fallback.sh check`, which rents one single-RTX-5090 machine
+on Vast (about $0.60 an hour), sets up the deposit prover on it (`vast-deposits-remote.sh`) and
+forwards its socket. The close of the window destroys the machine. If a G4 arrives later, the
+rented machine is destroyed at the next check.
+
+Measured 2026-11-26: rented, set up and warm in 3 min 35 s; deposit readiness reported true. The
+first offer tried refused the SSH login and was destroyed; the script moved to the next offer.
+No real deposit has been proven on a rented machine yet: the test wallet was out of USDC.
+The stopped four-GPU machine is not a fallback: Vast would not restart it ("Required resources are
+currently unavailable").

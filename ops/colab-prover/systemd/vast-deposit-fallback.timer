@@ -1,0 +1,10 @@
+[Unit]
+Description=From 16:45 to 18:30 UTC, check every 5 minutes whether deposits need the Vast machine
+
+[Timer]
+OnCalendar=*-*-* 16:45..59/5:00 UTC
+OnCalendar=*-*-* 17:00/5:00 UTC
+OnCalendar=*-*-* 18:00..30/5:00 UTC
+
+[Install]
+WantedBy=timers.target
