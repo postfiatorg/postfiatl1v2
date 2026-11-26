@@ -112,3 +112,19 @@ For the owner (date first asked):
 - **Task Node PRs:** #442.
 - **Private repository:** PR #53.
 - **Previous handoff:** [2026-11-25: Docs updated, exit release on main and first paper drafted](2026-11-25___dravlic__docs_updated_exit_release_on_main_and_first_paper_drafted.md).
+
+## End of session (14:46 UTC)
+
+**The work server.** It was unreachable from my side from about 12:25 to 13:37 UTC and did not restart. The sessions on it lost their provider connection and were started again. Its disk was at 99% from the day's builds; I removed three build caches of mine, and it is back at 92%.
+
+**Validator-5.** The block is lifted since 13:39 UTC: the access file is the one from `/root/authorized_keys.before-20261125-flood` again, and the blocked file is kept as `/root/authorized_keys.blocked-20261126`. In an hour of watching (13:45 to 14:41 UTC) `rpc-events.ndjson` showed no `owned_apply_v3`. The proxy's log says its certificate recovery is still deferred ("got 4, need 5"), so it has not tried to deliver the three certificates again and #239 has not been exercised by it yet.
+
+**Merged after the text above.** #265, #266, #267 and #270 at 12:42 UTC, and [#276](https://github.com/postfiatorg/postfiatl1v2/pull/276): two tests of #265 had a fixed clock, so `python-sdk` failed on `main` from 12:42 to 13:45 UTC.
+
+**Still waiting for a second read, not to be installed before it:**
+
+- #272 and #273: the fix rounds for the second read's points are pushed.
+- [#277](https://github.com/postfiatorg/postfiatl1v2/pull/277): the small part of #273 on its own. With `WITHDRAW_PROVING_WINDOW_HOURS` set, the Ethereum withdrawal service's readiness says closed outside the hours; nothing in how jobs are processed changes. It takes effect after an install on the host of that service.
+- tasknode #442: its second read came back "fine to merge after" three points (the withdrawal screens keep a stale clock and readiness, the local hours are off across a daylight-saving change, one test calls the configured service). The fix round is next; after it the pull request can be merged by either side.
+
+**Other.** #271 has six more mechanical commits for the `cargo clippy` step. The paper's newest check found four points, which are being corrected. A one-page note of the recorded times per step on the two USDC routes is on the work server at `~/.cache/eth-bridge-facts-20261126.md`.
