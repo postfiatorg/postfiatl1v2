@@ -208,6 +208,45 @@ class SettingTest(WindowTest):
         self.assertTrue(self.ready()['proving_window_file_state'].startswith('unreadable'))
 
 
+class StateTableTest(WindowTest):
+    """States that are not unsent work are handled while closed exactly as without a window."""
+
+    ROWS = {
+        'failed, burn scope': (dict(error_scope='burn', error='x'), 'failed', None),
+        'failed, retries exhausted': (dict(error_scope='route', route_attempts=4, retry_exhausted=True, retry_at=None), 'failed', None),
+        'failed, retry due, with a checkpoint result': (dict(error_scope='route', route_attempts=1, retry_exhausted=False,
+                                                             retry_at='2000-01-01T00:00:00+00:00'), 'failed', 'checkpoint'),
+        'paid, proven': (dict(ethereum_tx='0x' + '11' * 32, ethereum_finality=dict(chain_id=1, block_hash='0x' + '22' * 32,
+                                                                                    expected=dict(burn_tx_id=BURN))), 'paid', None),
+        'paid, not proven': (dict(ethereum_tx='0x' + '11' * 32), 'paid', None),
+        'awaiting finality': (dict(ethereum_tx='0x' + '11' * 32), 'awaiting_finality', 'withdraw'),
+        'reconciliation required, journaled': (dict(), 'reconciliation_required', 'intent'),
+    }
+
+    def calls(self, fields, stage, files, env):
+        for old in self.jobs.glob('*'):
+            import shutil
+            shutil.rmtree(old)
+        service.stage(dict(burn_tx_id=BURN, journal_version=1, **fields), stage)
+        folder = self.jobs / BURN
+        if files == 'checkpoint':
+            (folder / 'checkpoint-1-3').mkdir()
+            (folder / 'checkpoint-1-3' / 'eth-result.json').write_text('{}')
+        elif files == 'withdraw':
+            (folder / 'eth-withdrawal.json').write_text('{}')
+        elif files == 'intent':
+            (folder / 'eth-withdrawal.intent.json').write_text('{}')
+        with patch.dict(os.environ, env, clear=not env), patch.object(service, 'process') as process:
+            service.run_jobs(startup=True)
+        return process.call_count, service.read_job(BURN)['stage']
+
+    def test_each_state_while_closed_is_handled_as_without_a_window(self):
+        closed = {'WITHDRAW_PROVING_WINDOW_FILE': str(self.mode), 'WITHDRAW_PROVING_WINDOW_HOURS': '17:00-19:00'}
+        for name, (fields, stage, files) in self.ROWS.items():
+            with self.subTest(name):
+                self.assertEqual(self.calls(fields, stage, files, closed), self.calls(fields, stage, files, {}))
+
+
 class ProbeTest(unittest.TestCase):
     """Concurrent readiness requests share one prover probe per interval (B04)."""
 
