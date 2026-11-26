@@ -625,6 +625,13 @@ export function wallet_sign_pftl_swap_intent(backup_json, intent_json) {
  * @returns {any}
  */
 export function wallet_sign_transfer(backup_json, quote_json, intent_json) {
+    // Refuse a missing or malformed quote or intent before the strings reach the module.
+    try {
+        JSON.parse(quote_json);
+        JSON.parse(intent_json);
+    } catch (_) {
+        throw new Error('transfer quote and intent must be valid JSON');
+    }
     const ptr0 = passStringToWasm0(backup_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(quote_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
