@@ -10,7 +10,7 @@
         > docs/status/testnet-path.md
     ```
 
-Generated at input commit `693e426e1` (2026-11-25), the newest commit touching the input documents at generation time.
+Generated at input commit `e24e8b7da` (2026-11-27), the newest commit touching the input documents at generation time.
 
 Inputs: the [testnet-path milestone](../plans/active/l1v2-public-testnet-path-milestone.md),
 the [storage scaling milestone](../plans/completed/storage-scaling-milestone.md) gate table,
@@ -92,4 +92,4 @@ Row states from the storage scaling milestone's gate-status table.
 ## Context
 
 - Plans registry: the testnet-path milestone is LISTED ACTIVE.
-- Chain state head: updated 2026-11-26T10:14:35Z — 2026-11-26: fleet read at height 1906, release `sol-exit-r3`.
+- Chain state head: updated 2026-11-27T09:03:03Z — 2026-11-27: fleet read at height 1915, release `pq-r3`.

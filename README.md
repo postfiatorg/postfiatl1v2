@@ -11,11 +11,12 @@ validators sign with the post-quantum ML-DSA-65 scheme from genesis. Changes to
 the validator set and trust graph are ratified on chain by a governance lane
 called Cobalt. Private settlement runs through Asset-Orchard, a typed-asset
 extension of Zcash Orchard with Halo2 proofs; that shielded stack itself is not
-post-quantum. The main application is NAVCoins: floating-value assets whose
+post-quantum. The post-quantum PFSH03 private payments are active on the devnet
+from block 1910 ([Private payments](docs/quantum/private-payments.md)). The main application is NAVCoins: floating-value assets whose
 supply, minting and redemption are tied to machine-checkable reserve packets.
 
 > **Guidance reviewed 2026-11-06: devnet only. Latest reported fleet observation:
-> 2026-11-06. See
+> 2026-11-27. See
 > [Network Status](docs/status/network-status.md).**
 >
 > - One network runs today: the devnet `postfiat-wan-devnet-2`, run by six
