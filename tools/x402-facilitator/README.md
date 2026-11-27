@@ -5,12 +5,11 @@ gate, and thin MCP JSON-RPC client wrapper. The three headers follow Post Fiat
 Pillar 2 and Contract C1 (`postfiat.message.v1.X402PaymentRequired`,
 `X402PaymentSignature`, `X402PaymentResponse`).
 
-## Status: prototype, no chain adapter
+## Settlement status
 
-Nothing in this folder reads or writes the chain. Do not gate anything of value
-with it yet.
+The prototype HTTP adapter can issue live RPC writes when configured with validator gateway URLs. Its FastPay implementation lacks pinned committee verification. Use a test network for this adapter.
 
-- **It ships no settlement adapter.** A payment counts as settled when the
+- **Production requires a separately verified settlement adapter.** A payment counts as settled when the
   `settlementAdapter` that the embedding code passes to `createFacilitatorCore`
   says so. Without one, every payment is refused with
   `503 settlement_backend_unavailable`; the only exception is
