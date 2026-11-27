@@ -1,0 +1,38 @@
+{
+  "name": "@postfiat/navcoin-sdk",
+  "version": "1.0.0",
+  "description": "Open NAVCoin SDK, CLI, and exact-atom deterministic fee & NAV engine for Post Fiat L1 (Pillar 7).",
+  "type": "module",
+  "license": "MIT OR Apache-2.0",
+  "main": "./src/index.mjs",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.mjs"
+    },
+    "./constants": "./src/constants.mjs",
+    "./canonical": "./src/canonical.mjs",
+    "./engine": "./src/engine.mjs",
+    "./sdk": "./src/sdk.mjs",
+    "./vectors": "./vectors/nav_fee_vectors_v1.json"
+  },
+  "bin": {
+    "pftl-navcoin": "./bin/navcoin-cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "verify-vectors": "node ./bin/navcoin-cli.mjs verify-vectors"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "postfiat",
+    "pftl",
+    "navcoin",
+    "nav",
+    "sdk",
+    "deterministic-math"
+  ]
+}
