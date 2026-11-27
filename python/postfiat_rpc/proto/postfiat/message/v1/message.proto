@@ -174,7 +174,10 @@ message LegacyPointerV4 {
 
 // Per-recipient X-Wing (X25519 + ML-KEM-768) content-encryption-key (CEK) wrap.
 message RecipientWrap {
-  // 32-byte SHA-256 digest of the recipient's 1216-byte X-Wing public key.
+  // 32-byte recipient tag:
+  // - PRIVATE: SHA-256(recipient's 1216-byte X-Wing public key)
+  // - SEALED (blinded default): SHA-256("postfiat-l1-v2/sealed-recipient-tag/v1\x00" || xwing_ss || aad_context)
+  //   eliminating static key-directory linkability on IPFS envelopes.
   bytes recipient_key_id = 1;
   // Optional recipient postfiatl1v2 account address (MUST be empty when visibility == VISIBILITY_SEALED).
   string recipient_account = 2;
@@ -201,6 +204,9 @@ message XWingEncryptionHeader {
   string kdf_info = 5;
   // Ordered recipient wraps (sorted lexicographically by recipient_key_id in canonical producers).
   repeated RecipientWrap recipients = 6;
+  // 32-byte key-commitment tag closing multi-recipient non-key-committing AEAD attacks:
+  // SHA-256("postfiat-l1-v2/cek-commit/v1\x00" || cek || aad_context).
+  bytes cek_commitment = 7;
 }
 
 // Signed wallet message KEM key registration enabling encrypted FastPay rewards for zero-balance accounts

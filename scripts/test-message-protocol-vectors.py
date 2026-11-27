@@ -1534,7 +1534,7 @@ PROTO_MESSAGE_FIELDS: dict[str, tuple[str, ...]] = {
     ),
     "postfiat.message.v1.XWingEncryptionHeader": (
         "1 CipherSuite cipher_suite", "2 bytes aead_nonce", "3 bytes aad_context", "4 uint32 chunk_index",
-        "5 string kdf_info", "6 repeated RecipientWrap recipients",
+        "5 string kdf_info", "6 repeated RecipientWrap recipients", "7 bytes cek_commitment",
     ),
     "postfiat.message.v1.MessageKeyBinding": (
         "1 string chain_id", "2 string account", "3 bytes xwing_public_key", "4 bytes key_id",
@@ -1793,6 +1793,7 @@ PROTO_STATED_BYTE_SIZES: dict[str, str] = {
     "postfiat.message.v1.RecipientWrap.wrapped_cek": "48",
     "postfiat.message.v1.XWingEncryptionHeader.aead_nonce": "24",
     "postfiat.message.v1.XWingEncryptionHeader.aad_context": "32",
+    "postfiat.message.v1.XWingEncryptionHeader.cek_commitment": "32",
     "postfiat.message.v1.MessageKeyBinding.xwing_public_key": "1216",
     "postfiat.message.v1.MessageKeyBinding.key_id": "32",
     "postfiat.message.v1.FastPayPaymentRef.order_hash": "48",
