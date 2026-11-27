@@ -74,9 +74,9 @@ Every pillar is complete **only** when all four ship gates are checked off:
 - [ ] **4. Public blog post document** — Public blog post explaining Post Fiat's quantum-resistant NFT protocol and burn-first migration.
 
 ### Pillar 5 — [The Task Node Local Experience](pillars/05-local-task-node.md)
-*Native SwiftUI + Rust Mac app (`tasknode-apple`) with local post-quantum `PFSH03` shielded payments (**already proved live on devnet-2 Blocks 1912–1914 on Nov 26, 2026!**), direct public validator RPC default, notarized release, native tab parity, and external audit.*
+*Native SwiftUI + Rust Mac app (`tasknode-apple`) with local post-quantum `PFSH03` shielded payments (**already proved live on devnet-2 Blocks 1912–1914 on Nov 26, 2026!**), direct public validator RPC default, notarized release, native tab parity, and multi-model adversarial review.*
 
-- [ ] **1. Executed** — Merge PRs `#280`/`#444`/`#39`, unified BIP-39 recovery across clients, direct public validator RPC + leak-capture proof, notarized Mac build, native SwiftUI parity, external audit closed.
+- [ ] **1. Executed** — Merge PRs `#280`/`#444`/`#39`, unified BIP-39 recovery across clients, direct public validator RPC + leak-capture proof, notarized Mac build, native SwiftUI parity, multi-model review closed.
 - [ ] **2. Tested by user** — Clean-Mac install of notarized `TaskNode.app`, seed restore, one-click *Make private* on FastPay payout, Shield → Send → Receive → Unshield directly via public validator RPC.
 - [ ] **3. Added to docs** — Mac install/privacy guide, honest privacy model, MacBook Air + M5 benchmarks, Lean scope statement, and pause/exit runbook published.
 - [ ] **4. Public blog post document** — Public blog post announcing local post-quantum private payments (`PFSH03`) in the native Post Fiat Mac app.
@@ -151,7 +151,7 @@ Every NAVCoin builds on five core parts: (1) Uniswap ERC-20 wrapper + NAV guard 
 
 Assuming **heavy parallel agentic workflows and delegated coding agents**, raw coding speed is **not** the bottleneck. The four real bottlenecks that dictate sequencing are:
 
-1. **External & human calendar gates (start on Day 0):** Coding agents move in hours; external vendors and humans take weeks. The real critical path is the **PFSH03 cryptographic audit** (Pillar 5), **Goodbrief content-rights check** (Pillar 9), **legal counsel sign-off for perp-backed equity interviews** (Pillar 10), **Apple Developer ID notarization** (Pillar 5), **recruiting the outside `G0` validator cohort** (Pillar 3), and **batched Founder UAT sessions** (Gate #2 across all 10 pillars).
+1. **External & human calendar gates (start on Day 0):** Coding agents move in hours; legal checks, notarization, and outside operators take days to weeks. The real critical path is the **Goodbrief content-rights check** (Pillar 9), **legal counsel sign-off for perp-backed equity interviews** (Pillar 10), **Apple Developer ID notarization** (Pillar 5), **recruiting the outside `G0` validator cohort** (Pillar 3), and **batched Founder UAT sessions** (Gate #2 across all 10 pillars).
 2. **L1 "hot-file" consensus contention:** Pillars 2, 4, 5, 6, 7, and 8 all touch the same core Rust files in `postfiatl1v2` (`transactions_mempool_receipts.rs`, `account_owned_asset_types.rs`, `nft_escrow_asset_execution.rs`, `fees_offer_planning.rs`, `rpc_dispatch.rs`, `wallet_wasm/src/lib.rs`). Unleashing 6 agents on those files simultaneously causes constant rebase thrashing and replay-hash breaks. **Rule:** Assign **one L1 Consensus Integrator lane** and batch consensus changes into **just 2 governed live-chain upgrade trains** (Train A and Train B) instead of 6 separate hard forks.
 3. **Contract-first unblocking (Phase 0):** Freeze wire contracts and shared test vectors in the first 24–48 hours (`.proto` schemas, `coverage_manifest.json`, `postfiat-validator-uptime-v1`, `NavFeeScheduleV1`, `identity_set` + `asset_gate` JSON/RPC shapes). Once frozen, **8 independent agent lanes execute in parallel** across separate repos/worktrees using shared vectors and mocks.
 4. **Batched Founder UAT (3 checkpoints, not 40 interruptions):** Group Gate #2 (*Tested by user*) into 3 crisp demo checkpoints aligned with Ship Wave 1, L1 Train A, and L1 Train B.
@@ -159,7 +159,6 @@ Assuming **heavy parallel agentic workflows and delegated coding agents**, raw c
 ```mermaid
 flowchart LR
     subgraph D0["Day 0 · Start External & Human Gates Immediately"]
-      E1["PFSH03 External Audit (P5)"]
       E2["Goodbrief Rights + Equity Legal Review (P9/P10)"]
       E3["Apple Developer ID Notarization (P5)"]
       E4["Recruit G0 Outside Validators (P3)"]
@@ -195,7 +194,6 @@ flowchart LR
     L2 & L5 & L6 --> U1
     L1A & L3 & L4 & L7 & L8 --> U2
     L1B & L5 & L7 & L8 --> U3
-    E1 -.-> L6
     E2 -.-> L5
     E3 -.-> L6
     E4 -.-> L2
@@ -212,14 +210,14 @@ Every lane below operates in its own repo or disjoint file boundary so you can f
 | **3 · Message SDKs, x402 & Relay** | `postfiatl1v2/proto/`, standalone SDKs, x402 facilitator, `relay.postfiat.org` | **P2**, **P6** relay | **Yes** (after Phase 0 `.proto` freeze) | Train A for live FastPay x402 test |
 | **4 · Task Node Core & Governance** | `tasknode` (Hive, wallet, payouts, NFTs, identity UI) | **P1**, **P2**, **P4**, **P6** | **Yes** (start with P6 signing guard + P1 multi-channel Hive) | Train A (FastPay/NFTs/P1 anchors), Train B (`identity_set`) |
 | **5 · Finance Hub & Hive Mind** | `tasknode` (research routes) + `navstrategies-company-models` | **P9** → **P10** | **Yes** (100% independent of L1 consensus!) | P9 rights review (before Top-30); P10 equity legal sign-off |
-| **6 · Native Mac App** | `tasknode-apple` (SwiftUI + Rust `pf_app_core`) | **P5** | **Yes** (merge `#39` + unified KDF + SwiftUI parity) | Lane 2 public RPCs; Day-0 Apple notarization & external audit |
+| **6 · Native Mac App** | `tasknode-apple` (SwiftUI + Rust `pf_app_core`) | **P5** | **Yes** (merge `#39` + unified KDF + SwiftUI parity) | Lane 2 public RPCs; Day-0 Apple notarization |
 | **7 · Explorer, Docs & Blogs** | `postfiatorg.github.io` | **All 10** (Gates #3 & #4) | **Yes** (build UI cards & draft docs/blogs from Phase 0 contracts) | Final screenshots & live tx hashes after UAT Checkpoints 1–3 |
 | **8 · Near-term NAVCoin & Adapters** | `crates/ethereum-contracts`, `solana/`, standalone VC/ZK-passport services, Cobalt Lean | **Near-term NAVCoin**, **P8** adapters, Cobalt | **Yes** (Day 1) | Train A/B for live credential + NAVCoin SDK integration |
 
 ### Optimal execution sequence (fast wins first, zero wasted waiting)
 
 - **Day 0 (Kick off slow external gates — takes 1 hour):**
-  - Engage external auditor for `PFSH03` (Pillar 5), kick off Goodbrief content-rights check (Pillar 9) + perp-equity legal sign-off (Pillar 10), verify Apple Developer ID notarization credentials (Pillar 5), and open `G0` validator outreach (Pillar 3).
+  - Kick off Goodbrief content-rights check (Pillar 9) + perp-equity legal sign-off (Pillar 10), verify Apple Developer ID notarization credentials (Pillar 5), and open `G0` validator outreach (Pillar 3).
 - **Phase 0 (Contract Freeze — 24–48h):**
   - Merge `postfiatl1v2#280`, `tasknode#444`, and `tasknode-apple#39` (today's live `PFSH03` stack) so `main` is clean.
   - Freeze and merge the tiny schema/contract PRs: Pillar 2 `.proto` files + test vectors, Pillar 3 `postfiat-validator-uptime-v1` schema, Pillar 9 `coverage_manifest.json` + `agent_brief_public.json`, and Pillar 6/7/8 RPC/type specs.
@@ -236,7 +234,7 @@ Every lane below operates in its own repo or disjoint file boundary so you can f
 - **Wave 3 → L1 Upgrade Train B → Founder UAT Checkpoint 3 (Full Open Ecosystem):**
   - **Lane 1 (L1 Train B — second & final coordinated activation):** Pillar 6 native `identity_set` + 2-of-3 registrar, Pillar 7 `NavFeeScheduleV1` + universal `floor(V × U / S)` check + Ethereum `NAVGuardHook` sync, and Pillar 8 Issuer Registry + delegated `credential_create_and_accept` + `did:pftl` + permissionless DEX/escrow.
   - **Lanes 4, 5, 6, 7, 8 (in parallel):** Identity mint UX (`goodalexander@tasknode.postfiat.org` + `hive-board@`), open NAVCoin SDK, W3C VC & ZK-passport adapters, Information Hive Mind two-phase agents + in-memory MNPI firewall + accelerated alpha rewards (Pillar 10), native Mac SwiftUI parity tabs, and remaining Explorer views + all 10 Docs & Blog Posts (Gates #3 & #4).
-  - *Founder UAT Checkpoint 3:* Mint on-chain identity, launch zero-fee + fee-enabled NAVCoins via SDK, run gated ZK-passport NAVCoin + Return-only exit, test Hive Mind crypto & perp-equity interviews + alpha payout, and sign off on uncapping `PFSH03` once the external audit closes.
+  - *Founder UAT Checkpoint 3:* Mint on-chain identity, launch zero-fee + fee-enabled NAVCoins via SDK, run gated ZK-passport NAVCoin + Return-only exit, test Hive Mind crypto & perp-equity interviews + alpha payout, and sign off on raising/lifting the `PFSH03` TVL cap by governance vote.
 
 ### Dependency graph (logical order)
 

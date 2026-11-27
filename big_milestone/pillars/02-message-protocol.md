@@ -57,7 +57,7 @@ sequenceDiagram
   - **Future upgrade (v2):** Add Sui-style refundable storage deposits (99% rebate on merge/unwrap) if owned-object volume warrants it.
 - **IPFS pinning responsibility:** **Task Node pins all Task Node traffic, Pillar 1 governance packets, and Post Fiat NFT metadata.** Outside developers and third-party apps pin their own traffic (or pay a pinning service via x402).
 - **Task Node payout visibility:** **Private (not Sealed).** The body is encrypted so task details stay confidential, while the block explorer shows a clean `"Task reward"` badge and CID so real network activity is visible.
-- **Shielded (`PFSH03`) payments & memos:** Keep the live `PFSH03` shielded pool clean in v1 **without modifying its ZK circuit** (optional private notes travel off-chain via Hive/Nostr). Adding an encrypted memo directly inside `PFSH03` note ciphertexts is reserved as a clean v2 upgrade after the core shielded audit.
+- **Shielded (`PFSH03`) payments & memos:** Keep the live `PFSH03` shielded pool clean in v1 **without modifying its ZK circuit** (optional private notes travel off-chain via Hive/Nostr). Adding an encrypted memo directly inside `PFSH03` note ciphertexts is reserved as a clean v2 upgrade.
 - **Agent payment integrations:** Target **x402** first (PFT over FastPay for sub-second speed, PFUSDC on the consensus lane as fallback), operate a Post Fiat facilitator so builders can integrate immediately, and publish a thin **MCP payment wrapper** on top.
 - **Engineering defaults locked in:**
   - Post-quantum encryption suite: **X-Wing (X25519 + ML-KEM-768)**. Old X25519 payloads remain readable for legacy history once a user imports their old-chain seed.
