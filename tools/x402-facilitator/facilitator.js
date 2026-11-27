@@ -130,12 +130,12 @@ function extractX402RequestHashFromMemos(memos) {
 
 function computeFastPayOrderHash(order) {
   const canonical = mp.canonicalJsonBytes(order);
-  return mp.sha256(Buffer.concat([DOMAIN_FASTPAY_ORDER_HASH, canonical]));
+  return mp.sha3_384(Buffer.concat([DOMAIN_FASTPAY_ORDER_HASH, canonical]));
 }
 
 function computeConsensusTxHash(tx) {
   const canonical = mp.canonicalJsonBytes(tx);
-  return mp.sha256(Buffer.concat([DOMAIN_CONSENSUS_TX_HASH, canonical]));
+  return mp.sha3_384(Buffer.concat([DOMAIN_CONSENSUS_TX_HASH, canonical]));
 }
 
 async function signFastPayOrder(order, { publicKey, secretKey }) {
@@ -181,7 +181,7 @@ async function signFastPayValidatorVote({ orderHash, epoch, validatorId, secretK
 }
 
 function computeCertificateDigest(cert) {
-  return mp.sha256(mp.canonicalJsonBytes(cert));
+  return mp.sha3_384(mp.canonicalJsonBytes(cert));
 }
 
 // ---------------------------------------------------------------------------
@@ -764,7 +764,7 @@ function createFacilitatorCore({
         throw new X402Error(400, 'memo_request_hash_mismatch', 'pf.ptr v5 INLINE memo hash does not match request_hash');
       }
       const computedOrderHash = computeFastPayOrderHash(order);
-      if (sigMsg.order_hash.length !== 32 || !crypto.timingSafeEqual(sigMsg.order_hash, computedOrderHash)) {
+      if (sigMsg.order_hash.length !== mp.CHAIN_HASH_BYTES || !crypto.timingSafeEqual(sigMsg.order_hash, computedOrderHash)) {
         throw new X402Error(400, 'order_hash_mismatch', 'PAYMENT-SIGNATURE order_hash does not match signed order');
       }
       const preimage = Buffer.concat([DOMAIN_FASTPAY_ORDER_SIGN, mp.canonicalJsonBytes(order)]);
@@ -821,7 +821,7 @@ function createFacilitatorCore({
         throw new X402Error(400, 'memo_request_hash_mismatch', 'pf.ptr v5 INLINE memo hash does not match request_hash');
       }
       const computedTxHash = computeConsensusTxHash(tx);
-      if (sigMsg.tx_hash.length !== 32 || !crypto.timingSafeEqual(sigMsg.tx_hash, computedTxHash)) {
+      if (sigMsg.tx_hash.length !== mp.CHAIN_HASH_BYTES || !crypto.timingSafeEqual(sigMsg.tx_hash, computedTxHash)) {
         throw new X402Error(400, 'tx_hash_mismatch', 'PAYMENT-SIGNATURE tx_hash does not match signed consensus tx');
       }
       const preimage = Buffer.concat([DOMAIN_CONSENSUS_TX_SIGN, mp.canonicalJsonBytes(tx)]);

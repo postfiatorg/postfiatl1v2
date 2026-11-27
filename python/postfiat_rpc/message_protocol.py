@@ -51,6 +51,8 @@ AEAD_TAG_BYTES = 16
 WRAPPED_CEK_BYTES = AEAD_KEY_BYTES + AEAD_TAG_BYTES  # 48 bytes
 CIDV1_RAW_PREFIX = b"\x01\x55\x12\x20"
 CIDV1_RAW_BYTES = 36
+# Chain hash size (SHA3-384): FastPay order_hash and certificate_digest, consensus tx_hash.
+CHAIN_HASH_BYTES = 48
 
 # Canonical domain separation strings (Contract C1)
 DOMAIN_ENVELOPE_SIGN = b"postfiat-l1-v2/message-envelope/v1"
@@ -325,6 +327,15 @@ def sha256(data: bytes) -> bytes:
 
 def sha3_384(data: bytes) -> bytes:
     return hashlib.sha3_384(data).digest()
+
+
+def _check_chain_hashes(message: str, **hashes: bytes) -> None:
+    """Refuse a set chain hash field that is not CHAIN_HASH_BYTES long (an empty field stays allowed)."""
+    for name, value in hashes.items():
+        if value and len(value) != CHAIN_HASH_BYTES:
+            raise MessageProtocolError(
+                f"{message}.{name} must be {CHAIN_HASH_BYTES} bytes (SHA3-384), got {len(value)}"
+            )
 
 
 def hkdf_sha256(ikm: bytes, salt: bytes, info: bytes, length: int = 32) -> bytes:
@@ -981,15 +992,23 @@ class FastPayPaymentRef:
     fee_atoms: int = 0
     finalized_height: int = 0
 
+    def __post_init__(self) -> None:
+        _check_chain_hashes(
+            "FastPayPaymentRef",
+            order_hash=self.order_hash,
+            certificate_digest=self.certificate_digest,
+            tx_hash=self.tx_hash,
+        )
+
     def dedup_key(self) -> bytes:
         """Canonical immutable deduplication key (order_hash for FastPay, tx_hash for consensus)."""
         if self.lane == PaymentLane.FASTPAY:
-            if len(self.order_hash) != 32:
-                raise MessageProtocolError("FastPayPaymentRef(FASTPAY) requires 32-byte order_hash")
+            if len(self.order_hash) != CHAIN_HASH_BYTES:
+                raise MessageProtocolError(f"FastPayPaymentRef(FASTPAY) requires {CHAIN_HASH_BYTES}-byte order_hash")
             return self.order_hash
         if self.lane in (PaymentLane.CONSENSUS_PFT, PaymentLane.CONSENSUS_ISSUED):
-            if len(self.tx_hash) != 32:
-                raise MessageProtocolError("FastPayPaymentRef(CONSENSUS) requires 32-byte tx_hash")
+            if len(self.tx_hash) != CHAIN_HASH_BYTES:
+                raise MessageProtocolError(f"FastPayPaymentRef(CONSENSUS) requires {CHAIN_HASH_BYTES}-byte tx_hash")
             return self.tx_hash
         raise MessageProtocolError(f"unsupported PaymentLane for dedup key: {self.lane!r}")
 
@@ -1163,6 +1182,9 @@ class X402PaymentSignature:
     tx_hash: bytes = b""
     signed_payload: bytes = b""
     certificate_payload: bytes = b""
+
+    def __post_init__(self) -> None:
+        _check_chain_hashes("X402PaymentSignature", order_hash=self.order_hash, tx_hash=self.tx_hash)
 
     def encode(self) -> bytes:
         return b"".join(

@@ -164,7 +164,7 @@ async function startStack({ settlementAdapter = null, coreOptions = {}, gateOpti
   const adapter = settlementAdapter || {
     async settleFastPay() {
       backendCalls.fastpay += 1;
-      return { accepted: true, certificateDigest: Buffer.alloc(32, 1), finalizedHeight: 0 };
+      return { accepted: true, certificateDigest: Buffer.alloc(48, 1), finalizedHeight: 0 };
     },
     async settleConsensus() {
       backendCalls.consensus += 1;
@@ -461,7 +461,7 @@ async function gateSettlesOnePaymentPerChallenge({ payerKeys }) {
           failNextSettlement = false;
           return { accepted: false, reason: 'backend not ready' };
         }
-        return { accepted: true, certificateDigest: Buffer.alloc(32, 2) };
+        return { accepted: true, certificateDigest: Buffer.alloc(48, 2) };
       },
     },
   });
@@ -493,7 +493,7 @@ async function gateComparesTheSettledRequestHashWithItsOwn() {
     },
     async settlePayment() {
       return {
-        response: { settled: true, payment_ref: { order_hash: Buffer.alloc(32, 7) } },
+        response: { settled: true, payment_ref: { order_hash: Buffer.alloc(48, 7) } },
         responseHeaderValue: '',
         dedupKey: 'fastpay:00',
         requestHash: requestHashFor('/cheap', '{"prompt":"what was paid for"}'),
@@ -861,7 +861,7 @@ function junkPaymentNaming(payerPublicKey, required, requestHash) {
       signature_b64: Buffer.alloc(mp.ML_DSA_65_SIGNATURE_BYTES).toString('base64url'),
     })
   );
-  return wrapPayment(required, requestHash, { order_hash: Buffer.alloc(32), signed_payload: signedPayload });
+  return wrapPayment(required, requestHash, { order_hash: Buffer.alloc(48), signed_payload: signedPayload });
 }
 
 // Unsigned payloads that name a payer's key, sent from several addresses, must not get that
