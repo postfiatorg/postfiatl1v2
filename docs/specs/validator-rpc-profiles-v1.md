@@ -338,7 +338,7 @@ A field the node cannot know is `null`, never a guess. `reward_eligibility` come
 Validators opting into public RPC or `--allow-private-action-admission` MUST isolate public RPC and admission traffic from consensus voting using one of two supported topologies:
 
 1. **Topology A — Dedicated same-host cgroup-isolated read-replica service:** `postfiat-rpc-replica.service` runs under its own unprivileged UID (`postfiat-rpc`, distinct from consensus `postfiat` and signer `postfiat-signer`), serves read traffic from a non-blocking read-replica store/snapshot (never contending on the consensus writer's exclusive `redb` lock), and is capped with strict systemd CPU, memory, I/O, and task cgroups so consensus voting retains priority headroom.
-2. **Topology B — Dedicated non-voting follower host:** A separate host runs `postfiat-node` in non-voting follower mode, catching up from release-pinned checkpoints via `postfiat-node rpc-catch-up-certified-delta`, and optionally forwarding pre-checked private-action proofs to an approved validator admission edge.
+2. **Topology B — Dedicated non-voting follower host:** A separate host runs `postfiat-node` in non-voting follower mode, seeded from a signed snapshot and kept current by `postfiat-node rpc-catch-up --follow` on a timer. `--follow` applies each new block only with its certificate and requires the local tip and state root to equal the block's after every apply; it does not repeat the full re-verification of the whole state on every run, which takes minutes. `rpc-catch-up` without `--follow` runs that full verification.
 
 ### 5.2 Non-Voting Follower Mode Invariants
 
@@ -377,7 +377,7 @@ Both profiles ship as generated systemd units (extending [`systemd/postfiat-rpc.
 | **Bind Address** | `127.0.0.1:27650` | `127.0.0.1:27651` (or `/run/postfiat-rpc-public/rpc.sock`); TLS 1.3 terminated on `:443` by edge |
 | **Node Mode Flag** | `--rpc-profile private-replica` | `--rpc-profile public-replica` |
 | **Write Surface** | Disabled (read allowlist only) | Disabled by default; `--allow-private-action-admission` is an explicit bounded opt-in |
-| **Checkpoint Catch-Up** | `rpc-catch-up-certified-delta` from release-pinned checkpoint | `rpc-catch-up-certified-delta` from release-pinned checkpoint |
+| **Catch-Up** | `rpc-catch-up --follow` on a timer, from a signed snapshot | `rpc-catch-up --follow` on a timer, from a signed snapshot |
 | **Max Replica Lag Before Unready** | `5` blocks (`ready = false` when exceeded) | `5` blocks (`ready = false` -> edge drains host) |
 | **`CPUQuota` / `CPUWeight`** | `100%` / `50` | `200%` / `25` (consensus unit runs at `CPUWeight=200`) |
 | **`MemoryHigh` / `MemoryMax`** | `2G` / `3G` | `3G` / `4G` |
@@ -469,7 +469,7 @@ As measured in [`fast-validator-reads-20261124.md`](fast-validator-reads-2026112
 
 1. **Serve reads off the consensus writer lock:** Read-replica `rpc-serve` serves from non-blocking read snapshots or a resident read-only replica store, never taking the consensus writer's `redb` exclusive lock.
 2. **Use keyed lookups for all history queries:** `blocks` (`blocks_window`), `receipts` (by `tx_id`), `tx` (by `tx_id`), and `pfusdc_egress_witness` MUST use keyed index reads rather than full-history scans.
-3. **Height-stamped in-process response cache, on replica profiles only:** The standard validator profile keeps the existing worker path, so shipping the cache changes nothing for a validator. On a replica, a method is cacheable only if its answer is a pure function of committed state at a height; `metrics`, `mempool_status` and every answer that can change between blocks (an account balance after an owned-lane credit) are never cached. Every cached answer carries the committed `height` it was read at, is stored only when `committed_height_before == committed_height_after`, and is dropped after 2 seconds or when the height moves, whichever is first. The in-process path keeps the worker path's limits: at most 8 reads at once, 4 per caller, and the request time limit.
+3. **Height-stamped in-process response cache, on replica profiles only:** The standard validator profile keeps the existing worker path, so shipping the cache changes nothing for a validator. A replica's store has one writer, the catch-up job, and it writes only by applying a certified block; owned-lane effects and pending transactions live on validators and reach a replica only inside a block. So on a replica every read of committed state is a pure function of the committed height, and an answer read at a height stays exact until the height moves. A replica caches those answers by height, stores one only when `committed_height_before == committed_height_after`, and names the height in every cached answer. `metrics` (the clock and the server's own counters) is always read fresh. The in-process path keeps the worker path's limits: at most 8 reads at once, 4 per caller, and the request time limit.
 4. **Byte-for-byte equivalence:** Differential tests MUST prove that a cached reply and an in-process reply each equal the reply of the existing worker path, byte for byte at the same committed height (`cmp`). Comparing the new path with itself proves nothing.
 
 ### 6.2 Frozen Read-Path SLO Targets
@@ -484,6 +484,19 @@ Measured at the loopback RPC boundary on reference validator/replica hardware un
 | **Bridge & route state reads** | `vault_bridge_route`, `vault_bridge_status`, `bridge_status` | `<= 50 ms` | **`<= 200 ms`** | `<= 350 ms` | Height-stamped snapshot |
 | **Keyed egress witness & bounded scans** | `pfusdc_egress_witness` (keyed), `shield_turnstile`, `shield_disclose` | `<= 100 ms` | **`<= 250 ms`** | `<= 500 ms` | Isolated concurrency slot |
 | **Global Standard Read SLA** | All standard read methods above combined | `<= 50 ms` | **`< 250 ms`** | `<= 500 ms` | Availability `>= 99.9%` |
+
+### 6.2.1 Measured on `postfiat-wan-devnet-2` (27 November 2026)
+
+A `public-replica` on a copy of a validator's store at height 1,933, release build, 32-core host, three clients, 1,200 mixed reads (`status`, `validators`, `fee`, `account`, `account_lines`, `blocks`, `manifests`, `account_tx`, `ledger` with `limit 1`, `bridge_status`, `block_vote_records`):
+
+| Path | p50 | p95 | p99 | Throughput |
+| --- | ---: | ---: | ---: | ---: |
+| TCP to `rpc-serve` | 10 ms | 15 ms | 51 ms | 273 reads/s |
+| HTTP through `rpc-http-edge` | 10 ms | 16 ms | 51 ms | 268 reads/s |
+
+These are warm numbers: the height did not move during the run. The first read of `fee`, `ledger` and `account_tx` after each new block takes 5 to 6 seconds, because the node computes them from the whole block history (`metrics` reads every block and receipt; the copy's `account_tx` index was not usable). Every other first read took at most 140 ms. `metrics` itself is never cached and takes about 5.5 seconds. `ledger` without a `limit` returns more than the response bound and fails. The targets of 6.2 therefore hold for a replica between blocks and do not yet hold for those three reads in the moment after a block.
+
+Not measured yet: the same workload while blocks are produced continuously, a validator's own RPC under this load, and the reference hardware (2 vCPU, 3 GB) the six validators run on.
 
 ### 6.3 Freshness and Zero-Consensus-Interference SLOs
 
