@@ -35,7 +35,10 @@ pub enum OwnedTransferError {
     MixedAssets,
     NotConserved,
     OwnerAuthFailed,
-    InsufficientQuorum { have: usize, need: usize },
+    InsufficientQuorum {
+        have: usize,
+        need: usize,
+    },
     ResourceLimitExceeded,
     UnsupportedAsset,
     InvalidDomain,
@@ -45,7 +48,10 @@ pub enum OwnedTransferError {
     InvalidRecovery,
     NotYetValid,
     VersionFenced,
-    InsufficientFee { fee: u64, required: u64 },
+    InsufficientFee {
+        fee: u64,
+        required: u64,
+    },
     AccountOwnedObjectCapExceeded {
         owner_pubkey_hex: String,
         current: usize,
@@ -59,8 +65,9 @@ pub fn fastpay_minimum_fee_atoms(
     inputs_consumed: usize,
     outputs_created: usize,
 ) -> Result<u64, OwnedTransferError> {
-    let byte_quanta = u64::try_from(weight_bytes.div_ceil(postfiat_types::FASTPAY_FEE_BYTE_QUANTUM))
-        .map_err(|_| OwnedTransferError::Overflow)?;
+    let byte_quanta =
+        u64::try_from(weight_bytes.div_ceil(postfiat_types::FASTPAY_FEE_BYTE_QUANTUM))
+            .map_err(|_| OwnedTransferError::Overflow)?;
     let byte_fee = byte_quanta
         .checked_mul(postfiat_types::FASTPAY_FEE_PER_BYTE_QUANTUM_ATOMS)
         .ok_or(OwnedTransferError::Overflow)?;
@@ -121,29 +128,44 @@ fn ensure_owned_object_capacity_v2(
     for target_pk in output_owners {
         *created_by_owner.entry(*target_pk).or_insert(0) += 1;
     }
-    for (target_pk, created_for_owner) in created_by_owner {
+    // Count existing objects for growing owners in one ledger traversal. Keep owner
+    // checks in sorted order so orders with multiple cap failures report the same error.
+    let mut existing_by_owner = std::collections::BTreeMap::new();
+    for (&target_pk, &created) in &created_by_owner {
+        let consumed = if target_pk == owner_pubkey_hex {
+            inputs_consumed
+        } else {
+            0
+        };
+        if created > consumed {
+            existing_by_owner.insert(target_pk, 0usize);
+        }
+    }
+    if existing_by_owner.is_empty() {
+        return Ok(());
+    }
+    for object in &ledger.owned_objects {
+        if let Some(count) = existing_by_owner.get_mut(object.owner_pubkey_hex.as_str()) {
+            *count += 1;
+        }
+    }
+    for (target_pk, current_for_owner) in existing_by_owner {
+        let created_for_owner = created_by_owner[target_pk];
         let consumed_for_owner = if target_pk == owner_pubkey_hex {
             inputs_consumed
         } else {
             0
         };
-        if created_for_owner > consumed_for_owner {
-            let current_for_owner = ledger
-                .owned_objects
-                .iter()
-                .filter(|obj| obj.owner_pubkey_hex == target_pk)
-                .count();
-            let next_for_owner = current_for_owner
-                .saturating_sub(consumed_for_owner)
-                .checked_add(created_for_owner)
-                .ok_or(OwnedTransferError::Overflow)?;
-            if next_for_owner > postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP {
-                return Err(OwnedTransferError::AccountOwnedObjectCapExceeded {
-                    owner_pubkey_hex: target_pk.to_string(),
-                    current: current_for_owner,
-                    limit: postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP,
-                });
-            }
+        let next_for_owner = current_for_owner
+            .saturating_sub(consumed_for_owner)
+            .checked_add(created_for_owner)
+            .ok_or(OwnedTransferError::Overflow)?;
+        if next_for_owner > postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP {
+            return Err(OwnedTransferError::AccountOwnedObjectCapExceeded {
+                owner_pubkey_hex: target_pk.to_string(),
+                current: current_for_owner,
+                limit: postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP,
+            });
         }
     }
     Ok(())
@@ -269,7 +291,10 @@ pub fn verify_owned_certificate(
         if !seen_validators.insert(vote.validator_id.as_str()) {
             return None;
         }
-        let Some((_, pk_hex)) = validator_pks.iter().find(|(id, _)| *id == vote.validator_id) else {
+        let Some((_, pk_hex)) = validator_pks
+            .iter()
+            .find(|(id, _)| *id == vote.validator_id)
+        else {
             continue;
         };
         let (Ok(pk), Ok(sig)) = (
@@ -278,7 +303,12 @@ pub fn verify_owned_certificate(
         ) else {
             continue;
         };
-        if postfiat_crypto_provider::ml_dsa_65_verify_with_context(&pk, &bytes, &sig, OWNED_TRANSFER_CONTEXT) {
+        if postfiat_crypto_provider::ml_dsa_65_verify_with_context(
+            &pk,
+            &bytes,
+            &sig,
+            OWNED_TRANSFER_CONTEXT,
+        ) {
             valid += 1;
         }
     }
@@ -312,7 +342,10 @@ pub fn verify_owned_unwrap_certificate(
         if !seen_validators.insert(vote.validator_id.as_str()) {
             return None;
         }
-        let Some((_, pk_hex)) = validator_pks.iter().find(|(id, _)| *id == vote.validator_id) else {
+        let Some((_, pk_hex)) = validator_pks
+            .iter()
+            .find(|(id, _)| *id == vote.validator_id)
+        else {
             continue;
         };
         let (Ok(pk), Ok(sig)) = (
@@ -321,7 +354,12 @@ pub fn verify_owned_unwrap_certificate(
         ) else {
             continue;
         };
-        if postfiat_crypto_provider::ml_dsa_65_verify_with_context(&pk, &bytes, &sig, OWNED_UNWRAP_CONTEXT) {
+        if postfiat_crypto_provider::ml_dsa_65_verify_with_context(
+            &pk,
+            &bytes,
+            &sig,
+            OWNED_UNWRAP_CONTEXT,
+        ) {
             valid += 1;
         }
     }
@@ -584,7 +622,9 @@ fn prepare_owned_transfer_with_cap_v2(
         }
     }
     let output_value = order.outputs.iter().try_fold(0u64, |total, output| {
-        total.checked_add(output.value).ok_or(OwnedTransferError::Overflow)
+        total
+            .checked_add(output.value)
+            .ok_or(OwnedTransferError::Overflow)
     })?;
     if output_value.checked_add(order.fee) != Some(input_value) {
         return Err(OwnedTransferError::NotConserved);
@@ -610,8 +650,7 @@ pub(crate) fn apply_owned_unwrap_with_cap_v2(
     owner_pubkey_hex: &str,
     cap_v2: bool,
 ) -> Result<OwnedUnwrapOutcome, OwnedTransferError> {
-    let (mut consume_indices, input_value) =
-        prepare_owned_unwrap(ledger, order, owner_pubkey_hex)?;
+    let (mut consume_indices, input_value) = prepare_owned_unwrap(ledger, order, owner_pubkey_hex)?;
     let required = order
         .amount
         .checked_add(order.fee)
@@ -748,9 +787,7 @@ fn prepare_owned_unwrap(
     Ok((consume_indices, input_value))
 }
 
-fn validate_owned_memos(
-    memos: &[postfiat_types::PaymentMemo],
-) -> Result<(), OwnedTransferError> {
+fn validate_owned_memos(memos: &[postfiat_types::PaymentMemo]) -> Result<(), OwnedTransferError> {
     if memos.len() > postfiat_types::MAX_PAYMENT_MEMOS {
         return Err(OwnedTransferError::ResourceLimitExceeded);
     }
@@ -788,7 +825,12 @@ pub fn owned_transfer_output_objects(
         .collect()
 }
 
-fn owned_output_id(owner: &str, nonce: u64, index: usize, spec: &postfiat_types::OwnedOutputSpec) -> String {
+fn owned_output_id(
+    owner: &str,
+    nonce: u64,
+    index: usize,
+    spec: &postfiat_types::OwnedOutputSpec,
+) -> String {
     let mut material = Vec::new();
     material.extend_from_slice(owner.as_bytes());
     material.extend(&nonce.to_le_bytes());
@@ -914,8 +956,7 @@ pub fn apply_owned_deposit(
     if account.sequence.checked_add(1) != Some(deposit.sequence) {
         return Err(OwnedTransferError::InvalidSequence);
     }
-    let source_pubkey_hex =
-        postfiat_crypto_provider::bytes_to_hex(&deposit.source_pubkey);
+    let source_pubkey_hex = postfiat_crypto_provider::bytes_to_hex(&deposit.source_pubkey);
     if account
         .public_key_hex
         .as_ref()
@@ -938,9 +979,7 @@ pub fn apply_owned_deposit(
     let object = postfiat_types::OwnedObject {
         id: object_id,
         version: 1,
-        owner_pubkey_hex: postfiat_crypto_provider::bytes_to_hex(
-            &deposit.destination_owner_pubkey,
-        ),
+        owner_pubkey_hex: postfiat_crypto_provider::bytes_to_hex(&deposit.destination_owner_pubkey),
         value: deposit.amount_atoms,
         asset: deposit.asset.clone(),
     };
@@ -1024,8 +1063,8 @@ mod owned_transfer_tests {
             for consumed in 0..=8 {
                 for created in 0..=8 {
                     let current = cap.saturating_sub(offset);
-                    let expected = created <= consumed
-                        || current.saturating_add(created - consumed) <= cap;
+                    let expected =
+                        created <= consumed || current.saturating_add(created - consumed) <= cap;
                     assert_eq!(
                         ensure_owned_object_capacity(current, consumed, created).is_ok(),
                         expected,
@@ -1043,13 +1082,26 @@ mod owned_transfer_tests {
     #[test]
     fn applies_conserving_transfer() {
         let mut ledger = LedgerState::empty();
-        ledger.owned_objects.push(object("aa", "ownerA", 100, "PFT"));
+        ledger
+            .owned_objects
+            .push(object("aa", "ownerA", 100, "PFT"));
         let order = postfiat_types::OwnedTransferOrder {
             domain: domain(),
-            inputs: vec![postfiat_types::OwnedObjectRef { id: "aa".into(), version: 1 }],
+            inputs: vec![postfiat_types::OwnedObjectRef {
+                id: "aa".into(),
+                version: 1,
+            }],
             outputs: vec![
-                postfiat_types::OwnedOutputSpec { owner_pubkey_hex: "recipient".into(), value: 90, asset: "PFT".into() },
-                postfiat_types::OwnedOutputSpec { owner_pubkey_hex: "ownerA".into(), value: 9, asset: "PFT".into() },
+                postfiat_types::OwnedOutputSpec {
+                    owner_pubkey_hex: "recipient".into(),
+                    value: 90,
+                    asset: "PFT".into(),
+                },
+                postfiat_types::OwnedOutputSpec {
+                    owner_pubkey_hex: "ownerA".into(),
+                    value: 9,
+                    asset: "PFT".into(),
+                },
             ],
             fee: 1,
             nonce: 1,
@@ -1060,9 +1112,18 @@ mod owned_transfer_tests {
         assert_eq!(out.created.len(), 2);
         // Frozen IDs from the pre-extraction implementation. Output order,
         // owner, amount, asset, nonce and version must remain wire compatible.
-        assert_eq!(out.created[0].id, "04d5cbf9e4bbd9403688f1c4ab1556eaac70ef35a692abbf28abb4d74d534d98");
-        assert_eq!(out.created[1].id, "78392faf369acb000e0ced2d43b6542e081a8a10b63bd250df38424eb55f4ed3");
-        assert_eq!(out.created, owned_transfer_output_objects("ownerA", 1, &order.outputs));
+        assert_eq!(
+            out.created[0].id,
+            "04d5cbf9e4bbd9403688f1c4ab1556eaac70ef35a692abbf28abb4d74d534d98"
+        );
+        assert_eq!(
+            out.created[1].id,
+            "78392faf369acb000e0ced2d43b6542e081a8a10b63bd250df38424eb55f4ed3"
+        );
+        assert_eq!(
+            out.created,
+            owned_transfer_output_objects("ownerA", 1, &order.outputs)
+        );
         for (object, spec) in out.created.iter().zip(&order.outputs) {
             assert_eq!(object.version, 1);
             assert_eq!(object.owner_pubkey_hex, spec.owner_pubkey_hex);
@@ -1071,9 +1132,18 @@ mod owned_transfer_tests {
         }
         // Frozen IDs from the pre-extraction implementation. Output order,
         // owner, amount, asset, nonce and version must remain wire compatible.
-        assert_eq!(out.created[0].id, "04d5cbf9e4bbd9403688f1c4ab1556eaac70ef35a692abbf28abb4d74d534d98");
-        assert_eq!(out.created[1].id, "78392faf369acb000e0ced2d43b6542e081a8a10b63bd250df38424eb55f4ed3");
-        assert_eq!(out.created, owned_transfer_output_objects("ownerA", 1, &order.outputs));
+        assert_eq!(
+            out.created[0].id,
+            "04d5cbf9e4bbd9403688f1c4ab1556eaac70ef35a692abbf28abb4d74d534d98"
+        );
+        assert_eq!(
+            out.created[1].id,
+            "78392faf369acb000e0ced2d43b6542e081a8a10b63bd250df38424eb55f4ed3"
+        );
+        assert_eq!(
+            out.created,
+            owned_transfer_output_objects("ownerA", 1, &order.outputs)
+        );
         for (object, spec) in out.created.iter().zip(&order.outputs) {
             assert_eq!(object.version, 1);
             assert_eq!(object.owner_pubkey_hex, spec.owner_pubkey_hex);
@@ -1088,10 +1158,15 @@ mod owned_transfer_tests {
     #[test]
     fn rejects_replay_of_consumed_input() {
         let mut ledger = LedgerState::empty();
-        ledger.owned_objects.push(object("aa", "ownerA", 100, "PFT"));
+        ledger
+            .owned_objects
+            .push(object("aa", "ownerA", 100, "PFT"));
         let order = postfiat_types::OwnedTransferOrder {
             domain: domain(),
-            inputs: vec![postfiat_types::OwnedObjectRef { id: "aa".into(), version: 1 }],
+            inputs: vec![postfiat_types::OwnedObjectRef {
+                id: "aa".into(),
+                version: 1,
+            }],
             outputs: vec![postfiat_types::OwnedOutputSpec {
                 owner_pubkey_hex: "ownerA".into(),
                 value: 100,
@@ -1111,34 +1186,69 @@ mod owned_transfer_tests {
     #[test]
     fn rejects_non_conserving_wrong_owner_and_version() {
         let mut ledger = LedgerState::empty();
-        ledger.owned_objects.push(object("aa", "ownerA", 100, "PFT"));
+        ledger
+            .owned_objects
+            .push(object("aa", "ownerA", 100, "PFT"));
         // non-conserving
         let bad = postfiat_types::OwnedTransferOrder {
             domain: domain(),
-            inputs: vec![postfiat_types::OwnedObjectRef { id: "aa".into(), version: 1 }],
-            outputs: vec![postfiat_types::OwnedOutputSpec { owner_pubkey_hex: "ownerA".into(), value: 200, asset: "PFT".into() }],
-            fee: 0, nonce: 1,
+            inputs: vec![postfiat_types::OwnedObjectRef {
+                id: "aa".into(),
+                version: 1,
+            }],
+            outputs: vec![postfiat_types::OwnedOutputSpec {
+                owner_pubkey_hex: "ownerA".into(),
+                value: 200,
+                asset: "PFT".into(),
+            }],
+            fee: 0,
+            nonce: 1,
             memos: Vec::new(),
         };
-        assert_eq!(apply_owned_transfer(&mut ledger, &bad, "ownerA").unwrap_err(), OwnedTransferError::NotConserved);
+        assert_eq!(
+            apply_owned_transfer(&mut ledger, &bad, "ownerA").unwrap_err(),
+            OwnedTransferError::NotConserved
+        );
         // wrong owner
         let wrong = postfiat_types::OwnedTransferOrder {
             domain: domain(),
-            inputs: vec![postfiat_types::OwnedObjectRef { id: "aa".into(), version: 1 }],
-            outputs: vec![postfiat_types::OwnedOutputSpec { owner_pubkey_hex: "x".into(), value: 100, asset: "PFT".into() }],
-            fee: 0, nonce: 2,
+            inputs: vec![postfiat_types::OwnedObjectRef {
+                id: "aa".into(),
+                version: 1,
+            }],
+            outputs: vec![postfiat_types::OwnedOutputSpec {
+                owner_pubkey_hex: "x".into(),
+                value: 100,
+                asset: "PFT".into(),
+            }],
+            fee: 0,
+            nonce: 2,
             memos: Vec::new(),
         };
-        assert_eq!(apply_owned_transfer(&mut ledger, &wrong, "notTheOwner").unwrap_err(), OwnedTransferError::NotOwner);
+        assert_eq!(
+            apply_owned_transfer(&mut ledger, &wrong, "notTheOwner").unwrap_err(),
+            OwnedTransferError::NotOwner
+        );
         // version mismatch
         let vm = postfiat_types::OwnedTransferOrder {
             domain: domain(),
-            inputs: vec![postfiat_types::OwnedObjectRef { id: "aa".into(), version: 99 }],
-            outputs: vec![postfiat_types::OwnedOutputSpec { owner_pubkey_hex: "ownerA".into(), value: 100, asset: "PFT".into() }],
-            fee: 0, nonce: 3,
+            inputs: vec![postfiat_types::OwnedObjectRef {
+                id: "aa".into(),
+                version: 99,
+            }],
+            outputs: vec![postfiat_types::OwnedOutputSpec {
+                owner_pubkey_hex: "ownerA".into(),
+                value: 100,
+                asset: "PFT".into(),
+            }],
+            fee: 0,
+            nonce: 3,
             memos: Vec::new(),
         };
-        assert_eq!(apply_owned_transfer(&mut ledger, &vm, "ownerA").unwrap_err(), OwnedTransferError::VersionMismatch);
+        assert_eq!(
+            apply_owned_transfer(&mut ledger, &vm, "ownerA").unwrap_err(),
+            OwnedTransferError::VersionMismatch
+        );
     }
 
     #[test]
@@ -1152,7 +1262,15 @@ mod owned_transfer_tests {
             flags: 0,
         });
         // wrap: 100 balance -> 100 owned object
-        let obj = wrap_to_owned(&mut ledger, "alice", "alicepk".into(), 100, "PFT".into(), "obj1".into()).expect("wrap");
+        let obj = wrap_to_owned(
+            &mut ledger,
+            "alice",
+            "alicepk".into(),
+            100,
+            "PFT".into(),
+            "obj1".into(),
+        )
+        .expect("wrap");
         assert_eq!(obj.value, 100);
         assert_eq!(ledger.account("alice").map(|a| a.balance).unwrap_or(0), 0);
         assert_eq!(ledger.owned_objects.len(), 1);
@@ -1175,8 +1293,15 @@ mod owned_transfer_tests {
         });
         for asset in ["pfUSDC", "a651", "pft", ""] {
             assert_eq!(
-                wrap_to_owned(&mut ledger, "alice", "alicepk".into(), 50, asset.into(), "obj".into())
-                    .unwrap_err(),
+                wrap_to_owned(
+                    &mut ledger,
+                    "alice",
+                    "alicepk".into(),
+                    50,
+                    asset.into(),
+                    "obj".into()
+                )
+                .unwrap_err(),
                 OwnedTransferError::UnsupportedAsset,
                 "asset {asset:?} must be rejected"
             );
@@ -1228,7 +1353,10 @@ mod owned_transfer_tests {
                 .expect_err("issued custody must never credit the native PFT account field"),
             OwnedTransferError::UnsupportedAsset
         );
-        assert_eq!(ledger, before, "wrong-lane unwrap must not consume its input");
+        assert_eq!(
+            ledger, before,
+            "wrong-lane unwrap must not consume its input"
+        );
     }
 
     #[test]
@@ -1312,17 +1440,41 @@ mod owned_transfer_tests {
         });
         // insufficient balance
         assert_eq!(
-            wrap_to_owned(&mut ledger, "alice", "k".into(), 100, "PFT".into(), "o".into()).unwrap_err(),
+            wrap_to_owned(
+                &mut ledger,
+                "alice",
+                "k".into(),
+                100,
+                "PFT".into(),
+                "o".into()
+            )
+            .unwrap_err(),
             OwnedTransferError::NotConserved
         );
         // unknown account
         assert_eq!(
-            wrap_to_owned(&mut ledger, "ghost", "k".into(), 1, "PFT".into(), "o".into()).unwrap_err(),
+            wrap_to_owned(
+                &mut ledger,
+                "ghost",
+                "k".into(),
+                1,
+                "PFT".into(),
+                "o".into()
+            )
+            .unwrap_err(),
             OwnedTransferError::UnknownInput
         );
         // unwrap as non-owner rejected
         ledger.accounts[0].balance = 100;
-        wrap_to_owned(&mut ledger, "alice", "alicepk".into(), 50, "PFT".into(), "obj".into()).expect("wrap");
+        wrap_to_owned(
+            &mut ledger,
+            "alice",
+            "alicepk".into(),
+            50,
+            "PFT".into(),
+            "obj".into(),
+        )
+        .expect("wrap");
         assert_eq!(
             unwrap_from_owned(&mut ledger, "obj", "wrongpk", "bob").unwrap_err(),
             OwnedTransferError::NotOwner
@@ -1343,7 +1495,10 @@ mod owned_transfer_tests {
         });
         let order = postfiat_types::OwnedUnwrapOrder {
             domain: domain(),
-            inputs: vec![postfiat_types::OwnedObjectRef { id: "obj".into(), version: 1 }],
+            inputs: vec![postfiat_types::OwnedObjectRef {
+                id: "obj".into(),
+                version: 1,
+            }],
             to_address: "alice".into(),
             amount: 75,
             asset: "PFT".into(),
@@ -1358,9 +1513,23 @@ mod owned_transfer_tests {
             OWNED_UNWRAP_CONTEXT,
         )
         .unwrap();
-        let vs: Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> =
-            (0..3).map(|i| (format!("v{i}"), postfiat_crypto_provider::ml_dsa_65_keygen().unwrap())).collect();
-        let pks: Vec<(String, String)> = vs.iter().map(|(id, kp)| (id.clone(), postfiat_crypto_provider::bytes_to_hex(&kp.public_key))).collect();
+        let vs: Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> = (0..3)
+            .map(|i| {
+                (
+                    format!("v{i}"),
+                    postfiat_crypto_provider::ml_dsa_65_keygen().unwrap(),
+                )
+            })
+            .collect();
+        let pks: Vec<(String, String)> = vs
+            .iter()
+            .map(|(id, kp)| {
+                (
+                    id.clone(),
+                    postfiat_crypto_provider::bytes_to_hex(&kp.public_key),
+                )
+            })
+            .collect();
         let votes = vs
             .iter()
             .map(|(id, kp)| {
@@ -1412,7 +1581,10 @@ mod owned_transfer_tests {
         let order = postfiat_types::OwnedUnwrapOrder {
             domain: domain(),
             inputs: (0..20)
-                .map(|index| postfiat_types::OwnedObjectRef { id: format!("obj-{index}"), version: 1 })
+                .map(|index| postfiat_types::OwnedObjectRef {
+                    id: format!("obj-{index}"),
+                    version: 1,
+                })
                 .collect(),
             to_address: "alice".into(),
             amount: 1950,
@@ -1428,9 +1600,23 @@ mod owned_transfer_tests {
             OWNED_UNWRAP_CONTEXT,
         )
         .unwrap();
-        let vs: Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> =
-            (0..3).map(|i| (format!("v{i}"), postfiat_crypto_provider::ml_dsa_65_keygen().unwrap())).collect();
-        let pks: Vec<(String, String)> = vs.iter().map(|(id, kp)| (id.clone(), postfiat_crypto_provider::bytes_to_hex(&kp.public_key))).collect();
+        let vs: Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> = (0..3)
+            .map(|i| {
+                (
+                    format!("v{i}"),
+                    postfiat_crypto_provider::ml_dsa_65_keygen().unwrap(),
+                )
+            })
+            .collect();
+        let pks: Vec<(String, String)> = vs
+            .iter()
+            .map(|(id, kp)| {
+                (
+                    id.clone(),
+                    postfiat_crypto_provider::bytes_to_hex(&kp.public_key),
+                )
+            })
+            .collect();
         let votes = vs
             .iter()
             .map(|(id, kp)| {
@@ -1478,7 +1664,10 @@ mod owned_transfer_tests {
         });
         let order = postfiat_types::OwnedUnwrapOrder {
             domain: domain(),
-            inputs: vec![postfiat_types::OwnedObjectRef { id: "obj".into(), version: 1 }],
+            inputs: vec![postfiat_types::OwnedObjectRef {
+                id: "obj".into(),
+                version: 1,
+            }],
             to_address: "alice".into(),
             amount: 100,
             asset: "PFT".into(),
@@ -1493,9 +1682,23 @@ mod owned_transfer_tests {
             OWNED_UNWRAP_CONTEXT,
         )
         .unwrap();
-        let vs: Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> =
-            (0..2).map(|i| (format!("v{i}"), postfiat_crypto_provider::ml_dsa_65_keygen().unwrap())).collect();
-        let pks: Vec<(String, String)> = vs.iter().map(|(id, kp)| (id.clone(), postfiat_crypto_provider::bytes_to_hex(&kp.public_key))).collect();
+        let vs: Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> = (0..2)
+            .map(|i| {
+                (
+                    format!("v{i}"),
+                    postfiat_crypto_provider::ml_dsa_65_keygen().unwrap(),
+                )
+            })
+            .collect();
+        let pks: Vec<(String, String)> = vs
+            .iter()
+            .map(|(id, kp)| {
+                (
+                    id.clone(),
+                    postfiat_crypto_provider::bytes_to_hex(&kp.public_key),
+                )
+            })
+            .collect();
         let votes = vs
             .iter()
             .map(|(id, kp)| {
@@ -1536,35 +1739,82 @@ mod owned_transfer_tests {
         let owner_kp = postfiat_crypto_provider::ml_dsa_65_keygen().expect("owner keygen");
         let owner_pk_hex = postfiat_crypto_provider::bytes_to_hex(&owner_kp.public_key);
         let mint = |id: &str| postfiat_types::OwnedObject {
-            id: id.into(), version: 1, owner_pubkey_hex: owner_pk_hex.clone(), value: 100, asset: "PFT".into(),
+            id: id.into(),
+            version: 1,
+            owner_pubkey_hex: owner_pk_hex.clone(),
+            value: 100,
+            asset: "PFT".into(),
         };
         let order_over = |input_id: &str, nonce: u64| postfiat_types::OwnedTransferOrder {
             domain: domain(),
-            inputs: vec![postfiat_types::OwnedObjectRef { id: input_id.into(), version: 1 }],
-            outputs: vec![postfiat_types::OwnedOutputSpec { owner_pubkey_hex: owner_pk_hex.clone(), value: 100, asset: "PFT".into() }],
-            fee: 0, nonce, memos: Vec::new(),
+            inputs: vec![postfiat_types::OwnedObjectRef {
+                id: input_id.into(),
+                version: 1,
+            }],
+            outputs: vec![postfiat_types::OwnedOutputSpec {
+                owner_pubkey_hex: owner_pk_hex.clone(),
+                value: 100,
+                asset: "PFT".into(),
+            }],
+            fee: 0,
+            nonce,
+            memos: Vec::new(),
         };
-        let sign_cert = |order: postfiat_types::OwnedTransferOrder, vs: &[(String, postfiat_crypto_provider::MlDsa65KeyPair)]| {
-            let sb = owned_transfer_signing_bytes(&order);
-            let owner_sig = postfiat_crypto_provider::ml_dsa_65_sign_with_context(&owner_kp.private_key, &sb, OWNED_TRANSFER_CONTEXT).unwrap();
-            let votes: Vec<postfiat_types::OwnedTransferVote> = vs.iter().map(|(id, kp)| {
-                let sig = postfiat_crypto_provider::ml_dsa_65_sign_with_context(&kp.private_key, &sb, OWNED_TRANSFER_CONTEXT).unwrap();
-                postfiat_types::OwnedTransferVote { validator_id: id.clone(), signature_hex: postfiat_crypto_provider::bytes_to_hex(&sig) }
-            }).collect();
-            postfiat_types::OwnedTransferCertificate {
-                order, owner_pubkey_hex: owner_pk_hex.clone(),
-                owner_signature_hex: postfiat_crypto_provider::bytes_to_hex(&owner_sig), votes,
-            }
-        };
-        let vs: Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> =
-            (0..3).map(|i| (format!("v{i}"), postfiat_crypto_provider::ml_dsa_65_keygen().unwrap())).collect();
-        let pks: Vec<(String, String)> = vs.iter().map(|(id, kp)| (id.clone(), postfiat_crypto_provider::bytes_to_hex(&kp.public_key))).collect();
+        let sign_cert =
+            |order: postfiat_types::OwnedTransferOrder,
+             vs: &[(String, postfiat_crypto_provider::MlDsa65KeyPair)]| {
+                let sb = owned_transfer_signing_bytes(&order);
+                let owner_sig = postfiat_crypto_provider::ml_dsa_65_sign_with_context(
+                    &owner_kp.private_key,
+                    &sb,
+                    OWNED_TRANSFER_CONTEXT,
+                )
+                .unwrap();
+                let votes: Vec<postfiat_types::OwnedTransferVote> = vs
+                    .iter()
+                    .map(|(id, kp)| {
+                        let sig = postfiat_crypto_provider::ml_dsa_65_sign_with_context(
+                            &kp.private_key,
+                            &sb,
+                            OWNED_TRANSFER_CONTEXT,
+                        )
+                        .unwrap();
+                        postfiat_types::OwnedTransferVote {
+                            validator_id: id.clone(),
+                            signature_hex: postfiat_crypto_provider::bytes_to_hex(&sig),
+                        }
+                    })
+                    .collect();
+                postfiat_types::OwnedTransferCertificate {
+                    order,
+                    owner_pubkey_hex: owner_pk_hex.clone(),
+                    owner_signature_hex: postfiat_crypto_provider::bytes_to_hex(&owner_sig),
+                    votes,
+                }
+            };
+        let vs: Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> = (0..3)
+            .map(|i| {
+                (
+                    format!("v{i}"),
+                    postfiat_crypto_provider::ml_dsa_65_keygen().unwrap(),
+                )
+            })
+            .collect();
+        let pks: Vec<(String, String)> = vs
+            .iter()
+            .map(|(id, kp)| {
+                (
+                    id.clone(),
+                    postfiat_crypto_provider::bytes_to_hex(&kp.public_key),
+                )
+            })
+            .collect();
 
         // quorum 3 with 3 valid votes -> applies
         ledger.owned_objects.push(mint("obj"));
         let cert = sign_cert(order_over("obj", 1), &vs);
-        let out = apply_owned_certificate(&mut ledger, &cert, &pks, &domain(), 3)
-            .expect("cert apply");
+        let out =
+            apply_owned_certificate(&mut ledger, &cert, &pks, &domain(), 3).expect("cert apply");
         assert_eq!(out.consumed, 1);
 
         // insufficient quorum (need 4, have 3) -> rejected
@@ -1632,12 +1882,9 @@ mod owned_transfer_tests {
         let mut expected_domain = domain();
         expected_domain.chain_id = "postfiat-other-chain".to_string();
         let mut ledger = LedgerState::empty();
-        ledger.owned_objects.push(object(
-            "domain-object",
-            &owner_pubkey_hex,
-            100,
-            "PFT",
-        ));
+        ledger
+            .owned_objects
+            .push(object("domain-object", &owner_pubkey_hex, 100, "PFT"));
         let before = ledger.clone();
 
         assert_eq!(
@@ -1693,9 +1940,7 @@ mod owned_transfer_tests {
         let transfer_cert = postfiat_types::OwnedTransferCertificate {
             order: transfer_order,
             owner_pubkey_hex: owner_pubkey_hex.clone(),
-            owner_signature_hex: postfiat_crypto_provider::bytes_to_hex(
-                &transfer_owner_signature,
-            ),
+            owner_signature_hex: postfiat_crypto_provider::bytes_to_hex(&transfer_owner_signature),
             votes: vec![transfer_vote.clone(), transfer_vote],
         };
         assert_eq!(
@@ -1748,7 +1993,9 @@ mod owned_transfer_tests {
     #[test]
     fn duplicate_owned_input_is_rejected_without_mutation() {
         let mut ledger = LedgerState::empty();
-        ledger.owned_objects.push(object("object-0", "owner", 100, "PFT"));
+        ledger
+            .owned_objects
+            .push(object("object-0", "owner", 100, "PFT"));
         let order = postfiat_types::OwnedTransferOrder {
             domain: domain(),
             inputs: vec![
@@ -1774,7 +2021,10 @@ mod owned_transfer_tests {
             apply_owned_transfer(&mut ledger, &order, "owner").unwrap_err(),
             OwnedTransferError::DuplicateInput
         );
-        assert_eq!(ledger.owned_objects, vec![object("object-0", "owner", 100, "PFT")]);
+        assert_eq!(
+            ledger.owned_objects,
+            vec![object("object-0", "owner", 100, "PFT")]
+        );
     }
 
     #[test]
@@ -1821,9 +2071,12 @@ mod owned_transfer_tests {
         };
         let nonce = 12;
         let collision_id = owned_output_id("owner", nonce, 0, &output);
-        ledger
-            .owned_objects
-            .push(object(&collision_id, "someone-else", 99, OWNED_NATIVE_ASSET));
+        ledger.owned_objects.push(object(
+            &collision_id,
+            "someone-else",
+            99,
+            OWNED_NATIVE_ASSET,
+        ));
         let collision_order = postfiat_types::OwnedTransferOrder {
             domain: domain(),
             inputs: vec![postfiat_types::OwnedObjectRef {
@@ -1851,17 +2104,30 @@ mod owned_transfer_tests {
         let owner_kp = postfiat_crypto_provider::ml_dsa_65_keygen().expect("owner");
         let owner_pk_hex = postfiat_crypto_provider::bytes_to_hex(&owner_kp.public_key);
         let vs: Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> = (0..4)
-            .map(|i| (format!("v{i}"), postfiat_crypto_provider::ml_dsa_65_keygen().expect("v")))
+            .map(|i| {
+                (
+                    format!("v{i}"),
+                    postfiat_crypto_provider::ml_dsa_65_keygen().expect("v"),
+                )
+            })
             .collect();
         let pks: Vec<(String, String)> = vs
             .iter()
-            .map(|(id, kp)| (id.clone(), postfiat_crypto_provider::bytes_to_hex(&kp.public_key)))
+            .map(|(id, kp)| {
+                (
+                    id.clone(),
+                    postfiat_crypto_provider::bytes_to_hex(&kp.public_key),
+                )
+            })
             .collect();
         let forger = postfiat_crypto_provider::ml_dsa_65_keygen().expect("forger");
 
         let mk_order = |obj_id: &str, nonce: u64| postfiat_types::OwnedTransferOrder {
             domain: domain(),
-            inputs: vec![postfiat_types::OwnedObjectRef { id: obj_id.into(), version: 1 }],
+            inputs: vec![postfiat_types::OwnedObjectRef {
+                id: obj_id.into(),
+                version: 1,
+            }],
             outputs: vec![postfiat_types::OwnedOutputSpec {
                 owner_pubkey_hex: owner_pk_hex.clone(),
                 value: 100,
@@ -1871,15 +2137,30 @@ mod owned_transfer_tests {
             nonce,
             memos: Vec::new(),
         };
-        let mk_vote = |order: &postfiat_types::OwnedTransferOrder, id: String, kp: &postfiat_crypto_provider::MlDsa65KeyPair| {
+        let mk_vote = |order: &postfiat_types::OwnedTransferOrder,
+                       id: String,
+                       kp: &postfiat_crypto_provider::MlDsa65KeyPair| {
             let sb = owned_transfer_signing_bytes(order);
-            let sig = postfiat_crypto_provider::ml_dsa_65_sign_with_context(&kp.private_key, &sb, OWNED_TRANSFER_CONTEXT).expect("sign");
-            postfiat_types::OwnedTransferVote { validator_id: id, signature_hex: postfiat_crypto_provider::bytes_to_hex(&sig) }
+            let sig = postfiat_crypto_provider::ml_dsa_65_sign_with_context(
+                &kp.private_key,
+                &sb,
+                OWNED_TRANSFER_CONTEXT,
+            )
+            .expect("sign");
+            postfiat_types::OwnedTransferVote {
+                validator_id: id,
+                signature_hex: postfiat_crypto_provider::bytes_to_hex(&sig),
+            }
         };
         let owner_sig_hex = |order: &postfiat_types::OwnedTransferOrder| {
             let sb = owned_transfer_signing_bytes(order);
             postfiat_crypto_provider::bytes_to_hex(
-                &postfiat_crypto_provider::ml_dsa_65_sign_with_context(&owner_kp.private_key, &sb, OWNED_TRANSFER_CONTEXT).expect("owner sign"),
+                &postfiat_crypto_provider::ml_dsa_65_sign_with_context(
+                    &owner_kp.private_key,
+                    &sb,
+                    OWNED_TRANSFER_CONTEXT,
+                )
+                .expect("owner sign"),
             )
         };
         let mint = |id: &str| postfiat_types::OwnedObject {
@@ -1893,7 +2174,10 @@ mod owned_transfer_tests {
         // 4 valid votes (quorum 3) -> applies.
         ledger.owned_objects.push(mint("a"));
         let order_a = mk_order("a", 1);
-        let votes_a: Vec<_> = vs.iter().map(|(id, kp)| mk_vote(&order_a, id.clone(), kp)).collect();
+        let votes_a: Vec<_> = vs
+            .iter()
+            .map(|(id, kp)| mk_vote(&order_a, id.clone(), kp))
+            .collect();
         let cert_a = postfiat_types::OwnedTransferCertificate {
             owner_signature_hex: owner_sig_hex(&order_a),
             order: order_a,
@@ -1961,10 +2245,19 @@ mod owned_transfer_tests {
         let too_many_inputs = postfiat_types::OwnedTransferOrder {
             domain: domain(),
             inputs: (0..too_many_input_count)
-                .map(|i| postfiat_types::OwnedObjectRef { id: format!("in{i}"), version: 1 })
+                .map(|i| postfiat_types::OwnedObjectRef {
+                    id: format!("in{i}"),
+                    version: 1,
+                })
                 .collect(),
-            outputs: vec![postfiat_types::OwnedOutputSpec { owner_pubkey_hex: opk.clone(), value: 99, asset: "PFT".into() }],
-            fee: 1, nonce: 1, memos: Vec::new(),
+            outputs: vec![postfiat_types::OwnedOutputSpec {
+                owner_pubkey_hex: opk.clone(),
+                value: 99,
+                asset: "PFT".into(),
+            }],
+            fee: 1,
+            nonce: 1,
+            memos: Vec::new(),
         };
         assert_eq!(
             apply_owned_transfer(&mut ledger, &too_many_inputs, &opk).unwrap_err(),
@@ -1973,9 +2266,20 @@ mod owned_transfer_tests {
         // 9 outputs (> MAX_OWNED_OUTPUTS_PER_TRANSFER=8) -> rejected
         let too_many_outputs = postfiat_types::OwnedTransferOrder {
             domain: domain(),
-            inputs: vec![postfiat_types::OwnedObjectRef { id: "x".into(), version: 1 }],
-            outputs: (0..9).map(|_| postfiat_types::OwnedOutputSpec { owner_pubkey_hex: opk.clone(), value: 1, asset: "PFT".into() }).collect(),
-            fee: 1, nonce: 2, memos: Vec::new(),
+            inputs: vec![postfiat_types::OwnedObjectRef {
+                id: "x".into(),
+                version: 1,
+            }],
+            outputs: (0..9)
+                .map(|_| postfiat_types::OwnedOutputSpec {
+                    owner_pubkey_hex: opk.clone(),
+                    value: 1,
+                    asset: "PFT".into(),
+                })
+                .collect(),
+            fee: 1,
+            nonce: 2,
+            memos: Vec::new(),
         };
         assert_eq!(
             apply_owned_transfer(&mut ledger, &too_many_outputs, &opk).unwrap_err(),
