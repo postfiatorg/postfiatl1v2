@@ -16,12 +16,12 @@ means independently audited" ([Whitepaper](../whitepaper.md)).
 
 The only running network is a controlled devnet run by six
 Foundation-administered validators
-([Network Status](../status/network-status.md)). On 26 November 2026 all six
-were at height 1906 with one state root, on build `2356caf1` (release
-`sol-exit-r3`, cut from `main`); pull requests merged to `main` after it were
-not deployed on that date
-([Current State](../status/chain-state-current.md),
-[handoff of 26 November](../status/handoff-2026-11-26.md)).
+([Network Status](../status/network-status.md)). On 27 November 2026 all six
+were at height 1915 with one state root, on build `9dcb689e` (release `pq-r3`,
+a commit of #280's branch, not of `main`; `main` holds #280 as the squashed,
+newer `b121df606`); nothing merged to `main` after the running build is
+deployed ([Current State](../status/chain-state-current.md),
+[handoff of 27 November](../handoffs/2026-11-27___antigravity__pfsh03_merged_big_milestone_specs_and_wave1_to_dravlic.md)).
 
 Since 23 November 2026 the devnet also carries USDC between Solana mainnet and
 pfUSDC in both directions, under small caps: one withdrawal burns from one backing

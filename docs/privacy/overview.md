@@ -6,7 +6,7 @@ chain adapter and application circuits; it does not implement a new Halo2 proof
 system. The exact dependency and narrow local compatibility patch are described
 in [Halo2 Dependency And Local Patch Boundary](../security/halo2-dependency.md).
 
-Orchard uses classical proof assumptions. The separate PFSH02 rehearsal pool settles private PFT and one governed pfUSDC source series on a disposable six-validator genesis. It has a Rust validator verifier, an independent Go verifier, a Python wallet CLI and a local browser wallet. No public network has an activation height in this release. [Quantum-safe private payments](../quantum/private-payments.md).
+Orchard uses classical proof assumptions. The separate PFSH02 rehearsal pool settles private PFT and one governed pfUSDC source series on a disposable six-validator genesis. It has a Rust validator verifier, an independent Go verifier, a Python wallet CLI and a local browser wallet. Its successor PFSH03 is on `main` since #280 and, by the 27 November handoff, active on the controlled devnet `postfiat-wan-devnet-2` from block 1910; no public network runs it. [Quantum-safe private payments](../quantum/private-payments.md).
 
 In the M8 rehearsal the validators finalized both assets, then refused new PQ inclusion after a signed pause. An independently imported signed snapshot recovered notes for both assets and replayed the finalized history. The pre-activation M4 binary rejected the scheduling amendment during replay, so the upgrade compatibility gate remains open. [Rehearsal record](../evidence/pq-private-payments-m8/rehearsal-record.md).
 
@@ -65,7 +65,9 @@ Checked on 25 November 2026.
 - The RPC server admits user-proven private actions (`private_action_submit`)
   only when it is started with `rpc-serve --allow-private-action-admission`;
   the switch is off unless set (`crates/node/src/private_action_rpc.rs`).
-- Post-quantum private payments are not on `main`.
+- Post-quantum private payments (PFSH03) are on `main` since #280 and run on
+  the devnet from block 1910 (27 November handoff; blocks 1912 to 1914 hold PQ
+  payments, read 27 November).
 - The assurance-receipt, predicate-registry, metadata, deanonymization,
   correlation, observer-inference, floor-calibration and longitudinal-linkage
   items are schemas and fixtures under `docs/governance/agent/`. Their verifier
