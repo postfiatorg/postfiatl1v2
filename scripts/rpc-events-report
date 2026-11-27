@@ -1,0 +1,755 @@
+#!/usr/bin/env python3
+"""Read-only report and threshold check over rpc-serve event logs.
+
+`postfiat-node rpc-serve --event-log PATH` writes one JSON object per request
+(schema postfiat-rpc-serve-event-v1, crates/node/src/rpc_cli.rs). This tool
+streams those files with bounded memory and never writes to them.
+
+  rpc-events-report summary [options] FILE...
+  rpc-events-report check [--state STATE] [thresholds] [options] FILE...
+
+`summary` reads every FILE completely (plain or .gz) and prints counts.
+`check` applies thresholds and exits 0 (within limits), 1 (a limit was
+exceeded or a rotation gap was seen) or 2 (usage, unreadable input, bad state).
+With --state, `check` takes exactly one live FILE and reads only what was
+appended since the previous run, following copytruncate, rename and
+compressed rotation through FILE.* / FILE-* siblings, so every complete line
+is counted exactly once. Records carry no timestamp, so limits are per run:
+run `check --state` from a timer and size limits for its interval.
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import fcntl
+import gzip
+import hashlib
+import json
+import os
+import re
+import sys
+import tempfile
+import time
+
+EVENT_SCHEMA = "postfiat-rpc-serve-event-v1"
+REPORT_SCHEMA = "postfiat-rpc-events-report-v1"
+STATE_SCHEMA = "postfiat-rpc-events-report-state-v1"
+FINGERPRINT_BYTES = 4096
+READ_CHUNK = 65536
+OTHER_KEY = "(other)"
+# logrotate names: FILE.1, FILE.1.gz, FILE-20261126, FILE-2026112612.gz
+ROTATED_SUFFIX = re.compile(r"(\.[0-9]+|-[0-9][0-9_T:-]*)(\.gz)?")
+
+EXIT_OK = 0
+EXIT_BREACH = 1
+EXIT_ERROR = 2
+
+
+class ToolError(Exception):
+    """Fails the run with exit 2."""
+
+
+class CappedCounter:
+    """Counter with at most `cap` distinct keys; later new keys go to OTHER_KEY."""
+
+    def __init__(self, cap: int) -> None:
+        self.cap = cap
+        self.counts: dict[str, int] = {}
+        self.other = 0
+        self.dropped_keys = 0
+        self._seen_dropped: set[str] = set()
+
+    def add(self, key: str) -> None:
+        if key in self.counts:
+            self.counts[key] += 1
+        elif len(self.counts) < self.cap:
+            self.counts[key] = 1
+        else:
+            self.other += 1
+            if len(self._seen_dropped) < self.cap and key not in self._seen_dropped:
+                self._seen_dropped.add(key)
+                self.dropped_keys += 1
+
+    def top(self, n: int) -> list[tuple[str, int]]:
+        items = sorted(self.counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        return items[:n]
+
+    def max_item(self) -> tuple[str, int] | None:
+        top = self.top(1)
+        return top[0] if top else None
+
+
+class Stats:
+    def __init__(self, key_cap: int, methods: set[str] | None) -> None:
+        self.methods = methods
+        self.lines = 0
+        self.events = 0
+        self.ok = 0
+        self.errors = 0
+        self.filtered_out = 0
+        self.bad = {"bad_json": 0, "wrong_schema": 0, "torn": 0, "oversize": 0}
+        self.by_method = CappedCounter(key_cap)
+        self.by_peer = CappedCounter(key_cap)
+        self.by_error_code = CappedCounter(key_cap)
+        self.by_peer_method = CappedCounter(key_cap)
+        self.handler_ms_count = 0
+        self.handler_ms_max = 0.0
+
+    def bad_total(self) -> int:
+        return sum(self.bad.values())
+
+    def add_line(self, raw: bytes) -> None:
+        self.lines += 1
+        try:
+            record = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            self.bad["bad_json"] += 1
+            return
+        if (
+            not isinstance(record, dict)
+            or record.get("schema") != EVENT_SCHEMA
+            or not isinstance(record.get("method"), str)
+            or not isinstance(record.get("peer_addr"), str)
+            or not isinstance(record.get("ok"), bool)
+        ):
+            self.bad["wrong_schema"] += 1
+            return
+        method = record["method"]
+        if self.methods is not None and method not in self.methods:
+            self.filtered_out += 1
+            return
+        peer = record["peer_addr"]
+        self.events += 1
+        self.by_method.add(method)
+        self.by_peer.add(peer)
+        self.by_peer_method.add(peer + "\t" + method)
+        if record["ok"]:
+            self.ok += 1
+        else:
+            self.errors += 1
+            code = record.get("error_code")
+            self.by_error_code.add(code if isinstance(code, str) else "(none)")
+        handler_ms = record.get("handler_ms")
+        if isinstance(handler_ms, (int, float)) and not isinstance(handler_ms, bool):
+            self.handler_ms_count += 1
+            self.handler_ms_max = max(self.handler_ms_max, float(handler_ms))
+
+
+def open_binary(path: str):
+    if path.endswith(".gz"):
+        return gzip.open(path, "rb")
+    return open(path, "rb")
+
+
+class Position:
+    """Where a read stopped: end offset, inode and head bytes of the same open file."""
+
+    def __init__(self, end: int, inode: int, head: bytes) -> None:
+        self.end = end
+        self.inode = inode
+        self.head = head
+
+
+def read_lines(
+    path: str, start: int, final: bool, stats: Stats, max_line: int
+) -> Position:
+    """Count complete lines of `path` from byte `start`; return where it stopped.
+
+    A trailing line without a newline is left unread when `final` is false (a
+    writer may still be finishing it) and counted as torn when `final` is true.
+    Lines longer than `max_line` bytes are skipped and counted as oversize.
+    """
+    with open_binary(path) as handle:
+        inode = os.fstat(handle.fileno()).st_ino if not path.endswith(".gz") else 0
+        head = handle.read(FINGERPRINT_BYTES)
+        end = _read_from(handle, start, final, stats, max_line)
+        if len(head) < min(end, FINGERPRINT_BYTES):
+            handle.seek(0)
+            head = handle.read(FINGERPRINT_BYTES)
+        return Position(end, inode, head[: min(end, FINGERPRINT_BYTES)])
+
+
+def _read_from(handle, start: int, final: bool, stats: Stats, max_line: int) -> int:
+    handle.seek(start)
+    offset = start
+    while True:
+        line_start = offset
+        raw = handle.readline(max_line + 1)
+        if not raw:
+            return offset
+        offset += len(raw)
+        if raw.endswith(b"\n"):
+            stats.add_line(raw)
+            continue
+        if len(raw) <= max_line:
+            # end of file inside a line
+            if final:
+                stats.lines += 1
+                stats.bad["torn"] += 1
+                return offset
+            return line_start
+        # oversize: skip to the end of this line
+        complete = False
+        while True:
+            rest = handle.readline(READ_CHUNK)
+            if not rest:
+                break
+            offset += len(rest)
+            if rest.endswith(b"\n"):
+                complete = True
+                break
+        if not complete and not final:
+            return line_start
+        stats.lines += 1
+        stats.bad["oversize"] += 1
+        if not complete:
+            return offset
+
+
+def fingerprint(path: str, length: int) -> str | None:
+    """sha256 of the first `length` bytes, or None if the file is shorter."""
+    if length <= 0:
+        return hashlib.sha256(b"").hexdigest()
+    with open_binary(path) as handle:
+        data = handle.read(length)
+    if len(data) < length:
+        return None
+    return hashlib.sha256(data).hexdigest()
+
+
+def last_line_end(handle, size: int) -> int:
+    """Offset just after the last newline at or before `size`."""
+    position = size
+    while position > 0:
+        start = max(0, position - READ_CHUNK)
+        handle.seek(start)
+        chunk = handle.read(position - start)
+        index = chunk.rfind(b"\n")
+        if index >= 0:
+            return start + index + 1
+        position = start
+    return 0
+
+
+def load_state(state_path: str, live_path: str) -> dict | None:
+    try:
+        with open(state_path, encoding="utf-8") as handle:
+            text = handle.read()
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise ToolError(f"state {state_path}: {error.strerror}") from error
+    try:
+        state = json.loads(text)
+    except ValueError as error:
+        raise ToolError(
+            f"state {state_path} is not valid JSON; remove it to start a new history"
+        ) from error
+    if not isinstance(state, dict) or state.get("schema") != STATE_SCHEMA:
+        raise ToolError(f"state {state_path} has no {STATE_SCHEMA} schema")
+    for key, kind in (
+        ("path", str),
+        ("inode", int),
+        ("offset", int),
+        ("fp_len", int),
+        ("fp", str),
+    ):
+        if not isinstance(state.get(key), kind) or isinstance(state.get(key), bool):
+            raise ToolError(f"state {state_path} field {key!r} is missing or invalid")
+    if state["offset"] < 0 or not 0 <= state["fp_len"] <= min(
+        state["offset"], FINGERPRINT_BYTES
+    ):
+        raise ToolError(
+            f"state {state_path} has an invalid offset or fingerprint length"
+        )
+    if state["path"] != live_path:
+        raise ToolError(
+            f"state {state_path} belongs to {state['path']}, not {live_path}; use one state file per log"
+        )
+    return state
+
+
+def write_state(state_path: str, state: dict) -> None:
+    directory = os.path.dirname(os.path.abspath(state_path))
+    fd, tmp = tempfile.mkstemp(prefix=".rpc-events-state.", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(state, handle, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, state_path)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp)
+        raise
+
+
+def rotated_candidates(live_path: str, exclude: set[str]) -> list[str]:
+    """Rotated copies of live_path, newest first: FILE.N or FILE-DATE, optionally .gz."""
+    base = os.path.basename(live_path)
+    directory = os.path.dirname(live_path)
+    names = []
+    for name in os.listdir(directory):
+        if not name.startswith(base) or not ROTATED_SUFFIX.fullmatch(name[len(base) :]):
+            continue
+        path = os.path.join(directory, name)
+        if os.path.isfile(path) and path not in exclude:
+            names.append(path)
+    return sorted(
+        names, key=lambda name: (os.stat(name).st_mtime_ns, name), reverse=True
+    )
+
+
+def same_head(path: str, state: dict) -> bool:
+    try:
+        return fingerprint(path, state["fp_len"]) == state["fp"]
+    except (OSError, EOFError, gzip.BadGzipFile):
+        return False
+
+
+def plan_incremental(
+    live_path: str, state: dict | None, start_at_end: bool, exclude: set[str]
+):
+    """Return (segments, gap, rotated) where a segment is (path, start, final)."""
+    try:
+        live_stat = os.stat(live_path)
+    except OSError as error:
+        raise ToolError(f"{live_path}: {error.strerror}") from error
+    if state is None:
+        if start_at_end:
+            with open(live_path, "rb") as handle:
+                end = last_line_end(handle, os.fstat(handle.fileno()).st_size)
+                handle.seek(0)
+                head = handle.read(min(end, FINGERPRINT_BYTES))
+                return (
+                    [],
+                    False,
+                    False,
+                    Position(end, os.fstat(handle.fileno()).st_ino, head),
+                )
+        return [(live_path, 0, False)], False, False, None
+    offset = state["offset"]
+    if (
+        live_stat.st_ino == state["inode"]
+        and live_stat.st_size >= offset
+        and fingerprint(live_path, state["fp_len"]) == state["fp"]
+    ):
+        return [(live_path, offset, False)], False, False, None
+    # The file the state points into was rotated away: find it by content.
+    candidates = rotated_candidates(live_path, exclude)
+    for index, candidate in enumerate(candidates):
+        if not same_head(candidate, state):
+            continue
+        newer = list(reversed(candidates[:index]))
+        segments = [(candidate, offset, True)] + [(path, 0, True) for path in newer]
+        segments.append((live_path, 0, False))
+        return segments, False, True, None
+    return [(live_path, 0, False)], True, True, None
+
+
+def make_state(live_path: str, position: Position) -> dict:
+    return {
+        "schema": STATE_SCHEMA,
+        "path": live_path,
+        "inode": position.inode,
+        "offset": position.end,
+        "fp_len": len(position.head),
+        "fp": hashlib.sha256(position.head).hexdigest(),
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+
+def split_peer_method(key: str) -> tuple[str, str]:
+    if key == OTHER_KEY:
+        return OTHER_KEY, OTHER_KEY
+    peer, _, method = key.partition("\t")
+    return peer, method
+
+
+def evaluate(stats: Stats, args: argparse.Namespace, gap: bool) -> list[dict]:
+    checks: list[dict] = []
+
+    def counter_check(
+        name: str, limit: int | None, counter: CappedCounter, label
+    ) -> None:
+        if limit is None:
+            return
+        worst = counter.max_item()
+        value, key = (worst[1], worst[0]) if worst else (0, None)
+        status = "ok" if value <= limit else "breach"
+        check = {"name": name, "limit": limit, "value": value, "status": status}
+        check.update(label(key))
+        if counter.other > limit:
+            # keys beyond the cap are pooled, so one of them may exceed the limit
+            check.update({"status": "breach", "value": max(value, counter.other)})
+            check.update(label(OTHER_KEY))
+            check["reason"] = "key table capped; pooled keys exceed the limit"
+        checks.append(check)
+
+    counter_check(
+        "max_peer_method",
+        args.max_peer_method,
+        stats.by_peer_method,
+        lambda key: (
+            dict(zip(("peer", "method"), split_peer_method(key))) if key else {}
+        ),
+    )
+    counter_check(
+        "max_method",
+        args.max_method,
+        stats.by_method,
+        lambda key: {"method": key} if key else {},
+    )
+    counter_check(
+        "max_peer",
+        args.max_peer,
+        stats.by_peer,
+        lambda key: {"peer": key} if key else {},
+    )
+    if args.max_errors is not None:
+        status = "ok" if stats.errors <= args.max_errors else "breach"
+        checks.append(
+            {
+                "name": "max_errors",
+                "limit": args.max_errors,
+                "value": stats.errors,
+                "status": status,
+            }
+        )
+    if args.max_error_ratio is not None:
+        ratio = stats.errors / stats.events if stats.events else 0.0
+        if stats.events < args.min_events:
+            status = "skipped"
+        else:
+            status = "ok" if ratio <= args.max_error_ratio else "breach"
+        checks.append(
+            {
+                "name": "max_error_ratio",
+                "limit": args.max_error_ratio,
+                "value": round(ratio, 6),
+                "events": stats.events,
+                "min_events": args.min_events,
+                "status": status,
+            }
+        )
+    if args.max_bad_lines is not None:
+        value = stats.bad_total()
+        status = "ok" if value <= args.max_bad_lines else "breach"
+        checks.append(
+            {
+                "name": "max_bad_lines",
+                "limit": args.max_bad_lines,
+                "value": value,
+                "status": status,
+            }
+        )
+    if gap:
+        checks.append(
+            {
+                "name": "continuity",
+                "status": "breach",
+                "reason": "log was rotated and the previous position was not found in any rotated file",
+            }
+        )
+    return checks
+
+
+def counter_json(counter: CappedCounter, top: int) -> dict:
+    return {
+        "top": [{"key": key, "count": count} for key, count in counter.top(top)],
+        "distinct": len(counter.counts),
+        "other": counter.other,
+        "dropped_keys": counter.dropped_keys,
+    }
+
+
+def build_report(mode, stats, args, segments, checks, gap, rotated, exit_code) -> dict:
+    peer_methods = [
+        {"peer": peer, "method": method, "count": count}
+        for (peer, method), count in (
+            (split_peer_method(key), count)
+            for key, count in stats.by_peer_method.top(args.top)
+        )
+    ]
+    return {
+        "schema": REPORT_SCHEMA,
+        "mode": mode,
+        "event_schema": EVENT_SCHEMA,
+        "segments": segments,
+        "rotated": rotated,
+        "gap": gap,
+        "lines": stats.lines,
+        "events": stats.events,
+        "ok": stats.ok,
+        "errors": stats.errors,
+        "filtered_out": stats.filtered_out,
+        "method_filter": sorted(stats.methods) if stats.methods is not None else None,
+        "bad_lines": dict(stats.bad, total=stats.bad_total()),
+        "handler_ms": {"count": stats.handler_ms_count, "max": stats.handler_ms_max},
+        "key_cap": args.max_keys,
+        "by_method": counter_json(stats.by_method, args.top),
+        "by_peer": counter_json(stats.by_peer, args.top),
+        "by_error_code": counter_json(stats.by_error_code, args.top),
+        "by_peer_method": {
+            "top": peer_methods,
+            "distinct": len(stats.by_peer_method.counts),
+            "other": stats.by_peer_method.other,
+            "dropped_keys": stats.by_peer_method.dropped_keys,
+        },
+        "checks": checks,
+        "verdict": "breach" if exit_code == EXIT_BREACH else "ok",
+        "exit_code": exit_code,
+    }
+
+
+def print_text(report: dict) -> None:
+    out = sys.stdout.write
+    verdict = report["verdict"].upper()
+    out(f"rpc-events-report {report['mode']}: {verdict} (exit {report['exit_code']})\n")
+    for segment in report["segments"]:
+        final = "to end" if segment["final"] else "complete lines"
+        out(
+            f"read {segment['path']} [{final}] bytes {segment['start']}-{segment['end']}\n"
+        )
+    if report["gap"]:
+        out(
+            "GAP: previous position not found in any rotated file; read the live file from 0\n"
+        )
+    bad = report["bad_lines"]
+    out(
+        f"lines {report['lines']} events {report['events']} ok {report['ok']} errors {report['errors']}"
+        f" filtered_out {report['filtered_out']}\n"
+    )
+    out(
+        f"bad_lines {bad['total']} (bad_json {bad['bad_json']}, wrong_schema {bad['wrong_schema']},"
+        f" torn {bad['torn']}, oversize {bad['oversize']})\n"
+    )
+    for title, name in (
+        ("methods", "by_method"),
+        ("peers", "by_peer"),
+        ("error codes", "by_error_code"),
+    ):
+        table = report[name]
+        items = (
+            ", ".join(f"{item['key']} {item['count']}" for item in table["top"]) or "-"
+        )
+        extra = f" (+{table['other']} in {OTHER_KEY})" if table["other"] else ""
+        out(f"top {title}: {items}{extra}\n")
+    pairs = (
+        ", ".join(
+            f"{p['peer']} {p['method']} {p['count']}"
+            for p in report["by_peer_method"]["top"]
+        )
+        or "-"
+    )
+    out(f"top peer+method: {pairs}\n")
+    for check in report["checks"]:
+        detail = " ".join(
+            f"{k} {check[k]}" for k in ("peer", "method") if check.get(k) is not None
+        )
+        reason = f" ({check['reason']})" if check.get("reason") else ""
+        value = (
+            f" value {check['value']} limit {check['limit']}"
+            if "limit" in check
+            else ""
+        )
+        out(
+            f"{check['status'].upper()} {check['name']}{value}{(' ' + detail) if detail else ''}{reason}\n"
+        )
+
+
+def non_negative_int(text: str) -> int:
+    value = int(text)
+    if value < 0:
+        raise argparse.ArgumentTypeError("must be >= 0")
+    return value
+
+
+def positive_int(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be >= 1")
+    return value
+
+
+def ratio(text: str) -> float:
+    value = float(text)
+    if not 0.0 <= value <= 1.0:
+        raise argparse.ArgumentTypeError("must be between 0 and 1")
+    return value
+
+
+class Parser(argparse.ArgumentParser):
+    def error(self, message: str):
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_ERROR, f"{self.prog}: error: {message}\n")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = Parser(
+        prog="rpc-events-report",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="mode", required=True, parser_class=Parser)
+    for mode in ("summary", "check"):
+        p = sub.add_parser(mode, help=f"{mode} rpc-events.ndjson files")
+        p.add_argument(
+            "files", nargs="+", metavar="FILE", help="event log (plain or .gz)"
+        )
+        p.add_argument("--json", action="store_true", help="print the JSON report")
+        p.add_argument(
+            "--top", type=positive_int, default=10, help="rows per table (default 10)"
+        )
+        p.add_argument(
+            "--method", action="append", help="count only this method (repeatable)"
+        )
+        p.add_argument(
+            "--max-keys",
+            type=positive_int,
+            default=10000,
+            help="distinct keys per table (default 10000)",
+        )
+        p.add_argument(
+            "--max-line-bytes",
+            type=positive_int,
+            default=1048576,
+            help="longer lines are oversize (default 1 MiB)",
+        )
+        if mode == "check":
+            p.add_argument(
+                "--state", help="state file for incremental runs (one live FILE)"
+            )
+            p.add_argument(
+                "--start-at-end",
+                action="store_true",
+                help="with a new --state, skip existing lines",
+            )
+            p.add_argument(
+                "--max-peer-method",
+                type=non_negative_int,
+                help="max events per peer+method",
+            )
+            p.add_argument(
+                "--max-method", type=non_negative_int, help="max events per method"
+            )
+            p.add_argument(
+                "--max-peer", type=non_negative_int, help="max events per peer"
+            )
+            p.add_argument(
+                "--max-errors", type=non_negative_int, help="max error events"
+            )
+            p.add_argument("--max-error-ratio", type=ratio, help="max errors/events")
+            p.add_argument(
+                "--min-events",
+                type=non_negative_int,
+                default=20,
+                help="events needed for the ratio check",
+            )
+            p.add_argument(
+                "--max-bad-lines",
+                type=non_negative_int,
+                help="max bad_json+wrong_schema+torn+oversize",
+            )
+    return parser
+
+
+def run(args: argparse.Namespace) -> int:
+    methods = set(args.method) if args.method else None
+    stats = Stats(args.max_keys, methods)
+    gap = rotated = False
+    state_path = getattr(args, "state", None)
+    if getattr(args, "start_at_end", False) and not state_path:
+        raise ToolError("--start-at-end needs --state")
+    segments_out: list[dict] = []
+    with contextlib.ExitStack() as stack:
+        if state_path:
+            if len(args.files) != 1:
+                raise ToolError("--state takes exactly one live FILE")
+            live_path = os.path.abspath(args.files[0])
+            if live_path.endswith(".gz"):
+                raise ToolError(
+                    "--state needs the live (uncompressed) log, not a rotated .gz"
+                )
+            try:
+                lock_handle = stack.enter_context(open(state_path + ".lock", "a"))
+                fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as error:
+                raise ToolError(f"another run holds {state_path}.lock") from error
+            except OSError as error:
+                raise ToolError(f"{state_path}.lock: {error.strerror}") from error
+            state = load_state(state_path, live_path)
+            exclude = {
+                os.path.abspath(state_path),
+                os.path.abspath(state_path + ".lock"),
+            }
+            segments, gap, rotated, live_position = plan_incremental(
+                live_path, state, args.start_at_end, exclude
+            )
+            for path, start, final in segments:
+                try:
+                    position = read_lines(
+                        path, start, final, stats, args.max_line_bytes
+                    )
+                except (EOFError, gzip.BadGzipFile) as error:
+                    raise ToolError(
+                        f"{path}: corrupt or partly written gzip ({error}); state not updated"
+                    ) from error
+                end = position.end
+                shown = (
+                    args.files[0]
+                    if path == live_path
+                    else os.path.join(
+                        os.path.dirname(args.files[0]), os.path.basename(path)
+                    )
+                )
+                segments_out.append(
+                    {"path": shown, "start": start, "end": end, "final": final}
+                )
+                if path == live_path:
+                    live_position = position
+            new_state = make_state(live_path, live_position)
+        else:
+            for path in args.files:
+                try:
+                    end = read_lines(path, 0, True, stats, args.max_line_bytes).end
+                except OSError as error:
+                    raise ToolError(f"{path}: {error.strerror}") from error
+                except (EOFError, gzip.BadGzipFile) as error:
+                    raise ToolError(f"{path}: corrupt gzip ({error})") from error
+                segments_out.append(
+                    {"path": path, "start": 0, "end": end, "final": True}
+                )
+            new_state = None
+        checks = evaluate(stats, args, gap) if args.mode == "check" else []
+        breach = any(check["status"] == "breach" for check in checks)
+        exit_code = EXIT_BREACH if breach else EXIT_OK
+        if new_state is not None:
+            write_state(state_path, new_state)
+    report = build_report(
+        args.mode, stats, args, segments_out, checks, gap, rotated, exit_code
+    )
+    if args.json:
+        json.dump(report, sys.stdout, sort_keys=True)
+        sys.stdout.write("\n")
+    else:
+        print_text(report)
+    return exit_code
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        return run(args)
+    except ToolError as error:
+        sys.stderr.write(f"rpc-events-report: error: {error}\n")
+        return EXIT_ERROR
+    except OSError as error:
+        sys.stderr.write(f"rpc-events-report: error: {error}\n")
+        return EXIT_ERROR
+
+
+if __name__ == "__main__":
+    sys.exit(main())
