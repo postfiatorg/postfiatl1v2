@@ -8,7 +8,7 @@ An observer only reads. It holds its own signing key and nothing else: no valida
 
 - `postfiat-node` from a signed release (it signs and verifies).
 - `scripts/validator-uptime-observer.py` and `scripts/validator_uptime_contract.py`, installed together in `/usr/local/lib/postfiat/`. Python 3.11 or newer, no packages.
-- Read access to at least one RPC endpoint of the chain. To count the votes that certificates leave out, it needs the RPC of each validator whose blocks should count in full: a validator serves the vote records only for the blocks it proposed. For a proposer it cannot reach, the certificates alone count.
+- Read access to a trusted RPC on the chain. Certificate votes determine the signed score. Other validator RPCs can provide diagnostic late-vote records.
 
 ## Set up one observer
 
@@ -61,3 +61,5 @@ postfiat-node observer-uptime-verify --feed-file validator-uptime-feed.json --ke
 ```
 
 It prints who signed, whose attestation was dropped and why, and the rows. With fewer than two attestations that count, `indeterminate` is true: new bindings and new credit wait, and nobody is revoked.
+
+For a cold start with known lifecycle history, supply both `--bootstrap-feed` and `--bootstrap-keyset`. The latter must be pinned independently. Without a verified checkpoint, activation dates remain unknown and the observer grants no ramp-in.
