@@ -287,11 +287,11 @@ class X402HttpClient {
       if (!paymentReceipt.settled || !paymentReceipt.payment_ref) {
         throw new X402Error(502, 'unsettled_payment_response', 'server returned unsettled PAYMENT-RESPONSE');
       }
-      if (expectedOrderHash.length === 32) {
+      if (expectedOrderHash.length === mp.CHAIN_HASH_BYTES) {
         if (!crypto.timingSafeEqual(paymentReceipt.payment_ref.order_hash, expectedOrderHash)) {
           throw new X402Error(502, 'receipt_order_hash_mismatch', 'PAYMENT-RESPONSE order_hash mismatch');
         }
-      } else if (expectedTxHash.length === 32) {
+      } else if (expectedTxHash.length === mp.CHAIN_HASH_BYTES) {
         if (!crypto.timingSafeEqual(paymentReceipt.payment_ref.tx_hash, expectedTxHash)) {
           throw new X402Error(502, 'receipt_tx_hash_mismatch', 'PAYMENT-RESPONSE tx_hash mismatch');
         }
