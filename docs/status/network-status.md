@@ -94,8 +94,9 @@ closed. The window's launcher (#257) was merged into `main` on 27 November at
 hours ahead and alert when deposits stay closed; rent a Vast 5090 for deposits
 when Colab has no G4); by the 27 November handoff it is not deployed. A day can
 pass without a session. The Task Node's opening-hours screens (tasknode #442
-and #445) are merged in the Task Node's `main` and not deployed, and its
-setting `L1_PROVING_WINDOW_UTC` is not set, so the Task Node does not say when
+and #445) are merged in the Task Node's `main` and not deployed, and the
+setting that switches them on, `L1_PROVING_WINDOW_UTC`, stays unset until
+follow-up work on those screens is done, so the Task Node does not say when
 a route reopens
 ([26 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-26.md),
 [27 November handoff](../handoffs/2026-11-27___antigravity__pfsh03_merged_big_milestone_specs_and_wave1_to_dravlic.md)).

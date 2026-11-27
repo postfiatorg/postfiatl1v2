@@ -88,7 +88,7 @@ sha256sum -c SHA256SUMS
 PFSH03 runs on the controlled devnet only; no public network runs it. On local test chains validators verify and
 settle payments, the pool keeps its own ledger, and a command-line wallet and the browser wallet shield, pay and exit
 for PFT and pfUSDC. The six-validator upgrade rehearsal is done. No external review of the cryptography and the code
-is recorded (the package for reviewers is ready); the devnet activation at block 1910 came before any. The build plan
+is recorded (the package for reviewers is ready). The activation at block 1910 is on the controlled devnet, not on a public network. The build plan
 is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
 The historical M1–M8 results below cover the standalone fixture and the original L1 profile 1, which charged a public PFT payer on issued spends.
 
@@ -119,9 +119,9 @@ system is new. Its whole security analysis was written by the project and has no
 it: the classical soundness argument (Appendix A.1–A.2), the reduction for quantum attackers (A.3) and the
 zero-knowledge argument that privacy depends on (Appendix B). Protection against an attacker who reuses parts of
 other people's proofs (A.4) is stated as a conjecture. Privacy and authorization also rely on assumptions about
-SHAKE256 and ML-KEM-1024 that the specification marks as non-standard and gives no numbers for. M8 sets external
-review of the verifier and these proofs before activation; none is recorded, and PFSH03 is active on the controlled
-devnet from block 1910.
+SHAKE256 and ML-KEM-1024 that the specification marks as non-standard and gives no numbers for. M8 names an external
+review of the verifier and these proofs as a condition of activation. None is recorded; PFSH03 is active on the
+controlled devnet from block 1910, which is not a public network.
 
 Privacy here covers the contents of payments. It does not hide network-level information such as the IP address or
 timing of a submission, and a small pool hides less than a large one.
