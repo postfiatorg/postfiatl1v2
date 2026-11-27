@@ -87,9 +87,10 @@ jobs:
           scripts/check-rust-ci-test-split --listing "$RUNNER_TEMP/test-list.txt"
       - name: cargo test
         run: |
-          cargo test --workspace --locked -- --skip pq_ \
+          cargo test --workspace --locked --no-fail-fast -- --skip pq_ \
             --skip transport_batch_payload_tests::a_peer_refusing_past_the_retry_budget_is_asked_until_the_deadline_and_the_round_certifies \
-            --skip transport_batch_payload_tests::a_prepare_answered_8s_late_does_not_delay_an_early_quorum_round
+            --skip transport_batch_payload_tests::a_prepare_answered_8s_late_does_not_delay_an_early_quorum_round \
+            --skip tests::fail_fast_dos_rejects_bad_sig_bad_pow_and_aborts_siblings
           cargo test --locked --manifest-path tools/tasknode-validator-binding/Cargo.toml
           cargo test --locked -p postfiat-node --bin postfiat-node \
             fastswap_service::tests::persistent_wallet_driver_meets_isolated_warm_latency_gate \
@@ -101,10 +102,18 @@ jobs:
       - name: Transport timing tests, alone on one thread
         # Their wall-clock bounds hold for a round with nothing running beside
         # it. --workspace reuses the build of the step above.
+        if: ${{ !cancelled() }}
         run: |
           cargo test --workspace --locked -- --exact --test-threads=1 \
             transport_batch_payload_tests::a_peer_refusing_past_the_retry_budget_is_asked_until_the_deadline_and_the_round_certifies \
             transport_batch_payload_tests::a_prepare_answered_8s_late_does_not_delay_an_early_quorum_round
+      - name: Fail-fast timing test of the PQ verifier, optimized and alone
+        # Its bounds are milliseconds for rejecting a bad payment. They are a
+        # property of the optimized verifier, so it runs in a release build.
+        if: ${{ !cancelled() }}
+        run: |
+          cargo test --release --locked -p postfiat-privacy-binius --lib -- --exact --test-threads=1 \
+            tests::fail_fast_dos_rejects_bad_sig_bad_pow_and_aborts_siblings
 
   test-pq:
     # The PQ payment tests (every test named pq_) prove for real; beside the

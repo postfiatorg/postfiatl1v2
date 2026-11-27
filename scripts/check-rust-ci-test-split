@@ -20,8 +20,14 @@ from pathlib import Path
 import yaml
 
 JOBS = ("test", "test-pq")
+# Cargo options that change how tests are built or reported, not which run.
+NOT_SELECTING = ("--no-fail-fast", "--release")
 WORKSPACE = ("--workspace", "--locked")
-NODE_BIN = ("--locked", "-p", "postfiat-node", "--bin", "postfiat-node")
+# A command for one package's binary, and the listing prefix of that binary.
+ONE_BINARY = {
+    ("--locked", "-p", "postfiat-node", "--bin", "postfiat-node"): "src/main.rs (postfiat_node-",
+    ("--locked", "-p", "postfiat-privacy-binius", "--lib"): "src/lib.rs (postfiat_privacy_binius-",
+}
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 RUNNING_RE = re.compile(r"^\s*Running (?:unittests )?(\S+) \((\S+)\)$")
 DOC_RE = re.compile(r"^\s*Doc-tests (\S+)$")
@@ -61,7 +67,8 @@ def cargo_test_commands(workflow: Path) -> list[tuple[str, list[str]]]:
 
 def selection(tokens: list[str]) -> tuple[tuple[str, ...], list[str], list[str], bool, bool]:
     cut = tokens.index("--") if "--" in tokens else len(tokens)
-    cargo_args, libtest_args = tuple(tokens[2:cut]), tokens[cut + 1 :]
+    cargo_args = tuple(arg for arg in tokens[2:cut] if arg not in NOT_SELECTING)
+    libtest_args = tokens[cut + 1 :]
     filters, skips, exact, ignored = [], [], False, False
     args = iter(libtest_args)
     for arg in args:
@@ -96,8 +103,8 @@ def main() -> int:
     options = parser.parse_args()
 
     binaries = read_listing(options.listing)
-    node_bin = [b for b in binaries if b.startswith("src/main.rs (postfiat_node-")]
-    if len(binaries) < 2 or len(node_bin) != 1:
+    one_binary = {form: [b for b in binaries if b.startswith(prefix)] for form, prefix in ONE_BINARY.items()}
+    if len(binaries) < 2 or any(len(found) != 1 for found in one_binary.values()):
         sys.exit(f"{options.listing}: not a complete `cargo test --workspace -- --list` listing")
     counts = {(binary, test): 0 for binary, tests in binaries.items() for test in tests}
 
@@ -108,8 +115,8 @@ def main() -> int:
             continue
         if cargo_args == WORKSPACE:
             covered = list(binaries)
-        elif cargo_args == NODE_BIN:
-            covered = node_bin
+        elif cargo_args in one_binary:
+            covered = one_binary[cargo_args]
         else:
             sys.exit(f"{job}: unknown cargo test form, extend this check: {shlex.join(tokens)}")
         selected = 0
