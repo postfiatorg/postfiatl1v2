@@ -228,11 +228,14 @@ message MessageKeyBinding {
 message FastPayPaymentRef {
   PaymentLane lane = 1;
   string chain_id = 2;
-  // 32-byte immutable hash of the signed OwnedTransferOrderV3 (required when lane == PAYMENT_LANE_FASTPAY).
+  // 48-byte immutable SHA3-384 digest of the signed OwnedTransferOrderV3: the raw bytes of the 96-lowercase-hex
+  // fastpay_transfer_order_digest_v3 value (required when lane == PAYMENT_LANE_FASTPAY).
   bytes order_hash = 3;
-  // Optional 32-byte validator quorum certificate digest for audit/display only (never a dedup key).
+  // Optional 48-byte SHA3-384 validator quorum certificate digest (raw bytes of the 96-lowercase-hex
+  // fastpay_transfer_certificate_digest_v3 value) for audit/display only (never a dedup key).
   bytes certificate_digest = 4;
-  // Consensus-lane transaction hash (required when lane == CONSENSUS_PFT or CONSENSUS_ISSUED).
+  // 48-byte SHA3-384 consensus-lane transaction id: the raw bytes of the 96-lowercase-hex payment_v2_tx_id or
+  // asset_transaction_tx_id value (required when lane == CONSENSUS_PFT or CONSENSUS_ISSUED).
   bytes tx_hash = 5;
   // "PFT" for native PFT or 96-char lowercase hex issued asset id (e.g. PFUSDC).
   string asset_id = 6;
@@ -272,9 +275,11 @@ message X402PaymentSignature {
   PaymentLane lane = 4;
   bytes request_hash = 5;
   bytes nonce = 6;
-  // Immutable FastPay order_hash used as the cross-replica spent-payment dedup key for FastPay PFT.
+  // Immutable 48-byte FastPay order_hash (as FastPayPaymentRef.order_hash) used as the cross-replica
+  // spent-payment dedup key for FastPay PFT.
   bytes order_hash = 7;
-  // Immutable consensus tx_hash used as the spent-payment dedup key for consensus-lane PFUSDC.
+  // Immutable 48-byte consensus tx_hash (as FastPayPaymentRef.tx_hash) used as the spent-payment dedup key
+  // for consensus-lane PFUSDC.
   bytes tx_hash = 8;
   // Serialized signed transfer payload (SignedOwnedTransferOrderV3 or signed issued_payment_v2).
   bytes signed_payload = 9;

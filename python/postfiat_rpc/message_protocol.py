@@ -58,6 +58,17 @@ DOMAIN_MESSAGE_AAD = b"postfiat-l1-v2/message-aad/v1"
 DOMAIN_XWING_WRAP_INFO = b"postfiat-l1-v2/xwing-wrap/v1"
 DOMAIN_MESSAGE_KEY_KDF = b"postfiat-l1-v2/message-key/v1"
 DOMAIN_MESSAGE_KEY_BIND = b"postfiat-l1-v2/message-key-bind/v1"
+DOMAIN_ACCOUNT_ADDRESS = b"postfiat.address.v1\x00"
+
+
+def derive_account_address(account_pubkey: bytes) -> str:
+    """Derive canonical postfiatl1v2 account address from a 1,952-byte ML-DSA-65 public key."""
+    if len(account_pubkey) != ML_DSA_65_PUBKEY_BYTES:
+        raise MessageProtocolError(
+            f"ML-DSA-65 public key must be {ML_DSA_65_PUBKEY_BYTES} bytes, got {len(account_pubkey)}"
+        )
+    digest = hashlib.sha3_384(DOMAIN_ACCOUNT_ADDRESS + account_pubkey).digest()
+    return "pf" + digest[:20].hex()
 
 MEMO_TYPE_PF_PTR_HEX = b"pf.ptr".hex()  # "70662e707472"
 MEMO_FORMAT_V5_HEX = b"v5".hex()  # "7635"
@@ -1851,11 +1862,14 @@ def open_envelope(
     verify_signature_fn: Callable[[bytes, bytes, bytes], bool],
     expected_cid_bin: bytes | None = None,
     expected_multibase_cid: str | None = None,
+    expected_chain_id: str | None = None,
+    expected_tx_sender: str | None = None,
+    verify_sender_address: bool = True,
     recipient_key_id: bytes | None = None,
     xwing_decap_fn: Callable[[bytes], bytes] | None = None,
     enforce_canonical_order: bool = False,
 ) -> OpenedEnvelopeResult:
-    """Verify CID + raw-byte ML-DSA-65 signature BEFORE decoding nested fields, then decrypt if private/sealed."""
+    """Verify CID + raw-byte ML-DSA-65 signature BEFORE decoding nested fields, enforce anchor/sender bindings, then decrypt if private/sealed."""
     # Step 1: Verify CIDv1 raw over exact transmitted bytes (zero re-serialization).
     cid_ref = verify_cidv1_raw(
         envelope_bytes,
@@ -1876,6 +1890,22 @@ def open_envelope(
     header = MessageHeader.decode(envelope.header_bytes, enforce_canonical_order=enforce_canonical_order)
     if header.protocol_version != 1:
         raise MessageProtocolError(f"unsupported MessageHeader.protocol_version: {header.protocol_version}")
+
+    # Step 4: Enforce sender-key derivation, chain_id, and anchoring tx.from bindings.
+    if verify_sender_address:
+        derived_sender = derive_account_address(envelope.sender_pubkey)
+        if derived_sender != header.sender_account:
+            raise MessageProtocolError(
+                f"Envelope sender_pubkey address {derived_sender} != header.sender_account {header.sender_account}"
+            )
+    if expected_chain_id is not None and header.chain_id != expected_chain_id:
+        raise MessageProtocolError(
+            f"Envelope chain_id mismatch: got {header.chain_id!r}, expected {expected_chain_id!r}"
+        )
+    if expected_tx_sender is not None and header.sender_account != expected_tx_sender:
+        raise MessageProtocolError(
+            f"Foreign re-anchor rejected: header.sender_account {header.sender_account} != anchoring tx.from {expected_tx_sender}"
+        )
 
     if header.visibility == Visibility.PUBLIC:
         if envelope.encryption_header_bytes:
