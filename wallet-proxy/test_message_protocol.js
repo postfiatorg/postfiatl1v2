@@ -210,6 +210,7 @@ async function testRealPqRoundtrips() {
   assert.equal(verifiedBinding.xwing_public_key.length, mp.XWING_PUBKEY_BYTES);
 
   // 2. Real PRIVATE multi-recipient X-Wing + XChaCha20-Poly1305 + ML-DSA-65 Envelope
+  const senderAccount = mp.deriveAccountAddress(senderKeys.publicKey);
   const rewardPlaintext = mp.encodeRewardNotice({
     reward_id: 'reward-live-001',
     task_id: 'task-live-001',
@@ -228,7 +229,7 @@ async function testRealPqRoundtrips() {
       visibility: mp.Visibility.PRIVATE,
       body_encoding: mp.BodyEncoding.PROTOBUF,
       cipher_suite: mp.CipherSuite.XWING_XCHACHA20_POLY1305,
-      sender_account: 'pf1tasknode0000000000000000000000000000000',
+      sender_account: senderAccount,
       created_at_unix_ms: 1764201700000,
       task_id: 'task-live-001',
     },
@@ -236,7 +237,7 @@ async function testRealPqRoundtrips() {
     senderPubkey: senderKeys.publicKey,
     senderSecretKey: senderKeys.secretKey,
     recipients: [
-      { xwingPublicKey: recip2.publicKey, account: 'pf1tasknode0000000000000000000000000000000' },
+      { xwingPublicKey: recip2.publicKey, account: senderAccount },
       { xwingPublicKey: recip1.publicKey, account: 'pf1recip0000000000000000000000000000000000' },
     ],
   });
@@ -248,11 +249,13 @@ async function testRealPqRoundtrips() {
   assert.equal(decodedEnc.recipients[0].wrapped_cek.length, mp.WRAPPED_CEK_BYTES);
   assert.ok(Buffer.compare(decodedEnc.recipients[0].recipient_key_id, decodedEnc.recipients[1].recipient_key_id) < 0);
 
-  // Both recipients can decrypt identically
+  // Both recipients can decrypt identically with full anchor-binding checks enforced inside openEnvelope()
   for (const r of [recip1, recip2]) {
     const opened = await mp.openEnvelope(sealed.envelopeBytes, {
       expectedCidBin: sealed.cidBin,
       expectedMultibaseCid: sealed.multibaseCid,
+      expectedChainId: 'postfiat-devnet-2',
+      expectedTxSender: senderAccount,
       recipientKeyId: r.keyId,
       recipientXWingSecretKey: r.secretKey,
       enforceCanonicalOrder: true,
@@ -260,6 +263,55 @@ async function testRealPqRoundtrips() {
     assert.deepEqual(opened.plaintextBody, rewardPlaintext);
     assert.equal(mp.decodeRewardNotice(opened.plaintextBody).reward_id, 'reward-live-001');
   }
+
+  // Anchor-binding negative checks enforced inside openEnvelope():
+  await assert.rejects(
+    () =>
+      mp.openEnvelope(sealed.envelopeBytes, {
+        expectedChainId: 'postfiat-mainnet-1',
+        expectedTxSender: senderAccount,
+        recipientKeyId: recip1.keyId,
+        recipientXWingSecretKey: recip1.secretKey,
+      }),
+    /chain_id mismatch/
+  );
+  await assert.rejects(
+    () =>
+      mp.openEnvelope(sealed.envelopeBytes, {
+        expectedChainId: 'postfiat-devnet-2',
+        expectedTxSender: 'pf0000000000000000000000000000000000000000',
+        recipientKeyId: recip1.keyId,
+        recipientXWingSecretKey: recip1.secretKey,
+      }),
+    /Foreign re-anchor rejected/
+  );
+  const outsiderKeys = mlDsa65.keygen(crypto.randomBytes(32));
+  const spoofed = await mp.sealEnvelope({
+    header: {
+      protocol_version: 1,
+      chain_id: 'postfiat-devnet-2',
+      schema_name: 'pf.reward.v1',
+      schema_id: mp.SCHEMA_ID.REWARD_V1,
+      kind: mp.ContentKind.REWARD,
+      visibility: mp.Visibility.PRIVATE,
+      body_encoding: mp.BodyEncoding.PROTOBUF,
+      cipher_suite: mp.CipherSuite.XWING_XCHACHA20_POLY1305,
+      sender_account: senderAccount,
+      created_at_unix_ms: 1764201700000,
+    },
+    bodyPlaintext: rewardPlaintext,
+    senderPubkey: outsiderKeys.publicKey,
+    senderSecretKey: outsiderKeys.secretKey,
+    recipients: [{ xwingPublicKey: recip1.publicKey, account: 'pf1recip0000000000000000000000000000000000' }],
+  });
+  await assert.rejects(
+    () =>
+      mp.openEnvelope(spoofed.envelopeBytes, {
+        recipientKeyId: recip1.keyId,
+        recipientXWingSecretKey: recip1.secretKey,
+      }),
+    /sender_pubkey address/
+  );
 
   // Tampering any byte breaks CID & signature verification
   const tampered = Buffer.from(sealed.envelopeBytes);
@@ -284,7 +336,7 @@ async function testRealPqRoundtrips() {
       visibility: mp.Visibility.SEALED,
       body_encoding: mp.BodyEncoding.RAW_UTF8,
       cipher_suite: mp.CipherSuite.XWING_XCHACHA20_POLY1305,
-      sender_account: 'pf1sender000000000000000000000000000000000',
+      sender_account: senderAccount,
       created_at_unix_ms: 1764201700000,
     },
     bodyPlaintext: Buffer.from('anonymous sealed payload', 'utf8'),

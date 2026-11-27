@@ -291,6 +291,7 @@ class MessageProtocolVectorTests(unittest.TestCase):
     def test_seal_open_private_and_sealed_and_manifest_roundtrip(self) -> None:
         sign_fn, verify_fn = _hmac_test_signer(b"deterministic-test-signing-material")
         sender_pk = b"\xaa" * mp.ML_DSA_65_PUBKEY_BYTES
+        sender_addr = mp.derive_account_address(sender_pk)
         recip_pk, encap_fn, decap_fn = _toy_xwing_kem(b"recipient-seed-01")
         recip_key_id = mp.compute_recipient_key_id(recip_pk)
 
@@ -313,7 +314,7 @@ class MessageProtocolVectorTests(unittest.TestCase):
             visibility=mp.Visibility.PRIVATE,
             body_encoding=mp.BodyEncoding.PROTOBUF,
             cipher_suite=mp.CipherSuite.XWING_XCHACHA20_POLY1305,
-            sender_account="pf1tasknode0000000000000000000000000000000",
+            sender_account=sender_addr,
             created_at_unix_ms=1764201660000,
             task_id="task-100",
         )
@@ -331,6 +332,8 @@ class MessageProtocolVectorTests(unittest.TestCase):
             verify_signature_fn=verify_fn,
             expected_cid_bin=sealed_priv.cid_bin,
             expected_multibase_cid=sealed_priv.multibase_cid,
+            expected_chain_id="postfiat-devnet-2",
+            expected_tx_sender=sender_addr,
             recipient_key_id=recip_key_id,
             xwing_decap_fn=decap_fn,
             enforce_canonical_order=True,
@@ -338,6 +341,43 @@ class MessageProtocolVectorTests(unittest.TestCase):
         self.assertEqual(opened.plaintext_body, reward_body)
         assert opened.encryption_header is not None
         self.assertEqual(opened.encryption_header.recipients[0].recipient_account, "pf1recip0000000000000000000000000000000000")
+
+        # Anchor-binding negative checks enforced inside open_envelope():
+        with self.assertRaisesRegex(mp.MessageProtocolError, "chain_id mismatch"):
+            mp.open_envelope(
+                sealed_priv.envelope_bytes,
+                verify_signature_fn=verify_fn,
+                expected_chain_id="postfiat-mainnet-1",
+                expected_tx_sender=sender_addr,
+                recipient_key_id=recip_key_id,
+                xwing_decap_fn=decap_fn,
+            )
+        with self.assertRaisesRegex(mp.MessageProtocolError, "Foreign re-anchor rejected"):
+            mp.open_envelope(
+                sealed_priv.envelope_bytes,
+                verify_signature_fn=verify_fn,
+                expected_chain_id="postfiat-devnet-2",
+                expected_tx_sender="pf0000000000000000000000000000000000000000",
+                recipient_key_id=recip_key_id,
+                xwing_decap_fn=decap_fn,
+            )
+        # Spoofed sender_account (signed by outsider_pk claiming sender_addr) must fail by default:
+        outsider_pk = b"\xbb" * mp.ML_DSA_65_PUBKEY_BYTES
+        spoof_sealed = mp.seal_envelope(
+            header=priv_header,
+            body_plaintext=reward_body,
+            sender_pubkey=outsider_pk,
+            sign_fn=sign_fn,
+            recipients=[mp.RecipientSpec(xwing_public_key=recip_pk, account="pf1recip0000000000000000000000000000000000")],
+            xwing_encap_fn=encap_fn,
+        )
+        with self.assertRaisesRegex(mp.MessageProtocolError, "sender_pubkey address"):
+            mp.open_envelope(
+                spoof_sealed.envelope_bytes,
+                verify_signature_fn=verify_fn,
+                recipient_key_id=recip_key_id,
+                xwing_decap_fn=decap_fn,
+            )
 
         # SEALED envelope must strip recipient_account
         sealed_hdr = mp.MessageHeader(
@@ -349,7 +389,7 @@ class MessageProtocolVectorTests(unittest.TestCase):
             visibility=mp.Visibility.SEALED,
             body_encoding=mp.BodyEncoding.RAW_UTF8,
             cipher_suite=mp.CipherSuite.XWING_XCHACHA20_POLY1305,
-            sender_account="pf1sender000000000000000000000000000000000",
+            sender_account=sender_addr,
             created_at_unix_ms=1764201660000,
         )
         sealed_res = mp.seal_envelope(

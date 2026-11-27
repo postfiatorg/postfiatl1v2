@@ -1525,6 +1525,9 @@ async function openEnvelope(
   {
     expectedCidBin = null,
     expectedMultibaseCid = null,
+    expectedChainId = null,
+    expectedTxSender = null,
+    verifySenderAddress = true,
     verifySignatureFn = null,
     recipientKeyId = null,
     recipientXWingSecretKey = null,
@@ -1560,6 +1563,26 @@ async function openEnvelope(
   const header = decodeMessageHeader(envelope.header_bytes, { enforceCanonicalOrder });
   if (header.protocol_version !== 1) {
     throw new MessageProtocolError(`unsupported MessageHeader.protocol_version: ${header.protocol_version}`);
+  }
+
+  // Step 4: Enforce sender-key derivation, chain_id, and anchoring tx.from bindings.
+  if (verifySenderAddress) {
+    const derivedSender = deriveAccountAddress(envelope.sender_pubkey);
+    if (derivedSender !== header.sender_account) {
+      throw new MessageProtocolError(
+        `Envelope sender_pubkey address ${derivedSender} != header.sender_account ${header.sender_account}`
+      );
+    }
+  }
+  if (expectedChainId !== null && expectedChainId !== undefined && header.chain_id !== expectedChainId) {
+    throw new MessageProtocolError(
+      `Envelope chain_id mismatch: got ${JSON.stringify(header.chain_id)}, expected ${JSON.stringify(expectedChainId)}`
+    );
+  }
+  if (expectedTxSender !== null && expectedTxSender !== undefined && header.sender_account !== expectedTxSender) {
+    throw new MessageProtocolError(
+      `Foreign re-anchor rejected: header.sender_account ${header.sender_account} != anchoring tx.from ${expectedTxSender}`
+    );
   }
 
   if (header.visibility === Visibility.PUBLIC) {
