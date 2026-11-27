@@ -104,6 +104,15 @@ def _toy_xwing_kem(seed_secret: bytes):
 
 
 class MessageProtocolVectorTests(unittest.TestCase):
+    def test_unsigned_wire_fields_are_refused(self) -> None:
+        extension = bytes.fromhex("f00101")
+        for reader in (mp.Envelope, mp.MessageKeyBinding, mp.X402PaymentRequired,
+                       mp.X402PaymentSignature, mp.X402PaymentResponse):
+            with self.subTest(reader=reader.__name__), self.assertRaisesRegex(mp.MessageProtocolError, "unknown"):
+                reader.decode(extension)
+        header = mp.MessageHeader.decode(bytes.fromhex("820103") + extension)
+        self.assertIsNotNone(header.x402_receipt)
+
     def test_pointer_reader_contract(self) -> None:
         ptr = mp.Pointer(target=mp.PointerTarget.INLINE, flags=int(mp.PointerFlag.PUBLIC), inline_payload=b"x")
         canonical = ptr.encode()

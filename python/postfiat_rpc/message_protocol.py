@@ -935,6 +935,8 @@ class MessageKeyBinding:
             elif fn == 9:
                 _expect_wt(fn, wt, 2)
                 vals["signature"] = val
+            else:
+                raise MessageProtocolError(f"unknown MessageKeyBinding field {fn}")
         return cls(**vals)
 
 
@@ -1119,6 +1121,8 @@ class X402PaymentRequired:
             elif fn == 12:
                 _expect_wt(fn, wt, 2)
                 vals["facilitator_url"] = _decode_utf8(val, "X402PaymentRequired.facilitator_url")
+            else:
+                raise MessageProtocolError(f"unknown X402PaymentRequired field {fn}")
         return cls(**vals)
 
 
@@ -1196,6 +1200,8 @@ class X402PaymentSignature:
             elif fn == 10:
                 _expect_wt(fn, wt, 2)
                 vals["certificate_payload"] = val
+            else:
+                raise MessageProtocolError(f"unknown X402PaymentSignature field {fn}")
         return cls(**vals)
 
 
@@ -1219,7 +1225,7 @@ class X402PaymentResponse:
         )
 
     @classmethod
-    def decode(cls, data: bytes, *, enforce_canonical_order: bool = False) -> "X402PaymentResponse":
+    def decode(cls, data: bytes, *, enforce_canonical_order: bool = False, _inside_signed_header: bool = False) -> "X402PaymentResponse":
         x402_version = 0
         settled = False
         payment_ref = None
@@ -1241,6 +1247,8 @@ class X402PaymentResponse:
             elif fn == 5:
                 _expect_wt(fn, wt, 2)
                 facilitator_id = _decode_utf8(val, "X402PaymentResponse.facilitator_id")
+            elif not _inside_signed_header:
+                raise MessageProtocolError(f"unknown X402PaymentResponse field {fn}")
         return cls(
             x402_version=x402_version,
             settled=settled,
@@ -1359,7 +1367,9 @@ class MessageHeader:
                 vals["payment_ref"] = FastPayPaymentRef.decode(val, enforce_canonical_order=enforce_canonical_order)
             elif fn == 16:
                 _expect_wt(fn, wt, 2)
-                vals["x402_receipt"] = X402PaymentResponse.decode(val, enforce_canonical_order=enforce_canonical_order)
+                vals["x402_receipt"] = X402PaymentResponse.decode(
+                    val, enforce_canonical_order=enforce_canonical_order, _inside_signed_header=True
+                )
         return cls(**vals)
 
 
@@ -1437,6 +1447,8 @@ class Envelope:
             elif fn == 7:
                 _expect_wt(fn, wt, 2)
                 vals["signature"] = val
+            else:
+                raise MessageProtocolError(f"unknown Envelope field {fn}")
         return cls(**vals)
 
 

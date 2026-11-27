@@ -423,6 +423,13 @@ async function testKeyBindingIsSignedByTheNamedAccount() {
 }
 
 async function main() {
+  const extension = Buffer.from('f00101', 'hex');
+  for (const decode of [mp.decodeEnvelope, mp.decodeMessageKeyBinding, mp.decodeX402PaymentRequired,
+    mp.decodeX402PaymentSignature, mp.decodeX402PaymentResponse]) {
+    assert.throws(() => decode(extension), /unknown/);
+  }
+  assert.ok(mp.decodeMessageHeader(Buffer.concat([Buffer.from('820103', 'hex'), extension])).x402_receipt);
+
   testCanonicalVectors();
   await testRealPqRoundtrips();
   await testKeyBindingIsSignedByTheNamedAccount();
