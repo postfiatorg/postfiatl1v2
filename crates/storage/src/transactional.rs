@@ -559,13 +559,70 @@ impl TransactionalStore {
         }
         .map_err(database_error)?;
         let _open_record = lease::record_open(&database_path);
-        Ok(Self {
+        let store = Self {
             database_path,
             database: TransactionalDatabase::ReadWrite(database),
             integrity_key,
             counters: Arc::new(WorkCounterState::default()),
             _open_record,
-        })
+        };
+        store.backfill_fastpay_order_index()?;
+        Ok(store)
+    }
+
+    /// A store written before the `fastpay_order_v1` index existed holds
+    /// FastPay anchors without their order rows. Write the missing rows once,
+    /// derived exactly as the integrity scan derives them, so that the scan,
+    /// prune and export keep passing. A no-op when nothing is missing.
+    fn backfill_fastpay_order_index(&self) -> StorageResult<()> {
+        let TransactionalDatabase::ReadWrite(database) = &self.database else {
+            return Ok(());
+        };
+        let counters = WorkCounterState::default();
+        let missing = {
+            let read = database.begin_read().map_err(database_error)?;
+            let indexes = match read.open_table(HISTORY_INDEXES) {
+                Ok(table) => table,
+                Err(redb::TableError::TableDoesNotExist(_)) => return Ok(()),
+                Err(error) => return Err(database_error(error)),
+            };
+            let blocks = match read.open_table(BLOCKS_BY_HEIGHT) {
+                Ok(table) => Some(table),
+                Err(redb::TableError::TableDoesNotExist(_)) => None,
+                Err(error) => return Err(database_error(error)),
+            };
+            fastpay_index::missing_order_entries(
+                &indexes,
+                blocks.as_ref(),
+                &self.integrity_key,
+                &counters,
+            )?
+        };
+        if missing.is_empty() {
+            return Ok(());
+        }
+        let mut transaction = database.begin_write().map_err(database_error)?;
+        transaction
+            .set_durability(Durability::Immediate)
+            .map_err(database_error)?;
+        transaction.set_two_phase_commit(true);
+        {
+            let mut indexes = transaction
+                .open_table(HISTORY_INDEXES)
+                .map_err(database_error)?;
+            for entry in &missing {
+                insert_authenticated(
+                    &mut indexes,
+                    HISTORY_INDEXES_TABLE,
+                    &fastpay_order_index_key(&entry.order_hash)?,
+                    &encode_json(entry, MAX_RECORD_BYTES)?,
+                    MAX_RECORD_BYTES,
+                    &self.integrity_key,
+                    &counters,
+                )?;
+            }
+        }
+        transaction.commit().map_err(database_error)
     }
 
     fn open_read_only_with_integrity_key(
@@ -5285,6 +5342,131 @@ mod tests {
         );
         assert_eq!(report.block_count, 1);
         assert_eq!(report.history_index_count, 2);
+    }
+
+    /// Point 2 (A2, B02): a store written without the `fastpay_order_v1`
+    /// rows (main's layout) is backfilled at open, so the integrity scan,
+    /// prune and canonical export pass on it.
+    #[test]
+    fn store_written_without_fastpay_order_rows_is_backfilled_at_open() {
+        let (dir, store) = committed_one_block("main-layout-fastpay-order-backfill");
+        let old_tip = next_tip(1);
+        let old_commitment = store
+            .meta()
+            .expect("read one-block metadata")
+            .ordered_history_commitment();
+        let effect = confirmed_consensusless_fastpay_effect();
+        let mut ledger = LedgerState::empty();
+        ledger.fastpay_version_fences.push(effect.clone());
+        let receipt = receipt("tx-2", true);
+        let new_tip = ChainTipState {
+            height: 2,
+            block_hash: "block-2".to_owned(),
+            state_root: "state-2".to_owned(),
+            ordered_batch_count: 2,
+            receipt_count: 2,
+            ..old_tip.clone()
+        };
+        let new_commitment = old_commitment
+            .append("batch-2")
+            .expect("append second batch");
+        let mut block = block(vec![receipt.tx_id.clone()]);
+        block.header.height = 2;
+        block.header.parent_hash = old_tip.block_hash.clone();
+        block.header.batch_id = "batch-2".to_owned();
+        block.header.state_root = new_tip.state_root.clone();
+        block.header.certificate_id = "certificate-2".to_owned();
+        block.header.block_hash = new_tip.block_hash.clone();
+        block.fastpay_pre_state_effects.push(effect.clone());
+        let mut archive = archive();
+        archive.batch_id = "batch-2".to_owned();
+        archive.payload_hash = "payload-hash-2".to_owned();
+        store
+            .commit_finalized_block(CommitFinalizedBlock {
+                expected_tip: &old_tip,
+                new_tip: &new_tip,
+                block: &block,
+                receipts: std::slice::from_ref(&receipt),
+                archive_entry: &archive,
+                batch_id: "batch-2",
+                ordered_history: &new_commitment,
+                current_state: CurrentStateUpdate {
+                    ledger: Some(&ledger),
+                    ..CurrentStateUpdate::default()
+                },
+                scheduled_activation_height: None,
+                allow_legacy_receipt_id_mismatch: false,
+            })
+            .expect("commit FastPay effect");
+
+        // Rewrite the store into main's layout: anchors only, no order rows.
+        let postfiat_types::FastPayRecoveryDecisionV1::Confirmed { order_digest, .. } =
+            &effect.decision
+        else {
+            panic!("fixture effect is confirmed");
+        };
+        {
+            let TransactionalDatabase::ReadWrite(database) = &store.database else {
+                panic!("fixture store is writable");
+            };
+            let transaction = database.begin_write().expect("begin raw write");
+            {
+                let mut indexes = transaction
+                    .open_table(HISTORY_INDEXES)
+                    .expect("open history indexes");
+                let key = fastpay_order_index_key(order_digest).expect("order key");
+                assert!(indexes
+                    .remove(key.as_slice())
+                    .expect("remove order row")
+                    .is_some());
+            }
+            transaction.commit().expect("commit raw write");
+        }
+        let scan = store
+            .verify_logical_integrity()
+            .expect_err("main's layout fails the scan before the backfill");
+        assert_eq!(scan.code(), StorageErrorCode::CountMismatch);
+        drop(store);
+
+        let store = TransactionalStore::open(&dir.0).expect("reopen main-layout store");
+        assert!(store
+            .fastpay_order_index_entry(order_digest)
+            .expect("read backfilled order row")
+            .is_some_and(|entry| entry.block_height == 2 && entry.effect_index == 0));
+        let report = store
+            .verify_logical_integrity()
+            .expect("backfilled store passes the integrity scan");
+        assert_eq!(report.history_index_count, 2);
+        drop(store);
+        // The backfill is idempotent: a second open writes nothing new.
+        let store = TransactionalStore::open(&dir.0).expect("reopen backfilled store");
+        assert_eq!(
+            store
+                .verify_logical_integrity()
+                .expect("scan after second open")
+                .history_index_count,
+            2
+        );
+        store
+            .write_canonical_jsonl_export(dir.0.join("canonical-export.jsonl"))
+            .expect("canonical export of the backfilled store");
+        store
+            .verify_and_mark_full_integrity()
+            .expect("full verification of the backfilled store");
+        let checkpoint = serde_json::to_vec(&serde_json::json!({
+            "schema": "postfiat-history-checkpoint-v2",
+            "pruned_up_to_height": 1,
+            "ledger": LedgerState::empty(),
+        }))
+        .expect("encode prefix checkpoint");
+        store
+            .prune_retained_history(PruneRetainedHistory {
+                expected_tip: &new_tip,
+                new_history_base_height: 1,
+                retained_checkpoint: &checkpoint,
+            })
+            .expect("prune the backfilled store");
+        store.verify_logical_integrity().expect("scan after prune");
     }
 
     #[test]
