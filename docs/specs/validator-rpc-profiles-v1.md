@@ -172,7 +172,7 @@ This evolves `postfiat.deployment_manifest.v2` (see [`signed-deployment-manifest
 4. `valid_from_unix <= now_unix <= valid_until_unix` MUST hold.
 5. `rollout.mode` MUST be either `"rolling"` (`activation_height: null`, `halt_if_missed: false`) or `"activation_height"` (`activation_height >= 1`, `advance_warning_blocks >= 1`, `halt_if_missed: true`).
 6. Any missing, duplicate, expired, wrong-chain, or invalid signature is a hard refusal.
-7. **Releases have an order.** `release_sequence` is a positive integer that grows by at least 1 with every release of a chain. After a successful upgrade the node records the installed `release_id` and `release_sequence` in `<backup-dir>/installed-release.json`. A manifest with a lower sequence than the installed one is refused (`exit 3`, `release_downgrade`); an equal sequence with the same `release_id` means up to date; an equal sequence with another `release_id` is refused. There is no flag to skip this. With no record yet, the first verified manifest is accepted.
+7. **Releases have an order.** `release_sequence` is a positive integer that grows by at least 1 with every release of a chain. After a successful upgrade the node records the installed `release_id` and `release_sequence` in `<binary-path>.upgrade-state/installed-release.json`. A manifest with a lower sequence than the installed one is refused (`exit 3`, `release_downgrade`); an equal sequence with the same `release_id` means up to date; an equal sequence with another `release_id` is refused. There is no flag to skip this. Use the previous backup directory on the first upgrade from an older installation so its legacy sequence and journal can be read. Keep the new installation state with the executable when rotating backups.
 
 ---
 
@@ -211,12 +211,13 @@ postfiat-node upgrade [OPTIONS]
 2. **Double-sign guard isolation check (HARD INVARIANT):** Canonicalize `--signer-guard-dir`, `--data-dir`, and `--backup-dir`. Refuse immediately (`exit 3`, error code `guard_path_overlap`) if `--signer-guard-dir` is equal to, nested inside, or an ancestor of `--data-dir` or `--backup-dir`. **The double-sign guard directory (`/var/lib/postfiat/signer-guard/`) is NEVER copied, backed up, modified, or rolled back.**
 3. **Disk-space preflight:** Compute total byte size `D` of `--data-dir` and `B` of the candidate binary. Verify free bytes on `--backup-dir`'s filesystem satisfy `free_bytes >= 2 * D + B + 536870912` (`2x` chain data + binary + 512 MiB headroom). Refuse with `exit 4` (`insufficient_disk_space`) before stopping any service.
 4. **In `--check` mode:** Stop here and emit the report (`exit 0` if already at `release_id`; `exit 10` if upgrade available; `exit 11` if `activation_height` is within `advance_warning_blocks`).
-5. **Journal, then graceful stop:** Write `<backup-dir>/upgrade-journal.json` (target release, the units, the backup path, the step reached) and `fsync` it. Then stop `--service-units` via systemd so `redb` closes cleanly. The journal is updated before each later step and removed at the end.
-6. **Chain-state backup:** Create `<backup-dir>/<release-id>-pre-<unix>/` (mode `0700`, owned by the owner of `--data-dir`) with a copy of the chain state, the prior binary, and a `backup-manifest.json` of SHA-256 digests. The copy keeps every file's owner, group and mode. It leaves out, and the rollback therefore never touches:
-   - `consensus-v2-safety/`, the validator's own record of what it has voted for;
-   - every file a unit passes as `--finality-key-file` or `--finality-proposal-key-file`, and `validator_keys.json`;
+5. **Journal, then graceful stop:** Write `<binary-path>.upgrade-state/upgrade-journal.json` (target release, the units, the backup path, the step reached) and `fsync` it. An exclusive OS lock beside the installed binary covers the upgrade and any recovery. Confirm that systemd has stopped each service before restoring data. The journal is updated before each later step and removed at the end.
+6. **Chain-state backup:** Create `<backup-dir>/<release-id>-pre-<unix>/` (mode `0700`, owned by the upgrader) with a copy of the chain state, the prior binary, and a `backup-manifest.json` of SHA-256 digests. The copy keeps every file's owner, group and mode. It leaves out, and the rollback therefore never touches:
+   - `consensus-v2-safety/`, `block_proposal_vote_locks/`, and the configured transport vote directory, which retain signing decisions across rollback;
+   - configured key paths and `validator_keys.json`;
    - `runtime/`, `readiness/`, sockets, and every `--exclude-path`;
    - `--signer-guard-dir`, which is outside the data directory by step 2.
+   The installation journal pins the snapshot inventory digest. Before restarting units, recovery verifies the saved binary and staged chain files, and carries the excluded entries forward. A failed stop or incomplete restore leaves the journal for recovery. A legacy journal without a trusted inventory digest requires manual recovery.
 7. **Atomic binary swap:** Write staged binary to `<binary-path>.staging.<pid>`, `chmod 0755`, `fsync`, atomically `rename(2)` onto `<binary-path>`, and `fsync` parent directory.
 8. **Start and post-upgrade health gate:** Start `--service-units` and verify within `--health-timeout-ms`:
    - `rpc-probe` returns `ok: true`;
