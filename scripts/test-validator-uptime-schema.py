@@ -129,7 +129,7 @@ def build_fixture() -> tuple[dict[str, Any], dict[str, Any]]:
     def claims_for(observer_index: int) -> list[dict[str, Any]]:
         # Observer 3 polled across midnight once, so one day is incomplete for it.
         incomplete = {d(2026, 11, 15)} if observer_index == 2 else set()
-        # Observers see the same certificates, so they count the same votes.
+        # Observers read the same certificates and vote records, so they count the same votes.
         specs = [
             # healthy for the whole window
             dict(state="active", first=window_start, signed=lambda day: 198, grace=None, floor=None),
@@ -195,7 +195,8 @@ def build_fixture() -> tuple[dict[str, Any], dict[str, Any]]:
             "indeterminate_behavior": "block_new_bindings_and_credits_preserve_existing_access",
         },
         "window_spec": {
-            "metric_version": "precommit-qc-observer-brackets-v1",
+            "metric_version": "accepted-votes-observer-brackets-v1",
+            "credit_sources": ["precommit_certificate", "prepare_certificate", "proposer_vote_record"],
             "time_basis": "observer_brackets",
             "max_observation_gap_seconds": 900,
             "evaluation_horizon_days": EVALUATION_HORIZON_DAYS,
@@ -403,7 +404,8 @@ def run_feed_tests(schema: Draft202012Validator, feed: dict[str, Any], keyset: d
     for path, value in (
         (("window_spec", "liveness_threshold_bps"), 9400),
         (("window_spec", "grace_period_days"), 7),
-        (("window_spec", "metric_version"), "latency-fair-round-window-v1"),
+        (("window_spec", "metric_version"), "precommit-qc-observer-brackets-v1"),
+        (("window_spec", "credit_sources"), ["precommit_certificate"]),
         (("quorum_policy", "quorum_threshold"), 1),
         (("undeclared_extra",), True),
     ):
