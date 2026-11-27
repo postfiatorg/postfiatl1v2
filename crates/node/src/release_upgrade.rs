@@ -35,6 +35,21 @@ pub const DEFAULT_UPGRADE_BACKUP_DIR: &str = "/var/lib/postfiat/backups";
 pub const DEFAULT_UPGRADE_SERVICE_UNITS: &str =
     "postfiat-validator-0.service,postfiat-validator-0-rpc.service";
 pub const UPGRADE_HEADROOM_BYTES: u64 = 536_870_912; // 512 MiB
+pub const INSTALLED_RELEASE_SCHEMA: &str = "postfiat-node-installed-release-v1";
+pub const INSTALLED_RELEASE_FILE: &str = "installed-release.json";
+pub const UPGRADE_JOURNAL_SCHEMA: &str = "postfiat-node-upgrade-journal-v1";
+pub const UPGRADE_JOURNAL_FILE: &str = "upgrade-journal.json";
+pub const RELEASE_KEYSET_ROTATION_SCHEMA: &str = "postfiat.release_keyset_rotation.v1";
+pub const RELEASE_KEYSET_ROTATION_CONTEXT: &str = "postfiat-l1-v2/release-keyset-rotation/v1";
+/// Entries of the data directory that are never backed up and never rolled
+/// back: the validator's own vote record, its key file, and runtime state.
+/// A vote record is only ever carried forward.
+pub const DEFAULT_BACKUP_EXCLUDES: &[&str] = &[
+    crate::CONSENSUS_V2_SAFETY_DIR,
+    crate::VALIDATOR_KEYS_FILE,
+    "runtime",
+    "readiness",
+];
 pub const MAX_RELEASE_MANIFEST_BYTES: usize = 1_048_576; // 1 MiB
 
 // Frozen Contract C2 §3.3 exit codes.
@@ -136,6 +151,8 @@ pub struct ReleaseSignatureV3 {
 pub struct ReleaseManifestV3 {
     pub schema: String,
     pub release_id: String,
+    /// Grows by at least 1 with every release of a chain; orders releases.
+    pub release_sequence: u64,
     pub created_unix: u64,
     pub valid_from_unix: u64,
     pub valid_until_unix: u64,
@@ -157,6 +174,7 @@ pub struct ReleaseManifestV3 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReleaseManifestVerification {
     pub release_id: String,
+    pub release_sequence: u64,
     pub git_revision: String,
     pub chain_id: String,
     pub genesis_hash: String,
@@ -184,6 +202,7 @@ pub struct UpgradeBackupManifestV1 {
     pub source_data_dir: String,
     pub source_binary_path: String,
     pub signer_guard_dir_excluded: String,
+    pub excluded_paths: Vec<String>,
     pub prior_binary_sha256: String,
     pub prior_binary_size_bytes: u64,
     pub data_files: Vec<UpgradeBackupFileEntry>,
@@ -202,7 +221,13 @@ pub struct UpgradeReportV1 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub release_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub release_sequence: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target_git_revision: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub installed_release_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub installed_release_sequence: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub installed_git_revision: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -225,6 +250,57 @@ pub struct UpgradeReportV1 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backup_path: Option<String>,
     pub rolled_back: bool,
+    /// Units that are not running at exit. Empty unless the exit code is 6.
+    pub units_stopped: Vec<String>,
+}
+
+/// What runs now, written after a successful upgrade.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InstalledReleaseV1 {
+    pub schema: String,
+    pub release_id: String,
+    pub release_sequence: u64,
+    pub git_revision: String,
+    pub installed_unix: u64,
+}
+
+/// Written before the services are stopped and removed when the upgrade has
+/// ended one way or the other. A journal found at start means an earlier run
+/// was interrupted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpgradeJournalV1 {
+    pub schema: String,
+    pub release_id: String,
+    pub release_sequence: u64,
+    pub started_unix: u64,
+    /// `stopping`, `backed_up`, `swapped` or `started`.
+    pub step: String,
+    pub data_dir: String,
+    pub binary_path: String,
+    pub signer_guard_dir: String,
+    /// Set from `backed_up` on.
+    pub backup_root: Option<String>,
+    pub service_units: Vec<String>,
+    pub exclude_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReleaseKeysetRotationSignatureV1 {
+    pub signer_id: String,
+    pub algorithm_id: String,
+    pub signature_hex: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReleaseKeysetRotationV1 {
+    pub schema: String,
+    pub prior_keyset_id: String,
+    pub new_keyset: ReleaseKeysetV1,
+    pub signatures: Vec<ReleaseKeysetRotationSignatureV1>,
 }
 
 #[derive(Debug, Clone)]
@@ -246,7 +322,8 @@ pub struct UpgradeOptions {
     pub architecture: Option<String>,
     pub yes: bool,
     pub json: bool,
-    pub skip_rpc_preflight: bool,
+    /// Further entries of `data_dir` to leave out of the backup and the rollback.
+    pub exclude_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -269,6 +346,7 @@ pub trait UpgradeSystemHooks {
         timeout_ms: u64,
     ) -> Result<UpgradeNodeStatusProbe, String>;
     fn free_disk_bytes(&self, path: &Path) -> Result<u64, String>;
+    fn unit_is_active(&self, unit: &str) -> bool;
 }
 
 pub struct LiveUpgradeSystemHooks;
@@ -294,6 +372,305 @@ impl UpgradeSystemHooks for LiveUpgradeSystemHooks {
     fn free_disk_bytes(&self, path: &Path) -> Result<u64, String> {
         filesystem_free_bytes(path)
     }
+
+    fn unit_is_active(&self, unit: &str) -> bool {
+        Command::new("systemctl")
+            .args(["is-active", "--quiet", unit])
+            .status()
+            .is_ok_and(|status| status.success())
+    }
+}
+
+fn stopped_units(hooks: &dyn UpgradeSystemHooks, units: &[String]) -> Vec<String> {
+    units
+        .iter()
+        .filter(|unit| !hooks.unit_is_active(unit))
+        .cloned()
+        .collect()
+}
+
+/// The node reports a short revision (8 characters today); the manifest
+/// carries the full one. They match when the reported one is a prefix.
+pub fn revision_matches(reported: Option<&str>, manifest_revision: &str) -> bool {
+    reported.is_some_and(|revision| revision.len() >= 8 && manifest_revision.starts_with(revision))
+}
+
+fn write_json_atomically<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("`{}` has no parent directory", path.display()))?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("create `{}` failed: {error}", parent.display()))?;
+    let json = serde_json::to_string_pretty(value)
+        .map_err(|error| format!("serialize `{}` failed: {error}", path.display()))?;
+    let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
+    let write = || -> io::Result<()> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&tmp)?;
+        file.write_all(json.as_bytes())?;
+        file.write_all(b"\n")?;
+        file.sync_all()?;
+        fs::rename(&tmp, path)?;
+        fsync_dir(parent)
+    };
+    write().map_err(|error| format!("write `{}` failed: {error}", path.display()))
+}
+
+pub fn read_installed_release(backup_dir: &Path) -> Result<Option<InstalledReleaseV1>, String> {
+    let path = backup_dir.join(INSTALLED_RELEASE_FILE);
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("read `{}` failed: {error}", path.display())),
+    };
+    let record: InstalledReleaseV1 = serde_json::from_slice(&bytes).map_err(|error| {
+        format!(
+            "`{}` is not a valid installed-release record: {error}",
+            path.display()
+        )
+    })?;
+    if record.schema != INSTALLED_RELEASE_SCHEMA || record.release_sequence == 0 {
+        return Err(format!(
+            "`{}` is not a valid installed-release record",
+            path.display()
+        ));
+    }
+    Ok(Some(record))
+}
+
+pub fn read_upgrade_journal(backup_dir: &Path) -> Result<Option<UpgradeJournalV1>, String> {
+    let path = backup_dir.join(UPGRADE_JOURNAL_FILE);
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("read `{}` failed: {error}", path.display())),
+    };
+    let journal: UpgradeJournalV1 = serde_json::from_slice(&bytes).map_err(|error| {
+        format!(
+            "`{}` is not a valid upgrade journal: {error}",
+            path.display()
+        )
+    })?;
+    if journal.schema != UPGRADE_JOURNAL_SCHEMA {
+        return Err(format!(
+            "`{}` is not a valid upgrade journal",
+            path.display()
+        ));
+    }
+    Ok(Some(journal))
+}
+
+/// Relative entries of the data directory that the backup and the rollback skip.
+pub fn backup_excludes(extra: &[String]) -> Result<Vec<PathBuf>, String> {
+    let mut excludes = Vec::new();
+    for raw in DEFAULT_BACKUP_EXCLUDES
+        .iter()
+        .map(|s| (*s).to_string())
+        .chain(extra.iter().cloned())
+    {
+        let path = PathBuf::from(&raw);
+        if raw.is_empty()
+            || path.is_absolute()
+            || path
+                .components()
+                .any(|c| !matches!(c, Component::Normal(_)))
+        {
+            return Err(format!(
+                "--exclude-path `{raw}` must be a relative entry of the data directory without `.` or `..`"
+            ));
+        }
+        if !excludes.contains(&path) {
+            excludes.push(path);
+        }
+    }
+    Ok(excludes)
+}
+
+fn is_excluded(relative: &Path, excludes: &[PathBuf]) -> bool {
+    excludes.iter().any(|exclude| relative.starts_with(exclude))
+}
+
+/// Give `dest` the owner, group and mode recorded in `source`.
+fn copy_owner_and_mode(source: &fs::Metadata, dest: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let current = fs::metadata(dest)?;
+        if current.uid() != source.uid() || current.gid() != source.gid() {
+            std::os::unix::fs::chown(dest, Some(source.uid()), Some(source.gid()))?;
+        }
+        fs::set_permissions(dest, fs::Permissions::from_mode(source.mode() & 0o7777))?;
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (source, dest);
+    }
+    Ok(())
+}
+
+pub fn release_keyset_rotation_signing_bytes(
+    new_keyset: &ReleaseKeysetV1,
+) -> Result<Vec<u8>, String> {
+    let value = serde_json::to_value(new_keyset)
+        .map_err(|error| format!("release keyset serialization failed: {error}"))?;
+    canonical_json_bytes(&value)
+}
+
+pub fn sign_release_keyset_rotation(
+    new_keyset: &ReleaseKeysetV1,
+    signer_id: &str,
+    private_key_hex: &str,
+) -> Result<ReleaseKeysetRotationSignatureV1, String> {
+    let sk = hex_to_bytes(private_key_hex)
+        .map_err(|error| format!("invalid release signer private key hex: {error}"))?;
+    let signature = ml_dsa_65_sign_with_context(
+        &sk,
+        &release_keyset_rotation_signing_bytes(new_keyset)?,
+        RELEASE_KEYSET_ROTATION_CONTEXT.as_bytes(),
+    )
+    .map_err(|error| format!("release keyset rotation ML-DSA-65 sign failed: {error}"))?;
+    Ok(ReleaseKeysetRotationSignatureV1 {
+        signer_id: signer_id.to_string(),
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        signature_hex: bytes_to_hex(&signature),
+    })
+}
+
+/// A new keyset counts only when `threshold` signers of the installed keyset
+/// have signed it. Returns the signers that verified.
+pub fn verify_release_keyset_rotation(
+    rotation: &ReleaseKeysetRotationV1,
+    installed: &ReleaseKeysetV1,
+) -> Result<Vec<String>, String> {
+    validate_release_keyset_v1(installed)?;
+    validate_release_keyset_v1(&rotation.new_keyset)?;
+    if rotation.schema != RELEASE_KEYSET_ROTATION_SCHEMA {
+        return Err(format!(
+            "unexpected keyset rotation schema `{}`",
+            rotation.schema
+        ));
+    }
+    if rotation.prior_keyset_id != installed.keyset_id {
+        return Err(format!(
+            "rotation replaces keyset `{}`, but `{}` is installed",
+            rotation.prior_keyset_id, installed.keyset_id
+        ));
+    }
+    if rotation.new_keyset.keyset_id == installed.keyset_id {
+        return Err("the new keyset must have a new keyset_id".to_string());
+    }
+    let signed = release_keyset_rotation_signing_bytes(&rotation.new_keyset)?;
+    let mut verified = BTreeSet::new();
+    for signature in &rotation.signatures {
+        let Some(pinned) = installed
+            .signers
+            .iter()
+            .find(|s| s.signer_id == signature.signer_id)
+        else {
+            return Err(format!(
+                "rotation signer `{}` is not in the installed keyset",
+                signature.signer_id
+            ));
+        };
+        if !verified.insert(signature.signer_id.clone()) {
+            return Err(format!(
+                "duplicate rotation signature for `{}`",
+                signature.signer_id
+            ));
+        }
+        let public_key = hex_to_bytes(&pinned.public_key_hex)
+            .map_err(|error| format!("bad pinned key for `{}`: {error}", pinned.signer_id))?;
+        let signature_bytes = hex_to_bytes(&signature.signature_hex)
+            .map_err(|error| format!("bad signature hex for `{}`: {error}", signature.signer_id))?;
+        if signature.algorithm_id != ML_DSA_65_ALGORITHM
+            || !ml_dsa_65_verify_with_context(
+                &public_key,
+                &signed,
+                &signature_bytes,
+                RELEASE_KEYSET_ROTATION_CONTEXT.as_bytes(),
+            )
+        {
+            return Err(format!(
+                "rotation signature of `{}` does not verify",
+                signature.signer_id
+            ));
+        }
+    }
+    if verified.len() < installed.threshold {
+        return Err(format!(
+            "{} rotation signatures verified; the installed keyset requires {}",
+            verified.len(),
+            installed.threshold
+        ));
+    }
+    Ok(verified.into_iter().collect())
+}
+
+/// Verify a rotation against the installed keyset and replace the keyset file.
+/// The replaced file is kept beside it as `<keyset-file>.<prior keyset_id>`.
+pub fn apply_release_keyset_rotation(
+    rotation_file: &Path,
+    keyset_file: &Path,
+) -> Result<String, String> {
+    let installed: ReleaseKeysetV1 = serde_json::from_slice(
+        &fs::read(keyset_file)
+            .map_err(|error| format!("read `{}` failed: {error}", keyset_file.display()))?,
+    )
+    .map_err(|error| format!("invalid installed keyset: {error}"))?;
+    let rotation: ReleaseKeysetRotationV1 = serde_json::from_slice(
+        &fs::read(rotation_file)
+            .map_err(|error| format!("read `{}` failed: {error}", rotation_file.display()))?,
+    )
+    .map_err(|error| format!("invalid keyset rotation: {error}"))?;
+    verify_release_keyset_rotation(&rotation, &installed)?;
+    let kept = PathBuf::from(format!("{}.{}", keyset_file.display(), installed.keyset_id));
+    fs::copy(keyset_file, &kept)
+        .map_err(|error| format!("keep `{}` failed: {error}", kept.display()))?;
+    write_json_atomically(keyset_file, &rotation.new_keyset)?;
+    Ok(rotation.new_keyset.keyset_id)
+}
+
+/// Pre-start check of a service: the manifest is signed by the pinned keyset
+/// and the binary about to run is the one the manifest names. The validity
+/// window bounds accepting an upgrade, not running an installed release, so
+/// an expired manifest still passes here.
+pub fn verify_installed_release(
+    manifest_file: &Path,
+    keyset_file: &Path,
+    runtime_binary: &Path,
+    architecture: &str,
+) -> Result<ReleaseManifestVerification, String> {
+    let keyset: ReleaseKeysetV1 = serde_json::from_slice(
+        &fs::read(keyset_file)
+            .map_err(|error| format!("read `{}` failed: {error}", keyset_file.display()))?,
+    )
+    .map_err(|error| format!("invalid release keyset: {error}"))?;
+    let bytes = fs::read(manifest_file)
+        .map_err(|error| format!("read `{}` failed: {error}", manifest_file.display()))?;
+    if bytes.len() > MAX_RELEASE_MANIFEST_BYTES {
+        return Err("release manifest exceeds 1 MiB limit".to_string());
+    }
+    let manifest: ReleaseManifestV3 = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("invalid release manifest: {error}"))?;
+    let verification = verify_release_manifest_v3(&manifest, &keyset, manifest.valid_from_unix)?;
+    let artifact = match architecture {
+        "linux-x86_64" => &manifest.artifacts.linux_x86_64,
+        "linux-aarch64" => &manifest.artifacts.linux_aarch64,
+        other => return Err(format!("unsupported architecture `{other}`")),
+    };
+    let (digest, size) = sha256_file_and_size(runtime_binary)
+        .map_err(|error| format!("read `{}` failed: {error}", runtime_binary.display()))?;
+    if digest != artifact.binary_sha256 || size != artifact.binary_size_bytes {
+        return Err(format!(
+            "`{}` is not the {architecture} binary of release `{}`",
+            runtime_binary.display(),
+            manifest.release_id
+        ));
+    }
+    Ok(verification)
 }
 
 fn run_systemctl(action: &str, units: &[String]) -> Result<(), String> {
@@ -431,6 +808,9 @@ pub fn verify_release_manifest_v3(
     }
     if manifest.release_id.trim().is_empty() || manifest.chain_id.trim().is_empty() {
         return Err("release_id and chain_id must be non-empty".to_string());
+    }
+    if manifest.release_sequence == 0 {
+        return Err("release manifest release_sequence must be at least 1".to_string());
     }
     if !is_lowercase_hex_len(&manifest.genesis_hash, 96) {
         return Err("release manifest genesis_hash must be 96 lowercase hex chars".to_string());
@@ -596,6 +976,7 @@ pub fn verify_release_manifest_v3(
 
     Ok(ReleaseManifestVerification {
         release_id: manifest.release_id.clone(),
+        release_sequence: manifest.release_sequence,
         git_revision: manifest.git_revision.clone(),
         chain_id: manifest.chain_id.clone(),
         genesis_hash: manifest.genesis_hash.clone(),
@@ -961,33 +1342,30 @@ pub fn atomic_install_binary(staged_source: &Path, dest_binary: &Path) -> io::Re
     Ok(())
 }
 
-/// Copy chain state only (regular files and subdirectories, skipping symlinks
-/// and sockets, and strictly excluding `signer_guard_dir`), returning file
-/// entries with SHA-256 digests.
+/// Copy chain state only: regular files and subdirectories, without symlinks,
+/// sockets, `signer_guard_dir` and every excluded entry. Every copy keeps the
+/// owner, group and mode of its source. Returns the files with their digests.
 fn copy_chain_state_tree(
     source_root: &Path,
     dest_root: &Path,
     canonical_guard_dir: &Path,
+    excludes: &[PathBuf],
 ) -> io::Result<Vec<UpgradeBackupFileEntry>> {
     fs::create_dir_all(dest_root)?;
+    copy_owner_and_mode(&fs::metadata(source_root)?, dest_root)?;
     let mut entries = Vec::new();
     let mut stack = vec![PathBuf::new()];
     while let Some(rel) = stack.pop() {
-        let src_dir = if rel.as_os_str().is_empty() {
-            source_root.to_path_buf()
-        } else {
-            source_root.join(&rel)
-        };
-        let dst_dir = if rel.as_os_str().is_empty() {
-            dest_root.to_path_buf()
-        } else {
-            dest_root.join(&rel)
-        };
-        fs::create_dir_all(&dst_dir)?;
+        let src_dir = source_root.join(&rel);
+        let dst_dir = dest_root.join(&rel);
         let mut children: Vec<_> = fs::read_dir(&src_dir)?.collect::<io::Result<_>>()?;
         children.sort_by_key(|e| e.file_name());
         for child in children {
             let child_src = child.path();
+            let child_rel = rel.join(child.file_name());
+            if is_excluded(&child_rel, excludes) {
+                continue;
+            }
             let normalized_child =
                 resolve_normalized_path(&child_src).unwrap_or_else(|_| child_src.clone());
             if normalized_child == canonical_guard_dir
@@ -1002,21 +1380,22 @@ fn copy_chain_state_tree(
             if meta.file_type().is_symlink() {
                 continue;
             }
-            let child_rel = if rel.as_os_str().is_empty() {
-                PathBuf::from(child.file_name())
-            } else {
-                rel.join(child.file_name())
-            };
+            let child_dst = dst_dir.join(child.file_name());
             if meta.is_dir() {
+                fs::create_dir_all(&child_dst)?;
+                copy_owner_and_mode(&meta, &child_dst)?;
                 stack.push(child_rel);
             } else if meta.is_file() {
-                let child_dst = dest_root.join(&child_rel);
                 let mut reader = File::open(&child_src)?;
-                let mut writer = OpenOptions::new()
-                    .create(true)
-                    .truncate(true)
-                    .write(true)
-                    .open(&child_dst)?;
+                let mut options = OpenOptions::new();
+                options.create(true).truncate(true).write(true);
+                #[cfg(unix)]
+                {
+                    // Never wider than owner-only while the bytes are written.
+                    use std::os::unix::fs::OpenOptionsExt;
+                    options.mode(0o600);
+                }
+                let mut writer = options.open(&child_dst)?;
                 let mut hasher = Sha256::new();
                 let mut buf = [0_u8; 64 * 1024];
                 let mut size = 0_u64;
@@ -1030,6 +1409,8 @@ fn copy_chain_state_tree(
                     size = size.saturating_add(n as u64);
                 }
                 writer.sync_all()?;
+                drop(writer);
+                copy_owner_and_mode(&meta, &child_dst)?;
                 entries.push(UpgradeBackupFileEntry {
                     relative_path: child_rel.to_string_lossy().replace('\\', "/"),
                     size_bytes: size,
@@ -1043,16 +1424,7 @@ fn copy_chain_state_tree(
     Ok(entries)
 }
 
-fn create_pre_upgrade_backup(
-    release_id: &str,
-    now_unix: u64,
-    data_dir: &Path,
-    binary_path: &Path,
-    backup_dir: &Path,
-    signer_guard_dir: &Path,
-) -> Result<(PathBuf, PathBuf, PathBuf), String> {
-    let canonical_guard = resolve_normalized_path(signer_guard_dir)
-        .map_err(|error| format!("resolve signer-guard-dir failed: {error}"))?;
+fn backup_snapshot_dir(backup_dir: &Path, release_id: &str, now_unix: u64) -> PathBuf {
     let safe_release: String = release_id
         .chars()
         .map(|c| {
@@ -1063,26 +1435,55 @@ fn create_pre_upgrade_backup(
             }
         })
         .collect();
-    let snapshot_dir = backup_dir.join(format!("{safe_release}-pre-{now_unix}"));
+    backup_dir.join(format!("{safe_release}-pre-{now_unix}"))
+}
+
+fn backup_paths(snapshot_dir: &Path) -> (PathBuf, PathBuf) {
+    (
+        snapshot_dir.join("postfiat-node.prev"),
+        snapshot_dir.join("chain-data"),
+    )
+}
+
+fn create_pre_upgrade_backup(
+    release_id: &str,
+    now_unix: u64,
+    data_dir: &Path,
+    binary_path: &Path,
+    backup_dir: &Path,
+    signer_guard_dir: &Path,
+    excludes: &[PathBuf],
+) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+    let canonical_guard = resolve_normalized_path(signer_guard_dir)
+        .map_err(|error| format!("resolve signer-guard-dir failed: {error}"))?;
+    let snapshot_dir = backup_snapshot_dir(backup_dir, release_id, now_unix);
     if snapshot_dir.exists() {
         return Err(format!(
             "backup directory `{}` already exists",
             snapshot_dir.display()
         ));
     }
-    let backup_data_dir = snapshot_dir.join("chain-data");
-    let backup_binary = snapshot_dir.join("postfiat-node.prev");
+    let (backup_binary, backup_data_dir) = backup_paths(&snapshot_dir);
     fs::create_dir_all(&snapshot_dir)
         .map_err(|error| format!("create backup dir failed: {error}"))?;
+    // The backup belongs to the owner of the data directory and to nobody else.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let owner =
+            fs::metadata(data_dir).map_err(|error| format!("stat data-dir failed: {error}"))?;
+        let snapshot = fs::metadata(&snapshot_dir)
+            .map_err(|error| format!("stat backup dir failed: {error}"))?;
+        if snapshot.uid() != owner.uid() || snapshot.gid() != owner.gid() {
+            std::os::unix::fs::chown(&snapshot_dir, Some(owner.uid()), Some(owner.gid()))
+                .map_err(|error| format!("chown backup dir failed: {error}"))?;
+        }
+        fs::set_permissions(&snapshot_dir, fs::Permissions::from_mode(0o700))
+            .map_err(|error| format!("chmod backup dir failed: {error}"))?;
+    }
 
-    let data_files = if data_dir.exists() {
-        copy_chain_state_tree(data_dir, &backup_data_dir, &canonical_guard)
-            .map_err(|error| format!("chain-state backup failed: {error}"))?
-    } else {
-        fs::create_dir_all(&backup_data_dir)
-            .map_err(|error| format!("create empty chain-data backup failed: {error}"))?;
-        Vec::new()
-    };
+    let data_files = copy_chain_state_tree(data_dir, &backup_data_dir, &canonical_guard, excludes)
+        .map_err(|error| format!("chain-state backup failed: {error}"))?;
 
     let (prior_binary_sha256, prior_binary_size_bytes) = if binary_path.is_file() {
         fs::copy(binary_path, &backup_binary)
@@ -1107,27 +1508,30 @@ fn create_pre_upgrade_backup(
         source_data_dir: data_dir.display().to_string(),
         source_binary_path: binary_path.display().to_string(),
         signer_guard_dir_excluded: canonical_guard.display().to_string(),
+        excluded_paths: excludes
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect(),
         prior_binary_sha256,
         prior_binary_size_bytes,
         data_files,
     };
-    let manifest_json = serde_json::to_string_pretty(&manifest)
-        .map_err(|error| format!("backup manifest serialize failed: {error}"))?;
-    let manifest_path = snapshot_dir.join("backup-manifest.json");
-    fs::write(&manifest_path, format!("{manifest_json}\n"))
-        .map_err(|error| format!("write backup-manifest.json failed: {error}"))?;
-    fsync_dir(&snapshot_dir).map_err(|error| format!("fsync backup dir failed: {error}"))?;
+    // Written last: a snapshot without this file is not a complete backup.
+    write_json_atomically(&snapshot_dir.join("backup-manifest.json"), &manifest)?;
     Ok((snapshot_dir, backup_binary, backup_data_dir))
 }
 
-/// Restore the pre-upgrade binary and chain-state directory together atomically,
-/// NEVER touching `signer_guard_dir`.
+/// Restore the pre-upgrade binary and chain state. The excluded entries (the
+/// vote record, the key file, runtime state) are carried over from the
+/// directory the failed binary ran in: the old binary starts with every vote
+/// the new one cast on record. `signer_guard_dir` is never touched.
 fn restore_pre_upgrade_backup(
     backup_binary: &Path,
     backup_data_dir: &Path,
     dest_binary: &Path,
     dest_data_dir: &Path,
     signer_guard_dir: &Path,
+    excludes: &[PathBuf],
 ) -> Result<(), String> {
     verify_signer_guard_isolation(signer_guard_dir, dest_data_dir, backup_data_dir)?;
     let canonical_guard = resolve_normalized_path(signer_guard_dir)
@@ -1137,7 +1541,7 @@ fn restore_pre_upgrade_backup(
     atomic_install_binary(backup_binary, dest_binary)
         .map_err(|error| format!("rollback binary restore failed: {error}"))?;
 
-    // 2. Stage restored chain-data beside dest_data_dir, then swap cleanly.
+    // 2. Stage the restored chain state beside the data directory, then swap.
     let parent = dest_data_dir
         .parent()
         .ok_or_else(|| "data-dir has no parent directory".to_string())?;
@@ -1145,29 +1549,58 @@ fn restore_pre_upgrade_backup(
         .file_name()
         .and_then(|s| s.to_str())
         .ok_or_else(|| "invalid data-dir name".to_string())?;
-    let pid = std::process::id();
-    let restore_stage = parent.join(format!(".{name}.rollback-stage.{pid}"));
-    let failed_stash = parent.join(format!(".{name}.failed-upgrade.{pid}"));
-    if restore_stage.exists() {
-        let _ = fs::remove_dir_all(&restore_stage);
-    }
-    if failed_stash.exists() {
-        let _ = fs::remove_dir_all(&failed_stash);
-    }
-    copy_chain_state_tree(backup_data_dir, &restore_stage, &canonical_guard)
-        .map_err(|error| format!("rollback chain-state stage failed: {error}"))?;
-    if dest_data_dir.exists() {
-        fs::rename(dest_data_dir, &failed_stash)
-            .map_err(|error| format!("rollback move failed data-dir failed: {error}"))?;
-    }
-    if let Err(error) = fs::rename(&restore_stage, dest_data_dir) {
-        if failed_stash.exists() && !dest_data_dir.exists() {
-            let _ = fs::rename(&failed_stash, dest_data_dir);
+    let restore_stage = parent.join(format!(".{name}.rollback-stage"));
+    let failed_stash = parent.join(format!(".{name}.failed-upgrade"));
+    // A stash beside an existing data directory means an earlier rollback
+    // already swapped the chain state in and stopped while carrying entries
+    // over. The swap is not repeated: the data directory may already hold the
+    // vote record, and it must not be deleted.
+    let swap_already_done = failed_stash.exists() && dest_data_dir.exists();
+    if !swap_already_done {
+        if failed_stash.exists() {
+            fs::rename(&failed_stash, dest_data_dir)
+                .map_err(|error| format!("rollback could not put the data-dir back: {error}"))?;
         }
-        return Err(format!("rollback swap restored data-dir failed: {error}"));
+        if restore_stage.exists() {
+            fs::remove_dir_all(&restore_stage)
+                .map_err(|error| format!("rollback could not clear an old stage: {error}"))?;
+        }
+        copy_chain_state_tree(backup_data_dir, &restore_stage, &canonical_guard, &[])
+            .map_err(|error| format!("rollback chain-state stage failed: {error}"))?;
+        if dest_data_dir.exists() {
+            fs::rename(dest_data_dir, &failed_stash)
+                .map_err(|error| format!("rollback move failed data-dir failed: {error}"))?;
+        }
+        if let Err(error) = fs::rename(&restore_stage, dest_data_dir) {
+            if failed_stash.exists() && !dest_data_dir.exists() {
+                let _ = fs::rename(&failed_stash, dest_data_dir);
+            }
+            return Err(format!("rollback swap restored data-dir failed: {error}"));
+        }
     }
+    // 3. Carry the excluded entries over. Until every one has moved, the stash stays.
+    for exclude in excludes {
+        let from = failed_stash.join(exclude);
+        if fs::symlink_metadata(&from).is_err() {
+            continue;
+        }
+        let to = dest_data_dir.join(exclude);
+        if let Some(to_parent) = to.parent() {
+            fs::create_dir_all(to_parent).map_err(|error| {
+                format!("rollback could not prepare `{}`: {error}", to.display())
+            })?;
+        }
+        fs::rename(&from, &to).map_err(|error| {
+            format!(
+                "rollback could not carry `{}` over; it is kept in `{}`: {error}",
+                exclude.display(),
+                failed_stash.display()
+            )
+        })?;
+    }
+    fsync_dir(dest_data_dir).map_err(|error| format!("fsync data-dir failed: {error}"))?;
+    fsync_dir(parent).map_err(|error| format!("fsync data-dir parent failed: {error}"))?;
     let _ = fs::remove_dir_all(&failed_stash);
-    let _ = fsync_dir(parent);
     Ok(())
 }
 
@@ -1175,12 +1608,15 @@ fn base_report(check_only: bool) -> UpgradeReportV1 {
     UpgradeReportV1 {
         schema: UPGRADE_REPORT_SCHEMA.to_string(),
         check_only,
-        status: "failed".to_string(),
+        status: "refused".to_string(),
         exit_code: UPGRADE_EXIT_INVALID_ARGS,
         error_code: None,
         message: None,
         release_id: None,
+        release_sequence: None,
         target_git_revision: None,
+        installed_release_id: None,
+        installed_release_sequence: None,
         installed_git_revision: None,
         architecture: None,
         rollout_mode: None,
@@ -1196,6 +1632,7 @@ fn base_report(check_only: bool) -> UpgradeReportV1 {
         disk_headroom_ok: false,
         backup_path: None,
         rolled_back: false,
+        units_stopped: Vec::new(),
     }
 }
 
@@ -1212,6 +1649,39 @@ pub fn execute_upgrade(
         report.message =
             Some("--manifest-file and --channel-url are mutually exclusive".to_string());
         return report;
+    }
+
+    let excludes = match backup_excludes(&options.exclude_paths) {
+        Ok(excludes) => excludes,
+        Err(error) => {
+            report.exit_code = UPGRADE_EXIT_INVALID_ARGS;
+            report.error_code = Some("invalid_args".to_string());
+            report.message = Some(error);
+            return report;
+        }
+    };
+
+    // An earlier run that did not finish comes first. Nothing else is done
+    // until its rollback is complete.
+    match read_upgrade_journal(&options.backup_dir) {
+        Ok(None) => {}
+        Ok(Some(journal)) if options.check_only => {
+            report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+            report.error_code = Some("interrupted_upgrade".to_string());
+            report.release_id = Some(journal.release_id.clone());
+            report.message = Some(format!(
+                "an upgrade to `{}` was interrupted at step `{}`; run `postfiat-node upgrade` to roll it back",
+                journal.release_id, journal.step
+            ));
+            return report;
+        }
+        Ok(Some(journal)) => return recover_interrupted_upgrade(&journal, options, hooks, report),
+        Err(error) => {
+            report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+            report.error_code = Some("upgrade_journal_invalid".to_string());
+            report.message = Some(error);
+            return report;
+        }
     }
 
     let now_unix = options.now_unix.unwrap_or_else(unix_now);
@@ -1314,16 +1784,57 @@ pub fn execute_upgrade(
     };
 
     report.release_id = Some(verification.release_id.clone());
+    report.release_sequence = Some(verification.release_sequence);
     report.target_git_revision = Some(verification.git_revision.clone());
+
+    // Releases have an order. An older one is refused; there is no flag to skip this.
+    let installed = match read_installed_release(&options.backup_dir) {
+        Ok(installed) => installed,
+        Err(error) => {
+            report.exit_code = UPGRADE_EXIT_SECURITY_REFUSAL;
+            report.error_code = Some("installed_release_record_invalid".to_string());
+            report.message = Some(error);
+            return report;
+        }
+    };
+    if let Some(installed) = &installed {
+        report.installed_release_id = Some(installed.release_id.clone());
+        report.installed_release_sequence = Some(installed.release_sequence);
+        if manifest.release_sequence < installed.release_sequence {
+            report.exit_code = UPGRADE_EXIT_SECURITY_REFUSAL;
+            report.error_code = Some("release_downgrade".to_string());
+            report.message = Some(format!(
+                "release `{}` (sequence {}) is older than the installed `{}` (sequence {})",
+                manifest.release_id,
+                manifest.release_sequence,
+                installed.release_id,
+                installed.release_sequence
+            ));
+            return report;
+        }
+        if manifest.release_sequence == installed.release_sequence {
+            if manifest.release_id != installed.release_id {
+                report.exit_code = UPGRADE_EXIT_SECURITY_REFUSAL;
+                report.error_code = Some("release_sequence_conflict".to_string());
+                report.message = Some(format!(
+                    "release `{}` has the sequence {} of the installed `{}`",
+                    manifest.release_id, manifest.release_sequence, installed.release_id
+                ));
+                return report;
+            }
+            report.status = "up_to_date".to_string();
+            report.exit_code = UPGRADE_EXIT_OK;
+            report.message = Some(format!("already at release `{}`", manifest.release_id));
+            return report;
+        }
+    }
     report.rollout_mode = Some(verification.rollout_mode.clone());
     report.activation_height = verification.activation_height;
     report.halt_if_missed = Some(verification.halt_if_missed);
     report.verified_signers = verification.verified_signers.clone();
 
     // Probe local node (chain_id, genesis_hash, current height & git_revision).
-    let pre_probe = if options.skip_rpc_preflight {
-        None
-    } else {
+    let pre_probe = {
         match hooks.probe_node(&options.rpc_host, options.rpc_port, 5_000) {
             Ok(probe) => {
                 if probe.chain_id != manifest.chain_id
@@ -1495,8 +2006,7 @@ pub fn execute_upgrade(
     if options.check_only {
         let already_at_release = pre_probe
             .as_ref()
-            .and_then(|p| p.git_revision.as_deref())
-            .is_some_and(|rev| rev == manifest.git_revision)
+            .is_some_and(|p| revision_matches(p.git_revision.as_deref(), &manifest.git_revision))
             || options
                 .binary_path
                 .is_file()
@@ -1524,7 +2034,7 @@ pub fn execute_upgrade(
                 });
 
         if in_activation_warning {
-            report.status = "activation_warning".to_string();
+            report.status = "activation_imminent".to_string();
             report.exit_code = UPGRADE_EXIT_ACTIVATION_WARNING;
             report.message = Some(format!(
                 "activation_height {} is within advance_warning_blocks",
@@ -1574,18 +2084,65 @@ pub fn execute_upgrade(
         .and_then(|p| p.signer_mode.as_deref())
         .is_some_and(|mode| mode == "socket");
 
-    // Step 5: Graceful service stop.
-    if let Err(error) = hooks.stop_units(&options.service_units) {
-        if let Some(tmp) = downloaded_temp {
+    // Step 5: Journal, then graceful stop.
+    let journal_path = options.backup_dir.join(UPGRADE_JOURNAL_FILE);
+    let mut journal = UpgradeJournalV1 {
+        schema: UPGRADE_JOURNAL_SCHEMA.to_string(),
+        release_id: manifest.release_id.clone(),
+        release_sequence: manifest.release_sequence,
+        started_unix: now_unix,
+        step: "stopping".to_string(),
+        data_dir: options.data_dir.display().to_string(),
+        binary_path: options.binary_path.display().to_string(),
+        signer_guard_dir: options.signer_guard_dir.display().to_string(),
+        backup_root: None,
+        service_units: options.service_units.clone(),
+        exclude_paths: excludes
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect(),
+    };
+    let discard_candidate = |downloaded: &Option<PathBuf>| {
+        if let Some(tmp) = downloaded {
             let _ = fs::remove_file(tmp);
         }
+    };
+    if let Err(error) = write_json_atomically(&journal_path, &journal) {
+        discard_candidate(&downloaded_temp);
         report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
-        report.error_code = Some("service_stop_failed".to_string());
+        report.error_code = Some("journal_write_failed".to_string());
         report.message = Some(error);
         return report;
     }
+    // Nothing of the installation has changed yet: a failure here ends with
+    // the units started again and the journal removed.
+    let abort_before_swap = |report: &mut UpgradeReportV1, code: &str, error: String| {
+        let start = hooks.start_units(&options.service_units);
+        let stopped = stopped_units(hooks, &options.service_units);
+        let _ = fs::remove_file(&journal_path);
+        report.error_code = Some(code.to_string());
+        if start.is_ok() && stopped.is_empty() {
+            report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+            report.message = Some(error);
+        } else {
+            report.status = "rollback_failed".to_string();
+            report.exit_code = UPGRADE_EXIT_ROLLBACK_FAILED;
+            report.units_stopped = stopped;
+            report.message = Some(format!(
+                "{error}; the units could not all be started again ({})",
+                start
+                    .err()
+                    .unwrap_or_else(|| "see units_stopped".to_string())
+            ));
+        }
+    };
+    if let Err(error) = hooks.stop_units(&options.service_units) {
+        discard_candidate(&downloaded_temp);
+        abort_before_swap(&mut report, "service_stop_failed", error);
+        return report;
+    }
 
-    // Step 6: Chain-state-only backup + prior binary.
+    // Step 6: Chain-state backup + prior binary.
     let (backup_root, backup_binary, backup_data_dir) = match create_pre_upgrade_backup(
         &manifest.release_id,
         now_unix,
@@ -1593,48 +2150,66 @@ pub fn execute_upgrade(
         &options.binary_path,
         &options.backup_dir,
         &options.signer_guard_dir,
+        &excludes,
     ) {
         Ok(paths) => paths,
         Err(error) => {
-            let _ = hooks.start_units(&options.service_units);
-            if let Some(tmp) = downloaded_temp {
-                let _ = fs::remove_file(tmp);
+            discard_candidate(&downloaded_temp);
+            let partial = backup_snapshot_dir(&options.backup_dir, &manifest.release_id, now_unix);
+            if !partial.join("backup-manifest.json").exists() {
+                let _ = fs::remove_dir_all(&partial);
             }
-            report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
-            report.error_code = Some("backup_failed".to_string());
-            report.message = Some(error);
+            abort_before_swap(&mut report, "backup_failed", error);
             return report;
         }
     };
     report.backup_path = Some(backup_root.display().to_string());
+    journal.step = "backed_up".to_string();
+    journal.backup_root = Some(backup_root.display().to_string());
+    if let Err(error) = write_json_atomically(&journal_path, &journal) {
+        discard_candidate(&downloaded_temp);
+        abort_before_swap(&mut report, "journal_write_failed", error);
+        return report;
+    }
+
+    let rollback = |cause: &str, report: &mut UpgradeReportV1| {
+        rollback_and_verify(
+            hooks,
+            &options.service_units,
+            &backup_binary,
+            &backup_data_dir,
+            &options.binary_path,
+            &options.data_dir,
+            &options.signer_guard_dir,
+            &excludes,
+            (&options.rpc_host, options.rpc_port),
+            &journal_path,
+            cause,
+            report,
+        )
+    };
 
     // Step 7: Atomic binary swap.
     let swap_result = atomic_install_binary(&staged_binary, &options.binary_path);
-    if let Some(tmp) = downloaded_temp {
-        let _ = fs::remove_file(tmp);
-    }
+    discard_candidate(&downloaded_temp);
     if let Err(error) = swap_result {
-        let rb = rollback_and_verify(
-            hooks,
-            options,
-            &backup_binary,
-            &backup_data_dir,
-            &format!("atomic binary swap failed: {error}"),
-            &mut report,
-        );
-        return rb;
+        return rollback(&format!("atomic binary swap failed: {error}"), &mut report);
+    }
+    journal.step = "swapped".to_string();
+    if let Err(error) = write_json_atomically(&journal_path, &journal) {
+        return rollback(&error, &mut report);
     }
 
     // Step 8: Start services and enforce post-upgrade health gate.
     if let Err(error) = hooks.start_units(&options.service_units) {
-        return rollback_and_verify(
-            hooks,
-            options,
-            &backup_binary,
-            &backup_data_dir,
+        return rollback(
             &format!("post-upgrade service start failed: {error}"),
             &mut report,
         );
+    }
+    journal.step = "started".to_string();
+    if let Err(error) = write_json_atomically(&journal_path, &journal) {
+        return rollback(&error, &mut report);
     }
 
     let deadline = Instant::now() + Duration::from_millis(options.health_timeout_ms.max(100));
@@ -1643,10 +2218,8 @@ pub fn execute_upgrade(
     while Instant::now() <= deadline {
         match hooks.probe_node(&options.rpc_host, options.rpc_port, 2_000) {
             Ok(probe) => {
-                let rev_ok = probe
-                    .git_revision
-                    .as_deref()
-                    .is_none_or(|rev| rev == manifest.git_revision);
+                let rev_ok =
+                    revision_matches(probe.git_revision.as_deref(), &manifest.git_revision);
                 let height_ok = probe.block_height >= pre_height;
                 let signer_ok =
                     if had_socket_signer || probe.signer_mode.as_deref() == Some("socket") {
@@ -1655,14 +2228,15 @@ pub fn execute_upgrade(
                     } else {
                         true
                     };
-                if rev_ok && height_ok && signer_ok {
+                let stopped = stopped_units(hooks, &options.service_units);
+                if rev_ok && height_ok && signer_ok && stopped.is_empty() {
                     report.installed_git_revision = probe.git_revision;
                     healthy = true;
                     break;
                 }
                 last_health_err = format!(
-                    "health gate mismatch: rev_ok={rev_ok}, height_ok={height_ok} ({}<{pre_height}), signer_ok={signer_ok}",
-                    probe.block_height
+                    "health gate mismatch: rev_ok={rev_ok} (node reports {:?}), height_ok={height_ok} ({}<{pre_height}), signer_ok={signer_ok}, units_not_running={stopped:?}",
+                    probe.git_revision, probe.block_height
                 );
             }
             Err(error) => {
@@ -1673,67 +2247,183 @@ pub fn execute_upgrade(
     }
 
     if !healthy {
-        return rollback_and_verify(
-            hooks,
-            options,
-            &backup_binary,
-            &backup_data_dir,
-            &last_health_err,
-            &mut report,
-        );
+        return rollback(&last_health_err, &mut report);
     }
 
+    let record = InstalledReleaseV1 {
+        schema: INSTALLED_RELEASE_SCHEMA.to_string(),
+        release_id: manifest.release_id.clone(),
+        release_sequence: manifest.release_sequence,
+        git_revision: manifest.git_revision.clone(),
+        installed_unix: now_unix,
+    };
+    let recorded = write_json_atomically(&options.backup_dir.join(INSTALLED_RELEASE_FILE), &record);
+    let _ = fs::remove_file(&journal_path);
+    report.installed_release_id = Some(record.release_id.clone());
+    report.installed_release_sequence = Some(record.release_sequence);
     report.status = "upgraded".to_string();
     report.exit_code = UPGRADE_EXIT_OK;
-    report.message = Some(format!(
-        "successfully upgraded to `{}` (git {})",
-        manifest.release_id, manifest.git_revision
-    ));
+    report.message = Some(match recorded {
+        Ok(()) => format!(
+            "successfully upgraded to `{}` (git {})",
+            manifest.release_id, manifest.git_revision
+        ),
+        Err(error) => format!(
+            "upgraded to `{}`, but the installed-release record could not be written ({error}); the next upgrade cannot check its order until it is",
+            manifest.release_id
+        ),
+    });
     report
 }
 
+/// Finish what an interrupted run started: put the prior binary and chain
+/// state back if they were touched, start the units, and remove the journal.
+fn recover_interrupted_upgrade(
+    journal: &UpgradeJournalV1,
+    options: &UpgradeOptions,
+    hooks: &dyn UpgradeSystemHooks,
+    mut report: UpgradeReportV1,
+) -> UpgradeReportV1 {
+    let journal_path = options.backup_dir.join(UPGRADE_JOURNAL_FILE);
+    report.release_id = Some(journal.release_id.clone());
+    report.release_sequence = Some(journal.release_sequence);
+    let cause = format!(
+        "an earlier upgrade to `{}` was interrupted at step `{}`",
+        journal.release_id, journal.step
+    );
+    let excludes = match backup_excludes(&journal.exclude_paths) {
+        Ok(excludes) => excludes,
+        Err(error) => {
+            report.exit_code = UPGRADE_EXIT_ROLLBACK_FAILED;
+            report.status = "rollback_failed".to_string();
+            report.error_code = Some("upgrade_journal_invalid".to_string());
+            report.message = Some(error);
+            return report;
+        }
+    };
+    let complete_backup = journal
+        .backup_root
+        .as_ref()
+        .map(PathBuf::from)
+        .filter(|root| root.join("backup-manifest.json").is_file());
+    match complete_backup {
+        Some(root) => {
+            report.backup_path = Some(root.display().to_string());
+            let (backup_binary, backup_data_dir) = backup_paths(&root);
+            rollback_and_verify(
+                hooks,
+                &journal.service_units,
+                &backup_binary,
+                &backup_data_dir,
+                Path::new(&journal.binary_path),
+                Path::new(&journal.data_dir),
+                Path::new(&journal.signer_guard_dir),
+                &excludes,
+                (&options.rpc_host, options.rpc_port),
+                &journal_path,
+                &cause,
+                &mut report,
+            )
+        }
+        None => {
+            // Interrupted before the backup was complete: the installation is
+            // unchanged. Remove the partial backup and start the units.
+            let partial = backup_snapshot_dir(
+                &options.backup_dir,
+                &journal.release_id,
+                journal.started_unix,
+            );
+            if !partial.join("backup-manifest.json").exists() {
+                let _ = fs::remove_dir_all(&partial);
+            }
+            let start = hooks.start_units(&journal.service_units);
+            let health =
+                start.and_then(|()| hooks.probe_node(&options.rpc_host, options.rpc_port, 5_000));
+            let stopped = stopped_units(hooks, &journal.service_units);
+            match health {
+                Ok(_) if stopped.is_empty() => {
+                    let _ = fs::remove_file(&journal_path);
+                    report.status = "rolled_back".to_string();
+                    report.exit_code = UPGRADE_EXIT_ROLLED_BACK;
+                    report.error_code = Some("rolled_back".to_string());
+                    report.message = Some(format!(
+                        "{cause}; nothing had been changed, the units are running again"
+                    ));
+                }
+                other => {
+                    report.status = "rollback_failed".to_string();
+                    report.exit_code = UPGRADE_EXIT_ROLLBACK_FAILED;
+                    report.error_code = Some("rollback_failed".to_string());
+                    report.units_stopped = stopped;
+                    report.message = Some(format!(
+                        "CRITICAL: {cause} and the units did not come back ({})",
+                        other
+                            .err()
+                            .unwrap_or_else(|| "see units_stopped".to_string())
+                    ));
+                }
+            }
+            report
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn rollback_and_verify(
     hooks: &dyn UpgradeSystemHooks,
-    options: &UpgradeOptions,
+    service_units: &[String],
     backup_binary: &Path,
     backup_data_dir: &Path,
+    binary_path: &Path,
+    data_dir: &Path,
+    signer_guard_dir: &Path,
+    excludes: &[PathBuf],
+    rpc: (&str, u16),
+    journal_path: &Path,
     cause: &str,
     report: &mut UpgradeReportV1,
 ) -> UpgradeReportV1 {
-    let _ = hooks.stop_units(&options.service_units);
+    let _ = hooks.stop_units(service_units);
     let restore = restore_pre_upgrade_backup(
         backup_binary,
         backup_data_dir,
-        &options.binary_path,
-        &options.data_dir,
-        &options.signer_guard_dir,
+        binary_path,
+        data_dir,
+        signer_guard_dir,
+        excludes,
     );
-    let start = restore
-        .as_ref()
-        .map_err(Clone::clone)
-        .and_then(|()| hooks.start_units(&options.service_units));
-    let health = start
-        .as_ref()
-        .map_err(Clone::clone)
-        .and_then(|()| hooks.probe_node(&options.rpc_host, options.rpc_port, 5_000));
+    // The units are started whether or not the restore worked: a validator
+    // left stopped helps nobody, and the report names what is not running.
+    let start = hooks.start_units(service_units);
+    let health = restore
+        .clone()
+        .and_then(|()| start.clone())
+        .and_then(|()| hooks.probe_node(rpc.0, rpc.1, 5_000).map(|_| ()));
+    let stopped = stopped_units(hooks, service_units);
 
     match health {
-        Ok(_) => {
+        Ok(()) if stopped.is_empty() => {
+            let _ = fs::remove_file(journal_path);
             report.status = "rolled_back".to_string();
             report.exit_code = UPGRADE_EXIT_ROLLED_BACK;
             report.error_code = Some("rolled_back".to_string());
             report.rolled_back = true;
             report.message = Some(format!(
-                "upgrade health check failed ({cause}); atomic binary+chain-state rollback succeeded (signer-guard untouched)"
+                "upgrade failed ({cause}); the prior binary and chain state are back, the vote record was carried forward, signer-guard untouched"
             ));
         }
-        Err(rb_error) => {
+        other => {
+            // The journal stays: the next run tries the rollback again.
             report.status = "rollback_failed".to_string();
             report.exit_code = UPGRADE_EXIT_ROLLBACK_FAILED;
             report.error_code = Some("rollback_failed".to_string());
             report.rolled_back = false;
+            report.units_stopped = stopped;
             report.message = Some(format!(
-                "CRITICAL: upgrade failed ({cause}) AND rollback failed ({rb_error})"
+                "CRITICAL: upgrade failed ({cause}) AND rollback failed ({})",
+                other
+                    .err()
+                    .unwrap_or_else(|| "units are not running".to_string())
             ));
         }
     }
@@ -1788,6 +2478,12 @@ pub fn format_upgrade_human_report(report: &UpgradeReportV1) -> String {
     if let Some(backup) = &report.backup_path {
         lines.push(format!("  backup: {backup}"));
     }
+    if !report.units_stopped.is_empty() {
+        lines.push(format!(
+            "  UNITS NOT RUNNING: {}",
+            report.units_stopped.join(", ")
+        ));
+    }
     if let Some(code) = &report.error_code {
         lines.push(format!("  error_code: {code}"));
     }
@@ -1801,7 +2497,8 @@ pub fn format_upgrade_human_report(report: &UpgradeReportV1) -> String {
 mod tests {
     use super::*;
     use postfiat_crypto_provider::{address_from_public_key, ml_dsa_65_keygen};
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Mutex;
 
     struct TestTempDir(PathBuf);
     impl TestTempDir {
@@ -1822,21 +2519,72 @@ mod tests {
         }
     }
 
+    const CHAIN: &str = "postfiat-testnet-1";
+    const TARGET_REV: &str = "1111111111111111111111111111111111111111";
+    const NOW: u64 = 1_795_651_600;
+
+    /// A stand-in for systemd and the node. The node it models reports an
+    /// 8-character revision, as the real one does, and the revision follows the
+    /// binary that is installed when the units start.
     struct MockHooks {
+        installed_bin: PathBuf,
+        data_dir: PathBuf,
         free_bytes: u64,
-        fail_post_upgrade: AtomicBool,
-        probe_calls: AtomicUsize,
-        target_rev: String,
-        prior_rev: String,
-        block_height: u64,
-        fail_rollback_health: bool,
+        height: u64,
+        /// The new binary starts but never answers its health probe.
+        new_binary_unhealthy: bool,
+        /// The new binary casts a vote before it is found unhealthy.
+        new_binary_votes: bool,
+        /// Nothing answers after a rollback either.
+        dead_after_rollback: bool,
+        /// A unit that systemd reports as not running whatever is done.
+        dead_unit: Option<String>,
+        running: Mutex<bool>,
+        log: Mutex<Vec<String>>,
+    }
+
+    impl MockHooks {
+        fn new(installed_bin: &Path, data_dir: &Path) -> Self {
+            Self {
+                installed_bin: installed_bin.to_path_buf(),
+                data_dir: data_dir.to_path_buf(),
+                free_bytes: 10 * 1024 * 1024 * 1024,
+                height: 432_000,
+                new_binary_unhealthy: false,
+                new_binary_votes: false,
+                dead_after_rollback: false,
+                dead_unit: None,
+                running: Mutex::new(true),
+                log: Mutex::new(Vec::new()),
+            }
+        }
+        fn new_binary_installed(&self) -> bool {
+            fs::read(&self.installed_bin).is_ok_and(|bytes| bytes == b"NEW_BINARY_BYTES_V3")
+        }
+        fn log(&self) -> Vec<String> {
+            self.log.lock().expect("log").clone()
+        }
     }
 
     impl UpgradeSystemHooks for MockHooks {
         fn stop_units(&self, _units: &[String]) -> Result<(), String> {
+            *self.running.lock().expect("running") = false;
+            self.log.lock().expect("log").push("stop".to_string());
             Ok(())
         }
         fn start_units(&self, _units: &[String]) -> Result<(), String> {
+            *self.running.lock().expect("running") = true;
+            self.log.lock().expect("log").push("start".to_string());
+            if self.new_binary_installed() {
+                // The new binary writes chain state as soon as it runs.
+                fs::write(self.data_dir.join("ledger.dat"), b"REWRITTEN_BY_NEW_BINARY")
+                    .expect("ledger");
+            }
+            if self.new_binary_installed() && self.new_binary_votes {
+                let safety = self.data_dir.join(crate::CONSENSUS_V2_SAFETY_DIR);
+                fs::create_dir_all(&safety).expect("safety dir");
+                fs::write(safety.join("height-432001.json"), b"VOTED_BY_NEW_BINARY").expect("vote");
+            }
             Ok(())
         }
         fn probe_node(
@@ -1845,39 +2593,28 @@ mod tests {
             _port: u16,
             _timeout_ms: u64,
         ) -> Result<UpgradeNodeStatusProbe, String> {
-            let call = self.probe_calls.fetch_add(1, Ordering::Relaxed);
-            if call == 0 {
-                return Ok(UpgradeNodeStatusProbe {
-                    chain_id: "postfiat-testnet-1".to_string(),
-                    genesis_hash: "aa".repeat(48),
-                    block_height: self.block_height,
-                    git_revision: Some(self.prior_rev.clone()),
-                    signer_mode: Some("socket".to_string()),
-                    signer_double_sign_protection: Some(true),
-                });
+            if !*self.running.lock().expect("running") {
+                return Err("connection refused".to_string());
             }
-            if self.fail_post_upgrade.load(Ordering::Relaxed) {
-                if self.fail_rollback_health {
-                    return Err("node failed to restart".to_string());
-                }
-                // After rollback, let the final rollback health check pass.
-                if call >= 3 {
-                    return Ok(UpgradeNodeStatusProbe {
-                        chain_id: "postfiat-testnet-1".to_string(),
-                        genesis_hash: "aa".repeat(48),
-                        block_height: self.block_height,
-                        git_revision: Some(self.prior_rev.clone()),
-                        signer_mode: Some("socket".to_string()),
-                        signer_double_sign_protection: Some(true),
-                    });
-                }
+            let new = self.new_binary_installed();
+            if new && self.new_binary_unhealthy {
                 return Err("post-upgrade probe failed".to_string());
             }
+            if !new
+                && self.dead_after_rollback
+                && self.log().iter().filter(|l| *l == "start").count() > 0
+            {
+                return Err("node failed to restart".to_string());
+            }
             Ok(UpgradeNodeStatusProbe {
-                chain_id: "postfiat-testnet-1".to_string(),
+                chain_id: CHAIN.to_string(),
                 genesis_hash: "aa".repeat(48),
-                block_height: self.block_height + 1,
-                git_revision: Some(self.target_rev.clone()),
+                block_height: self.height + u64::from(new),
+                git_revision: Some(if new {
+                    TARGET_REV[..8].to_string()
+                } else {
+                    "00000000".to_string()
+                }),
                 signer_mode: Some("socket".to_string()),
                 signer_double_sign_protection: Some(true),
             })
@@ -1885,326 +2622,877 @@ mod tests {
         fn free_disk_bytes(&self, _path: &Path) -> Result<u64, String> {
             Ok(self.free_bytes)
         }
+        fn unit_is_active(&self, unit: &str) -> bool {
+            *self.running.lock().expect("running") && self.dead_unit.as_deref() != Some(unit)
+        }
     }
 
-    fn build_signed_fixture(
-        root: &Path,
-        rollout: ReleaseRolloutV3,
-        signers_count: usize,
-    ) -> (PathBuf, PathBuf, PathBuf, PathBuf, PathBuf, PathBuf, String) {
-        let mut keypairs = Vec::new();
-        let mut signers = Vec::new();
-        for (id, role) in [
-            ("release-lead-1", "release_lead"),
-            ("independent-builder-2", "independent_builder"),
-            ("security-custodian-3", "security_custodian"),
-        ] {
-            let kp = ml_dsa_65_keygen().expect("keygen");
-            let pk_hex = bytes_to_hex(&kp.public_key);
-            let sk_hex = bytes_to_hex(&kp.private_key);
-            let publisher = address_from_public_key(&kp.public_key);
-            signers.push(ReleaseKeysetSignerV1 {
-                signer_id: id.to_string(),
-                role: role.to_string(),
-                publisher: publisher.clone(),
-                public_key_hex: pk_hex.clone(),
-            });
-            keypairs.push((id.to_string(), publisher, pk_hex, sk_hex));
+    struct Fixture {
+        _tmp: TestTempDir,
+        root: PathBuf,
+        keys: Vec<(String, String, String, String)>,
+        keyset: ReleaseKeysetV1,
+        options: UpgradeOptions,
+    }
+
+    fn rolling() -> ReleaseRolloutV3 {
+        ReleaseRolloutV3 {
+            mode: "rolling".to_string(),
+            activation_height: None,
+            advance_warning_blocks: None,
+            halt_if_missed: false,
         }
-        let keyset = ReleaseKeysetV1 {
-            schema: RELEASE_KEYSET_SCHEMA.to_string(),
-            keyset_id: "postfiat-release-keyset-2026-v1".to_string(),
-            threshold: 2,
-            total_signers: 3,
-            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
-            signing_context: RELEASE_MANIFEST_SIGNING_CONTEXT.to_string(),
-            signers,
-        };
-        let keyset_file = root.join("release-keyset.json");
-        fs::write(&keyset_file, serde_json::to_string_pretty(&keyset).unwrap()).unwrap();
+    }
 
-        let candidate_bin = root.join("candidate-postfiat-node");
-        fs::write(&candidate_bin, b"NEW_BINARY_BYTES_V3").unwrap();
-        let (bin_sha, bin_size) = sha256_file_and_size(&candidate_bin).unwrap();
-
-        let installed_bin = root.join("installed-postfiat-node");
-        fs::write(&installed_bin, b"OLD_BINARY_BYTES_V2").unwrap();
-
-        let data_dir = root.join("data");
-        fs::create_dir_all(&data_dir).unwrap();
-        fs::write(data_dir.join("ledger.dat"), b"CHAIN_STATE_V2").unwrap();
-
-        let guard_dir = root.join("signer-guard");
-        fs::create_dir_all(&guard_dir).unwrap();
-        fs::write(
-            guard_dir.join("guard.state"),
-            b"MONOTONIC_GUARD_FLOOR_432000",
-        )
-        .unwrap();
-
-        let backup_dir = root.join("backups");
-        fs::create_dir_all(&backup_dir).unwrap();
-
-        let target_rev = "11".repeat(20);
-        let mut manifest = ReleaseManifestV3 {
-            schema: RELEASE_MANIFEST_SCHEMA.to_string(),
-            release_id: "v0.3.0-testnet".to_string(),
-            created_unix: 1_795_651_200,
-            valid_from_unix: 1_795_651_200,
-            valid_until_unix: 1_803_427_200,
-            chain_id: "postfiat-testnet-1".to_string(),
-            genesis_hash: "aa".repeat(48),
-            git_revision: target_rev.clone(),
-            build_profile: "release".to_string(),
-            build_features: vec![
-                "privacy".to_string(),
-                "rpc".to_string(),
-                "transport".to_string(),
-            ],
-            protocol_version: 2,
-            min_compatible_protocol_version: 1,
-            rpc_schema: "postfiat-local-rpc-v1".to_string(),
-            rollout,
-            checkpoint: ReleaseCheckpointV3 {
-                height: 432_000,
-                block_hash: "bb".repeat(48),
-                state_root: "cc".repeat(48),
-                certificate_id: "dd".repeat(48),
-                committee_epoch: 12,
-            },
-            artifacts: ReleaseArtifactsV3 {
-                linux_x86_64: ReleaseBinaryArtifactV3 {
-                    binary_url:
-                        "https://releases.postfiat.org/v0.3.0-testnet/postfiat-node-linux-x86_64"
-                            .to_string(),
-                    binary_sha256: bin_sha.clone(),
-                    binary_size_bytes: bin_size,
-                },
-                linux_aarch64: ReleaseBinaryArtifactV3 {
-                    binary_url:
-                        "https://releases.postfiat.org/v0.3.0-testnet/postfiat-node-linux-aarch64"
-                            .to_string(),
-                    binary_sha256: bin_sha,
-                    binary_size_bytes: bin_size,
-                },
-                systemd_bundle_sha256: "22".repeat(32),
-                docker_profiles_sha256: "33".repeat(32),
-                sbom_sha256: "44".repeat(32),
-                checksums_sha256: "55".repeat(32),
-                swap_circuit_metadata_sha256: "66".repeat(32),
-                private_egress_circuit_metadata_sha256: "77".repeat(32),
-            },
-            signing_policy: ReleaseSigningPolicyV3 {
+    impl Fixture {
+        fn new(label: &str) -> Self {
+            let tmp = TestTempDir::new(label);
+            let root = tmp.0.clone();
+            let mut keys = Vec::new();
+            let mut signers = Vec::new();
+            for (id, role) in [
+                ("release-lead-1", "release_lead"),
+                ("independent-builder-2", "independent_builder"),
+                ("security-custodian-3", "security_custodian"),
+            ] {
+                let kp = ml_dsa_65_keygen().expect("keygen");
+                let pk_hex = bytes_to_hex(&kp.public_key);
+                let publisher = address_from_public_key(&kp.public_key);
+                signers.push(ReleaseKeysetSignerV1 {
+                    signer_id: id.to_string(),
+                    role: role.to_string(),
+                    publisher: publisher.clone(),
+                    public_key_hex: pk_hex.clone(),
+                });
+                keys.push((
+                    id.to_string(),
+                    publisher,
+                    pk_hex,
+                    bytes_to_hex(&kp.private_key),
+                ));
+            }
+            let keyset = ReleaseKeysetV1 {
+                schema: RELEASE_KEYSET_SCHEMA.to_string(),
                 keyset_id: "postfiat-release-keyset-2026-v1".to_string(),
                 threshold: 2,
                 total_signers: 3,
                 algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
                 signing_context: RELEASE_MANIFEST_SIGNING_CONTEXT.to_string(),
-            },
-            signatures: Vec::new(),
-        };
-        for (id, publisher, pk, sk) in keypairs.iter().take(signers_count) {
-            let sig = sign_release_manifest_v3(&manifest, id, publisher, pk, sk, 1_795_651_260)
-                .expect("sign");
-            manifest.signatures.push(sig);
+                signers,
+            };
+            let keyset_file = root.join("release-keyset.json");
+            fs::write(&keyset_file, serde_json::to_string_pretty(&keyset).unwrap()).unwrap();
+            let candidate = root.join("candidate-postfiat-node");
+            fs::write(&candidate, b"NEW_BINARY_BYTES_V3").unwrap();
+            let installed = root.join("installed-postfiat-node");
+            fs::write(&installed, b"OLD_BINARY_BYTES_V2").unwrap();
+
+            // A validator's data directory as it is on the fleet today: chain
+            // state, the vote record, the key file and runtime state together.
+            let data_dir = root.join("data");
+            fs::create_dir_all(data_dir.join("blocks")).unwrap();
+            fs::write(data_dir.join("ledger.dat"), b"CHAIN_STATE_V2").unwrap();
+            fs::write(data_dir.join("blocks/000001.json"), b"BLOCK_1").unwrap();
+            fs::create_dir_all(data_dir.join(crate::CONSENSUS_V2_SAFETY_DIR)).unwrap();
+            fs::write(
+                data_dir
+                    .join(crate::CONSENSUS_V2_SAFETY_DIR)
+                    .join("height-432000.json"),
+                b"VOTED_BY_OLD_BINARY",
+            )
+            .unwrap();
+            fs::write(
+                data_dir.join(crate::VALIDATOR_KEYS_FILE),
+                b"SECRET_VALIDATOR_KEY",
+            )
+            .unwrap();
+            fs::create_dir_all(data_dir.join("runtime")).unwrap();
+            fs::write(data_dir.join("runtime/spool"), b"RUNTIME").unwrap();
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(&data_dir, fs::Permissions::from_mode(0o710)).unwrap();
+                fs::set_permissions(
+                    data_dir.join("ledger.dat"),
+                    fs::Permissions::from_mode(0o600),
+                )
+                .unwrap();
+                fs::set_permissions(data_dir.join("blocks"), fs::Permissions::from_mode(0o700))
+                    .unwrap();
+                fs::set_permissions(
+                    data_dir.join("blocks/000001.json"),
+                    fs::Permissions::from_mode(0o640),
+                )
+                .unwrap();
+            }
+            let guard_dir = root.join("signer-guard");
+            fs::create_dir_all(&guard_dir).unwrap();
+            fs::write(
+                guard_dir.join("guard.state"),
+                b"MONOTONIC_GUARD_FLOOR_432000",
+            )
+            .unwrap();
+            let backup_dir = root.join("backups");
+            fs::create_dir_all(&backup_dir).unwrap();
+
+            let options = UpgradeOptions {
+                check_only: false,
+                manifest_file: None,
+                channel_url: None,
+                binary_file: Some(candidate),
+                keyset_file,
+                data_dir,
+                signer_guard_dir: guard_dir,
+                binary_path: installed,
+                backup_dir,
+                service_units: vec![
+                    "postfiat-validator-0.service".to_string(),
+                    "postfiat-validator-0-rpc.service".to_string(),
+                ],
+                rpc_host: "127.0.0.1".to_string(),
+                rpc_port: 27650,
+                health_timeout_ms: 250,
+                now_unix: Some(NOW),
+                architecture: Some("linux-x86_64".to_string()),
+                yes: true,
+                json: true,
+                exclude_paths: Vec::new(),
+            };
+            let mut fixture = Self {
+                _tmp: tmp,
+                root,
+                keys,
+                keyset,
+                options,
+            };
+            fixture.options.manifest_file =
+                Some(fixture.manifest("v0.3.0-testnet", 7, rolling(), 2));
+            fixture
         }
-        let manifest_file = root.join("release-manifest.json");
+
+        fn manifest(
+            &self,
+            release_id: &str,
+            sequence: u64,
+            rollout: ReleaseRolloutV3,
+            signatures: usize,
+        ) -> PathBuf {
+            let (sha, size) =
+                sha256_file_and_size(self.options.binary_file.as_ref().unwrap()).unwrap();
+            let artifact = |arch: &str| ReleaseBinaryArtifactV3 {
+                binary_url: format!(
+                    "https://releases.postfiat.org/{release_id}/postfiat-node-{arch}"
+                ),
+                binary_sha256: sha.clone(),
+                binary_size_bytes: size,
+            };
+            let mut manifest = ReleaseManifestV3 {
+                schema: RELEASE_MANIFEST_SCHEMA.to_string(),
+                release_id: release_id.to_string(),
+                release_sequence: sequence,
+                created_unix: 1_795_651_200,
+                valid_from_unix: 1_795_651_200,
+                valid_until_unix: 1_803_427_200,
+                chain_id: CHAIN.to_string(),
+                genesis_hash: "aa".repeat(48),
+                git_revision: TARGET_REV.to_string(),
+                build_profile: "release".to_string(),
+                build_features: vec![
+                    "privacy".to_string(),
+                    "rpc".to_string(),
+                    "transport".to_string(),
+                ],
+                protocol_version: 2,
+                min_compatible_protocol_version: 1,
+                rpc_schema: "postfiat-local-rpc-v1".to_string(),
+                rollout,
+                checkpoint: ReleaseCheckpointV3 {
+                    height: 432_000,
+                    block_hash: "bb".repeat(48),
+                    state_root: "cc".repeat(48),
+                    certificate_id: "dd".repeat(48),
+                    committee_epoch: 12,
+                },
+                artifacts: ReleaseArtifactsV3 {
+                    linux_x86_64: artifact("linux-x86_64"),
+                    linux_aarch64: artifact("linux-aarch64"),
+                    systemd_bundle_sha256: "22".repeat(32),
+                    docker_profiles_sha256: "33".repeat(32),
+                    sbom_sha256: "44".repeat(32),
+                    checksums_sha256: "55".repeat(32),
+                    swap_circuit_metadata_sha256: "66".repeat(32),
+                    private_egress_circuit_metadata_sha256: "77".repeat(32),
+                },
+                signing_policy: ReleaseSigningPolicyV3 {
+                    keyset_id: self.keyset.keyset_id.clone(),
+                    threshold: 2,
+                    total_signers: 3,
+                    algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+                    signing_context: RELEASE_MANIFEST_SIGNING_CONTEXT.to_string(),
+                },
+                signatures: Vec::new(),
+            };
+            for (id, publisher, pk, sk) in self.keys.iter().take(signatures) {
+                let sig = sign_release_manifest_v3(&manifest, id, publisher, pk, sk, 1_795_651_260)
+                    .expect("sign");
+                manifest.signatures.push(sig);
+            }
+            let path = self.root.join(format!(
+                "release-manifest-{release_id}-{sequence}-{signatures}.json"
+            ));
+            fs::write(&path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+            path
+        }
+
+        fn hooks(&self) -> MockHooks {
+            MockHooks::new(&self.options.binary_path, &self.options.data_dir)
+        }
+        fn data(&self, relative: &str) -> Vec<u8> {
+            fs::read(self.options.data_dir.join(relative))
+                .unwrap_or_else(|error| panic!("{relative}: {error}"))
+        }
+        fn journal(&self) -> PathBuf {
+            self.options.backup_dir.join(UPGRADE_JOURNAL_FILE)
+        }
+        fn guard(&self) -> Vec<u8> {
+            fs::read(self.options.signer_guard_dir.join("guard.state")).unwrap()
+        }
+    }
+
+    fn mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path).unwrap().permissions().mode() & 0o7777
+    }
+
+    fn files_under(root: &Path) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for entry in fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    out.push(
+                        path.strip_prefix(root)
+                            .unwrap()
+                            .to_string_lossy()
+                            .into_owned(),
+                    );
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn the_node_reports_a_short_revision_and_the_health_gate_accepts_it() {
+        // What the build script puts into the binary: `git rev-parse --short=8`.
+        assert_eq!(
+            env!("POSTFIAT_BUILD_GIT_REV").len().min(8),
+            env!("POSTFIAT_BUILD_GIT_REV").len()
+        );
+        assert!(revision_matches(Some("11111111"), TARGET_REV));
+        assert!(revision_matches(Some(TARGET_REV), TARGET_REV));
+        assert!(
+            !revision_matches(Some("1111111"), TARGET_REV),
+            "shorter than 8 proves too little"
+        );
+        assert!(!revision_matches(Some("11111112"), TARGET_REV));
+        assert!(!revision_matches(Some("unknown"), TARGET_REV));
+        assert!(
+            !revision_matches(None, TARGET_REV),
+            "a node that names no revision is not healthy"
+        );
+
+        let fixture = Fixture::new("short-rev");
+        let hooks = fixture.hooks();
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_OK, "{report:?}");
+        assert_eq!(report.status, "upgraded");
+        assert_eq!(report.installed_git_revision.as_deref(), Some("11111111"));
+        assert_eq!(
+            fs::read(&fixture.options.binary_path).unwrap(),
+            b"NEW_BINARY_BYTES_V3"
+        );
+        assert_eq!(hooks.log(), ["stop", "start"]);
+        assert!(
+            !fixture.journal().exists(),
+            "the journal is removed at the end"
+        );
+        let record = read_installed_release(&fixture.options.backup_dir)
+            .unwrap()
+            .expect("record");
+        assert_eq!(
+            (record.release_id.as_str(), record.release_sequence),
+            ("v0.3.0-testnet", 7)
+        );
+        assert_eq!(fixture.guard(), b"MONOTONIC_GUARD_FLOOR_432000");
+    }
+
+    #[test]
+    fn the_backup_holds_no_key_and_no_vote_record_and_keeps_owner_and_mode() {
+        let fixture = Fixture::new("backup");
+        let hooks = fixture.hooks();
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_OK, "{report:?}");
+        let backup = PathBuf::from(report.backup_path.expect("backup path"));
+        assert_eq!(mode(&backup), 0o700, "the backup is the owner's alone");
+        assert_eq!(
+            files_under(&backup.join("chain-data")),
+            ["blocks/000001.json", "ledger.dat"],
+            "chain state only: no key file, no vote record, no runtime state"
+        );
+        for (relative, expected) in [
+            ("", 0o710),
+            ("ledger.dat", 0o600),
+            ("blocks", 0o700),
+            ("blocks/000001.json", 0o640),
+        ] {
+            assert_eq!(
+                mode(&backup.join("chain-data").join(relative)),
+                expected,
+                "{relative}"
+            );
+        }
+        let manifest: UpgradeBackupManifestV1 =
+            serde_json::from_slice(&fs::read(backup.join("backup-manifest.json")).unwrap())
+                .unwrap();
+        assert!(manifest
+            .excluded_paths
+            .contains(&crate::CONSENSUS_V2_SAFETY_DIR.to_string()));
+        assert!(manifest
+            .excluded_paths
+            .contains(&crate::VALIDATOR_KEYS_FILE.to_string()));
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(
+            fs::metadata(backup.join("chain-data/ledger.dat"))
+                .unwrap()
+                .uid(),
+            fs::metadata(fixture.options.data_dir.join("ledger.dat"))
+                .unwrap()
+                .uid()
+        );
+        // A further exclusion is honoured; one that leaves the data directory is refused.
+        let extra = Fixture::new("backup-extra");
+        let mut options = extra.options.clone();
+        options.exclude_paths = vec!["blocks".to_string()];
+        let report = execute_upgrade(&options, &extra.hooks());
+        assert_eq!(
+            files_under(&PathBuf::from(report.backup_path.unwrap()).join("chain-data")),
+            ["ledger.dat"]
+        );
+        options.exclude_paths = vec!["../elsewhere".to_string()];
+        assert_eq!(
+            execute_upgrade(&options, &extra.hooks()).exit_code,
+            UPGRADE_EXIT_INVALID_ARGS
+        );
+    }
+
+    #[test]
+    fn a_rollback_carries_the_vote_record_forward_and_restores_owner_and_mode() {
+        let fixture = Fixture::new("rollback");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        hooks.new_binary_votes = true;
+        let report = {
+            let report = execute_upgrade(&fixture.options, &hooks);
+            assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+            report
+        };
+        assert!(report.rolled_back && report.units_stopped.is_empty());
+        assert_eq!(
+            fs::read(&fixture.options.binary_path).unwrap(),
+            b"OLD_BINARY_BYTES_V2"
+        );
+        assert_eq!(fixture.data("ledger.dat"), b"CHAIN_STATE_V2");
+        // The vote the new binary cast is on record for the old binary: it
+        // cannot sign a second, different vote for that height.
+        let safety = crate::CONSENSUS_V2_SAFETY_DIR;
+        assert_eq!(
+            fixture.data(&format!("{safety}/height-432001.json")),
+            b"VOTED_BY_NEW_BINARY"
+        );
+        assert_eq!(
+            fixture.data(&format!("{safety}/height-432000.json")),
+            b"VOTED_BY_OLD_BINARY"
+        );
+        assert_eq!(
+            fixture.data(crate::VALIDATOR_KEYS_FILE),
+            b"SECRET_VALIDATOR_KEY"
+        );
+        assert_eq!(fixture.data("runtime/spool"), b"RUNTIME");
+        // The service user can start the node: nothing changed owner or mode.
+        for (relative, expected) in [
+            ("", 0o710),
+            ("ledger.dat", 0o600),
+            ("blocks", 0o700),
+            ("blocks/000001.json", 0o640),
+        ] {
+            assert_eq!(
+                mode(&fixture.options.data_dir.join(relative)),
+                expected,
+                "{relative}"
+            );
+        }
+        assert_eq!(hooks.log(), ["stop", "start", "stop", "start"]);
+        assert!(!fixture.journal().exists());
+        assert!(read_installed_release(&fixture.options.backup_dir)
+            .unwrap()
+            .is_none());
+        assert_eq!(fixture.guard(), b"MONOTONIC_GUARD_FLOOR_432000");
+        let parent = fixture.options.data_dir.parent().unwrap();
+        assert!(
+            !parent.join(".data.failed-upgrade").exists()
+                && !parent.join(".data.rollback-stage").exists()
+        );
+    }
+
+    #[test]
+    fn a_failed_rollback_names_the_stopped_units_and_keeps_the_journal() {
+        let fixture = Fixture::new("rollback-failed");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        hooks.dead_after_rollback = true;
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLBACK_FAILED, "{report:?}");
+        assert_eq!(report.status, "rollback_failed");
+        assert!(fixture.journal().exists(), "the next run tries again");
+
+        // A unit that will not start is named, even when the node answers.
+        let fixture = Fixture::new("dead-unit");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        hooks.dead_unit = Some("postfiat-validator-0.service".to_string());
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLBACK_FAILED, "{report:?}");
+        assert_eq!(report.units_stopped, ["postfiat-validator-0.service"]);
+        assert!(format_upgrade_human_report(&report)
+            .contains("UNITS NOT RUNNING: postfiat-validator-0.service"));
+        // And a new binary whose RPC answers while the validator unit is down is not healthy.
+        let fixture = Fixture::new("dead-unit-new");
+        let mut hooks = fixture.hooks();
+        hooks.dead_unit = Some("postfiat-validator-0.service".to_string());
+        assert_ne!(
+            execute_upgrade(&fixture.options, &hooks).exit_code,
+            UPGRADE_EXIT_OK
+        );
+    }
+
+    #[test]
+    fn an_older_release_is_refused_and_the_same_release_is_up_to_date() {
+        let fixture = Fixture::new("order");
+        let hooks = fixture.hooks();
+        assert_eq!(
+            execute_upgrade(&fixture.options, &hooks).exit_code,
+            UPGRADE_EXIT_OK
+        );
+        let log_after_install = hooks.log();
+
+        let mut options = fixture.options.clone();
+        for check_only in [true, false] {
+            options.check_only = check_only;
+            // Validly signed, inside its validity window, and older.
+            options.manifest_file = Some(fixture.manifest("v0.2.9-testnet", 6, rolling(), 2));
+            let report = execute_upgrade(&options, &hooks);
+            assert_eq!(
+                report.exit_code, UPGRADE_EXIT_SECURITY_REFUSAL,
+                "{report:?}"
+            );
+            assert_eq!(report.error_code.as_deref(), Some("release_downgrade"));
+            assert_eq!(report.installed_release_sequence, Some(7));
+            // The same sequence under another name.
+            options.manifest_file = Some(fixture.manifest("v0.3.0-other", 7, rolling(), 2));
+            let report = execute_upgrade(&options, &hooks);
+            assert_eq!(
+                report.error_code.as_deref(),
+                Some("release_sequence_conflict")
+            );
+            // The installed release again.
+            options.manifest_file = Some(fixture.manifest("v0.3.0-testnet", 7, rolling(), 2));
+            let report = execute_upgrade(&options, &hooks);
+            assert_eq!(
+                (report.exit_code, report.status.as_str()),
+                (UPGRADE_EXIT_OK, "up_to_date")
+            );
+        }
+        assert_eq!(
+            hooks.log(),
+            log_after_install,
+            "a refused release stops no service"
+        );
+        assert_eq!(
+            fs::read(&fixture.options.binary_path).unwrap(),
+            b"NEW_BINARY_BYTES_V3"
+        );
+        // A sequence of 0 is not a release.
+        options.manifest_file = Some(fixture.manifest("v0-zero", 0, rolling(), 2));
+        assert_eq!(
+            execute_upgrade(&options, &hooks).exit_code,
+            UPGRADE_EXIT_SECURITY_REFUSAL
+        );
+        // A damaged record is a refusal, not a fresh start.
         fs::write(
-            &manifest_file,
-            serde_json::to_string_pretty(&manifest).unwrap(),
+            fixture.options.backup_dir.join(INSTALLED_RELEASE_FILE),
+            b"{}",
         )
         .unwrap();
-        (
-            manifest_file,
-            keyset_file,
-            candidate_bin,
-            installed_bin,
-            data_dir,
-            guard_dir,
-            target_rev,
-        )
-    }
-
-    #[test]
-    fn upgrade_check_reports_exit_10_and_exit_11_and_refuses_single_signature() {
-        let tmp = TestTempDir::new("check");
-        let (manifest_file, keyset_file, candidate_bin, installed_bin, data_dir, guard_dir, rev) =
-            build_signed_fixture(
-                &tmp.0,
-                ReleaseRolloutV3 {
-                    mode: "activation_height".to_string(),
-                    activation_height: Some(500_000),
-                    advance_warning_blocks: Some(28_800),
-                    halt_if_missed: true,
-                },
-                2,
-            );
-        let backup_dir = tmp.0.join("backups");
-
-        // Inside activation warning window (500_000 - 480_000 = 20_000 <= 28_800) => exit 11
-        let hooks = MockHooks {
-            free_bytes: 10 * 1024 * 1024 * 1024,
-            fail_post_upgrade: AtomicBool::new(false),
-            probe_calls: AtomicUsize::new(0),
-            target_rev: rev.clone(),
-            prior_rev: "00".repeat(20),
-            block_height: 480_000,
-            fail_rollback_health: false,
-        };
-        let opts = UpgradeOptions {
-            check_only: true,
-            manifest_file: Some(manifest_file.clone()),
-            channel_url: None,
-            binary_file: Some(candidate_bin.clone()),
-            keyset_file: keyset_file.clone(),
-            data_dir: data_dir.clone(),
-            signer_guard_dir: guard_dir.clone(),
-            binary_path: installed_bin.clone(),
-            backup_dir: backup_dir.clone(),
-            service_units: Vec::new(),
-            rpc_host: "127.0.0.1".to_string(),
-            rpc_port: 27650,
-            health_timeout_ms: 500,
-            now_unix: Some(1_795_651_500),
-            architecture: Some("linux-x86_64".to_string()),
-            yes: true,
-            json: true,
-            skip_rpc_preflight: false,
-        };
-        let report = execute_upgrade(&opts, &hooks);
-        assert_eq!(
-            report.exit_code, UPGRADE_EXIT_ACTIVATION_WARNING,
-            "{report:?}"
-        );
-        assert_eq!(report.verified_signers.len(), 2);
-
-        // Guard overlap must refuse with exit 3.
-        let mut overlap = opts.clone();
-        overlap.signer_guard_dir = data_dir.join("nested-guard");
-        let report = execute_upgrade(&overlap, &hooks);
-        assert_eq!(report.exit_code, UPGRADE_EXIT_SECURITY_REFUSAL);
-        assert_eq!(report.error_code.as_deref(), Some("guard_path_overlap"));
-
-        // Insufficient disk space must refuse with exit 4.
-        let low_disk = MockHooks {
-            free_bytes: 1024,
-            fail_post_upgrade: AtomicBool::new(false),
-            probe_calls: AtomicUsize::new(0),
-            target_rev: rev,
-            prior_rev: "00".repeat(20),
-            block_height: 400_000,
-            fail_rollback_health: false,
-        };
-        let report = execute_upgrade(&opts, &low_disk);
-        assert_eq!(report.exit_code, UPGRADE_EXIT_PREFLIGHT_FAILED);
+        options.manifest_file = Some(fixture.manifest("v0.4.0-testnet", 8, rolling(), 2));
+        let report = execute_upgrade(&options, &hooks);
         assert_eq!(
             report.error_code.as_deref(),
-            Some("insufficient_disk_space")
+            Some("installed_release_record_invalid")
         );
-
-        // Single signature (1-of-3) must be refused with exit 3.
-        let tmp_bad = TestTempDir::new("one-sig");
-        let (m1, k1, b1, inst1, d1, g1, _) = build_signed_fixture(
-            &tmp_bad.0,
-            ReleaseRolloutV3 {
-                mode: "rolling".to_string(),
-                activation_height: None,
-                advance_warning_blocks: None,
-                halt_if_missed: false,
-            },
-            1,
-        );
-        let bad_opts = UpgradeOptions {
-            manifest_file: Some(m1),
-            keyset_file: k1,
-            binary_file: Some(b1),
-            binary_path: inst1,
-            data_dir: d1,
-            signer_guard_dir: g1,
-            backup_dir: tmp_bad.0.join("backups"),
-            ..opts
-        };
-        let report = execute_upgrade(&bad_opts, &hooks);
-        assert_eq!(report.exit_code, UPGRADE_EXIT_SECURITY_REFUSAL);
     }
 
     #[test]
-    fn upgrade_apply_and_rollback_preserve_signer_guard_untouched() {
-        let tmp = TestTempDir::new("apply-rollback");
-        let (manifest_file, keyset_file, candidate_bin, installed_bin, data_dir, guard_dir, rev) =
-            build_signed_fixture(
-                &tmp.0,
-                ReleaseRolloutV3 {
-                    mode: "rolling".to_string(),
-                    activation_height: None,
-                    advance_warning_blocks: None,
-                    halt_if_missed: false,
-                },
-                2,
-            );
-        let backup_dir = tmp.0.join("backups");
-        let guard_file = guard_dir.join("guard.state");
+    fn check_reports_and_refusals() {
+        let fixture = Fixture::new("check");
+        let mut hooks = fixture.hooks();
+        hooks.height = 480_000;
+        let mut options = fixture.options.clone();
+        options.check_only = true;
+        let report = execute_upgrade(&options, &hooks);
+        assert_eq!(
+            (report.exit_code, report.status.as_str()),
+            (UPGRADE_EXIT_AVAILABLE, "upgrade_available")
+        );
+        assert_eq!(report.release_sequence, Some(7));
+        assert_eq!(report.verified_signers.len(), 2);
 
-        // 1. Failing post-upgrade health triggers atomic rollback (exit 5), guard untouched.
-        let failing_hooks = MockHooks {
-            free_bytes: 10 * 1024 * 1024 * 1024,
-            fail_post_upgrade: AtomicBool::new(true),
-            probe_calls: AtomicUsize::new(0),
-            target_rev: rev.clone(),
-            prior_rev: "00".repeat(20),
-            block_height: 432_000,
-            fail_rollback_health: false,
-        };
-        let opts = UpgradeOptions {
-            check_only: false,
-            manifest_file: Some(manifest_file.clone()),
-            channel_url: None,
-            binary_file: Some(candidate_bin.clone()),
-            keyset_file: keyset_file.clone(),
-            data_dir: data_dir.clone(),
-            signer_guard_dir: guard_dir.clone(),
-            binary_path: installed_bin.clone(),
-            backup_dir: backup_dir.clone(),
-            service_units: Vec::new(),
-            rpc_host: "127.0.0.1".to_string(),
-            rpc_port: 27650,
-            health_timeout_ms: 250,
-            now_unix: Some(1_795_651_600),
-            architecture: Some("linux-x86_64".to_string()),
-            yes: true,
-            json: true,
-            skip_rpc_preflight: false,
-        };
-        let rb_report = execute_upgrade(&opts, &failing_hooks);
+        // Inside the warning window of an activation height (500_000 - 480_000 <= 28_800).
+        options.manifest_file = Some(fixture.manifest(
+            "v0.3.1-testnet",
+            8,
+            ReleaseRolloutV3 {
+                mode: "activation_height".to_string(),
+                activation_height: Some(500_000),
+                advance_warning_blocks: Some(28_800),
+                halt_if_missed: true,
+            },
+            2,
+        ));
+        let report = execute_upgrade(&options, &hooks);
         assert_eq!(
-            rb_report.exit_code, UPGRADE_EXIT_ROLLED_BACK,
-            "{rb_report:?}"
+            (report.exit_code, report.status.as_str()),
+            (UPGRADE_EXIT_ACTIVATION_WARNING, "activation_imminent")
         );
-        assert!(rb_report.rolled_back);
-        assert_eq!(fs::read(&installed_bin).unwrap(), b"OLD_BINARY_BYTES_V2");
+        assert_eq!(report.blocks_until_activation, Some(20_000));
+
+        // One signature is not a release.
+        options.manifest_file = Some(fixture.manifest("v0.3.2-testnet", 9, rolling(), 1));
+        let report = execute_upgrade(&options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_SECURITY_REFUSAL);
+        assert_eq!(report.status, "refused");
+
+        options.manifest_file = fixture.options.manifest_file.clone();
+        let mut overlap = options.clone();
+        overlap.signer_guard_dir = options.data_dir.join("nested-guard");
         assert_eq!(
-            fs::read(&guard_file).unwrap(),
-            b"MONOTONIC_GUARD_FLOOR_432000"
+            execute_upgrade(&overlap, &hooks).error_code.as_deref(),
+            Some("guard_path_overlap")
+        );
+        hooks.free_bytes = 1024;
+        assert_eq!(
+            execute_upgrade(&options, &hooks).error_code.as_deref(),
+            Some("insufficient_disk_space")
+        );
+        assert!(hooks.log().is_empty(), "--check stops and starts nothing");
+
+        // Another chain is refused in apply mode, and there is no flag to skip the check.
+        let other = Fixture::new("other-chain");
+        struct OtherChain(MockHooks);
+        impl UpgradeSystemHooks for OtherChain {
+            fn stop_units(&self, units: &[String]) -> Result<(), String> {
+                self.0.stop_units(units)
+            }
+            fn start_units(&self, units: &[String]) -> Result<(), String> {
+                self.0.start_units(units)
+            }
+            fn probe_node(
+                &self,
+                host: &str,
+                port: u16,
+                timeout_ms: u64,
+            ) -> Result<UpgradeNodeStatusProbe, String> {
+                let mut probe = self.0.probe_node(host, port, timeout_ms)?;
+                probe.chain_id = "some-other-chain".to_string();
+                Ok(probe)
+            }
+            fn free_disk_bytes(&self, path: &Path) -> Result<u64, String> {
+                self.0.free_disk_bytes(path)
+            }
+            fn unit_is_active(&self, unit: &str) -> bool {
+                self.0.unit_is_active(unit)
+            }
+        }
+        let hooks = OtherChain(other.hooks());
+        let report = execute_upgrade(&other.options, &hooks);
+        assert_eq!(
+            report.error_code.as_deref(),
+            Some("chain_identity_mismatch")
+        );
+        assert!(hooks.0.log().is_empty());
+    }
+
+    #[test]
+    fn an_interrupted_upgrade_is_rolled_back_before_anything_else() {
+        // Interrupted after the swap: the new binary is in place, the journal says so.
+        let fixture = Fixture::new("interrupted");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        hooks.new_binary_votes = true;
+        hooks.dead_after_rollback = true;
+        let first = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(first.exit_code, UPGRADE_EXIT_ROLLBACK_FAILED, "{first:?}");
+        // Put the machine into the state a power cut after the swap leaves: new
+        // binary installed, journal at `swapped`, units down.
+        fs::write(&fixture.options.binary_path, b"NEW_BINARY_BYTES_V3").unwrap();
+        fs::write(
+            fixture.options.data_dir.join("ledger.dat"),
+            b"REWRITTEN_BY_NEW_BINARY",
+        )
+        .unwrap();
+        let mut journal = read_upgrade_journal(&fixture.options.backup_dir)
+            .unwrap()
+            .expect("journal");
+        journal.step = "swapped".to_string();
+        write_json_atomically(&fixture.journal(), &journal).unwrap();
+
+        let recover = fixture.hooks();
+        *recover.running.lock().unwrap() = false;
+        let mut check = fixture.options.clone();
+        check.check_only = true;
+        let report = execute_upgrade(&check, &recover);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_PREFLIGHT_FAILED);
+        assert_eq!(report.error_code.as_deref(), Some("interrupted_upgrade"));
+        assert!(recover.log().is_empty(), "--check changes nothing");
+
+        // Any run finishes the rollback first, whatever manifest it was given.
+        let mut next = fixture.options.clone();
+        next.manifest_file = Some(fixture.manifest("v0.4.0-testnet", 8, rolling(), 2));
+        let report = execute_upgrade(&next, &recover);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+        assert_eq!(report.release_id.as_deref(), Some("v0.3.0-testnet"));
+        assert_eq!(
+            fs::read(&fixture.options.binary_path).unwrap(),
+            b"OLD_BINARY_BYTES_V2"
+        );
+        assert_eq!(fixture.data("ledger.dat"), b"CHAIN_STATE_V2");
+        assert_eq!(
+            fixture.data(&format!(
+                "{}/height-432001.json",
+                crate::CONSENSUS_V2_SAFETY_DIR
+            )),
+            b"VOTED_BY_NEW_BINARY"
+        );
+        assert_eq!(
+            fixture.data(crate::VALIDATOR_KEYS_FILE),
+            b"SECRET_VALIDATOR_KEY"
+        );
+        assert!(!fixture.journal().exists());
+        // With the journal gone the next run is an ordinary upgrade.
+        assert_eq!(
+            execute_upgrade(&next, &fixture.hooks()).exit_code,
+            UPGRADE_EXIT_OK
         );
 
-        // 2. Healthy apply swaps binary atomically (exit 0), guard still untouched.
-        let ok_hooks = MockHooks {
-            free_bytes: 10 * 1024 * 1024 * 1024,
-            fail_post_upgrade: AtomicBool::new(false),
-            probe_calls: AtomicUsize::new(0),
-            target_rev: rev,
-            prior_rev: "00".repeat(20),
-            block_height: 432_000,
-            fail_rollback_health: false,
-        };
-        let mut opts2 = opts;
-        opts2.now_unix = Some(1_795_651_700);
-        let ok_report = execute_upgrade(&opts2, &ok_hooks);
-        assert_eq!(ok_report.exit_code, UPGRADE_EXIT_OK, "{ok_report:?}");
-        assert_eq!(fs::read(&installed_bin).unwrap(), b"NEW_BINARY_BYTES_V3");
+        // Interrupted before the backup was complete: nothing changed, the units are started.
+        let early = Fixture::new("interrupted-early");
+        write_json_atomically(
+            &early.journal(),
+            &UpgradeJournalV1 {
+                schema: UPGRADE_JOURNAL_SCHEMA.to_string(),
+                release_id: "v0.3.0-testnet".to_string(),
+                release_sequence: 7,
+                started_unix: NOW,
+                step: "stopping".to_string(),
+                data_dir: early.options.data_dir.display().to_string(),
+                binary_path: early.options.binary_path.display().to_string(),
+                signer_guard_dir: early.options.signer_guard_dir.display().to_string(),
+                backup_root: None,
+                service_units: early.options.service_units.clone(),
+                exclude_paths: Vec::new(),
+            },
+        )
+        .unwrap();
+        let partial = backup_snapshot_dir(&early.options.backup_dir, "v0.3.0-testnet", NOW);
+        fs::create_dir_all(partial.join("chain-data")).unwrap();
+        let hooks = early.hooks();
+        *hooks.running.lock().unwrap() = false;
+        let report = execute_upgrade(&early.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+        assert_eq!(hooks.log(), ["start"]);
+        assert!(!partial.exists() && !early.journal().exists());
         assert_eq!(
-            fs::read(&guard_file).unwrap(),
-            b"MONOTONIC_GUARD_FLOOR_432000"
+            fs::read(&early.options.binary_path).unwrap(),
+            b"OLD_BINARY_BYTES_V2"
         );
+        assert_eq!(early.data("ledger.dat"), b"CHAIN_STATE_V2");
+    }
+
+    #[test]
+    fn a_rollback_that_stopped_while_carrying_entries_over_never_deletes_the_vote_record() {
+        let fixture = Fixture::new("carry");
+        let report = execute_upgrade(&fixture.options, &{
+            let mut hooks = fixture.hooks();
+            hooks.new_binary_unhealthy = true;
+            hooks.new_binary_votes = true;
+            hooks
+        });
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+        // Rebuild the state of a rollback that died after the swap and after
+        // moving the vote record, with the key file still in the stash.
+        let data_dir = &fixture.options.data_dir;
+        let stash = data_dir.parent().unwrap().join(".data.failed-upgrade");
+        fs::create_dir_all(&stash).unwrap();
+        fs::rename(
+            data_dir.join(crate::VALIDATOR_KEYS_FILE),
+            stash.join(crate::VALIDATOR_KEYS_FILE),
+        )
+        .unwrap();
+        let backup = PathBuf::from(report.backup_path.unwrap());
+        let (backup_binary, backup_data) = backup_paths(&backup);
+        restore_pre_upgrade_backup(
+            &backup_binary,
+            &backup_data,
+            &fixture.options.binary_path,
+            data_dir,
+            &fixture.options.signer_guard_dir,
+            &backup_excludes(&[]).unwrap(),
+        )
+        .expect("second rollback");
+        assert_eq!(
+            fixture.data(&format!(
+                "{}/height-432001.json",
+                crate::CONSENSUS_V2_SAFETY_DIR
+            )),
+            b"VOTED_BY_NEW_BINARY",
+            "the record already carried over is still there"
+        );
+        assert_eq!(
+            fixture.data(crate::VALIDATOR_KEYS_FILE),
+            b"SECRET_VALIDATOR_KEY"
+        );
+        assert!(!stash.exists());
+    }
+
+    #[test]
+    fn a_keyset_rotation_needs_two_signers_of_the_keyset_it_replaces() {
+        let fixture = Fixture::new("rotation");
+        let mut new_keyset = fixture.keyset.clone();
+        new_keyset.keyset_id = "postfiat-release-keyset-2027-v1".to_string();
+        let replacement = ml_dsa_65_keygen().expect("keygen");
+        new_keyset.signers[2].public_key_hex = bytes_to_hex(&replacement.public_key);
+        new_keyset.signers[2].publisher = address_from_public_key(&replacement.public_key);
+        let sign = |index: usize, keyset: &ReleaseKeysetV1| {
+            sign_release_keyset_rotation(keyset, &fixture.keys[index].0, &fixture.keys[index].3)
+                .expect("sign")
+        };
+        let rotation =
+            |signatures: Vec<ReleaseKeysetRotationSignatureV1>| ReleaseKeysetRotationV1 {
+                schema: RELEASE_KEYSET_ROTATION_SCHEMA.to_string(),
+                prior_keyset_id: fixture.keyset.keyset_id.clone(),
+                new_keyset: new_keyset.clone(),
+                signatures,
+            };
+        let good = rotation(vec![sign(0, &new_keyset), sign(2, &new_keyset)]);
+        assert_eq!(
+            verify_release_keyset_rotation(&good, &fixture.keyset).expect("two prior signers"),
+            ["release-lead-1", "security-custodian-3"]
+        );
+        // One signer, the same signer twice, a signature over another keyset, the new key signing for itself.
+        assert!(verify_release_keyset_rotation(
+            &rotation(vec![sign(0, &new_keyset)]),
+            &fixture.keyset
+        )
+        .is_err());
+        assert!(verify_release_keyset_rotation(
+            &rotation(vec![sign(0, &new_keyset), sign(0, &new_keyset)]),
+            &fixture.keyset
+        )
+        .is_err());
+        assert!(verify_release_keyset_rotation(
+            &rotation(vec![sign(0, &fixture.keyset), sign(1, &new_keyset)]),
+            &fixture.keyset
+        )
+        .is_err());
+        let self_signed = sign_release_keyset_rotation(
+            &new_keyset,
+            "security-custodian-3",
+            &bytes_to_hex(&replacement.private_key),
+        )
+        .unwrap();
+        assert!(verify_release_keyset_rotation(
+            &rotation(vec![sign(0, &new_keyset), self_signed]),
+            &fixture.keyset
+        )
+        .is_err());
+        let mut wrong_prior = good.clone();
+        wrong_prior.prior_keyset_id = "some-other-keyset".to_string();
+        assert!(verify_release_keyset_rotation(&wrong_prior, &fixture.keyset).is_err());
+        let mut same_id = good.clone();
+        same_id.new_keyset.keyset_id = fixture.keyset.keyset_id.clone();
+        assert!(verify_release_keyset_rotation(&same_id, &fixture.keyset).is_err());
+
+        // Applied: the keyset file is replaced and the old one kept beside it.
+        let rotation_file = fixture.root.join("rotation.json");
+        fs::write(&rotation_file, serde_json::to_vec(&good).unwrap()).unwrap();
+        let keyset_file = &fixture.options.keyset_file;
+        assert_eq!(
+            apply_release_keyset_rotation(&rotation_file, keyset_file).unwrap(),
+            "postfiat-release-keyset-2027-v1"
+        );
+        let installed: ReleaseKeysetV1 =
+            serde_json::from_slice(&fs::read(keyset_file).unwrap()).unwrap();
+        assert_eq!(installed, new_keyset);
+        assert!(PathBuf::from(format!(
+            "{}.postfiat-release-keyset-2026-v1",
+            keyset_file.display()
+        ))
+        .is_file());
+        // The same rotation cannot be applied twice, and a manifest under the old keyset is now refused.
+        assert!(apply_release_keyset_rotation(&rotation_file, keyset_file).is_err());
+        let report = execute_upgrade(&fixture.options, &fixture.hooks());
+        assert_eq!(
+            report.exit_code, UPGRADE_EXIT_SECURITY_REFUSAL,
+            "{report:?}"
+        );
+    }
+
+    #[test]
+    fn the_pre_start_check_ties_the_running_binary_to_a_signed_manifest() {
+        let fixture = Fixture::new("prestart");
+        let manifest = fixture.options.manifest_file.clone().unwrap();
+        let keyset = &fixture.options.keyset_file;
+        let candidate = fixture.options.binary_file.clone().unwrap();
+        let verified = verify_installed_release(&manifest, keyset, &candidate, "linux-x86_64")
+            .expect("the release binary");
+        assert_eq!(
+            (verified.release_id.as_str(), verified.release_sequence),
+            ("v0.3.0-testnet", 7)
+        );
+        // Another binary, an unsigned manifest, an unknown architecture.
+        assert!(verify_installed_release(
+            &manifest,
+            keyset,
+            &fixture.options.binary_path,
+            "linux-x86_64"
+        )
+        .is_err());
+        let one_signature = fixture.manifest("v0.3.0-testnet", 7, rolling(), 1);
+        assert!(
+            verify_installed_release(&one_signature, keyset, &candidate, "linux-x86_64").is_err()
+        );
+        assert!(verify_installed_release(&manifest, keyset, &candidate, "linux-riscv").is_err());
+        // The validity window bounds accepting an upgrade, not running a release:
+        // a node must still start after its manifest has expired.
+        let parsed: ReleaseManifestV3 =
+            serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        assert!(
+            verify_release_manifest_v3(&parsed, &fixture.keyset, parsed.valid_until_unix + 1)
+                .is_err()
+        );
+        assert!(verify_installed_release(&manifest, keyset, &candidate, "linux-x86_64").is_ok());
     }
 }

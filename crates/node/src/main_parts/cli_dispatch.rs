@@ -799,6 +799,10 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "deployment-validator-units-stage"
         | "top"
         | "rpc-http-edge"
+        | "release-manifest-verify"
+        | "release-key-create"
+        | "release-manifest-sign"
+        | "release-keyset-rotation-sign"
         | "observer-key-create"
         | "observer-uptime-sign"
         | "observer-uptime-verify" => run_cli_group_05(command, flags),
@@ -824,7 +828,7 @@ fn run_upgrade_command(flags: &[String]) -> i32 {
         if json {
             let err_json = serde_json::json!({
                 "schema": postfiat_node::release_upgrade::UPGRADE_REPORT_SCHEMA,
-                "status": "failed",
+                "status": "refused",
                 "exit_code": UPGRADE_EXIT_INVALID_ARGS,
                 "error_code": "invalid_args",
                 "message": msg,
@@ -850,13 +854,35 @@ fn run_upgrade_command(flags: &[String]) -> i32 {
         },
         None => 60_000,
     };
-    let now_unix = match flag_value(flags, "--now-unix") {
-        Some(raw) => match raw.parse::<u64>() {
-            Ok(v) => Some(v),
-            Err(_) => return parse_err("--now-unix must be a u64".to_string()),
-        },
-        None => None,
-    };
+    // The clock, the chain check and the release order cannot be overridden
+    // from the command line.
+    for removed in ["--now-unix", "--skip-rpc-preflight"] {
+        if flag_present(flags, removed) {
+            return parse_err(format!("{removed} is not an option of `upgrade`"));
+        }
+    }
+    let exclude_paths: Vec<String> = flags
+        .windows(2)
+        .filter(|pair| pair[0] == "--exclude-path")
+        .map(|pair| pair[1].clone())
+        .collect();
+    if let Some(rotation_file) = flag_value(flags, "--rotate-keyset") {
+        let keyset_file =
+            PathBuf::from(flag_value(flags, "--keyset-file").unwrap_or(DEFAULT_RELEASE_KEYSET_FILE));
+        return match postfiat_node::release_upgrade::apply_release_keyset_rotation(
+            Path::new(rotation_file),
+            &keyset_file,
+        ) {
+            Ok(keyset_id) => {
+                println!("release keyset rotated to `{keyset_id}` in {}", keyset_file.display());
+                0
+            }
+            Err(error) => {
+                eprintln!("error: release keyset rotation refused: {error}");
+                postfiat_node::release_upgrade::UPGRADE_EXIT_SECURITY_REFUSAL
+            }
+        };
+    }
     let service_units = match flag_value(flags, "--service-units") {
         Some("none" | "") => Vec::new(),
         Some(raw) => raw
@@ -897,11 +923,11 @@ fn run_upgrade_command(flags: &[String]) -> i32 {
             .to_string(),
         rpc_port,
         health_timeout_ms,
-        now_unix,
+        now_unix: None,
         architecture: flag_value(flags, "--arch").map(str::to_string),
         yes: flag_present(flags, "--yes"),
         json,
-        skip_rpc_preflight: flag_present(flags, "--skip-rpc-preflight"),
+        exclude_paths,
     };
 
     let hooks = LiveUpgradeSystemHooks;

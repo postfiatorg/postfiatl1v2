@@ -110,6 +110,7 @@ fn spawn_replica(data_dir: &Path, extra: &[&str]) -> Result<Replica, String> {
         thread::sleep(Duration::from_millis(20));
     }
     let _ = child.kill();
+    let _ = child.wait();
     Err("replica did not become ready".to_string())
 }
 

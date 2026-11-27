@@ -3333,6 +3333,179 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "release-manifest-verify" => {
+            // Pre-start check of a packaged unit: the manifest is signed by the
+            // pinned 2-of-3 keyset and names the binary about to run.
+            use postfiat_node::release_upgrade::{
+                host_release_architecture, verify_installed_release, DEFAULT_RELEASE_KEYSET_FILE,
+            };
+            let manifest_file = flag_value(flags, "--manifest-file").ok_or("missing --manifest-file")?;
+            let keyset_file = flag_value(flags, "--keyset-file").unwrap_or(DEFAULT_RELEASE_KEYSET_FILE);
+            let runtime_binary = match flag_value(flags, "--runtime-binary-file") {
+                Some(path) => PathBuf::from(path),
+                None => env::current_exe()
+                    .map_err(|error| format!("cannot find the running binary: {error}"))?,
+            };
+            let architecture = match flag_value(flags, "--arch") {
+                Some(arch) => arch.to_string(),
+                None => host_release_architecture()?.to_string(),
+            };
+            let verification = verify_installed_release(
+                Path::new(manifest_file),
+                Path::new(keyset_file),
+                &runtime_binary,
+                &architecture,
+            )
+            .map_err(|error| format!("release-manifest-verify failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&verification)
+                    .map_err(|error| format!("serialization failed: {error}"))?
+            );
+            Ok(())
+        }
+        "release-key-create" => {
+            // One of the three offline release keys. The private half is written
+            // owner-only and never printed.
+            let signer_id = flag_value(flags, "--signer-id").ok_or("missing --signer-id")?;
+            let role = flag_value(flags, "--role").ok_or("missing --role")?;
+            let out_file = PathBuf::from(flag_value(flags, "--out-file").ok_or("missing --out-file")?);
+            if out_file.exists() {
+                return Err(format!("`{}` already exists; a key is never overwritten", out_file.display()));
+            }
+            let keypair = postfiat_crypto_provider::ml_dsa_65_keygen()
+                .map_err(|error| format!("release-key-create failed: {error}"))?;
+            let public_key_hex = postfiat_crypto_provider::bytes_to_hex(&keypair.public_key);
+            let publisher = postfiat_crypto_provider::address_from_public_key(&keypair.public_key);
+            let private = serde_json::json!({
+                "schema": "postfiat.release_signer_key.v1",
+                "signer_id": signer_id,
+                "role": role,
+                "publisher": publisher,
+                "algorithm_id": postfiat_crypto_provider::ML_DSA_65_ALGORITHM,
+                "public_key_hex": public_key_hex,
+                "private_key_hex": postfiat_crypto_provider::bytes_to_hex(&keypair.private_key),
+            });
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                let mut file = std::fs::OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .mode(0o600)
+                    .open(&out_file)
+                    .map_err(|error| format!("write `{}` failed: {error}", out_file.display()))?;
+                file.write_all(private.to_string().as_bytes())
+                    .and_then(|()| file.sync_all())
+                    .map_err(|error| format!("write `{}` failed: {error}", out_file.display()))?;
+            }
+            // The public entry for the keyset file.
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "signer_id": signer_id,
+                    "role": role,
+                    "publisher": publisher,
+                    "public_key_hex": public_key_hex,
+                }))
+                .map_err(|error| format!("serialization failed: {error}"))?
+            );
+            Ok(())
+        }
+        "release-manifest-sign" => {
+            // Adds this signer's signature to a manifest. Run once per signer,
+            // each on its own machine; two signatures make a release.
+            use postfiat_node::release_upgrade::{sign_release_manifest_v3, ReleaseManifestV3};
+            let manifest_file = PathBuf::from(flag_value(flags, "--manifest-file").ok_or("missing --manifest-file")?);
+            let key_file = flag_value(flags, "--key-file").ok_or("missing --key-file")?;
+            let key: serde_json::Value = serde_json::from_slice(
+                &fs::read(key_file).map_err(|error| format!("read `{key_file}` failed: {error}"))?,
+            )
+            .map_err(|error| format!("invalid release signer key file: {error}"))?;
+            let field = |name: &str| -> Result<String, String> {
+                key[name]
+                    .as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| format!("release signer key file has no `{name}`"))
+            };
+            let mut manifest: ReleaseManifestV3 = serde_json::from_slice(
+                &fs::read(&manifest_file)
+                    .map_err(|error| format!("read `{}` failed: {error}", manifest_file.display()))?,
+            )
+            .map_err(|error| format!("invalid release manifest: {error}"))?;
+            let signer_id = field("signer_id")?;
+            if manifest.signatures.iter().any(|s| s.signer_id == signer_id) {
+                return Err(format!("the manifest already carries a signature of `{signer_id}`"));
+            }
+            let signature = sign_release_manifest_v3(
+                &manifest,
+                &signer_id,
+                &field("publisher")?,
+                &field("public_key_hex")?,
+                &field("private_key_hex")?,
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |elapsed| elapsed.as_secs()),
+            )?;
+            manifest.signatures.push(signature);
+            let json = serde_json::to_string_pretty(&manifest)
+                .map_err(|error| format!("serialization failed: {error}"))?;
+            fs::write(&manifest_file, format!("{json}\n"))
+                .map_err(|error| format!("write `{}` failed: {error}", manifest_file.display()))?;
+            println!("signed by `{signer_id}`: {} signature(s)", manifest.signatures.len());
+            Ok(())
+        }
+        "release-keyset-rotation-sign" => {
+            // Adds this signer's signature to a keyset rotation. The file is
+            // created from --new-keyset-file and --prior-keyset-id when absent.
+            use postfiat_node::release_upgrade::{
+                sign_release_keyset_rotation, ReleaseKeysetRotationV1, ReleaseKeysetV1,
+                RELEASE_KEYSET_ROTATION_SCHEMA,
+            };
+            let rotation_file = PathBuf::from(flag_value(flags, "--rotation-file").ok_or("missing --rotation-file")?);
+            let key_file = flag_value(flags, "--key-file").ok_or("missing --key-file")?;
+            let key: serde_json::Value = serde_json::from_slice(
+                &fs::read(key_file).map_err(|error| format!("read `{key_file}` failed: {error}"))?,
+            )
+            .map_err(|error| format!("invalid release signer key file: {error}"))?;
+            let signer_id = key["signer_id"].as_str().ok_or("release signer key file has no `signer_id`")?;
+            let private_key_hex = key["private_key_hex"]
+                .as_str()
+                .ok_or("release signer key file has no `private_key_hex`")?;
+            let mut rotation: ReleaseKeysetRotationV1 = if rotation_file.exists() {
+                serde_json::from_slice(
+                    &fs::read(&rotation_file)
+                        .map_err(|error| format!("read `{}` failed: {error}", rotation_file.display()))?,
+                )
+                .map_err(|error| format!("invalid keyset rotation: {error}"))?
+            } else {
+                let new_keyset_file = flag_value(flags, "--new-keyset-file").ok_or("missing --new-keyset-file")?;
+                let new_keyset: ReleaseKeysetV1 = serde_json::from_slice(
+                    &fs::read(new_keyset_file)
+                        .map_err(|error| format!("read `{new_keyset_file}` failed: {error}"))?,
+                )
+                .map_err(|error| format!("invalid new keyset: {error}"))?;
+                ReleaseKeysetRotationV1 {
+                    schema: RELEASE_KEYSET_ROTATION_SCHEMA.to_string(),
+                    prior_keyset_id: flag_value(flags, "--prior-keyset-id")
+                        .ok_or("missing --prior-keyset-id")?
+                        .to_string(),
+                    new_keyset,
+                    signatures: Vec::new(),
+                }
+            };
+            if rotation.signatures.iter().any(|s| s.signer_id == signer_id) {
+                return Err(format!("the rotation already carries a signature of `{signer_id}`"));
+            }
+            rotation
+                .signatures
+                .push(sign_release_keyset_rotation(&rotation.new_keyset, signer_id, private_key_hex)?);
+            let json = serde_json::to_string_pretty(&rotation)
+                .map_err(|error| format!("serialization failed: {error}"))?;
+            fs::write(&rotation_file, format!("{json}\n"))
+                .map_err(|error| format!("write `{}` failed: {error}", rotation_file.display()))?;
+            println!("signed by `{signer_id}`: {} signature(s)", rotation.signatures.len());
+            Ok(())
+        }
         "rpc-http-edge" => {
             use postfiat_node::rpc_http_edge::{run_rpc_http_edge, RpcHttpEdgeOptions};
             let parse_port = |flag: &str, default: u16| -> Result<u16, String> {
