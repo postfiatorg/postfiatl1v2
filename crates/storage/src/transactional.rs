@@ -79,6 +79,13 @@ const ORDERED_BY_ORDINAL: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new("ordered_by_ordinal_v1");
 const CURRENT_STATE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("current_state_v1");
 const HISTORY_INDEXES: TableDefinition<&[u8], &[u8]> = TableDefinition::new("history_indexes_v1");
+/// Local, node-only migration markers. Not part of the state root, any
+/// consensus hash, the integrity scan or the canonical export (which read an
+/// explicit table list); a release that does not know it never opens it.
+const LOCAL_MIGRATIONS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("local_migrations_v1");
+/// Set, in the backfill's own transaction, once the `fastpay_order_v1` rows
+/// of every anchor written before this release are present.
+const FASTPAY_ORDER_BACKFILL_MARKER: &[u8] = b"fastpay_order_index_backfill_v1";
 
 const META_TABLE: &str = "meta_v1";
 const BLOCKS_BY_HEIGHT_TABLE: &str = "blocks_by_height_v1";
@@ -505,6 +512,9 @@ pub struct TransactionalStore {
     database: TransactionalDatabase,
     integrity_key: IntegrityKey,
     counters: Arc<WorkCounterState>,
+    /// Work of the open-time FastPay order backfill, kept apart from
+    /// `counters` (the store's exposed work accounting).
+    fastpay_backfill_counters: WorkCounterState,
     _open_record: lease::OpenRecord,
 }
 
@@ -528,6 +538,12 @@ impl fmt::Debug for TransactionalStore {
             .field("database_path", &self.database_path)
             .finish_non_exhaustive()
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static FAIL_FASTPAY_BACKFILL_BEFORE_COMMIT: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
 }
 
 impl TransactionalStore {
@@ -564,6 +580,7 @@ impl TransactionalStore {
             database: TransactionalDatabase::ReadWrite(database),
             integrity_key,
             counters: Arc::new(WorkCounterState::default()),
+            fastpay_backfill_counters: WorkCounterState::default(),
             _open_record,
         };
         store.backfill_fastpay_order_index()?;
@@ -573,34 +590,48 @@ impl TransactionalStore {
     /// A store written before the `fastpay_order_v1` index existed holds
     /// FastPay anchors without their order rows. Write the missing rows once,
     /// derived exactly as the integrity scan derives them, so that the scan,
-    /// prune and export keep passing. A no-op when nothing is missing.
+    /// prune and export keep passing. Once-only: the rows and the
+    /// `local_migrations_v1` marker commit in one transaction (the marker
+    /// alone on a store that needs no rows), and an open that finds the
+    /// marker scans nothing. Rows of later blocks are written with them.
     fn backfill_fastpay_order_index(&self) -> StorageResult<()> {
         let TransactionalDatabase::ReadWrite(database) = &self.database else {
             return Ok(());
         };
-        let counters = WorkCounterState::default();
+        let counters = &self.fastpay_backfill_counters;
         let missing = {
             let read = database.begin_read().map_err(database_error)?;
-            let indexes = match read.open_table(HISTORY_INDEXES) {
-                Ok(table) => table,
-                Err(redb::TableError::TableDoesNotExist(_)) => return Ok(()),
+            match read.open_table(LOCAL_MIGRATIONS) {
+                Ok(markers) => {
+                    if markers
+                        .get(FASTPAY_ORDER_BACKFILL_MARKER)
+                        .map_err(database_error)?
+                        .is_some()
+                    {
+                        return Ok(());
+                    }
+                }
+                Err(redb::TableError::TableDoesNotExist(_)) => {}
                 Err(error) => return Err(database_error(error)),
-            };
-            let blocks = match read.open_table(BLOCKS_BY_HEIGHT) {
-                Ok(table) => Some(table),
-                Err(redb::TableError::TableDoesNotExist(_)) => None,
+            }
+            match read.open_table(HISTORY_INDEXES) {
+                Ok(indexes) => {
+                    let blocks = match read.open_table(BLOCKS_BY_HEIGHT) {
+                        Ok(table) => Some(table),
+                        Err(redb::TableError::TableDoesNotExist(_)) => None,
+                        Err(error) => return Err(database_error(error)),
+                    };
+                    fastpay_index::missing_order_entries(
+                        &indexes,
+                        blocks.as_ref(),
+                        &self.integrity_key,
+                        counters,
+                    )?
+                }
+                Err(redb::TableError::TableDoesNotExist(_)) => Vec::new(),
                 Err(error) => return Err(database_error(error)),
-            };
-            fastpay_index::missing_order_entries(
-                &indexes,
-                blocks.as_ref(),
-                &self.integrity_key,
-                &counters,
-            )?
+            }
         };
-        if missing.is_empty() {
-            return Ok(());
-        }
         let mut transaction = database.begin_write().map_err(database_error)?;
         transaction
             .set_durability(Durability::Immediate)
@@ -618,9 +649,22 @@ impl TransactionalStore {
                     &encode_json(entry, MAX_RECORD_BYTES)?,
                     MAX_RECORD_BYTES,
                     &self.integrity_key,
-                    &counters,
+                    counters,
                 )?;
             }
+        }
+        transaction
+            .open_table(LOCAL_MIGRATIONS)
+            .map_err(database_error)?
+            .insert(FASTPAY_ORDER_BACKFILL_MARKER, b"complete".as_slice())
+            .map_err(database_error)?;
+        #[cfg(test)]
+        if FAIL_FASTPAY_BACKFILL_BEFORE_COMMIT.with(std::cell::Cell::get) {
+            // Dropping the uncommitted transaction aborts it, as a crash would.
+            return Err(StorageError::new(
+                StorageErrorCode::Database,
+                "test crash before the FastPay order backfill commit",
+            ));
         }
         transaction.commit().map_err(database_error)
     }
@@ -646,6 +690,7 @@ impl TransactionalStore {
             database: TransactionalDatabase::ReadOnly(database),
             integrity_key,
             counters: Arc::new(WorkCounterState::default()),
+            fastpay_backfill_counters: WorkCounterState::default(),
             _open_record,
         })
     }
@@ -5344,12 +5389,12 @@ mod tests {
         assert_eq!(report.history_index_count, 2);
     }
 
-    /// Point 2 (A2, B02): a store written without the `fastpay_order_v1`
-    /// rows (main's layout) is backfilled at open, so the integrity scan,
-    /// prune and canonical export pass on it.
-    #[test]
-    fn store_written_without_fastpay_order_rows_is_backfilled_at_open() {
-        let (dir, store) = committed_one_block("main-layout-fastpay-order-backfill");
+    /// A two-block store holding one confirmed FastPay anchor, rewritten
+    /// into main's layout: no `fastpay_order_v1` row and no backfill marker.
+    fn main_layout_fastpay_store(
+        label: &str,
+    ) -> (TestDir, TransactionalStore, ChainTipState, String) {
+        let (dir, store) = committed_one_block(label);
         let old_tip = next_tip(1);
         let old_commitment = store
             .meta()
@@ -5399,7 +5444,8 @@ mod tests {
             })
             .expect("commit FastPay effect");
 
-        // Rewrite the store into main's layout: anchors only, no order rows.
+        // Rewrite the store into main's layout: anchors only, no order rows,
+        // no marker (main never writes one).
         let postfiat_types::FastPayRecoveryDecisionV1::Confirmed { order_digest, .. } =
             &effect.decision
         else {
@@ -5419,9 +5465,36 @@ mod tests {
                     .remove(key.as_slice())
                     .expect("remove order row")
                     .is_some());
+                let mut markers = transaction
+                    .open_table(LOCAL_MIGRATIONS)
+                    .expect("open local migrations");
+                assert!(markers
+                    .remove(FASTPAY_ORDER_BACKFILL_MARKER)
+                    .expect("remove marker")
+                    .is_some());
             }
             transaction.commit().expect("commit raw write");
         }
+        (dir, store, new_tip, order_digest.clone())
+    }
+
+    fn fastpay_backfill_work(store: &TransactionalStore) -> (u64, u64, u64) {
+        let counters = &store.fastpay_backfill_counters;
+        (
+            counters.full_history_scans.load(Ordering::Relaxed),
+            counters.records_read.load(Ordering::Relaxed),
+            counters.records_written.load(Ordering::Relaxed),
+        )
+    }
+
+    /// Point 2 (A2, B02): a store written without the `fastpay_order_v1`
+    /// rows (main's layout) is backfilled at open, so the integrity scan,
+    /// prune and canonical export pass on it.
+    #[test]
+    fn store_written_without_fastpay_order_rows_is_backfilled_at_open() {
+        let (dir, store, new_tip, order_digest) =
+            main_layout_fastpay_store("main-layout-fastpay-order-backfill");
+        let order_digest = &order_digest;
         let scan = store
             .verify_logical_integrity()
             .expect_err("main's layout fails the scan before the backfill");
@@ -5467,6 +5540,54 @@ mod tests {
             })
             .expect("prune the backfilled store");
         store.verify_logical_integrity().expect("scan after prune");
+    }
+
+    /// The FastPay order backfill runs once: a fresh store gets the marker
+    /// at once, a main-layout store is completed and marked in one commit, a
+    /// crash before that commit leaves neither rows nor marker, and a later
+    /// writable open scans nothing.
+    #[test]
+    fn fastpay_order_backfill_is_once_only_and_atomic() {
+        let fresh = TestDir::new("fastpay-backfill-fresh");
+        drop(TransactionalStore::open(&fresh.0).expect("create store"));
+        let store = TransactionalStore::open(&fresh.0).expect("reopen fresh store");
+        assert_eq!(fastpay_backfill_work(&store), (0, 0, 0));
+        drop(store);
+
+        let (dir, store, _, order_digest) = main_layout_fastpay_store("fastpay-backfill-once");
+        drop(store);
+
+        // A crash before the commit: the open fails and writes nothing.
+        FAIL_FASTPAY_BACKFILL_BEFORE_COMMIT.with(|fail| fail.set(true));
+        let crashed = TransactionalStore::open(&dir.0);
+        FAIL_FASTPAY_BACKFILL_BEFORE_COMMIT.with(|fail| fail.set(false));
+        assert!(crashed.is_err());
+        drop(crashed);
+
+        // No marker was left: the next open scans and writes the missing row.
+        let store = TransactionalStore::open(&dir.0).expect("open after the crash");
+        let (scans, records_read, records_written) = fastpay_backfill_work(&store);
+        assert_eq!((scans, records_written), (1, 1));
+        assert!(records_read > 0);
+        assert!(store
+            .fastpay_order_index_entry(&order_digest)
+            .expect("read backfilled order row")
+            .is_some());
+        store
+            .verify_logical_integrity()
+            .expect("completed store passes the integrity scan");
+        drop(store);
+
+        // The marker is set: a second writable open does no scan.
+        let store = TransactionalStore::open(&dir.0).expect("second open");
+        assert_eq!(fastpay_backfill_work(&store), (0, 0, 0));
+        assert_eq!(
+            store
+                .verify_logical_integrity()
+                .expect("scan after the second open")
+                .history_index_count,
+            2
+        );
     }
 
     #[test]

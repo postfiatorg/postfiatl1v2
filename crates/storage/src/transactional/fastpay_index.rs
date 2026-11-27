@@ -14,6 +14,7 @@ where
     I: ReadableTable<&'static [u8], &'static [u8]>,
     B: ReadableTable<&'static [u8], &'static [u8]>,
 {
+    counters.full_history_scans.fetch_add(1, Ordering::Relaxed);
     let mut anchor_keys = Vec::new();
     for entry in indexes.iter().map_err(database_error)? {
         let (key, _) = entry.map_err(database_error)?;
