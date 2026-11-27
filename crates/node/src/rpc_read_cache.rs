@@ -43,8 +43,6 @@ impl RpcServeProfile {
 const DEFAULT_MAX_REPLICA_LAG_BLOCKS: u64 = 5;
 const RPC_READ_CACHE_MAX_ENTRIES: usize = 256;
 const RPC_READ_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
-/// A cached answer is dropped after this long even when the height has not moved.
-const RPC_READ_CACHE_MAX_AGE: Duration = Duration::from_secs(2);
 /// How old the source-tip record of the catch-up job may be before the replica
 /// no longer knows how far behind it is.
 const RPC_REPLICA_SOURCE_TIP_MAX_AGE_SECS: u64 = 120;
@@ -195,7 +193,6 @@ fn rpc_replica_lag_refusal(
 #[derive(Debug, Clone)]
 struct RpcCachedReadEntry {
     height: u64,
-    inserted_at: Instant,
     approx_bytes: usize,
     response: RpcResponse,
 }
@@ -210,8 +207,7 @@ struct RpcServeReadCache {
 }
 
 impl RpcServeReadCache {
-    /// A stored answer is served only for the same committed height and only
-    /// while it is younger than `RPC_READ_CACHE_MAX_AGE`.
+    /// A stored answer is served only for the committed height it was read at.
     fn get_at_height(
         &mut self,
         height: u64,
@@ -221,7 +217,7 @@ impl RpcServeReadCache {
     ) -> Option<RpcResponse> {
         let key = (method.to_string(), canonical_params.to_string());
         if let Some(entry) = self.entries.get(&key) {
-            if entry.height == height && entry.inserted_at.elapsed() <= RPC_READ_CACHE_MAX_AGE {
+            if entry.height == height {
                 self.hits = self.hits.saturating_add(1);
                 let mut response = entry.response.clone();
                 response.id = request_id.to_string();
@@ -262,7 +258,6 @@ impl RpcServeReadCache {
             key,
             RpcCachedReadEntry {
                 height,
-                inserted_at: Instant::now(),
                 approx_bytes,
                 response,
             },
@@ -416,16 +411,21 @@ fn rpc_replica_lag_refusal_for(
     rpc_replica_lag_refusal(request_id, context)
 }
 
-/// Cached only when the answer is a pure function of committed state at a
-/// height. Balances, pending counts and anything an owned-lane effect can
-/// change between two blocks are read fresh every time.
+/// What a replica may answer from its cache.
+///
+/// A replica's store has one writer, the catch-up job, and it writes only by
+/// applying a certified block. Nothing changes between two blocks: owned-lane
+/// effects and pending transactions live on validators and reach a replica
+/// only inside a block. So every read of committed state is a pure function
+/// of the committed height, and an answer read at a height stays exact until
+/// the height moves. (This is not true of a validator, which is why the
+/// standard profile never comes here.)
+///
+/// `metrics` carries the clock and the server's own counters and is always
+/// read fresh. `receipts` takes its own lease and is not cached.
 fn is_height_pure_read(request: &RpcRequest) -> bool {
-    match request.method.as_str() {
-        "validators" | "manifests" | "vault_bridge_route" => true,
-        // A block window that names its start is immutable once committed.
-        "blocks" => request.params.get("from_height").is_some_and(|v| !v.is_null()),
-        _ => false,
-    }
+    !matches!(request.method.as_str(), "metrics" | "receipts")
+        && is_in_process_standard_read_method(request)
 }
 
 fn rpc_param_str<'a>(
@@ -1029,20 +1029,21 @@ mod rpc_read_cache_tests {
     }
 
     #[test]
-    fn cache_serves_only_height_pure_reads_at_the_same_height_and_while_fresh() {
+    fn cache_serves_a_read_only_at_the_height_it_was_read_at() {
         let request = |method: &str, params: serde_json::Value| RpcRequest::new("id", method, params);
-        for method in ["validators", "manifests", "vault_bridge_route"] {
+        for method in [
+            "validators", "manifests", "vault_bridge_route", "blocks", "account", "account_assets",
+            "account_lines", "account_tx", "fee", "ledger", "tx", "bridge_status", "vault_bridge_status",
+            "block_vote_records",
+        ] {
             assert!(is_height_pure_read(&request(method, serde_json::json!({}))), "{method}");
         }
-        assert!(is_height_pure_read(&request("blocks", serde_json::json!({"from_height": 3}))));
-        assert!(!is_height_pure_read(&request("blocks", serde_json::json!({}))));
-        // Balances, pending counts, clocks and anything an owned-lane effect moves between blocks.
-        for method in [
-            "account", "account_assets", "account_lines", "metrics", "fee", "ledger", "tx",
-            "receipts", "account_tx", "bridge_status", "vault_bridge_status",
-        ] {
-            assert!(!is_height_pure_read(&request(method, serde_json::json!({}))), "{method}");
-        }
+        // The clock and the server's own counters; a read with its own lease; a full-history audit;
+        // and anything that is not a read of this path.
+        assert!(!is_height_pure_read(&request("metrics", serde_json::json!({}))));
+        assert!(!is_height_pure_read(&request("receipts", serde_json::json!({}))));
+        assert!(!is_height_pure_read(&request("tx", serde_json::json!({"audit_block_log": true}))));
+        assert!(!is_height_pure_read(&request("mempool_submit_signed_payment_v2", serde_json::json!({}))));
 
         let mut cache = RpcServeReadCache::default();
         let response = success_response("first", &serde_json::json!({"v": 1}), Vec::new()).expect("response");
@@ -1052,14 +1053,9 @@ mod rpc_read_cache_tests {
         // The cached answer names the height it was read at.
         let event = hit.events.last().expect("cache event");
         assert_eq!((event.event_type.as_str(), event.subject.as_str()), ("read_cache", "7"));
-        assert!(cache.get_at_height(8, "validators", "{}", "x").is_none(), "another height");
+        assert!(cache.get_at_height(8, "validators", "{}", "x").is_none(), "the height moved");
+        assert!(cache.get_at_height(6, "validators", "{}", "x").is_none(), "an earlier height");
         assert!(cache.get_at_height(7, "validators", "{\"a\":1}", "x").is_none(), "other params");
-        cache
-            .entries
-            .get_mut(&("validators".to_string(), "{}".to_string()))
-            .expect("entry")
-            .inserted_at = Instant::now() - RPC_READ_CACHE_MAX_AGE - Duration::from_millis(1);
-        assert!(cache.get_at_height(7, "validators", "{}", "x").is_none(), "older than the age limit");
     }
 
     #[test]

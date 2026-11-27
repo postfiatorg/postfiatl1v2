@@ -10,7 +10,7 @@ Group=postfiat-rpc
 # POSTFIAT_SOURCE_RPC_HOST and POSTFIAT_SOURCE_RPC_PORT: the rpc-serve the
 # replica follows. Every block is verified against its certificate.
 EnvironmentFile=/etc/postfiat/rpc-replica.env
-ExecStart=/usr/local/bin/postfiat-node rpc-catch-up \
+ExecStart=/usr/local/bin/postfiat-node rpc-catch-up --follow \
   --data-dir /var/lib/postfiat-rpc/replica \
   --source-host ${POSTFIAT_SOURCE_RPC_HOST} \
   --source-rpc-port ${POSTFIAT_SOURCE_RPC_PORT} \

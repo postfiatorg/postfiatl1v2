@@ -2281,6 +2281,8 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                     expected_block_hash,
                     expected_state_root,
                 )?
+            } else if flag_present(flags, "--follow") {
+                rpc_catch_up_follow(options)?
             } else {
                 rpc_catch_up(options)?
             };

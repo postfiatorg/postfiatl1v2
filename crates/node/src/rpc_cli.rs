@@ -4998,6 +4998,11 @@ struct RpcCatchUpOptions {
 #[derive(Debug, Clone)]
 enum RpcCatchUpAuditMode {
     Full,
+    /// A follower that runs every few seconds. Each block is applied only
+    /// with its certificate, and the local tip and state root must equal the
+    /// block's after every apply. The full re-verification of the whole state
+    /// is not repeated on every run; `rpc-catch-up` without `--follow` runs it.
+    Follow,
     CertifiedDelta {
         expected_height: u64,
         expected_block_hash: String,
@@ -5146,6 +5151,10 @@ fn archive_window_backfill(
     }))
 }
 
+fn rpc_catch_up_follow(options: RpcCatchUpOptions) -> Result<serde_json::Value, String> {
+    rpc_catch_up_with_audit(options, RpcCatchUpAuditMode::Follow)
+}
+
 fn rpc_catch_up(options: RpcCatchUpOptions) -> Result<serde_json::Value, String> {
     rpc_catch_up_with_audit(options, RpcCatchUpAuditMode::Full)
 }
@@ -5196,7 +5205,17 @@ fn rpc_catch_up_with_audit(
                 "rpc catch-up certified delta requires a new block: local height {local_height}, source height {source_height}"
             ));
         }
-        let verification = rpc_catch_up_verify_completed_state(&options.data_dir)?;
+        let follow = matches!(audit_mode, RpcCatchUpAuditMode::Follow);
+        let verification = if follow {
+            serde_json::json!({
+                "schema": "postfiat-rpc-catch-up-deferred-audit-v1",
+                "status": "deferred",
+                "terminal_full_audit_required": true,
+                "certified_continuity_verified": true,
+            })
+        } else {
+            rpc_catch_up_verify_completed_state(&options.data_dir)?
+        };
         return Ok(serde_json::json!({
             "schema": "postfiat-rpc-catch-up-v1",
             "status": "up_to_date",
@@ -5209,8 +5228,8 @@ fn rpc_catch_up_with_audit(
             "local_height_after": local_height,
             "local_block_tip_after": local_before.block_tip_hash,
             "local_state_root_after": local_before.state_root,
-            "audit_mode": "full",
-            "full_verification_count": 1,
+            "audit_mode": if follow { "follow" } else { "full" },
+            "full_verification_count": usize::from(!follow),
             "verification": verification,
         }));
     }
@@ -5219,7 +5238,9 @@ fn rpc_catch_up_with_audit(
         .checked_add(options.max_blocks as u64)
         .ok_or_else(|| "rpc catch-up max height overflow".to_string())?;
     let catch_up_to = match &audit_mode {
-        RpcCatchUpAuditMode::Full => std::cmp::min(source_height, max_catch_up_height),
+        RpcCatchUpAuditMode::Full | RpcCatchUpAuditMode::Follow => {
+            std::cmp::min(source_height, max_catch_up_height)
+        }
         RpcCatchUpAuditMode::CertifiedDelta {
             expected_height, ..
         } => {
@@ -5339,6 +5360,16 @@ fn rpc_catch_up_with_audit(
             "full",
             1usize,
             rpc_catch_up_verify_completed_state(&options.data_dir)?,
+        ),
+        RpcCatchUpAuditMode::Follow => (
+            "follow",
+            0usize,
+            serde_json::json!({
+                "schema": "postfiat-rpc-catch-up-deferred-audit-v1",
+                "status": "deferred",
+                "terminal_full_audit_required": true,
+                "certified_continuity_verified": true,
+            }),
         ),
         RpcCatchUpAuditMode::CertifiedDelta {
             expected_height,

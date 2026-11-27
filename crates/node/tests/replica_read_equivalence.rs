@@ -411,18 +411,27 @@ fn replica_reads_equal_the_worker_path_and_a_replica_refuses_what_it_must() {
         .events
         .iter()
         .all(|event| event.event_type != "read_cache"));
-    // A balance read is never cached.
+    // On a replica a balance read is cached too: its store changes only when a
+    // block is applied. `metrics` carries the clock and is always read fresh.
     let request = RpcRequest::new(
-        "uncached",
-        "account",
-        serde_json::json!({ "address": address }),
+        "balance",
+        "account_lines",
+        serde_json::json!({ "account": address, "limit": 3 }),
     );
-    replica_call(replica.port, &request);
-    let again = replica_call(replica.port, &request);
-    assert!(again
+    let fresh = replica_call(replica.port, &request);
+    let cached = replica_call(replica.port, &request);
+    assert_eq!(fresh.result, cached.result);
+    assert!(cached
         .events
         .iter()
-        .all(|event| event.event_type != "read_cache"));
+        .any(|event| event.event_type == "read_cache"));
+    for _ in 0..2 {
+        let metrics = replica_call(replica.port, &RpcRequest::empty("m", "metrics"));
+        assert!(metrics
+            .events
+            .iter()
+            .all(|event| event.event_type != "read_cache"));
+    }
 
     // The vote record comes back as written; a height without one says so.
     let reply = replica_call(
