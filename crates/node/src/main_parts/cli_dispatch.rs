@@ -368,6 +368,11 @@ struct AssetOrchardSwapLiveRoundReport {
 
 fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
+    if args.first().is_some_and(|command| command == "upgrade") {
+        let code = run_upgrade_command(&args[1..]);
+        let _ = postfiat_storage::transactional::release_inactive_shared_transactional_stores();
+        process::exit(code);
+    }
     let is_rpc = args.first().is_some_and(|command| command == "rpc");
     let is_rpc_probe = args.first().is_some_and(|command| command == "rpc-probe");
     let result = run_cli(args.clone());
@@ -790,9 +795,12 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "help"
         | "--help"
         | "-h" => run_cli_group_05(command, flags),
-        "deployment-publisher-key-create" | "deployment-validator-units-stage" => {
-            run_cli_group_05(command, flags)
-        }
+        "deployment-publisher-key-create"
+        | "deployment-validator-units-stage"
+        | "top"
+        | "observer-key-create"
+        | "observer-uptime-sign"
+        | "observer-uptime-verify" => run_cli_group_05(command, flags),
         other => Err(format!("unknown command `{other}`")),
     }
 }
@@ -802,6 +810,111 @@ include!("cli_dispatch_parts/group_02.rs");
 include!("cli_dispatch_parts/group_03.rs");
 include!("cli_dispatch_parts/group_04.rs");
 include!("cli_dispatch_parts/group_05.rs");
+
+fn run_upgrade_command(flags: &[String]) -> i32 {
+    use postfiat_node::release_upgrade::{
+        execute_upgrade, format_upgrade_human_report, LiveUpgradeSystemHooks, UpgradeOptions,
+        DEFAULT_RELEASE_KEYSET_FILE, DEFAULT_SIGNER_GUARD_DIR, DEFAULT_UPGRADE_BACKUP_DIR,
+        DEFAULT_UPGRADE_BINARY_PATH, DEFAULT_UPGRADE_DATA_DIR, DEFAULT_UPGRADE_SERVICE_UNITS,
+        UPGRADE_EXIT_INVALID_ARGS,
+    };
+    let json = flag_present(flags, "--json");
+    let parse_err = |msg: String| -> i32 {
+        if json {
+            let err_json = serde_json::json!({
+                "schema": postfiat_node::release_upgrade::UPGRADE_REPORT_SCHEMA,
+                "status": "failed",
+                "exit_code": UPGRADE_EXIT_INVALID_ARGS,
+                "error_code": "invalid_args",
+                "message": msg,
+            });
+            println!("{}", serde_json::to_string_pretty(&err_json).unwrap_or_default());
+        } else {
+            eprintln!("error: {msg}");
+        }
+        UPGRADE_EXIT_INVALID_ARGS
+    };
+
+    let rpc_port = match flag_value(flags, "--rpc-port") {
+        Some(raw) => match raw.parse::<u16>() {
+            Ok(p) => p,
+            Err(_) => return parse_err("--rpc-port must be a u16".to_string()),
+        },
+        None => 27650,
+    };
+    let health_timeout_ms = match flag_value(flags, "--health-timeout-ms") {
+        Some(raw) => match raw.parse::<u64>() {
+            Ok(v) if v > 0 => v,
+            _ => return parse_err("--health-timeout-ms must be a positive u64".to_string()),
+        },
+        None => 60_000,
+    };
+    let now_unix = match flag_value(flags, "--now-unix") {
+        Some(raw) => match raw.parse::<u64>() {
+            Ok(v) => Some(v),
+            Err(_) => return parse_err("--now-unix must be a u64".to_string()),
+        },
+        None => None,
+    };
+    let service_units = match flag_value(flags, "--service-units") {
+        Some("none" | "") => Vec::new(),
+        Some(raw) => raw
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect(),
+        None => DEFAULT_UPGRADE_SERVICE_UNITS
+            .split(',')
+            .map(str::to_string)
+            .collect(),
+    };
+
+    let options = UpgradeOptions {
+        check_only: flag_present(flags, "--check"),
+        manifest_file: flag_value(flags, "--manifest-file").map(PathBuf::from),
+        channel_url: flag_value(flags, "--channel-url").map(str::to_string),
+        binary_file: flag_value(flags, "--binary-file").map(PathBuf::from),
+        keyset_file: PathBuf::from(
+            flag_value(flags, "--keyset-file").unwrap_or(DEFAULT_RELEASE_KEYSET_FILE),
+        ),
+        data_dir: PathBuf::from(
+            flag_value(flags, "--data-dir").unwrap_or(DEFAULT_UPGRADE_DATA_DIR),
+        ),
+        signer_guard_dir: PathBuf::from(
+            flag_value(flags, "--signer-guard-dir").unwrap_or(DEFAULT_SIGNER_GUARD_DIR),
+        ),
+        binary_path: PathBuf::from(
+            flag_value(flags, "--binary-path").unwrap_or(DEFAULT_UPGRADE_BINARY_PATH),
+        ),
+        backup_dir: PathBuf::from(
+            flag_value(flags, "--backup-dir").unwrap_or(DEFAULT_UPGRADE_BACKUP_DIR),
+        ),
+        service_units,
+        rpc_host: flag_value(flags, "--rpc-host")
+            .unwrap_or("127.0.0.1")
+            .to_string(),
+        rpc_port,
+        health_timeout_ms,
+        now_unix,
+        architecture: flag_value(flags, "--arch").map(str::to_string),
+        yes: flag_present(flags, "--yes"),
+        json,
+        skip_rpc_preflight: flag_present(flags, "--skip-rpc-preflight"),
+    };
+
+    let hooks = LiveUpgradeSystemHooks;
+    let report = execute_upgrade(&options, &hooks);
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).unwrap_or_default()
+        );
+    } else {
+        println!("{}", format_upgrade_human_report(&report));
+    }
+    report.exit_code
+}
 
 fn wait_for_asset_orchard_swap_start_signal(path: &Path, timeout_ms: u64) -> Result<(), String> {
     let start = Instant::now();

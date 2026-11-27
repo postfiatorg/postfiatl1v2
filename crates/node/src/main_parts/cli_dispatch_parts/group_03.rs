@@ -351,10 +351,34 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             // Off by default: private action admission and its round service.
             let allow_private_action_admission =
                 flag_present(flags, "--allow-private-action-admission");
+            let rpc_profile = match flag_value(flags, "--rpc-profile") {
+                Some(raw) => RpcServeProfile::parse(raw)?,
+                None => RpcServeProfile::Standard,
+            };
+            let max_replica_lag_blocks = match flag_value(flags, "--max-replica-lag-blocks") {
+                Some(raw) => raw
+                    .parse::<u64>()
+                    .map_err(|_| "--max-replica-lag-blocks must be a u64".to_string())?,
+                None => DEFAULT_MAX_REPLICA_LAG_BLOCKS,
+            };
+            validate_rpc_replica_profile_flags(
+                rpc_profile,
+                flags,
+                &bind_host,
+                allow_mempool_submit,
+                allow_mempool_submit_finality,
+                allow_orchard_batch_create,
+                allow_private_action_admission,
+            )?;
             // FastPay is a normal signed payment capability. Operators may
             // disable it explicitly during an incident, but ordinary startup
-            // must not silently remove the lane.
-            let owned_lane_enabled = rpc_owned_lane_enabled(flags)?;
+            // must not silently remove the lane. Non-voting replica profiles
+            // disable owned-lane writes by default so read_only remains true.
+            let owned_lane_enabled = if rpc_profile.is_replica() {
+                false
+            } else {
+                rpc_owned_lane_enabled(flags)?
+            };
             let finality_topology_file = flag_value(flags, "--finality-topology")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("remote-topology.json"));
@@ -518,6 +542,8 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     max_child_dispatch_concurrent,
                     max_child_dispatch_per_peer,
                     keep_alive,
+                    rpc_profile,
+                    max_replica_lag_blocks,
                 },
                 &mut std::io::stdout().lock(),
             )

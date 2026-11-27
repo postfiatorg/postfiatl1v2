@@ -1,0 +1,47 @@
+# PostFiat Public RPC TLS 1.3 Edge Configuration
+# Enforces TLS 1.3 only, 64 KiB max request body (MAX_RPC_REQUEST_BYTES=65536),
+# zero JSON body rewriting, and loopback-only upstream routing.
+{
+	auto_https disable_redirects
+	admin off
+	servers {
+		timeouts {
+			read_body 10s
+			read_header 5s
+			write 15s
+			idle 60s
+		}
+	}
+}
+
+{$POSTFIAT_PUBLIC_RPC_DOMAIN:rpc.example.postfiat.org} {
+	tls {
+		protocols tls1.3
+	}
+
+	log {
+		output file /var/log/postfiat-edge/access.json {
+			roll_size 50MiB
+			roll_keep 14
+		}
+		format json
+	}
+
+	request_body {
+		max_size 64KB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	reverse_proxy 127.0.0.1:27651 {
+		transport http {
+			dial_timeout 3s
+			response_header_timeout 15s
+		}
+		health_timeout 3s
+	}
+}

@@ -133,6 +133,8 @@ mod validator_signer_socket_tests {
             max_child_dispatch_concurrent: 8,
             max_child_dispatch_per_peer: 4,
             keep_alive: false,
+            rpc_profile: RpcServeProfile::Standard,
+            max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
         }
     }
 

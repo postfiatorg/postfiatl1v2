@@ -2921,7 +2921,7 @@ pub(crate) fn rpc_server_info_response(
     response
 }
 
-fn rpc_ledger_alias(data_dir: PathBuf, limit: Option<usize>) -> Result<serde_json::Value, String> {
+pub(super) fn rpc_ledger_alias(data_dir: PathBuf, limit: Option<usize>) -> Result<serde_json::Value, String> {
     let metrics_report = metrics(NodeOptions {
         data_dir: data_dir.clone(),
     })
@@ -2948,7 +2948,7 @@ fn rpc_ledger_alias(data_dir: PathBuf, limit: Option<usize>) -> Result<serde_jso
     }))
 }
 
-fn rpc_fee_alias(data_dir: PathBuf) -> Result<serde_json::Value, String> {
+pub(super) fn rpc_fee_alias(data_dir: PathBuf) -> Result<serde_json::Value, String> {
     let metrics_report =
         metrics(NodeOptions { data_dir }).map_err(|error| format!("rpc fee failed: {error}"))?;
     Ok(serde_json::json!({
@@ -2965,7 +2965,7 @@ fn rpc_fee_alias(data_dir: PathBuf) -> Result<serde_json::Value, String> {
     }))
 }
 
-fn rpc_validators_alias(data_dir: PathBuf) -> Result<serde_json::Value, String> {
+pub(super) fn rpc_validators_alias(data_dir: PathBuf) -> Result<serde_json::Value, String> {
     let status_report = status(NodeOptions {
         data_dir: data_dir.clone(),
     })
@@ -3007,7 +3007,7 @@ fn rpc_validators_alias(data_dir: PathBuf) -> Result<serde_json::Value, String> 
     }))
 }
 
-fn rpc_manifests_alias(data_dir: PathBuf) -> Result<serde_json::Value, String> {
+pub(super) fn rpc_manifests_alias(data_dir: PathBuf) -> Result<serde_json::Value, String> {
     let status_report = status(NodeOptions {
         data_dir: data_dir.clone(),
     })

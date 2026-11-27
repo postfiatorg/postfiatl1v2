@@ -3333,6 +3333,172 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "top" => {
+            use postfiat_node::validator_top::{
+                run_validator_top, ValidatorTopOptions, DEFAULT_OBSERVER_KEYSET_FILE,
+                DEFAULT_TOP_REFRESH_MS, DEFAULT_TOP_RELEASE_KEYSET_FILE, DEFAULT_TOP_RPC_HOST,
+                DEFAULT_TOP_RPC_PORT,
+            };
+            let rpc_host = flag_value(flags, "--rpc-host")
+                .unwrap_or(DEFAULT_TOP_RPC_HOST)
+                .to_string();
+            let rpc_port = match flag_value(flags, "--rpc-port") {
+                Some(raw) => raw
+                    .parse::<u16>()
+                    .map_err(|_| "--rpc-port must be a u16".to_string())?,
+                None => DEFAULT_TOP_RPC_PORT,
+            };
+            let refresh_ms = match flag_value(flags, "--refresh-ms") {
+                Some(raw) => raw
+                    .parse::<u64>()
+                    .map_err(|_| "--refresh-ms must be a u64".to_string())?,
+                None => DEFAULT_TOP_REFRESH_MS,
+            };
+            let rpc_timeout_ms = match flag_value(flags, "--timeout-ms") {
+                Some(raw) => raw
+                    .parse::<u64>()
+                    .map_err(|_| "--timeout-ms must be a u64".to_string())?,
+                None => 5_000,
+            };
+            let now_unix = flag_value(flags, "--now-unix")
+                .map(|raw| {
+                    raw.parse::<u64>()
+                        .map_err(|_| "--now-unix must be a u64".to_string())
+                })
+                .transpose()?;
+            let options = ValidatorTopOptions {
+                rpc_host,
+                rpc_port,
+                allow_remote_rpc: flag_present(flags, "--allow-remote-rpc"),
+                data_dir: flag_value(flags, "--data-dir").map(PathBuf::from),
+                uptime_feed_url: flag_value(flags, "--uptime-feed-url").map(str::to_string),
+                uptime_feed_file: flag_value(flags, "--uptime-feed-file").map(PathBuf::from),
+                observer_keyset_file: PathBuf::from(
+                    flag_value(flags, "--observer-keyset-file")
+                        .unwrap_or(DEFAULT_OBSERVER_KEYSET_FILE),
+                ),
+                release_manifest_url: flag_value(flags, "--release-manifest-url")
+                    .map(str::to_string),
+                release_manifest_file: flag_value(flags, "--release-manifest-file")
+                    .map(PathBuf::from),
+                release_keyset_file: PathBuf::from(
+                    flag_value(flags, "--release-keyset-file")
+                        .unwrap_or(DEFAULT_TOP_RELEASE_KEYSET_FILE),
+                ),
+                refresh_ms,
+                once: flag_present(flags, "--once"),
+                json: flag_present(flags, "--json"),
+                no_color: flag_present(flags, "--no-color"),
+                rpc_timeout_ms,
+                now_unix,
+            };
+            run_validator_top(&options)
+        }
+        "observer-key-create" => {
+            let key_file = PathBuf::from(
+                flag_value(flags, "--key-file").ok_or("missing --key-file")?,
+            );
+            let observer_id =
+                flag_value(flags, "--observer-id").ok_or("missing --observer-id")?;
+            let region = flag_value(flags, "--region").ok_or("missing --region")?;
+            let operator_group =
+                flag_value(flags, "--operator-group").ok_or("missing --operator-group")?;
+            let created = postfiat_node::validator_uptime::create_observer_key_file(
+                &key_file,
+                observer_id,
+                region,
+                operator_group,
+            )
+            .map_err(|error| format!("observer-key-create failed: {error}"))?;
+            let summary = serde_json::json!({
+                "schema": "postfiat.observer_public_key.v1",
+                "observer_id": created.observer_id,
+                "region": created.region,
+                "operator_group": created.operator_group,
+                "address": created.address,
+                "algorithm_id": created.algorithm_id,
+                "public_key_hex": created.public_key_hex,
+                "key_file": key_file.display().to_string(),
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&summary)
+                    .map_err(|error| format!("observer key serialize failed: {error}"))?
+            );
+            Ok(())
+        }
+        "observer-uptime-sign" => {
+            use postfiat_node::validator_uptime::{
+                sign_observer_attestation, ObserverPrivateKeyFileV1, ObserverValidatorClaimV1,
+                UptimeFeedChainV1, UptimeWindowSpecV1,
+            };
+            let key_file =
+                flag_value(flags, "--key-file").ok_or("missing --key-file")?;
+            let input_file =
+                flag_value(flags, "--input-file").ok_or("missing --input-file")?;
+            let output_file = flag_value(flags, "--output-file");
+            let key_raw = fs::read_to_string(key_file)
+                .map_err(|error| format!("read --key-file failed: {error}"))?;
+            let key: ObserverPrivateKeyFileV1 = serde_json::from_str(&key_raw)
+                .map_err(|error| format!("parse --key-file failed: {error}"))?;
+            let input_raw = fs::read_to_string(input_file)
+                .map_err(|error| format!("read --input-file failed: {error}"))?;
+            #[derive(serde::Deserialize)]
+            struct SignInput {
+                chain: UptimeFeedChainV1,
+                window_spec: UptimeWindowSpecV1,
+                observed_at: String,
+                validator_claims: Vec<ObserverValidatorClaimV1>,
+            }
+            let input: SignInput = serde_json::from_str(&input_raw)
+                .map_err(|error| format!("parse --input-file failed: {error}"))?;
+            let attestation = sign_observer_attestation(
+                &key,
+                &input.chain,
+                &input.window_spec,
+                &input.observed_at,
+                input.validator_claims,
+            )?;
+            let json = serde_json::to_string_pretty(&attestation)
+                .map_err(|error| format!("attestation serialize failed: {error}"))?;
+            if let Some(path) = output_file {
+                fs::write(path, format!("{json}\n"))
+                    .map_err(|error| format!("write --output-file failed: {error}"))?;
+            } else {
+                println!("{json}");
+            }
+            Ok(())
+        }
+        "observer-uptime-verify" => {
+            use postfiat_node::validator_uptime::{
+                verify_validator_uptime_feed, ObserverKeysetV1, ValidatorUptimeFeedV1,
+            };
+            let feed_file =
+                flag_value(flags, "--feed-file").ok_or("missing --feed-file")?;
+            let keyset_file =
+                flag_value(flags, "--keyset-file").ok_or("missing --keyset-file")?;
+            let now_unix = flag_value(flags, "--now-unix")
+                .map(|raw| {
+                    raw.parse::<u64>()
+                        .map_err(|_| "--now-unix must be a u64".to_string())
+                })
+                .transpose()?;
+            let feed_raw = fs::read_to_string(feed_file)
+                .map_err(|error| format!("read --feed-file failed: {error}"))?;
+            let keyset_raw = fs::read_to_string(keyset_file)
+                .map_err(|error| format!("read --keyset-file failed: {error}"))?;
+            let feed: ValidatorUptimeFeedV1 = serde_json::from_str(&feed_raw)
+                .map_err(|error| format!("parse --feed-file failed: {error}"))?;
+            let keyset: ObserverKeysetV1 = serde_json::from_str(&keyset_raw)
+                .map_err(|error| format!("parse --keyset-file failed: {error}"))?;
+            let report = verify_validator_uptime_feed(&feed, &keyset, now_unix)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .map_err(|error| format!("verify report serialize failed: {error}"))?
+            );
+            Ok(())
+        }
         "rpc" => run_rpc(flags),
         "help" | "--help" | "-h" => {
             print_usage();
