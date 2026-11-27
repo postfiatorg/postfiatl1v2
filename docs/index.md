@@ -5,7 +5,9 @@ the XRP Ledger model: known validators, deterministic finality from quorum
 certificates, a fixed-supply native token (PFT) whose fees burn, and no
 validator rewards. Accounts and validators sign with post-quantum ML-DSA-65
 from genesis, Cobalt can ratify on-chain validator-trust changes, and
-private settlement uses Asset-Orchard, a typed-asset extension of Zcash Orchard.
+private settlement uses Asset-Orchard, a typed-asset extension of Zcash Orchard,
+and, on the devnet from block 1910, the post-quantum PFSH03 private payments
+([Private payments](quantum/private-payments.md)).
 Its main application is NAVCoins, assets whose supply is tied to
 machine-checkable reserve packets. The design is in the
 [Whitepaper](whitepaper.md) (also published at
@@ -21,14 +23,18 @@ machine-checkable reserve packets. The design is in the
 
 ## What changed this week
 
-25 November 2026. Sources: [Current State](status/chain-state-current.md) and the
+27 November 2026. Sources: [Current State](status/chain-state-current.md) and the
 [handoffs](handoffs/index.md).
 
 - **21 November.** All six validators moved to `main-r64-20261121`; `main` became the only long-lived branch ([Master State](status/master-state.md)).
 - **23 November.** The first Solana withdrawal release (rules from block 1841); first real withdrawals; the deposit route re-anchored at block 1847.
 - **24 November.** The second Solana exit release (rules from block 1890): every Solana deposit batch can be withdrawn, a refund path for a burn that cannot be paid, each validator reviews a settlement itself. Real withdrawals of 0.30, 0.30 and 4.00 USDC were paid and settled.
 - **25 November.** Read-only read: all six validators at height 1897, one state root, build `04600868` (the second Solana exit release). B24 epoch 10 subsequently finalized at 1902.
-- **Limits.** A controlled devnet with small caps, not announced: one withdrawal spends one deposit batch, the minimum is 0.30 USDC, the vault accepts 25 USDC more, a withdrawal takes about four minutes ([Network Status](status/network-status.md#usdc-bridges)).
+- **25 November, evening.** The validators moved to `sol-exit-r3` (`2356caf1`), rolled 20:59 to 21:32 UTC: one settlement path for Solana exits, and a Solana exit payout or refund settles with five of six validators. Solana withdrawals were closed from 21:03 to 21:32 UTC while the roll was interrupted.
+- **26 November.** Proofs are made only during a daily proving session, planned for 17:00 to 19:00 UTC; outside it Solana deposits and both withdrawal paths are closed on purpose. Read-only read at 10:13 UTC: all six validators at height 1906, one state root, build `2356caf1`. Ten pull requests merged to `main` after that build were not deployed on 26 November.
+- **26 November, evening.** The validators moved to `pq-r3` (build `9dcb689e`): PFSH03 post-quantum private payments, activated at block 1910 and used from the signed Mac app at blocks 1912 to 1914 (27 November handoff). `9dcb689e` is a commit of #280's branch; `main` holds #280 as the squashed, newer `b121df606`, and nothing merged to `main` after the running build is deployed ([Master State](status/master-state.md)).
+- **27 November.** Read-only read at 09:01 UTC: all six validators at height 1915, one state root, build `9dcb689e`, deployment manifest verified on all six. The B24 daily job refuses `pq-r3` until its release line is added on the job's machine.
+- **Limits.** A controlled devnet with small caps, not announced: one withdrawal spends one deposit batch, the minimum is 0.30 USDC, the vault accepts 25 USDC more, a withdrawal takes about four minutes once a proving session runs, and deposits and withdrawals wait outside the daily window ([Network Status](status/network-status.md#usdc-bridges)).
 
 ## Start here
 
@@ -48,9 +54,9 @@ Codenames such as A666, BMNRC, Z3 or G4 are defined in the
 
 | Component and evidence | Chain / height | Last observed | Result |
 | --- | --- | --- | --- |
-| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/ops/b24-live/known-releases.txt) | postfiat-wan-devnet-2 / 1903 | 2026-11-25 20:15 UTC | Six validators reported on sol-exit-r2 |
+| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/chain-state-current.md) | postfiat-wan-devnet-2 / 1915 | 2026-11-27 09:01 UTC | Six validators on pq-r3, one state root |
 | [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
-| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45701171620) | Source build / n/a | 2026-11-25T21:22:27Z | Verified (workflow success, comparison success) |
+| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45938002025) | Source build / n/a | 2026-11-27T04:22:33Z | Unverified (workflow failure, comparison failure) |
 
 [Observation records, source revisions, artifacts and observers](status/component-observations.json)
 
@@ -70,6 +76,7 @@ dates on [Network Status](status/network-status.md).
 | Settlement lanes | Consensus transactions, W6 atomic swaps, FastPay, FastSwap and Asset-Orchard, each with its own finality and recovery rules. | [Settlement Lanes](architecture/settlement-lanes.md) |
 | Privacy | Orchard/Halo2 deposit, spend, withdraw, scan and selective disclosure. The shielded stack is not post-quantum. Public submission of shielded actions is off on every validator. | [Privacy](privacy/overview.md) |
 | Post-quantum authorization | ML-DSA-65 for accounts and validators; larger certificates accepted as a design cost. | [Quantum Authorization](quantum/authorization.md) |
+| Quantum-safe private payments | PFSH02 shield, pay and withdrawal verified for PFT and pfUSDC on a local rehearsal chain. | [Browser wallet](wallets/shielded-wallet.md#pfsh02-browser-wallet), [Protocol](quantum/private-payments.md) |
 | Storage | Transactional `redb` storage active since height 930; G5 offline qualified on 2026-10-23 for the October 21 binary. G6 remains open; later binaries need their own qualification. | [Network Status](status/network-status.md), [State And Storage](architecture/state-and-storage.md) |
 | NAVCoins | A666 v2 (public general availability closed) and BMNRC (created 2026-10-02) are on the devnet. B24, the Schwab-backed NAVCoin, has been created and cashed in with real money since mid-November; epoch 10 finalized at height 1902 on 25 November. | [NAVCoins](navcoins/index.md) |
 | USDC bridges | pfUSDC is minted from USDC on Ethereum and on Solana. Solana deposits and withdrawals run on the devnet with small caps and limits; no real Ethereum deposit or withdrawal is recorded since 2026-11-21. | [Network Status](status/network-status.md#usdc-bridges), [Bridge Audit Map](status/bridge-audit-map.md) |

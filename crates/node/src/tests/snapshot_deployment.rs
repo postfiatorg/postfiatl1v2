@@ -3496,3 +3496,134 @@ fn historical_external_certificate_rejects_wrong_local_parent_without_mutation()
 
     fs::remove_dir_all(&data_dir).expect("cleanup parent-divergent replay test");
 }
+
+#[test]
+fn pq_snapshot_rebuild_rejects_each_corrupt_component() {
+    use postfiat_types::pq_payment::{Chain, PqPayment, PqPool};
+    let root = unique_test_dir("pq-pages-staging");
+    let genesis_bytes = hex_to_bytes(pq_payment_fixture::GENESIS_HASH)
+        .unwrap()
+        .try_into()
+        .unwrap();
+    let chain = Chain {
+        id: pq_payment_fixture::CHAIN_ID,
+        genesis: genesis_bytes,
+        protocol: 1,
+    };
+    let mut pool = PqPool::default();
+    for name in ["pft-shield", "pft-pay"] {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "../../tools/pft-binius-shielded-pq/l1-vectors/{name}.bin"
+        ));
+        let payment = PqPayment::from_bytes(fs::read(path).unwrap()).unwrap();
+        pool = crate::pq_pool_state::prepare_pair(&pool, &payment, chain, 2)
+            .unwrap()
+            .0;
+    }
+    let mut state = ShieldedState::empty();
+    state.pq_pool_v1 = Some(pool.clone());
+    postfiat_storage::pq_pool::persist_pending(&root, &state).unwrap();
+    let restored = root.join("restored");
+    postfiat_storage::pq_pool::audit(&root, &state, Some(&restored)).unwrap();
+    let source = serde_json::to_value(&state).unwrap();
+    let mut cold: ShieldedState = serde_json::from_value(source.clone()).unwrap();
+    postfiat_storage::pq_pool::hydrate(&restored, &mut cold).unwrap();
+    let cold = cold.pq_pool_v1.unwrap();
+    let asset = "00".repeat(48);
+    assert_eq!(cold.head, pool.head);
+    for page in &pool.pending {
+        for slot in 0..2 {
+            assert!(cold.indexes.is_spent(&page.serials[slot]));
+            assert!(cold
+                .indexes
+                .contains_commitment(&page.outputs[slot].commitment));
+            let id = cold
+                .indexes
+                .page_for_output(&asset, 0, page.first_index + slot as u32)
+                .unwrap();
+            assert_eq!(
+                postfiat_storage::pq_pool::read_page(&restored, id).unwrap(),
+                **page
+            );
+        }
+    }
+    let mut cases = vec![
+        ("pairs".to_owned(), serde_json::json!(1)),
+        (
+            "last_page".to_owned(),
+            serde_json::json!(pool.pending[0].digest()),
+        ),
+    ];
+    for field in [
+        "serial_index_root",
+        "commitment_index_root",
+        "output_index_root",
+    ] {
+        cases.push((field.into(), serde_json::json!("ff".repeat(48))));
+    }
+    for (name, value) in [
+        ("epoch", serde_json::json!(3)),
+        ("reserve", serde_json::json!(7)),
+        ("ingress", serde_json::json!(8)),
+        ("exits", serde_json::json!(9)),
+        ("fees", serde_json::json!(10)),
+        ("frozen_epochs_root", serde_json::json!("aa".repeat(48))),
+        ("writable/count", serde_json::json!(50)),
+        ("writable/anchors/0", serde_json::json!("11".repeat(48))),
+        ("writable/frontier/2", serde_json::json!("22".repeat(48))),
+    ] {
+        cases.push((format!("assets/{asset}/{name}"), value));
+    }
+    for (key, value) in cases {
+        let mut bad = source.clone();
+        *bad.pointer_mut(&format!("/pq_pool_v1/head/{key}")).unwrap() = value;
+        let bad: ShieldedState = serde_json::from_value(bad).unwrap();
+        assert!(
+            postfiat_storage::pq_pool::audit(&root, &bad, None).is_err(),
+            "{key}"
+        );
+        let mut expected = Vec::new();
+        let mut changed = Vec::new();
+        append_shielded_state(&mut expected, &state);
+        append_shielded_state(&mut changed, &bad);
+        assert_ne!(expected, changed, "{key}");
+    }
+    let id = pool.pending[0].digest();
+    let file = root.join("pq_pool_pages_v1").join(&id[..2]).join(id);
+    let bytes = fs::read(&file).unwrap();
+    for field in [
+        "previous",
+        "asset",
+        "read_epoch",
+        "anchor",
+        "epoch",
+        "first_index",
+        "height",
+        "kind",
+        "mint",
+        "exit",
+        "fee",
+        "serials/0",
+        "outputs/1/commitment",
+        "outputs/0/ciphertext",
+        "outputs/1/ciphertext_digest",
+    ] {
+        let mut bad: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let v = bad.pointer_mut(&format!("/{field}")).unwrap();
+        *v = if field == "kind" {
+            serde_json::json!("Exit")
+        } else if v.is_string() {
+            serde_json::json!("ab".repeat(48))
+        } else {
+            serde_json::json!(12345)
+        };
+        fs::write(&file, serde_json::to_vec(&bad).unwrap()).unwrap();
+        assert!(
+            postfiat_storage::pq_pool::audit(&root, &state, None).is_err(),
+            "{field}"
+        );
+    }
+    fs::remove_file(file).unwrap();
+    assert!(postfiat_storage::pq_pool::audit(&root, &state, None).is_err());
+    fs::remove_dir_all(root).unwrap();
+}

@@ -3087,6 +3087,8 @@ pub struct AtomicSettlementTemplateReport {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IssuedAssetReport {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collected_private_fees: Option<u64>,
     pub asset_id: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub asset_family_id: String,

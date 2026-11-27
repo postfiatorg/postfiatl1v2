@@ -1,7 +1,7 @@
 #!/bin/bash
 # Install the settlement loop as a service on the RELAY machine, as root there:
 #   install-exit-settler.sh ARCHIVE KNOWN_HOSTS
-# ARCHIVE is `git archive -o exit-settler.tar <reviewed commit> ops/sol-live solana/deploy`.
+# ARCHIVE is `git archive -o exit-settler.tar <reviewed commit> ops/sol-live solana/deploy solana/pfusdc-egress-verifier/bootstrap.py`.
 # KNOWN_HOSTS holds the six validator hosts' SSH host keys you trust (for example the relay
 # login's own ~/.ssh/known_hosts).
 # The loop runs as its own user with its own SSH key, generated here, mode 0600, never printed and
@@ -31,7 +31,7 @@ if ! id -u "$user" >/dev/null 2>&1; then
 fi
 
 install -d -m755 -o root -g root "$app" || fail "cannot create $app"
-tar -xf "$archive" -C "$app" --no-same-owner --no-same-permissions ops/sol-live solana/deploy \
+tar -xf "$archive" -C "$app" --no-same-owner --no-same-permissions ops/sol-live solana/deploy solana/pfusdc-egress-verifier/bootstrap.py \
     || fail "cannot read the settlement loop from $archive"
 chmod -R go+rX "$app" || fail "cannot make $app readable"
 python3 -m venv "$app/venv" || fail "cannot create the venv"

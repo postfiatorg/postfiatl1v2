@@ -50,7 +50,7 @@ The fields and values are the same as before, with four exceptions:
 - a failed status read returns `rpc_status_failed`.
 
 Main answers it in-process since `9f76e2e5e`, and every release since
-`main-r64-20261121` carries it, including the running build `04600868`. Before
+`main-r64-20261121` carries it, including `04600868`, `2356caf1` (`sol-exit-r3`) and `9dcb689e` (`pq-r3`, running on 27 November). Before
 that, the child-process path took 6.6–14.1 s on the devnet validators
 (2026-11-09). Other reads still start a child process per request; on 23
 November they took 7 to 10 s each on the devnet validators

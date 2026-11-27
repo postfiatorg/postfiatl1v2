@@ -72,6 +72,7 @@ pub(super) fn verify_blocks_from_store(
     store: &NodeStore,
     policy: RegistryReplayPolicy<'_>,
 ) -> io::Result<BlockVerificationReport> {
+    postfiat_storage::pq_pool::audit(store.data_dir(), &store.read_shielded()?, None)?;
     let genesis = store.read_genesis()?;
     let blocks = store.read_blocks()?;
     let ordered_batches = store.read_ordered_batches()?;
@@ -407,9 +408,20 @@ pub(super) fn verify_blocks_from_store(
                 format!("block {} hash mismatch", block.header.height),
             ));
         }
+        if BatchArchiveEntry::may_contain_pq(&block.header.batch_kind, &archive_entry.payload_json)
+        {
+            let batch: ShieldedActionBatch = parse_archived_payload(block, archive_entry)?;
+            consensus_artifacts::check_pq_block(
+                &genesis,
+                &certificate_governance,
+                block.header.height,
+                [&batch],
+            )?;
+        }
         verify_archived_payload(&genesis, block, archive_entry)?;
         update_governance_for_certificate_replay(
             &mut certificate_governance,
+            &certificate_validator_registry,
             &genesis,
             block,
             archive_entry,
@@ -1331,6 +1343,7 @@ pub(super) fn parse_archived_payload<T: DeserializeOwned>(
 
 pub(super) fn update_governance_for_certificate_replay(
     governance: &mut GovernanceState,
+    registry: &ValidatorRegistry,
     genesis: &Genesis,
     block: &BlockRecord,
     archive_entry: &BatchArchiveEntry,
@@ -1339,6 +1352,19 @@ pub(super) fn update_governance_for_certificate_replay(
         return Ok(());
     }
     let batch: GovernanceActionBatch = parse_archived_payload(block, archive_entry)?;
+    if batch
+        .amendments
+        .iter()
+        .any(|a| consensus_artifacts::requires_pq_registry(a, governance, block.header.height))
+    {
+        verify_live_signed_governance_batch(
+            genesis,
+            governance,
+            registry,
+            &batch,
+            block.header.height,
+        )?;
+    }
     // Without a ledger a committee move is refused here
     // (`external_lane_committee_ledger_unavailable`), so this certificate copy
     // of governance drops a move that the state-replay copy, which executes
@@ -2004,7 +2030,7 @@ pub(super) fn verify_replayed_blocks_with_exports(
         registry_update_ids = HashSet::new();
         ledger = genesis_ledger_state(genesis, faucet_account)?;
         ordered_batches = Vec::<String>::new();
-        shielded = ShieldedState::empty();
+        shielded = pq_payment_fixture::genesis_shielded_state(genesis)?;
         bridge = BridgeState::empty();
     }
     let mut ordered_history =
@@ -2930,6 +2956,7 @@ pub fn native_pft_supply_breakdown(
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits,
+        collected_private_fees: _,
         pftl_uniswap_source_custody: _, // issued pfUSDC custody, never native PFT
         pftl_uniswap_routes: _,
         pftl_uniswap_receipts: _,
@@ -2961,6 +2988,8 @@ pub fn native_pft_supply_breakdown(
         notes: _,
         nullifiers: _,
         turnstile_events: _,
+        pq_pool_v1,
+        pq_fixture: _, // disposable test units, outside native PFT supply
         orchard,
     } = shielded;
 
@@ -2970,7 +2999,14 @@ pub fn native_pft_supply_breakdown(
             format!("duplicate native custody {lane} key `{key}`"),
         )
     };
-    let mut total = 0_u128;
+    let mut total = pq_pool_v1
+        .as_ref()
+        .and_then(|pool| {
+            pool.head
+                .assets
+                .get(postfiat_types::pq_payment::NATIVE_ASSET_HEX)
+        })
+        .map_or(0, |asset| u128::from(asset.reserve));
     let mut account_ids = std::collections::BTreeSet::new();
     for account in accounts {
         if !account_ids.insert(account.address.as_str()) {
@@ -3294,6 +3330,13 @@ pub(super) fn replay_archived_payload(
                     &batch,
                     block.header.height,
                 )
+                || batch.amendments.iter().any(|a| {
+                    consensus_artifacts::requires_pq_registry(
+                        a,
+                        state.governance,
+                        block.header.height,
+                    )
+                })
             {
                 crate::consensus_artifacts::verify_signed_governance_batch(
                     genesis,
@@ -3317,6 +3360,14 @@ pub(super) fn replay_archived_payload(
         }
         "shielded" => {
             let batch: ShieldedActionBatch = parse_archived_payload(block, archive_entry)?;
+            consensus_artifacts::check_pq_block(
+                genesis,
+                state.governance,
+                block.header.height,
+                [&batch],
+            )?;
+            pq_payment_fixture::check_batch_domain(genesis, &batch)?;
+            consensus_artifacts::verify_development_pq_payments(genesis, &batch)?;
             let compatibility =
                 if archived_wan_devnet_legacy_strict_domain_validation_allowed(genesis, block) {
                     AssetExecutionCompatibility::wan_devnet_legacy_strict_domain_validation()
@@ -3328,7 +3379,7 @@ pub(super) fn replay_archived_payload(
                 genesis,
                 state.governance,
             );
-            Ok(execute_shielded_batch(
+            let receipts = execute_shielded_batch(
                 genesis,
                 state.ledger,
                 state.shielded,
@@ -3337,9 +3388,18 @@ pub(super) fn replay_archived_payload(
                 compatibility,
                 state.governance.orchard_pool_paused,
                 state.governance.shielded_atomic_batch_activation_height(),
-                &state.governance.asset_orchard_egress_policy_registry(),
+                &state.governance,
                 true,
-            ))
+            );
+            if postfiat_types::pq_rehearsal_domain(&genesis.chain_id, &genesis_hash(genesis))
+                && state
+                    .governance
+                    .pq_fee_schedule_in_force(block.header.height)
+            {
+                ensure_atomic_shielded_batch_accepted(&batch, &receipts)?;
+            }
+            pq_payment_fixture::ensure_valid(&batch, &receipts)?;
+            Ok(receipts)
         }
         "bridge" => {
             let batch: BridgeActionBatch = parse_archived_payload(block, archive_entry)?;

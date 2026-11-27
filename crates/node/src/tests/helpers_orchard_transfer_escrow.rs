@@ -4333,7 +4333,7 @@
                 AssetExecutionCompatibility::strict(),
                 false,
                 None,
-                &postfiat_types::AssetOrchardEgressPolicyRegistry::default(),
+                &GovernanceState::new(genesis.validator_count),
                 false,
             );
         assert_eq!(oversized_receipts.len(), 1);
@@ -4406,7 +4406,7 @@
             AssetExecutionCompatibility::strict(),
             governance.orchard_pool_paused,
             None,
-            &postfiat_types::AssetOrchardEgressPolicyRegistry::default(),
+            &GovernanceState::new(genesis.validator_count),
             false,
         );
         assert_eq!(receipts.len(), 2);
@@ -4549,7 +4549,7 @@
             AssetExecutionCompatibility::strict(),
             false,
             None,
-            &postfiat_types::AssetOrchardEgressPolicyRegistry::default(),
+            &GovernanceState::new(genesis.validator_count),
             false,
         );
         assert_eq!(live_receipts[0].code, "legacy_cleartext_shielded_action_disabled");
@@ -4564,7 +4564,7 @@
             AssetExecutionCompatibility::strict(),
             false,
             None,
-            &postfiat_types::AssetOrchardEgressPolicyRegistry::default(),
+            &GovernanceState::new(genesis.validator_count),
             true,
         );
         assert!(replay_receipts[0].accepted, "{replay_receipts:?}");
@@ -4613,7 +4613,7 @@
             AssetExecutionCompatibility::strict(),
             false,
             None,
-            &postfiat_types::AssetOrchardEgressPolicyRegistry::default(),
+            &GovernanceState::new(genesis.validator_count),
             true,
         );
         assert_eq!(inactive_receipts.len(), 2);
@@ -4632,7 +4632,7 @@
             AssetExecutionCompatibility::strict(),
             false,
             Some(1),
-            &postfiat_types::AssetOrchardEgressPolicyRegistry::default(),
+            &GovernanceState::new(genesis.validator_count),
             true,
         );
         assert_eq!(receipts.len(), 2);

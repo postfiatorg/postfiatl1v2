@@ -2,13 +2,13 @@
   "fleet": {
     "component": "Validator release",
     "chain": "postfiat-wan-devnet-2",
-    "height": 1903,
-    "observed_at": "2026-11-25 20:15 UTC",
-    "observers": "Fleet operator report covering six validators",
-    "source_revision": "04600868326ed9704cd31149371ee6f493806c3a",
-    "artifact": "sha256:6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b",
-    "result": "Six validators reported on sol-exit-r2",
-    "evidence": "https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/ops/b24-live/known-releases.txt"
+    "height": 1915,
+    "observed_at": "2026-11-27 09:01 UTC",
+    "observers": "Read-only status of all six validators through local forwards 127.0.0.1:27650 to 27655",
+    "source_revision": "9dcb689e47a4565143a50e4d67b5688751165aaa",
+    "artifact": "sha256:c563a4dcf48ad4359ab0f37fb7a626efed2b2b6808fc1ebd57e2963900326fb6",
+    "result": "Six validators on pq-r3, one state root",
+    "evidence": "https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/chain-state-current.md"
   },
   "authority": {
     "component": "Validator-trust authority",
@@ -27,16 +27,14 @@
     "component": "Lane-export proof identity",
     "chain": "Source build",
     "height": null,
-    "observed_at": "2026-11-25T21:22:27Z",
+    "observed_at": "2026-11-27T04:22:33Z",
     "observers": "GitHub Actions",
-    "source_revision": "fc83122e5d82ba7100f42fae1a2ae111ad7bad63",
+    "source_revision": "99e05d1dc15d5b8228271750ba24c3ed94850f7d",
     "artifact": "pft-lane-export-program",
-    "conclusion": "success",
-    "evidence": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/45701171620",
-    "comparison": "success",
-    "run_number": 253,
-    "job": "success",
-    "artifact_sha256": "d9354039fbab503e4b404ab2f0f223365804c19881337d140a4e2ec3dd9c8abd",
-    "verification_key": "0x008e3070879d6dc1f4a49f97b300767ea0f847abc33f2aa338e56225549e7416"
+    "conclusion": "failure",
+    "evidence": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/45938002025",
+    "comparison": "failure",
+    "run_number": 343,
+    "job": "failure"
   }
 }

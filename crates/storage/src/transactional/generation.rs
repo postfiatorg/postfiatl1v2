@@ -336,7 +336,8 @@ impl NodeStore {
         let Some(store) = self.live_transactional_store() else {
             return Ok(None);
         };
-        let snapshot = store.read_snapshot()?;
+        // The snapshot keeps the validator's handle open for the whole read.
+        let snapshot = store.read_snapshot_holding()?;
         let meta = snapshot.meta();
         Ok(meta
             .scheduled_activation_height

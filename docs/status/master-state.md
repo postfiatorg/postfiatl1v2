@@ -1,6 +1,6 @@
 # Master State
 
-Recorded: `2026-11-21`; updated `2026-11-25`. Status: **the one source of truth for what the
+Recorded: `2026-11-21`; updated `2026-11-27`. Status: **the one source of truth for what the
 code is and what the network runs.**
 
 ## The rule
@@ -14,9 +14,18 @@ There is one line of code: `main` in this repository.
 - A branch that will not merge is tagged into the archive and deleted. It does not stay in the
   branch list.
 
+!!! warning "2026-11-27: the running build is not on `main`"
+
+    Since the evening of 26 November the validators run `pq-r3`, build `9dcb689e47a4` ("fix(pq):
+    allow pq_pool_v1 state domain on postfiat-wan-devnet-2", 20:47:30 UTC), a commit of #280's
+    branch. `main` received #280 as one squashed commit, `b121df606`, on 27 November: the merged
+    form, newer than the running build, and by the 27 November handoff it also holds #280's final
+    CI and hygiene commits beyond `pq-r3`. `git merge-base --is-ancestor 9dcb689e origin/main`
+    fails, so the first rule above is not met until a release cut from `main` is rolled.
+
 !!! note "2026-11-25: the running build is on `main` again"
 
-    The validators run `04600868`, the head of the release branch `release/sol-exit-r2`. It is
+    On 25 November the validators ran `04600868`, the head of the release branch `release/sol-exit-r2`. It is
     `main` at `e5c4f6ceb` plus the release height (block 1890), a reviewer-installer fix and a
     rehearsal-test fix. From the rollout on 24 November until the merge it was not on `main`.
     It was merged into `main` on 25 November 2026 at 11:43 UTC as `26acd4639` (#234, which carries #228 and #230);
@@ -25,20 +34,27 @@ There is one line of code: `main` in this repository.
 
 ## What the validators run
 
-Read from all six validators on 2026-11-25, 10:16–10:23 UTC, read-only `status`.
+Read from all six validators on 2026-11-27, 09:01:27–09:01:34 UTC, read-only `status`, each
+through its local forward.
 
 | Fact | Value |
 | --- | --- |
 | Chain | `postfiat-wan-devnet-2` |
-| Build revision | `04600868` (`release/sol-exit-r2`; second Solana exit release, rules from block 1890) |
-| On `main` | Yes, since `26acd4639` (#234, 25 November 2026). Its base `e5c4f6ceb` is the merge of #223 |
-| Binary SHA-256 | `6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b` |
-| Deployment manifest SHA-256 | `cd37a303d953e575727ee94141d2b897e0eff9c6cb9d91c5a09fd04b0ddb4d1b`; `deployment_manifest_verified` true |
-| Height | 1897, all six agreeing on tip and state root |
+| Release | `pq-r3`, since the evening of 2026-11-26; PFSH03 post-quantum private payments activated at block 1910 (27 November handoff) |
+| Build revision | `9dcb689e`, profile `release` |
+| On `main` | No: `9dcb689e47a4` is a commit of #280's branch; `main` holds #280 as the squashed, newer `b121df606` |
+| Binary SHA-256 | `c563a4dcf48ad4359ab0f37fb7a626efed2b2b6808fc1ebd57e2963900326fb6` |
+| Deployment manifest SHA-256 | `25edebe2ba4081a6ad5aa4bb16eca9c73dbbe784151a4f33f2130eeac576aee4`; `deployment_manifest_verified` true |
+| Height | 1915, all six agreeing on tip and state root |
+| `main` ahead of it | Nothing merged to `main` after the running build was cut is deployed: #257, #274, #281, #285, `b121df606` and every later commit |
 
-Releases since the join: `sol-exit-r1` (`71dbc9b3`, rules from block 1841, 2026-11-23) and the
-second Solana exit release (`04600868`, rules from block 1890, 2026-11-24). Both were rolled one
-validator at a time ([Current State](chain-state-current.md)).
+Releases since the join: `sol-exit-r1` (`71dbc9b3`, rules from block 1841, 2026-11-23), the
+second Solana exit release (`04600868`, `release/sol-exit-r2`, rules from block 1890,
+2026-11-24), `sol-exit-r3` (`2356caf1`, 2026-11-25) and `pq-r3` (`9dcb689e`, 2026-11-26,
+PFSH03 from block 1910). The first three were rolled one validator at a time
+([Current State](chain-state-current.md)). The roll of `sol-exit-r3` was interrupted after three
+validators; Solana withdrawals were closed from 21:03 to 21:32 UTC
+([26 November handoff](handoff-2026-11-26.md)).
 
 ### 21 November 2026, after the rollout
 
@@ -117,6 +133,16 @@ On 21 November 2026 every bridge service was moved to one checkout of `main`, at
     and the Solana payout service ran a bundle of the second exit release plus a speed-up
     (`c033278b`). Moving them back to unmodified `main` is open work in that handoff.
 
+!!! note "2026-11-26: proofs only during a daily session"
+
+    The proving machines that ran all day were stopped. A proving session runs during a daily
+    window, planned for 17:00 to 19:00 UTC; outside it Solana deposits and both withdrawal paths
+    (Solana and Ethereum) are closed on purpose. On 26 November the daily timers were not enabled
+    and the window's launcher (#257) was not merged
+    ([26 November handoff](handoff-2026-11-26.md)). At 17:13 UTC that day the window was not
+    open: the Task Node showed Solana deposits and withdrawals closed. #257 was merged into `main`
+    on 27 November at 00:41 UTC; by the 27 November handoff it is not deployed.
+
 | Service | Before | Check after the move |
 | --- | --- | --- |
 | Solana deposit relay, wallet API, health, re-anchor, prover tunnel | A private branch | A real 0.02 USDC deposit from Phantom was credited in 122 seconds, with no relay restart |
@@ -135,9 +161,15 @@ The source for each deployed contract, Solana program and proof key is mapped in
   validators.
 - **The daily price-reading job was failing.** It refused to run because the validator binary
   was not the one it pins. A B24 reading (epoch 9) was submitted at height 1842 on 23 November;
-  none followed up to height 1897 (read-only read, 25 November). The job pins the `sol-exit-r1`
-  node binary while the fleet runs `04600868`, so its runtime check will stop it until the pin
-  moves ([25 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-25.md)).
+  none followed up to height 1897 (read-only read, 25 November). At that time the job pinned the
+  `sol-exit-r1` node binary while the fleet ran `04600868`
+  ([25 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-25.md)).
+  Since #235 the job selects its release from the fleet; epoch 10 (NAV per unit 1.006077,
+  submitted at height 1901) is finalized (read-only `nav_reserve_proof_status`, 26 November).
+  `ops/b24-live/known-releases.txt` lists `sol-exit-r2` and `sol-exit-r3` only, so with `pq-r3`
+  on the validators the job refuses until `ops/b24-live/rehearsal_tool.sh pq-r3 9dcb689e
+  c563a4dcf48ad4359ab0f37fb7a626efed2b2b6808fc1ebd57e2963900326fb6` has run on the machine that
+  runs the job and its line is added. That step is open after `pq-r3`.
 - **Not checked:** a real Ethereum deposit and a real Ethereum withdrawal after the move; none is
   recorded up to 25 November. Real Solana withdrawals ran on 23 and 24 November
   ([Current State](chain-state-current.md)).

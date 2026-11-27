@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 from eth_account import Account
 from web3 import Web3
+from hexbytes import HexBytes
 from web3.exceptions import TransactionNotFound
 
 from test_eth_finality import chain, terms
@@ -118,6 +119,7 @@ class RestartTests(unittest.TestCase):
                 log['topics'] = [Web3.keccak(text='PFTLCheckpointAdvanced(bytes32,bytes32,uint64,bytes32)'),
                                  Web3.keccak(hexstr=prior),Web3.keccak(hexstr=target)]
                 log['data'] = (3).to_bytes(32,'big') + bytes(32)
+                net.contract.return_value.functions.acceptedCheckpointCommitment.return_value.call.return_value = True
             if mode == 'withdraw':
                 service.run_jobs()
                 service.run_jobs()
@@ -133,6 +135,50 @@ class RestartTests(unittest.TestCase):
             self.assertEqual(set(attempted), {tx})
             self.assertEqual(len(attempted), 2 if boundary == 'before_broadcast' else 1)
             fn.build_transaction.assert_called_once()
+
+    def test_recorded_payout_the_chain_forgot_is_rebroadcast_from_its_journal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs, burn = Path(tmp), '11' * 48
+            out = jobs/burn/'eth-withdrawal.json'
+            out.parent.mkdir()
+            account = Account.create()
+            signed = account.sign_transaction(dict(to=eth_send.VAULT, value=0, gas=100000, maxFeePerGas=200,
+                                                   maxPriorityFeePerGas=1, nonce=7, chainId=1, data=b'fixture'))
+            tx = Web3.to_hex(signed.hash)
+            durable_json(intent_path(out), dict(mode='withdraw', tx=tx, chain_id=1, nonce=7, to=eth_send.VAULT,
+                                                signed=Web3.to_hex(signed.raw_transaction),
+                                                **{'from': account.address}, before={}))
+            durable_json(out, dict(mode='withdraw', tx=tx, status=1, block=22, block_hash='0x'+'ca'*32))
+            client = Mock()
+            client.eth.chain_id = 1
+            client.eth.get_transaction.side_effect = TransactionNotFound(tx)
+            client.eth.get_transaction_count.return_value = 7
+            client.eth.send_raw_transaction.return_value = signed.hash
+            net = chain(terms(burn), tx=tx, height=22)[0]
+            net.get_transaction_receipt.side_effect = TransactionNotFound(tx)  # a reorganisation dropped it
+
+            def rebroadcast(mode, proof, result):
+                # The service runs eth_send.py; a failing sender becomes a reconciliation.
+                try:
+                    eth_send.submit(client, mode, proof, result)
+                except RuntimeError as error:
+                    raise service.ReconciliationRequired(str(error)) from error
+            with patch.object(eth_send, 'OPERATOR', account.address), patch.object(eth_send, 'KEY', jobs/'no-key'), \
+                 patch.object(service, 'JOBS', jobs), patch.object(service, 'ethereum_reader', return_value=net), \
+                 patch.object(service, 'eth_send') as send, patch.object(service, 'rebroadcast', create=True, side_effect=rebroadcast):
+                service.stage(dict(terms(burn), journal_version=1), 'paying')
+                service.run_jobs()
+                self.assertEqual(service.read_job(burn)['stage'], 'awaiting_finality')
+                client.eth.send_raw_transaction.assert_called_once_with(HexBytes(signed.raw_transaction))
+                client.eth.get_transaction_count.return_value = 8  # the nonce is now used: never broadcast
+                client.eth.send_raw_transaction.reset_mock()
+                service.run_jobs(startup=True)
+                client.eth.send_raw_transaction.assert_not_called()
+                saved = service.read_job(burn)
+                self.assertEqual(saved['stage'], 'awaiting_finality')
+                self.assertIn('occupied nonce', saved['detail'])
+                send.assert_not_called()
+            self.assertFalse(client.eth.contract.called, 'recovery never builds or signs a transaction')
 
     def test_legacy_unknown_send_is_visible_without_resending(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(service, 'JOBS', Path(tmp)), \

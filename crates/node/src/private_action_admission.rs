@@ -209,11 +209,36 @@ fn is_lower_hex(value: &str, len: usize) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-/// Decodes one action with the contract's strict parser: the three admitted
-/// kinds only, legacy v1 kinds refused, no unknown fields at either JSON level.
+/// Decodes a public action with the strict pool allowlist and nested field checks.
 pub fn decode_private_action(action_json: &str) -> io::Result<ShieldedAction> {
     postfiat_types::parse_private_public_action(action_json)
         .map_err(|code| refused(code, "action_json is not an admissible public action"))
+}
+
+fn valid_scope(scope: &str) -> bool {
+    !scope.is_empty()
+        && scope.len() <= 128
+        && scope
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._:-".contains(&b))
+}
+
+fn public_pool_matches(action: &ShieldedAction, pool: &str) -> bool {
+    match action {
+        ShieldedAction::PqPaymentV1(_) => pool == postfiat_types::pq_payment::POOL_ID,
+        ShieldedAction::AssetOrchardIngressV2(a) => {
+            pool == PRIVATE_ACTION_POOL_ID && a.pool_id == pool
+        }
+        ShieldedAction::AssetOrchardPrivateEgressV1(a) => {
+            pool == PRIVATE_ACTION_POOL_ID && a.pool_id == pool
+        }
+        ShieldedAction::ShieldedSwapV1(a) => {
+            pool == PRIVATE_ACTION_POOL_ID
+                && serde_json::from_str::<serde_json::Value>(&a.swap_json)
+                    .is_ok_and(|v| v["pool_id"].as_str() == Some(pool))
+        }
+        _ => false,
+    }
 }
 
 pub fn private_action_kind(action: &ShieldedAction) -> &'static str {
@@ -221,18 +246,119 @@ pub fn private_action_kind(action: &ShieldedAction) -> &'static str {
         ShieldedAction::AssetOrchardIngressV2(_) => "asset_orchard_ingress_v2",
         ShieldedAction::AssetOrchardPrivateEgressV1(_) => "asset_orchard_private_egress_v1",
         ShieldedAction::ShieldedSwapV1(_) => "shielded_swap_v1",
+        ShieldedAction::PqPaymentV1(_) => "pq_payment_v1",
         _ => "not_admitted",
     }
 }
+
+// Only unsigned, proof-independent bytes enter these keys. Use the same
+// header and L1 context as the proof transcript.
+#[derive(Clone, PartialEq, Eq)]
+struct PqReservation {
+    statement: String,
+    keys: Vec<String>,
+}
+
+fn pq_reservation(
+    payment: &postfiat_types::pq_payment::PqPayment,
+    domain: &PrivateActionSubmitDomain,
+) -> io::Result<PqReservation> {
+    use postfiat_types::pq_payment::{Chain, UNSIGNED_HEADER_LEN};
+    let (terms, _, inner) = payment.parts().map_err(|e| refused("pq_encoding", e))?;
+    let genesis = hex_to_bytes(&domain.genesis_hash)
+        .ok()
+        .and_then(|v| v.try_into().ok())
+        .ok_or_else(|| refused("private_action_wrong_domain", "invalid genesis"))?;
+    let chain = Chain {
+        id: &domain.chain_id,
+        genesis,
+        protocol: domain.protocol_version,
+    };
+    let mut raw = Sha384::new();
+    raw.update(b"PFT-SH-TXCTX-V3");
+    raw.update(&inner[..UNSIGNED_HEADER_LEN]);
+    let statement = bytes_to_hex(&terms.statement_context(chain, raw.finalize().into()));
+    let mut keys = Vec::with_capacity(5);
+    for serial in inner[112..208].chunks_exact(48) {
+        keys.push(format!("serial:{}", bytes_to_hex(serial)));
+    }
+    for output in inner[208..304].chunks_exact(48) {
+        keys.push(format!("output:{}", bytes_to_hex(output)));
+    }
+    if let Some(auth) = terms.account {
+        keys.push(format!(
+            "payer:{}:{}",
+            bytes_to_hex(&auth.id),
+            auth.sequence
+        ));
+    }
+    Ok(PqReservation { statement, keys })
+}
+
+fn pending(state: PrivateActionState) -> bool {
+    matches!(
+        state,
+        PrivateActionState::Queued | PrivateActionState::Dispatched | PrivateActionState::Unknown
+    )
+}
+
+const MAX_PENDING_BYTES: usize = 8 * PRIVATE_ACTION_MAX_JSON_BYTES;
+const PQ_QUEUE_LIFETIME_BLOCKS: u64 = 64;
 
 /// The append-only, fsync'd admission log. The last line for an intent is its
 /// current record.
 pub struct PrivateActionAdmissionStore {
     dir: PathBuf,
+    index: AdmissionIndex,
+    cacheable: bool,
+    _lock: File,
+}
+
+#[derive(Default)]
+struct AdmissionIndex {
     records: BTreeMap<String, PrivateActionRecord>,
     by_action_hash: BTreeMap<String, String>,
     by_batch_id: BTreeMap<String, String>,
-    _lock: File,
+    statements: BTreeMap<String, String>,
+    conflicts: BTreeMap<String, String>,
+    pq_reservations: BTreeMap<String, PqReservation>,
+    pending_bytes: usize,
+}
+
+// Keep one process-local index. The file lock protects both the durable append
+// and publication of the cache. Another process's write forces reconstruction.
+#[derive(PartialEq, Eq)]
+struct LogStamp {
+    length: u64,
+    modified: std::time::SystemTime,
+    #[cfg(unix)]
+    inode: u64,
+}
+fn log_stamp(path: &Path) -> io::Result<Option<LogStamp>> {
+    match fs::metadata(path) {
+        Ok(m) => Ok(Some(LogStamp {
+            length: m.len(),
+            modified: m.modified()?,
+            #[cfg(unix)]
+            inode: std::os::unix::fs::MetadataExt::ino(&m),
+        })),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+type CachedIndex = (PathBuf, Option<LogStamp>, AdmissionIndex);
+static LAST_INDEX: std::sync::Mutex<Option<CachedIndex>> = std::sync::Mutex::new(None);
+
+impl Drop for PrivateActionAdmissionStore {
+    fn drop(&mut self) {
+        if self.cacheable {
+            if let Ok(stamp) = log_stamp(&self.dir.join(ADMISSION_LOG)) {
+                if let Ok(mut cache) = LAST_INDEX.lock() {
+                    *cache = Some((self.dir.clone(), stamp, std::mem::take(&mut self.index)));
+                }
+            }
+        }
+    }
 }
 
 impl PrivateActionAdmissionStore {
@@ -246,64 +372,252 @@ impl PrivateActionAdmissionStore {
             .truncate(false)
             .open(dir.join(ADMISSION_LOCK))?;
         lock_exclusive(&lock)?;
+        let log = dir.join(ADMISSION_LOG);
+        let stamp = log_stamp(&log)?;
+        let cached = LAST_INDEX
+            .lock()
+            .ok()
+            .and_then(|mut c| c.take())
+            .filter(|(path, s, _)| path == &dir && *s == stamp);
         let mut store = Self {
             dir,
-            records: BTreeMap::new(),
-            by_action_hash: BTreeMap::new(),
-            by_batch_id: BTreeMap::new(),
+            index: Default::default(),
+            cacheable: false,
             _lock: lock,
         };
-        let log = store.dir.join(ADMISSION_LOG);
-        if log.exists() {
-            let text = fs::read_to_string(&log)?;
+        if let Some((_, _, index)) = cached {
+            store.index = index;
+        } else if stamp.is_some() {
+            use std::io::{BufRead, BufReader, Read};
+            let mut reader = BufReader::new(File::open(&log)?);
+            let mut latest = BTreeMap::new();
             let mut good_len = 0;
-            let mut lines = text.split_inclusive('\n').peekable();
-            while let Some(line) = lines.next() {
-                // Only a torn final line (a crash mid-append) is tolerated; it
-                // is cut off so the next append starts on a clean line.
-                if !line.ends_with('\n') && lines.peek().is_none() {
+            let mut line = Vec::new();
+            loop {
+                line.clear();
+                // Includes both copies of the bounded request, JSON escaping,
+                // certificate and receipt. Never allocate an entire log at once.
+                let limit = MAX_LOCAL_JSON_FILE_BYTES;
+                let n = (&mut reader).take(limit + 1).read_until(b'\n', &mut line)?;
+                if n == 0 {
+                    break;
+                }
+                if n as u64 > limit {
+                    return Err(refused(
+                        "private_action_record_limit",
+                        "oversized journal record",
+                    ));
+                }
+                if line.last() != Some(&b'\n') {
                     let file = OpenOptions::new().write(true).open(&log)?;
-                    file.set_len(good_len as u64)?;
+                    file.set_len(good_len)?;
                     file.sync_all()?;
                     break;
                 }
-                let record =
-                    serde_json::from_str::<PrivateActionRecord>(line.trim_end_matches('\n'))
-                        .map_err(|error| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!("private action admission log is corrupt: {error}"),
-                            )
-                        })?;
+                let record: PrivateActionRecord =
+                    serde_json::from_slice(&line).map_err(|error| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("private action admission log is corrupt: {error}"),
+                        )
+                    })?;
+                latest.insert(record.intent_id.clone(), (good_len, record));
+                good_len += n as u64;
+            }
+            // The journal can predate this binary. Re-establish the public
+            // bindings before a pending record can reserve or claim inclusion.
+            let mut records: Vec<_> = latest.into_values().collect();
+            records.sort_unstable_by_key(|(offset, _)| *offset);
+            let mut genesis = None;
+            for (_, record) in records {
+                if pending(record.state)
+                    && (record.domain.pool_id == postfiat_types::pq_payment::POOL_ID
+                        || record.action_kind == "pq_payment_v1")
+                {
+                    if genesis.is_none() {
+                        genesis = Some(NodeStore::new(data_dir).read_genesis()?);
+                    }
+                    if let Err(error) =
+                        queued_batch(&record, genesis.as_ref().expect("recovery genesis"))
+                    {
+                        finish(
+                            &mut store,
+                            record,
+                            refused_outcome(
+                                "private_action_binding_mismatch".into(),
+                                error.to_string(),
+                            ),
+                        )?;
+                        // Publish the index only after all retained records load.
+                        store.cacheable = false;
+                        continue;
+                    }
+                }
                 store.index(record);
-                good_len += line.len();
             }
         }
+        store.cacheable = true;
         Ok(store)
     }
 
+    fn existing_pq(
+        &self,
+        reservation: &PqReservation,
+        domain: &PrivateActionSubmitDomain,
+    ) -> io::Result<Option<PrivateActionSubmitReport>> {
+        if let Some(intent) = self.index.statements.get(&reservation.statement) {
+            let owner = &self.index.records[intent];
+            if &owner.domain != domain {
+                return Err(refused(
+                    "private_intent_conflict",
+                    "statement belongs to another caller",
+                ));
+            }
+            return Ok(Some(PrivateActionSubmitReport {
+                schema: PRIVATE_ACTION_RECORD_SCHEMA.into(),
+                existing: true,
+                record: owner.clone(),
+            }));
+        }
+        if reservation
+            .keys
+            .iter()
+            .any(|k| self.index.conflicts.contains_key(k))
+        {
+            return Err(refused(
+                "private_action_duplicate",
+                "a serial, output or public sequence is already reserved",
+            ));
+        }
+        Ok(None)
+    }
+
+    fn existing_submission(
+        &self,
+        request: &PrivateActionSubmitRequest,
+        reservation: Option<&PqReservation>,
+        batch_id: &str,
+    ) -> io::Result<Option<PrivateActionSubmitReport>> {
+        if let Some(keys) = reservation {
+            if let Some(existing) = self.existing_pq(keys, &request.domain)? {
+                return Ok(Some(existing));
+            }
+        }
+        // The same bytes after an operator abandonment reserve again under the same
+        // intent; the indexes keep pointing at that intent and the abandoned
+        // record stays in the log.
+        let supersedes_abandoned = self.get(&request.intent_id).is_some_and(|existing| {
+            existing.state == PrivateActionState::Abandoned
+                && (reservation.is_none() || existing.domain == request.domain)
+                && existing.action_json == request.action_json
+        });
+        let owned_by_this_intent = |intent: &str| {
+            (supersedes_abandoned && intent == request.intent_id.as_str())
+                || (reservation.is_some()
+                    && self.get(intent).is_some_and(|r| {
+                        r.state == PrivateActionState::Abandoned && r.domain == request.domain
+                    }))
+        };
+        if let Some(existing) = self
+            .get(&request.intent_id)
+            .filter(|_| !supersedes_abandoned)
+        {
+            if existing.action_json == request.action_json && existing.domain == request.domain {
+                return Ok(Some(PrivateActionSubmitReport {
+                    schema: PRIVATE_ACTION_RECORD_SCHEMA.to_string(),
+                    existing: true,
+                    record: existing.clone(),
+                }));
+            }
+            return Err(refused(
+                "private_intent_conflict",
+                "a different action is already reserved under this intent",
+            ));
+        }
+        if self
+            .intent_for_action_hash(&request.action_hash)
+            .is_some_and(|intent| !owned_by_this_intent(intent))
+        {
+            return Err(refused(
+                "private_action_duplicate",
+                "this action is already reserved under another intent",
+            ));
+        }
+        if self
+            .intent_for_batch_id(batch_id)
+            .is_some_and(|intent| !owned_by_this_intent(intent))
+        {
+            return Err(refused(
+                "private_action_duplicate",
+                "this canonical batch is already reserved under another intent",
+            ));
+        }
+        Ok(None)
+    }
+
     fn index(&mut self, record: PrivateActionRecord) {
-        self.by_action_hash
-            .insert(record.action_hash.clone(), record.intent_id.clone());
-        self.by_batch_id
-            .insert(record.batch_id.clone(), record.intent_id.clone());
-        self.records.insert(record.intent_id.clone(), record);
+        let intent = &record.intent_id;
+        if let Some(old) = self.index.records.get(intent).filter(|r| pending(r.state)) {
+            self.index.pending_bytes -= old.action_json.len() + old.batch_json.len();
+        }
+        if pending(record.state) {
+            self.index.pending_bytes += record.action_json.len() + record.batch_json.len();
+        }
+        if let Some(old) = self.index.pq_reservations.remove(intent) {
+            self.index.statements.remove(&old.statement);
+            for key in old.keys {
+                self.index.conflicts.remove(&key);
+            }
+        }
+        if record.domain.pool_id == postfiat_types::pq_payment::POOL_ID
+            && (pending(record.state) || record.state == PrivateActionState::Accepted)
+        {
+            if let Ok(ShieldedAction::PqPaymentV1(payment)) =
+                decode_private_action(&record.action_json)
+            {
+                if let Ok(keys) = pq_reservation(&payment, &record.domain) {
+                    self.index
+                        .statements
+                        .insert(keys.statement.clone(), intent.clone());
+                    for key in &keys.keys {
+                        self.index.conflicts.insert(key.clone(), intent.clone());
+                    }
+                    self.index.pq_reservations.insert(intent.clone(), keys);
+                }
+            }
+        }
+        if record
+            .outcome
+            .as_ref()
+            .is_none_or(|o| o.code != "private_action_binding_mismatch")
+        {
+            self.index
+                .by_action_hash
+                .insert(record.action_hash.clone(), record.intent_id.clone());
+            self.index
+                .by_batch_id
+                .insert(record.batch_id.clone(), record.intent_id.clone());
+        }
+        self.index.records.insert(record.intent_id.clone(), record);
     }
 
     pub fn get(&self, intent_id: &str) -> Option<&PrivateActionRecord> {
-        self.records.get(intent_id)
+        self.index.records.get(intent_id)
     }
 
     pub fn intent_for_action_hash(&self, action_hash: &str) -> Option<&str> {
-        self.by_action_hash.get(action_hash).map(String::as_str)
+        self.index
+            .by_action_hash
+            .get(action_hash)
+            .map(String::as_str)
     }
 
     pub fn intent_for_batch_id(&self, batch_id: &str) -> Option<&str> {
-        self.by_batch_id.get(batch_id).map(String::as_str)
+        self.index.by_batch_id.get(batch_id).map(String::as_str)
     }
 
     pub fn records(&self) -> impl Iterator<Item = &PrivateActionRecord> {
-        self.records.values()
+        self.index.records.values()
     }
 
     /// Every logged record for the intent, oldest first: the audit trail.
@@ -331,12 +645,14 @@ impl PrivateActionAdmissionStore {
         let path = self.dir.join(ADMISSION_LOG);
         let created = !path.exists();
         let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
+        self.cacheable = false;
         file.write_all(&line)?;
         file.sync_data()?;
         if created {
             File::open(&self.dir)?.sync_all()?;
         }
         self.index(record);
+        self.cacheable = true;
         Ok(())
     }
 }
@@ -414,6 +730,17 @@ fn admission_state_is_settled(
         && tip.state_root == state.tip.state_root)
 }
 
+fn pinned_pq_view(data_dir: &Path, state: &FinalizedAdmissionState) -> io::Result<bool> {
+    Ok(lifecycle_queries::replicated_state_root_of_parts(
+        &NodeStore::new(data_dir),
+        &state.genesis,
+        &state.governance,
+        &state.ledger,
+        &state.shielded,
+        &state.bridge,
+    )? == state.tip.state_root)
+}
+
 /// Runs the execution path's verification for the next height against the
 /// finalized state. Returns the first rejection's own code and message.
 fn verify_private_batch(
@@ -463,13 +790,7 @@ pub fn private_action_submit(
             "action_json must be 1 to 1048576 bytes",
         ));
     }
-    let scope = &request.domain.session_scope;
-    if scope.is_empty()
-        || scope.len() > 128
-        || !scope
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"._:-".contains(&b))
-    {
+    if !valid_scope(&request.domain.session_scope) {
         return Err(refused(
             "private_action_request_invalid",
             "session_scope must be 1 to 128 characters of [A-Za-z0-9._:-]",
@@ -480,7 +801,10 @@ pub fn private_action_submit(
     if domain.chain_id != state.genesis.chain_id
         || domain.genesis_hash != genesis_hash(&state.genesis)
         || domain.protocol_version != state.genesis.protocol_version
-        || domain.pool_id != PRIVATE_ACTION_POOL_ID
+        || !matches!(
+            domain.pool_id.as_str(),
+            PRIVATE_ACTION_POOL_ID | postfiat_types::pq_payment::POOL_ID
+        )
     {
         return Err(refused(
             "private_action_wrong_domain",
@@ -495,6 +819,12 @@ pub fn private_action_submit(
         ));
     }
     let action = decode_private_action(&request.action_json)?;
+    if !public_pool_matches(&action, &domain.pool_id) {
+        return Err(refused(
+            "private_action_wrong_domain",
+            "wrong pool for action",
+        ));
+    }
     let action_hash = postfiat_types::private_action_hash(&action)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     if action_hash != request.action_hash {
@@ -504,53 +834,45 @@ pub fn private_action_submit(
         ));
     }
 
-    let mut store = PrivateActionAdmissionStore::open(data_dir)?;
-    // The same bytes after an operator abandonment reserve again under the same
-    // intent; the indexes keep pointing at that intent and the abandoned
-    // record stays in the log.
-    let supersedes_abandoned = store.get(&request.intent_id).is_some_and(|existing| {
-        existing.state == PrivateActionState::Abandoned
-            && existing.action_json == request.action_json
-    });
-    let owned_by_this_intent =
-        |intent: &str| supersedes_abandoned && intent == request.intent_id.as_str();
-    if let Some(existing) = store
-        .get(&request.intent_id)
-        .filter(|_| !supersedes_abandoned)
-    {
-        if existing.action_json == request.action_json && existing.domain == request.domain {
-            return Ok(PrivateActionSubmitReport {
-                schema: PRIVATE_ACTION_RECORD_SCHEMA.to_string(),
-                existing: true,
-                record: existing.clone(),
-            });
-        }
-        return Err(refused(
-            "private_intent_conflict",
-            "a different action is already reserved under this intent",
-        ));
-    }
-    if store
-        .intent_for_action_hash(&request.action_hash)
-        .is_some_and(|intent| !owned_by_this_intent(intent))
-    {
-        return Err(refused(
-            "private_action_duplicate",
-            "this action is already reserved under another intent",
-        ));
-    }
+    let reservation = match &action {
+        ShieldedAction::PqPaymentV1(p) => Some(pq_reservation(p, domain)?),
+        _ => None,
+    };
     let action_kind = private_action_kind(&action).to_string();
     let batch =
         consensus_artifacts::build_atomic_shielded_action_batch(&state.genesis, vec![action])?;
-    consensus_artifacts::verify_shielded_action_batch_id(&state.genesis, &batch)?;
-    if store
-        .intent_for_batch_id(&batch.batch_id)
-        .is_some_and(|intent| !owned_by_this_intent(intent))
     {
-        return Err(refused(
-            "private_action_duplicate",
-            "this canonical batch is already reserved under another intent",
-        ));
+        let store = PrivateActionAdmissionStore::open(data_dir)?;
+        if reservation.is_some() {
+            // Returning an exact stored receipt creates no new reservation.
+            if let Some(record) = store.get(&request.intent_id).filter(|r| {
+                r.state != PrivateActionState::Abandoned
+                    && r.domain == request.domain
+                    && r.action_json == request.action_json
+                    && r.action_hash == request.action_hash
+            }) {
+                return Ok(PrivateActionSubmitReport {
+                    schema: PRIVATE_ACTION_RECORD_SCHEMA.into(),
+                    existing: true,
+                    record: record.clone(),
+                });
+            }
+            let height = state
+                .tip_height
+                .checked_add(1)
+                .ok_or_else(|| refused("height_overflow", "candidate height overflow"))?;
+            consensus_artifacts::check_pq_block(
+                &state.genesis,
+                &state.governance,
+                height,
+                [&batch],
+            )?;
+        }
+        if let Some(existing) =
+            store.existing_submission(request, reservation.as_ref(), &batch.batch_id)?
+        {
+            return Ok(existing);
+        }
     }
     if state.ordered_batches.contains(&batch.batch_id) {
         return Err(refused(
@@ -558,7 +880,28 @@ pub fn private_action_submit(
             "this canonical batch is already on chain",
         ));
     }
-    if let Err((code, message)) = verify_private_batch(&state, &batch)? {
+    // A batch that fails the pool checks is refused before its proofs are verified.
+    let verdict = match pq_pool_state::precheck_batch(
+        state.shielded.pq_pool_v1.as_ref(),
+        &batch,
+        state.tip_height.saturating_add(1),
+    ) {
+        Err(code) => Ok(Err((code.to_owned(), code.to_owned()))),
+        Ok(()) => verify_private_batch(&state, &batch),
+    };
+    if reservation.is_some()
+        && (!pinned_pq_view(data_dir, &state)?
+            || read_chain_tip_or_reconstruct_for_genesis_read_only(
+                &NodeStore::new(data_dir),
+                &state.genesis,
+            )? != state.tip)
+    {
+        return Err(refused(
+            "private_action_stale_tip",
+            "retry at the finalized tip",
+        ));
+    }
+    if let Err((code, message)) = verdict? {
         return Err(refused(&code, message));
     }
     let batch_json = serde_json::to_string(&batch)
@@ -577,6 +920,29 @@ pub fn private_action_submit(
         dispatch_count: 0,
         outcome: None,
     };
+    let mut store = PrivateActionAdmissionStore::open(data_dir)?;
+    if let Some(existing) =
+        store.existing_submission(request, reservation.as_ref(), &batch.batch_id)?
+    {
+        return Ok(existing);
+    }
+    if reservation.is_some() {
+        let disk = NodeStore::new(data_dir);
+        let tip = read_chain_tip_or_reconstruct_for_genesis_read_only(&disk, &state.genesis)?;
+        if tip != state.tip {
+            return Err(refused(
+                "private_action_stale_tip",
+                "retry at the finalized tip",
+            ));
+        }
+    }
+    let bytes = store
+        .index
+        .pending_bytes
+        .saturating_add(record.action_json.len() + record.batch_json.len());
+    if bytes > MAX_PENDING_BYTES {
+        return Err(refused("private_action_queue_full", "pending byte limit"));
+    }
     store.write(record.clone())?;
     Ok(PrivateActionSubmitReport {
         schema: PRIVATE_ACTION_RECORD_SCHEMA.to_string(),
@@ -716,12 +1082,54 @@ pub struct PrivateActionServiceStep {
     pub code: String,
 }
 
+fn queued_batch(
+    record: &PrivateActionRecord,
+    genesis: &Genesis,
+) -> io::Result<ShieldedActionBatch> {
+    let domain = &record.domain;
+    if record.action_json.len() > PRIVATE_ACTION_MAX_JSON_BYTES
+        || record.batch_json.len() > PRIVATE_ACTION_MAX_JSON_BYTES
+        || domain.chain_id != genesis.chain_id
+        || domain.genesis_hash != genesis_hash(genesis)
+        || domain.protocol_version != genesis.protocol_version
+        || !valid_scope(&domain.session_scope)
+        || record.schema != PRIVATE_ACTION_RECORD_SCHEMA
+    {
+        return Err(refused(
+            "private_action_wrong_domain",
+            "queued record does not match this chain or caller",
+        ));
+    }
+    let action = decode_private_action(&record.action_json)?;
+    if !public_pool_matches(&action, &domain.pool_id)
+        || private_action_kind(&action) != record.action_kind
+        || private_action_intent_id(&domain.intent_domain(), &record.action_json)?
+            != record.intent_id
+        || private_action_hash_for_json(&record.action_json)? != record.action_hash
+    {
+        return Err(refused(
+            "private_action_binding_mismatch",
+            "queued action binding changed",
+        ));
+    }
+    let batch = consensus_artifacts::build_atomic_shielded_action_batch(genesis, vec![action])?;
+    if batch.batch_id != record.batch_id
+        || serde_json::to_string(&batch).map_err(invalid_data)? != record.batch_json
+    {
+        return Err(refused(
+            "private_action_binding_mismatch",
+            "queued batch binding changed",
+        ));
+    }
+    Ok(batch)
+}
+
 /// One pass of the round service.
 ///
 /// 1. `dispatched` records (a crash mid-round) are reconciled from the chain by
 ///    batch id and never dispatched again: included → accepted/rejected,
 ///    absent → `unknown`, which stays pending until the batch appears on
-///    chain (for example proposed by another validator holding it queued).
+///    chain or its PQ reservation expires.
 /// 2. `queued` records whose batch is already on chain (another validator
 ///    proposed it) are reconciled without a round.
 /// 3. The oldest other `queued` record is re-verified at the current state;
@@ -739,6 +1147,19 @@ where
 {
     let mut steps = Vec::new();
     let mut store = PrivateActionAdmissionStore::open(data_dir)?;
+    // A concurrent pass must not mistake a live round for a crashed
+    // dispatcher. This lease is independent of the short reservation lock.
+    let lease = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(store.dir.join("dispatch.lock"))?;
+    match lease.try_lock() {
+        Ok(()) => (),
+        Err(std::fs::TryLockError::WouldBlock) => return Ok(steps),
+        Err(std::fs::TryLockError::Error(e)) => return Err(e),
+    }
     let pending = store
         .records()
         .filter(|record| {
@@ -752,6 +1173,7 @@ where
         .cloned()
         .collect::<Vec<_>>();
     let mut next = None;
+    let mut unknown_tip = None;
     for record in pending {
         if let Some((inclusion, receipts)) =
             private_action_chain_inclusion(data_dir, &record.batch_id)?
@@ -763,8 +1185,39 @@ where
             )?);
             continue;
         }
-        // `unknown` is only ever settled by the chain; it is never dispatched.
+        // Never redispatch an ambiguous attempt. After its PQ lifetime
+        // expires, check inclusion again at the observed tip before release.
         if record.state == PrivateActionState::Unknown {
+            if record.domain.pool_id == postfiat_types::pq_payment::POOL_ID {
+                let tip = match &unknown_tip {
+                    Some(tip) => tip,
+                    None => {
+                        let disk = NodeStore::new(data_dir);
+                        unknown_tip.insert(read_chain_tip_or_reconstruct_for_genesis_read_only(
+                            &disk,
+                            &disk.read_genesis()?,
+                        )?)
+                    }
+                };
+                if tip.height.saturating_sub(record.received_height) >= PQ_QUEUE_LIFETIME_BLOCKS {
+                    if let Some((inclusion, receipts)) =
+                        private_action_chain_inclusion(data_dir, &record.batch_id)?
+                    {
+                        steps.push(finish(
+                            &mut store,
+                            record,
+                            included_outcome(inclusion, &receipts),
+                        )?);
+                    } else {
+                        steps.push(release_reservation(
+                            &mut store,
+                            record,
+                            "pq_queue_expired",
+                            "queue lifetime elapsed",
+                        )?);
+                    }
+                }
+            }
             continue;
         }
         if record.state == PrivateActionState::Dispatched {
@@ -790,11 +1243,63 @@ where
     let Some(record) = next else {
         return Ok(steps);
     };
-    let batch: ShieldedActionBatch = serde_json::from_str(&record.batch_json)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    drop(store);
     let state = read_finalized_admission_state(data_dir)?;
-    consensus_artifacts::verify_shielded_action_batch_id(&state.genesis, &batch)?;
-    if let Err((code, message)) = verify_private_batch(&state, &batch)? {
+    let batch = queued_batch(&record, &state.genesis);
+    let verdict = match &batch {
+        Ok(batch) => verify_private_batch(&state, batch),
+        Err(error) => Ok(Err((
+            "private_action_binding_mismatch".into(),
+            error.to_string(),
+        ))),
+    };
+    let pq = record.domain.pool_id == postfiat_types::pq_payment::POOL_ID;
+    let pinned = !pq || pinned_pq_view(data_dir, &state)?;
+    let mut store = PrivateActionAdmissionStore::open(data_dir)?;
+    if store.get(&record.intent_id) != Some(&record) {
+        return Ok(steps);
+    }
+    let next_height = state
+        .tip_height
+        .checked_add(1)
+        .ok_or_else(|| refused("height_overflow", "candidate height overflow"))?;
+    if record.domain.pool_id == postfiat_types::pq_payment::POOL_ID
+        && (!pinned
+            || read_chain_tip_or_reconstruct_for_genesis_read_only(
+                &NodeStore::new(data_dir),
+                &state.genesis,
+            )? != state.tip)
+    {
+        return Ok(steps);
+    }
+    let release =
+        if pq && next_height.saturating_sub(record.received_height) > PQ_QUEUE_LIFETIME_BLOCKS {
+            Some(("pq_queue_expired", "queue lifetime elapsed"))
+        } else if verdict
+            .as_ref()
+            .is_err_and(|e| e.to_string() == "pq_settlement_inactive")
+        {
+            Some(("pq_settlement_inactive", "resubmit after activation"))
+        } else if verdict
+            .as_ref()
+            .is_err_and(|e| e.to_string() == "pq_exit_frozen")
+        {
+            Some((
+                "pq_exit_frozen",
+                "resubmit after emergency exit freeze expires",
+            ))
+        } else {
+            None
+        };
+    if let Some((code, message)) = release {
+        steps.push(release_reservation(&mut store, record, code, message)?);
+        return Ok(steps);
+    }
+    let verified = match verdict {
+        Err(e) => Err(("private_action_verification_failed".into(), e.to_string())),
+        Ok(value) => value,
+    };
+    if let Err((code, message)) = verified {
         // A batch a block commit is including fails against state that already
         // holds its effects. Settle it from the chain if it is there; record a
         // terminal rejection only against a settled tip, otherwise leave the
@@ -816,10 +1321,7 @@ where
         steps.push(finish(&mut store, record, outcome)?);
         return Ok(steps);
     }
-    let next_height = state
-        .tip_height
-        .checked_add(1)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
+    let batch = batch?;
     if !is_local_proposer(next_height)? {
         return Ok(steps);
     }
@@ -869,6 +1371,25 @@ where
     };
     steps.push(step);
     Ok(steps)
+}
+
+fn release_reservation(
+    store: &mut PrivateActionAdmissionStore,
+    mut record: PrivateActionRecord,
+    code: &str,
+    message: &str,
+) -> io::Result<PrivateActionServiceStep> {
+    let step = PrivateActionServiceStep {
+        intent_id: record.intent_id.clone(),
+        batch_id: record.batch_id.clone(),
+        from: record.state,
+        to: PrivateActionState::Abandoned,
+        code: code.into(),
+    };
+    record.state = step.to;
+    record.outcome = Some(refused_outcome(code.into(), message.into()));
+    store.write(record)?;
+    Ok(step)
 }
 
 fn refused_outcome(code: String, message: String) -> PrivateActionOutcome {
@@ -922,8 +1443,7 @@ pub struct PrivateActionResolveReport {
 /// The operator rule for a stuck record. Without `abandon_reason`, settles
 /// the record from the chain if its batch is there and otherwise changes
 /// nothing. With it, marks a `queued` or `unknown` record `abandoned` only if
-/// the batch is not on chain. Never dispatches. Holding the store lock means
-/// no service step, and so no round, is running.
+/// the batch is not on chain. A durable dispatched record cannot be abandoned.
 pub fn private_action_resolve(
     data_dir: &Path,
     intent_id: &str,

@@ -11,6 +11,12 @@ is off on every validator, as recorded in the
 [handoff of 23 November 2026](../status/handoff-2026-11-23.md); the switch is
 not reported over RPC.
 
+## PFSH02 rehearsal payments
+
+**Shield** debits a public account and credits the private reserve for the exact issue. The local signer checks both output openings before signing the ML-DSA-65 authorization. **Pay** consumes private notes and appends two outputs. **Unshield** pays the bound public recipient. Native PFT fees reduce the private PFT reserve. A pfUSDC deposit pays PFT from the depositing account. A pfUSDC payment or exit pays the fee from its notes into a public collector for that source series. The wire omits the sender account.
+
+In the six-validator rehearsal, a locally attested bridge deposit established 100 atoms of the governed pfUSDC series through signed transactions. The subsequent private shield moved all 100 atoms into its reserve. At height 30 the native PQ reserve held 494 atoms and the live PFT supply was 999,999,413 atoms after 587 atoms in burned fees. A fresh import recovered an unspent 99-atom PFT output and the 100-atom pfUSDC output after the pause. [Rehearsal record](../evidence/pq-private-payments-m8/rehearsal-record.md).
+
 ## Shielded Action Structure
 
 A shielded action exposes enough data for consensus verification while keeping

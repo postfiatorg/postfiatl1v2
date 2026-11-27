@@ -3492,7 +3492,7 @@ fn build_shielded_batch_proposal_with_timings(
     timings.read_batch_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    verify_shielded_action_batch_id(&genesis, &batch)?;
+
     reject_live_legacy_cleartext_shielded_actions(&batch)?;
     timings.verify_batch_id_ms = node_timing_elapsed_ms(stage_start);
 
@@ -3531,6 +3531,10 @@ fn build_shielded_batch_proposal_with_timings(
     )?;
     timings.activation_ms = node_timing_elapsed_ms(stage_start);
 
+    consensus_artifacts::check_pq_block(&genesis, &governance, block_height, [&batch])?;
+    pq_pool_state::precheck_batch(shielded.pq_pool_v1.as_ref(), &batch, block_height)
+        .map_err(|code| io::Error::new(io::ErrorKind::InvalidData, code))?;
+    verify_shielded_action_batch_id(&genesis, &batch)?;
     reset_asset_orchard_private_egress_timings();
     reset_asset_orchard_private_egress_node_timings();
     let stage_start = std::time::Instant::now();
@@ -3543,9 +3547,10 @@ fn build_shielded_batch_proposal_with_timings(
         asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
         governance.orchard_pool_paused,
         governance.shielded_atomic_batch_activation_height(),
-        &governance.asset_orchard_egress_policy_registry(),
+        &governance,
         false,
     );
+    pq_payment_fixture::ensure_valid(&batch, &receipts)?;
     ensure_atomic_shielded_batch_accepted(&batch, &receipts)?;
     timings.state_exec_ms = node_timing_elapsed_ms(stage_start);
     let private_egress_verifier_breakdown = take_asset_orchard_private_egress_timings();

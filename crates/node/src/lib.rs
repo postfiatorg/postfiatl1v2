@@ -503,6 +503,9 @@ use state_commitment::{
 };
 pub use store_lease::hold_transactional_store;
 mod execution_actions;
+mod pq_payment_actions;
+mod pq_payment_fixture;
+mod pq_pool_state;
 mod solana_exit_governance;
 #[cfg(test)]
 use execution_actions::execute_transparent_batch;

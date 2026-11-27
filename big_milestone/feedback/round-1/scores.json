@@ -1,0 +1,95 @@
+{
+  "run_at": "2026-11-26 20:13 UTC",
+  "pillars": {
+    "01-hive-governance.md": {
+      "pillar": "01-hive-governance.md",
+      "title": "Pillar 1 \u2014 Hive Chat Governance Module",
+      "scores": {
+        "google/gemini-4-neon": 52,
+        "anthropic/claude-opus-5.5": 68
+      },
+      "mean": 60
+    },
+    "02-message-protocol.md": {
+      "pillar": "02-message-protocol.md",
+      "title": "Pillar 2 \u2014 Message Protocol Spec",
+      "scores": {
+        "google/gemini-4-neon": 58,
+        "anthropic/claude-opus-5.5": 71
+      },
+      "mean": 64
+    },
+    "03-validator-program.md": {
+      "pillar": "03-validator-program.md",
+      "title": "Pillar 3 \u2014 Validator Rewards Program",
+      "scores": {
+        "google/gemini-4-neon": 58,
+        "anthropic/claude-opus-5.5": 72
+      },
+      "mean": 65
+    },
+    "04-nft-system.md": {
+      "pillar": "04-nft-system.md",
+      "title": "Pillar 4 \u2014 The NFT System",
+      "scores": {
+        "google/gemini-4-neon": 62,
+        "anthropic/claude-opus-5.5": 68
+      },
+      "mean": 65
+    },
+    "05-local-task-node.md": {
+      "pillar": "05-local-task-node.md",
+      "title": "Pillar 5 \u2014 The Task Node Local Experience",
+      "scores": {
+        "google/gemini-4-neon": 54,
+        "anthropic/claude-opus-5.5": 66
+      },
+      "mean": 60
+    },
+    "06-hive-identity.md": {
+      "pillar": "06-hive-identity.md",
+      "title": "Pillar 6 \u2014 Hive Chat Identity on Chain",
+      "scores": {
+        "google/gemini-4-neon": 52,
+        "anthropic/claude-opus-5.5": 68
+      },
+      "mean": 60
+    },
+    "07-navcoin-fees.md": {
+      "pillar": "07-navcoin-fees.md",
+      "title": "Pillar 7 \u2014 Transparent Fees for NAVCoins",
+      "scores": {
+        "google/gemini-4-neon": 56,
+        "anthropic/claude-opus-5.5": 72
+      },
+      "mean": 64
+    },
+    "08-onchain-identity.md": {
+      "pillar": "08-onchain-identity.md",
+      "title": "Pillar 8 \u2014 On-chain Identity (DID, KYC, Optional Trust Lines)",
+      "scores": {
+        "google/gemini-4-neon": 58,
+        "anthropic/claude-opus-5.5": 70
+      },
+      "mean": 64
+    },
+    "09-finance-hub.md": {
+      "pillar": "09-finance-hub.md",
+      "title": "Pillar 9 \u2014 Finance Hub User Spec",
+      "scores": {
+        "google/gemini-4-neon": 58,
+        "anthropic/claude-opus-5.5": 70
+      },
+      "mean": 64
+    },
+    "10-information-hive-mind.md": {
+      "pillar": "10-information-hive-mind.md",
+      "title": "Pillar 10 \u2014 Information Hive Mind",
+      "scores": {
+        "google/gemini-4-neon": 46,
+        "anthropic/claude-opus-5.5": 62
+      },
+      "mean": 54
+    }
+  }
+}

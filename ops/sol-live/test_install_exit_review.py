@@ -90,6 +90,17 @@ class DoorInstallTest(unittest.TestCase):
                 self.assertIn("not one ssh-ed25519 public key line", result.stderr)
                 self.assertFalse((host.root / "var/lib/pf-sol-exit-review-ssh").exists())
 
+    def test_a_key_line_whose_key_does_not_decode_is_refused_before_anything_changes(self):
+        with tempfile.TemporaryDirectory() as d:
+            host = Host(d)
+            key = Path(d, "settler.pub")
+            key.write_text("ssh-ed25519 AAAA invalid\n")
+            result = host.run("--settler-key", str(key))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("is not a valid ssh-ed25519 public key", result.stderr)
+            self.assertFalse((host.root / "var/lib/pf-sol-exit-review-ssh").exists())
+            self.assertFalse((host.root / "opt/postfiat/sol-exit-review").exists())
+
     def test_without_the_option_no_door_is_opened(self):
         with tempfile.TemporaryDirectory() as d:
             host = Host(d)

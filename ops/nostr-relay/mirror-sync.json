@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat-nostr-mirror-sync-v1",
+  "primary_relay": "wss://relay.postfiat.org",
+  "fallback_public_relays": [
+    "wss://relay.primal.net",
+    "wss://nos.lol",
+    "wss://relay.damus.io"
+  ],
+  "inbound_filter": {
+    "registered_members_only": true,
+    "allow_nip17_gift_wrap_to_registered_member": true,
+    "allowed_kinds": [0, 1, 13, 1059, 10050],
+    "max_event_bytes": 65536,
+    "per_pubkey_rate_limit_per_minute": 40
+  },
+  "outbound_policy": {
+    "mirror_registered_member_events": true,
+    "allowed_kinds": [0, 1, 13, 1059, 10050],
+    "block_kind0_in_non_production": true
+  }
+}

@@ -75,7 +75,7 @@ mod private_action_six_validator_tests {
             .expect("protect json");
     }
 
-    fn signed_asset_transaction(
+    pub(super) fn signed_asset_transaction(
         genesis: &Genesis,
         ledger: &LedgerState,
         key: &DevKeyFile,
@@ -222,6 +222,77 @@ mod private_action_six_validator_tests {
     }
 
     pub(crate) fn fleet_with_options(options: FleetOptions) -> Fleet {
+        fleet_on_chain(CHAIN_ID, options)
+    }
+
+    pub(crate) fn fleet_on_chain(chain_id: &str, options: FleetOptions) -> Fleet {
+        let pq_height =
+            (chain_id == "postfiat-pfsh02-m1-disposable").then_some(ATOMIC_ACTIVATION as u32);
+        fleet_with_pq_height(chain_id, options, pq_height)
+    }
+
+    pub(super) fn sign_amendment(primary: &Path, root: &Path, validator_ids: &[String], unsigned: &Path, slot: u64) -> PathBuf {
+        let authorization_files = validator_ids.iter()
+            .map(|id| {
+                let key_path = root.join(format!("{id}.governance-key.json"));
+                let authorization =
+                    root.join(format!("{id}.authorization-{slot}.json"));
+                sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                    data_dir: primary.to_owned(),
+                    amendment_file: unsigned.to_owned(),
+                    validator: id.clone(),
+                    validator_key_file: key_path,
+                    proposal_slot: slot,
+                    expires_at_height: slot + 8,
+                    authorization_file: authorization.clone(),
+                })
+                .expect("sign amendment");
+                authorization
+            })
+            .collect::<Vec<_>>();
+        let signed = root.join(format!("governance-{slot}.signed.json"));
+        assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
+            data_dir: primary.to_owned(),
+            amendment_file: unsigned.to_owned(),
+            authorization_files,
+            proposal_slot: slot,
+            output_file: signed.clone(),
+        })
+        .expect("assemble amendment");
+        signed
+    }
+
+    pub(super) fn governance_batch(primary: &Path, root: &Path, validator_ids: &[String], kind: &str, value: u32, slot: u64) -> PathBuf {
+        let unsigned = root.join(format!("governance-{slot}.unsigned.json"));
+        ratify_governance(RatifyGovernanceOptions {
+            data_dir: primary.to_owned(),
+            validators: validator_ids.to_vec(),
+            support: validator_ids.to_vec(),
+            kind: kind.to_string(),
+            value,
+            activation_height: 0,
+            veto_until_height: 0,
+            paused: false,
+            amendment_file: unsigned.clone(),
+        })
+        .expect("ratify amendment");
+        let signed = sign_amendment(primary, root, validator_ids, &unsigned, slot);
+        let governance_batch = root.join(format!("governance-{slot}.batch.json"));
+        create_governance_batch(GovernanceBatchOptions {
+            data_dir: primary.to_owned(),
+            amendment_file: Some(signed),
+            registry_update_file: None,
+            batch_file: governance_batch.clone(),
+        })
+        .expect("governance batch");
+        governance_batch
+    }
+
+    pub(crate) fn fleet_with_pq_height(
+        chain_id: &str,
+        options: FleetOptions,
+        pq_height: Option<u32>,
+    ) -> Fleet {
         let pricing = options.pricing;
         let root = std::env::temp_dir().join(format!(
             "postfiat-s6-private-actions-{}-{}",
@@ -237,7 +308,7 @@ mod private_action_six_validator_tests {
         for (index, data_dir) in data_dirs.iter().enumerate() {
             init_consensus_v2(InitConsensusV2Options {
                 data_dir: data_dir.clone(),
-                chain_id: CHAIN_ID.to_string(),
+                chain_id: chain_id.to_string(),
                 node_id: format!("validator-{index}"),
                 validator_count: VALIDATORS as u32,
                 activation_height: CONSENSUS_V2_ACTIVATION,
@@ -267,6 +338,9 @@ mod private_action_six_validator_tests {
             GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
             ATOMIC_ACTIVATION as u32,
         )];
+        if let Some(height) = pq_height {
+            amendments.push(("pq_payment_rehearsal_v1:fee:1", height));
+        }
         if pricing {
             amendments.push((
                 GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT,
@@ -279,64 +353,17 @@ mod private_action_six_validator_tests {
                 blocks,
             ));
         }
+        for record in &all_keys.validators {
+            write_private_json(
+                &root.join(format!("{}.governance-key.json", record.node_id)),
+                &ValidatorKeyFile {
+                    validators: vec![record.clone()],
+                },
+            );
+        }
         for (slot, (kind, value)) in amendments.into_iter().enumerate() {
             let slot = slot as u64 + 1;
-            let unsigned = root.join(format!("governance-{slot}.unsigned.json"));
-            ratify_governance(RatifyGovernanceOptions {
-                data_dir: primary.clone(),
-                validators: validator_ids.clone(),
-                support: validator_ids.clone(),
-                kind: kind.to_string(),
-                value,
-                activation_height: 0,
-                veto_until_height: 0,
-                paused: false,
-                amendment_file: unsigned.clone(),
-            })
-            .expect("ratify amendment");
-            let authorization_files = all_keys
-                .validators
-                .iter()
-                .map(|record| {
-                    let key_path = root.join(format!("{}.governance-key.json", record.node_id));
-                    write_private_json(
-                        &key_path,
-                        &ValidatorKeyFile {
-                            validators: vec![record.clone()],
-                        },
-                    );
-                    let authorization =
-                        root.join(format!("{}.authorization-{slot}.json", record.node_id));
-                    sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
-                        data_dir: primary.clone(),
-                        amendment_file: unsigned.clone(),
-                        validator: record.node_id.clone(),
-                        validator_key_file: key_path,
-                        proposal_slot: slot,
-                        expires_at_height: slot + 8,
-                        authorization_file: authorization.clone(),
-                    })
-                    .expect("sign amendment");
-                    authorization
-                })
-                .collect::<Vec<_>>();
-            let signed = root.join(format!("governance-{slot}.signed.json"));
-            assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
-                data_dir: primary.clone(),
-                amendment_file: unsigned,
-                authorization_files,
-                proposal_slot: slot,
-                output_file: signed.clone(),
-            })
-            .expect("assemble amendment");
-            let governance_batch = root.join(format!("governance-{slot}.batch.json"));
-            create_governance_batch(GovernanceBatchOptions {
-                data_dir: primary.clone(),
-                amendment_file: Some(signed),
-                registry_update_file: None,
-                batch_file: governance_batch.clone(),
-            })
-            .expect("governance batch");
+            let governance_batch = governance_batch(primary, &root, &validator_ids, kind, value, slot);
             let receipts = apply_governance_batch(ApplyBatchOptions {
                 data_dir: primary.clone(),
                 batch_file: governance_batch,
@@ -518,7 +545,7 @@ mod private_action_six_validator_tests {
         let topology_file = root.join("topology.json");
         let (base_port, listeners) = reserve_ports(VALIDATORS);
         write_consensus_v2_topology(TopologyConsensusV2Options {
-            chain_id: CHAIN_ID.to_string(),
+            chain_id: chain_id.to_string(),
             validators: VALIDATORS as u32,
             base_port,
             rpc_base_port: Some(base_port.saturating_add(100)),

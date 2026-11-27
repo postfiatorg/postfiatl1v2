@@ -398,6 +398,28 @@ def test_poll_finality_without_tx_id_exits_zero_and_warns_once(
     assert "do not resubmit" in lines[0]
 
 
+def test_poll_finality_verifier_failure_keeps_tx_id_exits_zero_and_warns_once(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    error = "WalletCommandError: payment finality verification failed: archive unreadable"
+    result = _send_result(pending=True, confirmation="pending", verification_error=error)
+    exit_code, out, err = _run_send_cli(tmp_path, capsys, result, poll=True)
+
+    assert exit_code == 0
+    assert out == _main_stdout(result)
+    report = json.loads(out)
+    assert report["ok"] is True
+    assert report["tx_id"] == "tx-poll"
+    assert report["result"]["confirmation"] == "pending"
+    assert report["result"]["verification_error"] == error
+    lines = err.splitlines()
+    assert len(lines) == 1, err
+    assert "local verifier failed" in lines[0]
+    assert "archive unreadable" in lines[0]
+    assert "tx-poll" in lines[0]
+    assert "do not resubmit" in lines[0]
+
+
 def test_poll_finality_warning_escapes_tx_id_control_characters(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

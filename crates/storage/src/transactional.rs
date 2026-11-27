@@ -84,6 +84,8 @@ const META_TABLE: &str = "meta_v1";
 const BLOCKS_BY_HEIGHT_TABLE: &str = "blocks_by_height_v1";
 const BLOCK_HEIGHT_BY_HASH_TABLE: &str = "block_height_by_hash_v1";
 const RECEIPTS_BY_ID_TABLE: &str = "receipts_by_id_v1";
+const PQ_BODIES_NAME: &str = "pq_payment_bodies_v1";
+const PQ_BODIES: TableDefinition<&[u8], &[u8]> = TableDefinition::new(PQ_BODIES_NAME);
 const BATCH_ARCHIVE_TABLE: &str = "batch_archive_v1";
 const ORDERED_BY_ID_TABLE: &str = "ordered_by_id_v1";
 const ORDERED_BY_ORDINAL_TABLE: &str = "ordered_by_ordinal_v1";
@@ -511,6 +513,10 @@ pub struct TransactionalReadSnapshot {
     meta: TransactionalStoreMetaV1,
     integrity_key: IntegrityKey,
     counters: Arc<WorkCounterState>,
+    /// Keeps a shared handle, and so the database file and its lock, open
+    /// until the read ends. redb defers its close only for a live write
+    /// transaction. Declared last: dropped after `transaction`.
+    _store: Option<Arc<TransactionalStore>>,
 }
 
 impl fmt::Debug for TransactionalStore {
@@ -834,7 +840,15 @@ impl TransactionalStore {
             meta,
             integrity_key: self.integrity_key.clone(),
             counters: Arc::clone(&self.counters),
+            _store: None,
         })
+    }
+
+    /// A read snapshot that holds this shared handle open until it is dropped.
+    pub fn read_snapshot_holding(self: &Arc<Self>) -> StorageResult<TransactionalReadSnapshot> {
+        let mut snapshot = self.read_snapshot()?;
+        snapshot._store = Some(Arc::clone(self));
+        Ok(snapshot)
     }
 
     pub fn meta(&self) -> StorageResult<TransactionalStoreMetaV1> {
@@ -971,7 +985,11 @@ impl TransactionalStore {
         batch_id: &str,
     ) -> StorageResult<Option<BatchArchiveEntry>> {
         let key = archive_key(batch_kind, batch_id)?;
-        self.read_json_record(BATCH_ARCHIVE, BATCH_ARCHIVE_TABLE, &key)
+        self.counters
+            .read_transactions
+            .fetch_add(1, Ordering::Relaxed);
+        let tx = self.database.begin_read().map_err(database_error)?;
+        read_archive_with_bodies(&tx, &key, &self.integrity_key, &self.counters)
     }
 
     pub fn anchored_fastpay_effect(
@@ -1416,7 +1434,38 @@ impl TransactionalStore {
                 &commit.archive_entry.batch_kind,
                 &commit.archive_entry.batch_id,
             )?;
-            let archive_bytes = encode_json(commit.archive_entry, MAX_RECORD_BYTES)?;
+            let (compact, bodies) = commit
+                .archive_entry
+                .compact_pq_with_framing(archive_key.len() + 96 + 2 * (1 + MAC_BYTES))
+                .map_err(serialization_error)?;
+            if !bodies.is_empty() {
+                let mut table = transaction.open_table(PQ_BODIES).map_err(database_error)?;
+                for (id, body) in bodies {
+                    if let Some(existing) = read_authenticated(
+                        &table,
+                        PQ_BODIES_NAME,
+                        id.as_bytes(),
+                        postfiat_types::pq_payment::ARCHIVE_LIMIT,
+                        &self.integrity_key,
+                        &self.counters,
+                    )? {
+                        if existing != body.bytes() {
+                            return Err(idempotent_conflict("PQ body"));
+                        }
+                    } else {
+                        insert_authenticated(
+                            &mut table,
+                            PQ_BODIES_NAME,
+                            id.as_bytes(),
+                            body.bytes(),
+                            postfiat_types::pq_payment::ARCHIVE_LIMIT,
+                            &self.integrity_key,
+                            &self.counters,
+                        )?;
+                    }
+                }
+            }
+            let archive_bytes = encode_json(&compact, MAX_RECORD_BYTES)?;
             let mut archive_table = transaction
                 .open_table(BATCH_ARCHIVE)
                 .map_err(database_error)?;
@@ -1738,6 +1787,51 @@ impl TransactionalStore {
                         "authenticated archive entry disappeared during prune transaction",
                     ));
                 }
+                self.counters.page_writes.fetch_add(1, Ordering::Relaxed);
+                self.counters
+                    .records_written
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            // Garbage-collect any PQ proof bodies no longer referenced by retained archive entries.
+            let mut retained_pq_ids = BTreeSet::<String>::new();
+            for item in archives.iter().map_err(database_error)? {
+                let (k, v) = item.map_err(database_error)?;
+                let raw = decode_authenticated_value(
+                    BATCH_ARCHIVE_TABLE,
+                    k.value(),
+                    v.value(),
+                    MAX_RECORD_BYTES,
+                    &self.integrity_key,
+                )?;
+                let entry: BatchArchiveEntry = decode_json(&raw)?;
+                if entry.has_binary_references() {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&entry.payload_json)
+                    {
+                        if let Some(actions) = val.get("actions").and_then(|a| a.as_array()) {
+                            for action in actions {
+                                if let Some(id) = action.get("pq_body_v1").and_then(|s| s.as_str())
+                                {
+                                    retained_pq_ids.insert(id.to_owned());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let mut pq_bodies = transaction.open_table(PQ_BODIES).map_err(database_error)?;
+            let mut stale_pq_keys = Vec::<Vec<u8>>::new();
+            for item in pq_bodies.iter().map_err(database_error)? {
+                let (k, _) = item.map_err(database_error)?;
+                let key_bytes = k.value();
+                if std::str::from_utf8(key_bytes)
+                    .map(|id| !retained_pq_ids.contains(id))
+                    .unwrap_or(true)
+                {
+                    stale_pq_keys.push(key_bytes.to_vec());
+                }
+            }
+            for stale in stale_pq_keys {
+                pq_bodies.remove(stale.as_slice()).map_err(database_error)?;
                 self.counters.page_writes.fetch_add(1, Ordering::Relaxed);
                 self.counters
                     .records_written
@@ -2176,7 +2270,11 @@ impl TransactionalStore {
                     format!("canonical block {height} has no archived batch"),
                 )
             })?;
-            let archive: BatchArchiveEntry = decode_json(&archive_raw)?;
+            let mut archive: BatchArchiveEntry = decode_json(&archive_raw)?;
+            if archive.has_binary_references() {
+                let table = transaction.open_table(PQ_BODIES).map_err(database_error)?;
+                hydrate_archive(&mut archive, &table, &self.integrity_key, &self.counters)?;
+            }
             if archive.batch_kind != block.header.batch_kind
                 || archive.batch_id != block.header.batch_id
                 || archive.payload_hash.is_empty()
@@ -2766,10 +2864,11 @@ impl TransactionalReadSnapshot {
         batch_kind: &str,
         batch_id: &str,
     ) -> StorageResult<Option<BatchArchiveEntry>> {
-        self.read_json_record(
-            BATCH_ARCHIVE,
-            BATCH_ARCHIVE_TABLE,
+        read_archive_with_bodies(
+            &self.transaction,
             &archive_key(batch_kind, batch_id)?,
+            &self.integrity_key,
+            &self.counters,
         )
     }
 
@@ -3511,6 +3610,11 @@ fn verify_idempotent_commit(
         integrity_key,
         counters,
     )?;
+    let mut archive = archive;
+    if archive.has_binary_references() {
+        let table = transaction.open_table(PQ_BODIES).map_err(database_error)?;
+        hydrate_archive(&mut archive, &table, integrity_key, counters)?;
+    }
     if archive != *commit.archive_entry {
         return Err(idempotent_conflict("batch archive"));
     }
@@ -3811,6 +3915,55 @@ fn read_meta<T: ReadableTable<&'static [u8], &'static [u8]>>(
     let meta: TransactionalStoreMetaV1 = decode_json(&raw)?;
     meta.validate()?;
     Ok(meta)
+}
+
+fn read_archive_with_bodies(
+    tx: &redb::ReadTransaction,
+    key: &[u8],
+    integrity: &IntegrityKey,
+    counters: &WorkCounterState,
+) -> StorageResult<Option<BatchArchiveEntry>> {
+    let table = tx.open_table(BATCH_ARCHIVE).map_err(database_error)?;
+    let Some(raw) = read_authenticated(
+        &table,
+        BATCH_ARCHIVE_TABLE,
+        key,
+        MAX_RECORD_BYTES,
+        integrity,
+        counters,
+    )?
+    else {
+        return Ok(None);
+    };
+    let mut entry: BatchArchiveEntry = decode_json(&raw)?;
+    if entry.has_binary_references() {
+        let bodies = tx.open_table(PQ_BODIES).map_err(database_error)?;
+        hydrate_archive(&mut entry, &bodies, integrity, counters)?;
+    }
+    Ok(Some(entry))
+}
+
+fn hydrate_archive(
+    entry: &mut BatchArchiveEntry,
+    table: &impl ReadableTable<&'static [u8], &'static [u8]>,
+    integrity: &IntegrityKey,
+    counters: &WorkCounterState,
+) -> StorageResult<()> {
+    entry
+        .expand_pq(|id| {
+            let bytes = read_authenticated(
+                table,
+                PQ_BODIES_NAME,
+                id.as_bytes(),
+                postfiat_types::pq_payment::ARCHIVE_LIMIT,
+                integrity,
+                counters,
+            )
+            .map_err(|e| e.to_string())?
+            .ok_or("missing PQ archive body")?;
+            postfiat_types::pq_payment::PqPayment::from_bytes(bytes).map_err(str::to_owned)
+        })
+        .map_err(|e| StorageError::new(StorageErrorCode::CorruptRecord, e))
 }
 
 fn required_json_record<T: DeserializeOwned>(
@@ -4323,6 +4476,186 @@ mod tests {
         }
     }
 
+    #[test]
+    fn pq_archive_measures_and_recovers_authorized_records_at_the_wire_ceiling() {
+        use postfiat_types::{pq_payment::*, ShieldedAction, ShieldedActionBatch};
+        let valid =
+            include_bytes!("../../../tools/pft-binius-shielded-pq/l1-vectors/pfusdc-shield.bin");
+        for ceiling in [false, true] {
+            let mut bytes = valid.to_vec();
+            if ceiling {
+                // Exercise the exact archive capacity independently of Fiat-Shamir sampling.
+                // The same signed header permits the maximum 52 columns and 792 siblings.
+                // These extra siblings do not constitute a valid proof of the statement.
+                let start = bytes.len()
+                    - PqPayment::from_bytes(bytes.clone())
+                        .unwrap()
+                        .parts()
+                        .unwrap()
+                        .2
+                        .len();
+                let inner = &mut bytes[start..];
+                let n_cols = u16::from_le_bytes(
+                    inner[INNER_PREFIX + 59912..INNER_PREFIX + 59914]
+                        .try_into()
+                        .unwrap(),
+                );
+                assert_eq!(n_cols, 52);
+                let siblings = INNER_PREFIX + 59914 + 38896;
+                inner[siblings..siblings + 2].copy_from_slice(&792u16.to_le_bytes());
+                inner[INNER_PREFIX - 4..INNER_PREFIX]
+                    .copy_from_slice(&((INNER_LIMIT - INNER_PREFIX) as u32).to_le_bytes());
+                bytes.resize(start + INNER_LIMIT, 0);
+            }
+            let payment = PqPayment::from_bytes(bytes.clone()).unwrap();
+            let digest = payment.digest();
+            let batch_id = "5a".repeat(48);
+            let batch =
+                ShieldedActionBatch::new(&batch_id, vec![ShieldedAction::PqPaymentV1(payment)]);
+            let archive = BatchArchiveEntry {
+                batch_kind: "shielded".into(),
+                batch_id: batch_id.clone(),
+                payload_hash: "6b".repeat(48),
+                payload_json: serde_json::to_string(&batch).unwrap(),
+            };
+            let dir = TestDir::new("pq-archive");
+            let store = TransactionalStore::open(&dir.0).unwrap();
+            let old = genesis_tip();
+            let new = next_tip(1);
+            let history = OrderedHistoryCommitment::genesis(
+                &old.chain_id,
+                &old.genesis_hash,
+                old.protocol_version,
+            )
+            .unwrap();
+            store
+                .initialize(&old, &history, CurrentStateUpdate::default())
+                .unwrap();
+            let history = history.append(&batch_id).unwrap();
+            let receipt = receipt("pq-archive-test", false);
+            let mut block = block(vec![receipt.tx_id.clone()]);
+            block.header.batch_kind = "shielded".into();
+            block.header.batch_id = batch_id.clone();
+            let commit = CommitFinalizedBlock {
+                expected_tip: &old,
+                new_tip: &new,
+                block: &block,
+                receipts: std::slice::from_ref(&receipt),
+                archive_entry: &archive,
+                batch_id: &batch_id,
+                ordered_history: &history,
+                current_state: CurrentStateUpdate::default(),
+                scheduled_activation_height: None,
+                allow_legacy_receipt_id_mismatch: false,
+            };
+            let before = store.read_snapshot().unwrap();
+            assert_eq!(
+                store.commit_finalized_block(commit).unwrap(),
+                CommitOutcome::Committed
+            );
+            assert_eq!(
+                store.commit_finalized_block(commit).unwrap(),
+                CommitOutcome::AlreadyCommitted
+            );
+            assert!(before
+                .archived_batch("shielded", &batch_id)
+                .unwrap()
+                .is_none());
+            drop(before);
+            drop(store);
+            let store = TransactionalStore::open(&dir.0).unwrap();
+            assert_eq!(
+                store
+                    .archived_batch("shielded", &batch_id)
+                    .unwrap()
+                    .unwrap(),
+                archive
+            );
+            assert_eq!(
+                store
+                    .read_snapshot()
+                    .unwrap()
+                    .archived_batch("shielded", &batch_id)
+                    .unwrap()
+                    .unwrap(),
+                archive
+            );
+            store.verify_logical_integrity().unwrap();
+            let (logical, stored) = {
+                let tx = store.database.begin_read().unwrap();
+                let bodies = tx.open_table(PQ_BODIES).unwrap();
+                assert_eq!(bodies.len().unwrap(), 1);
+                let refs = tx.open_table(BATCH_ARCHIVE).unwrap();
+                let key = archive_key("shielded", &batch_id).unwrap();
+                let reference = refs.get(key.as_slice()).unwrap().unwrap();
+                let body = bodies.get(digest.as_bytes()).unwrap().unwrap();
+                let logical = reference.value().len() - 1 - MAC_BYTES + bytes.len();
+                let stored =
+                    reference.value().len() + body.value().len() + key.len() + digest.len();
+                assert!(checked_archive_size(bytes.len(), stored - bytes.len()).is_ok());
+                (logical, stored)
+            };
+            println!("PQ archive {}: body {} bytes, body plus reference {} bytes, both redb keys and authenticated values {} bytes, headroom {} bytes",if ceiling {"wire ceiling"} else {"verified vector"},bytes.len(),logical,stored,ARCHIVE_LIMIT-stored);
+            let files = TestDir::new("pq-jsonl");
+            let legacy = crate::NodeStore::new(&files.0);
+            let log = files.0.join(crate::BATCH_ARCHIVE_APPEND_FILE);
+            // A preceding record gives the next entry a full-length chain MAC.
+            legacy
+                .append_batch_archive_entry(BatchArchiveEntry {
+                    batch_kind: "payments".into(),
+                    batch_id: "prior".into(),
+                    payload_hash: "prior".into(),
+                    payload_json: "{}".into(),
+                })
+                .unwrap();
+            let before = fs::metadata(&log).unwrap().len();
+            legacy.append_batch_archive_entry(archive.clone()).unwrap();
+            let record_bytes = (fs::metadata(&log).unwrap().len() - before) as usize;
+            let body_file = files.0.join("pq_bodies_v1").join(&digest);
+            let body_bytes = fs::metadata(&body_file).unwrap().len() as usize;
+            let total = checked_archive_size(body_bytes, record_bytes + digest.len()).unwrap();
+            assert_eq!(
+                legacy.read_batch_archive().unwrap().batches.last(),
+                Some(&archive)
+            );
+            println!("JSONL {}: binary body {}, framed reference {}, digest filename {}, total {}, headroom {}",if ceiling {"wire ceiling"} else {"verified vector"},body_bytes,record_bytes,digest.len(),total,ARCHIVE_LIMIT-total);
+            // Hold the authenticated body fixed and vary the allocated framing at the cap.
+            assert!(archive
+                .compact_pq_with_framing(ARCHIVE_LIMIT - logical)
+                .is_ok());
+            assert!(archive
+                .compact_pq_with_framing(ARCHIVE_LIMIT - logical + 1)
+                .is_err());
+            // Replace the body using a valid store MAC to test the independent digest binding.
+            for missing in [false, true] {
+                let tx = store.begin_durable_write().unwrap();
+                {
+                    let mut table = tx.open_table(PQ_BODIES).unwrap();
+                    if missing {
+                        table.remove(digest.as_bytes()).unwrap();
+                    } else {
+                        let mut bad = bytes.clone();
+                        *bad.last_mut().unwrap() ^= 1;
+                        insert_authenticated(
+                            &mut table,
+                            PQ_BODIES_NAME,
+                            digest.as_bytes(),
+                            &bad,
+                            ARCHIVE_LIMIT,
+                            &store.integrity_key,
+                            &store.counters,
+                        )
+                        .unwrap();
+                    }
+                }
+                store.commit_durable_write(tx).unwrap();
+                assert!(store.archived_batch("shielded", &batch_id).is_err());
+                assert!(store.commit_finalized_block(commit).is_err());
+                assert!(store.verify_logical_integrity().is_err());
+            }
+        }
+    }
+
     fn committed_one_block(label: &str) -> (TestDir, TransactionalStore) {
         let dir = TestDir::new(label);
         let store = TransactionalStore::open(&dir.0).expect("open committed fixture store");
@@ -4443,8 +4776,11 @@ mod tests {
         );
         let mut substituted = pointer;
         substituted.migration_packet_root = "22".repeat(48);
-        node.write_json(node_dir.0.join(TRANSACTIONAL_GENERATION_POINTER_FILE), &substituted)
-            .unwrap();
+        node.write_json(
+            node_dir.0.join(TRANSACTIONAL_GENERATION_POINTER_FILE),
+            &substituted,
+        )
+        .unwrap();
         assert!(verify_existing_generation(&node_dir.0, &genesis.chain_id, &hash).is_err());
         assert!(!node_dir.0.join(TRANSACTIONAL_DATABASE_FILE).exists());
     }

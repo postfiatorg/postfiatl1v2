@@ -15,6 +15,9 @@ path = "src/lib.rs"
 test-second-release = []
 
 [dependencies]
+imbl = "7.0.2"
+base64.workspace = true
+postfiat-crypto-provider = {path = "../crypto_provider"}
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_cbor = { workspace = true }

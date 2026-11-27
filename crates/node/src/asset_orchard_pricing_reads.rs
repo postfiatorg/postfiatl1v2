@@ -117,6 +117,7 @@ pub struct AssetOrchardPrivateEgressBindingReport {
     pub bindings: Vec<AssetOrchardPrivateEgressBinding>,
 }
 
+#[derive(Clone)]
 pub(super) struct FinalizedPairSnapshot {
     pub(super) genesis: Genesis,
     pub(super) tip: ChainTipState,

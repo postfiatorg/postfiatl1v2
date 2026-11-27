@@ -25,9 +25,9 @@ testnet opens.
 
 | Component and evidence | Chain / height | Last observed | Result |
 | --- | --- | --- | --- |
-| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/ops/b24-live/known-releases.txt) | postfiat-wan-devnet-2 / 1903 | 2026-11-25 20:15 UTC | Six validators reported on sol-exit-r2 |
+| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/chain-state-current.md) | postfiat-wan-devnet-2 / 1915 | 2026-11-27 09:01 UTC | Six validators on pq-r3, one state root |
 | [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
-| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45701171620) | Source build / n/a | 2026-11-25T21:22:27Z | Verified (workflow success, comparison success) |
+| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45938002025) | Source build / n/a | 2026-11-27T04:22:33Z | Unverified (workflow failure, comparison failure) |
 
 [Observation records, source revisions, artifacts and observers](../status/component-observations.json)
 
@@ -315,8 +315,8 @@ readiness, and key-file permissions
 ```bash
 scripts/testnet-validator-doctor \
   --data-dir /var/lib/postfiat/validator-0 \
-  --validator-service postfiat-validator-0.service \
-  --rpc-service postfiat-rpc-0.service
+  --validator-service validator-0=postfiat-validator-0.service \
+  --rpc-service validator-0=postfiat-validator-0-rpc.service
 ```
 
 **RPC health and cross-endpoint consistency:**

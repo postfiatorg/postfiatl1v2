@@ -1655,10 +1655,36 @@ pub(super) fn read_signed_transfer_file(path: &Path) -> io::Result<SignedTransfe
     Ok(transfer)
 }
 
+fn check_pq_pool_owner(action: &ShieldedAction) -> io::Result<()> {
+    // The PQ selector belongs only to its versioned action. An
+    // authenticated operator uses the same namespace as a public caller.
+    let pq_id = postfiat_types::pq_payment::POOL_ID;
+    let wrong_pool = match action {
+        ShieldedAction::AssetOrchardIngressV1(a) => a.pool_id == pq_id,
+        ShieldedAction::AssetOrchardIngressV2(a) => a.pool_id == pq_id,
+        ShieldedAction::AssetOrchardEgressV1(a) => a.pool_id == pq_id,
+        ShieldedAction::AssetOrchardPrivateEgressV1(a) => a.pool_id == pq_id,
+        ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(a) => a.pool_id == pq_id,
+        ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(a) => a.pool_id == pq_id,
+        ShieldedAction::ShieldedSwapV1(a) => {
+            serde_json::from_str::<serde_json::Value>(&a.swap_json)
+                .is_ok_and(|v| v["pool_id"].as_str() == Some(pq_id))
+        }
+        _ => false,
+    };
+    if wrong_pool {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_pool_owner"));
+    }
+    Ok(())
+}
+
 pub(super) fn build_shielded_action_batch(
     genesis: &Genesis,
     actions: Vec<ShieldedAction>,
 ) -> io::Result<ShieldedActionBatch> {
+    for action in &actions {
+        check_pq_pool_owner(action)?;
+    }
     let batch_id = chain_bound_action_batch_id(
         genesis,
         "postfiat.shielded_action_batch.v1",
@@ -1666,6 +1692,17 @@ pub(super) fn build_shielded_action_batch(
         &actions,
     )?;
     Ok(ShieldedActionBatch::new(batch_id, actions))
+}
+
+fn atomic_action_limit(actions: &[ShieldedAction]) -> usize {
+    if actions
+        .iter()
+        .all(|a| matches!(a, ShieldedAction::PqPaymentV1(_)))
+    {
+        postfiat_types::PQ_REHEARSAL_PROOFS
+    } else {
+        3
+    }
 }
 
 pub fn build_atomic_shielded_action_batch(
@@ -1678,11 +1715,14 @@ pub fn build_atomic_shielded_action_batch(
             "atomic shielded batch requires at least one action",
         ));
     }
-    if actions.len() > 3 {
+    if actions.len() > atomic_action_limit(&actions) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "atomic shielded batch supports at most three actions",
+            "atomic shielded batch exceeds action limit (three ordinary or four PQ actions)",
         ));
+    }
+    for action in &actions {
+        check_pq_pool_owner(action)?;
     }
     let batch_id = chain_bound_action_batch_id(
         genesis,
@@ -1693,14 +1733,197 @@ pub fn build_atomic_shielded_action_batch(
     Ok(ShieldedActionBatch::new_atomic(batch_id, actions))
 }
 
+/// The current block header certifies one batch. Account across the complete
+/// iterator so additional batch framing cannot reset either consensus meter.
+pub(super) fn check_pq_block<'a>(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    height: u64,
+    batches: impl IntoIterator<Item = &'a ShieldedActionBatch>,
+) -> io::Result<()> {
+    let mut proofs = 0;
+    let mut bytes = 0;
+    let hash = std::cell::OnceCell::new();
+    for batch in batches {
+        for action in &batch.actions {
+            check_pq_pool_owner(action)?;
+            let ShieldedAction::PqPaymentV1(payment) = action else {
+                continue;
+            };
+            let (terms, _, inner) = payment
+                .parts()
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            let digest = hash.get_or_init(|| genesis_hash(genesis));
+            if !postfiat_types::pq_rehearsal_domain(&genesis.chain_id, digest) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "pq_settlement_inactive",
+                ));
+            }
+            if let Err(code) = governance.pq_rehearsal_mode_allowed(
+                &genesis.chain_id,
+                digest,
+                genesis.protocol_version,
+                height,
+                terms.mode,
+            ) {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, code));
+            }
+            if !batch.atomic && governance.pq_fee_schedule_in_force(height) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "pq_atomic_batch_required",
+                ));
+            }
+            proofs += 1;
+            if proofs > postfiat_types::PQ_REHEARSAL_PROOFS {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_block_limit"));
+            }
+            // Both authenticated digests have fixed-width lowercase hex encoding.
+            let digest = "0".repeat(96);
+            let reference = serde_json::json!({"pq_body_v1": &digest});
+            let logical = BatchArchiveEntry::pq_archived_payment_bytes(
+                &batch.batch_id,
+                &digest,
+                batch.atomic,
+                batch.actions.len() > 1,
+                &reference,
+                payment.bytes().len(),
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            bytes += postfiat_types::pq_payment::checked_archive_size(
+                logical,
+                postfiat_types::PQ_REHEARSAL_ARCHIVE_OVERHEAD,
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            if bytes > postfiat_types::PQ_REHEARSAL_BYTES {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "pq_block_byte_limit",
+                ));
+            }
+            let inner_fee = u64::from_le_bytes(inner[104..112].try_into().unwrap());
+            let (fee, minimum) =
+                pq_payment_actions::fee_terms(governance, &terms, inner_fee, height)
+                    .map_err(|code| io::Error::new(io::ErrorKind::InvalidData, code))?;
+            if fee < minimum {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_minimum_fee"));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn verify_development_pq_payments(
+    genesis: &Genesis,
+    batch: &ShieldedActionBatch,
+) -> io::Result<()> {
+    let payments: Vec<&postfiat_types::pq_payment::PqPayment> = batch
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            ShieldedAction::PqPaymentV1(payment) => Some(payment),
+            _ => None,
+        })
+        .collect();
+    if payments.len() > postfiat_types::PQ_REHEARSAL_PROOFS {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "pq_block_limit"));
+    }
+    if payments.is_empty() {
+        return Ok(());
+    }
+    let hash = genesis_hash(genesis);
+    if !postfiat_types::pq_rehearsal_domain(&genesis.chain_id, &hash) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PQ L1 profile is restricted to enabled PQ domains",
+        ));
+    }
+    let genesis_bytes: [u8; 48] = hex_to_bytes(&hash)
+        .map_err(invalid_data)?
+        .try_into()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid genesis hash length"))?;
+    let chain = postfiat_types::pq_payment::Chain {
+        id: &genesis.chain_id,
+        genesis: genesis_bytes,
+        protocol: genesis.protocol_version,
+    };
+    // Run cheap encoding and exit-policy checks on every payment before proof verification.
+    for payment in &payments {
+        let (_, _, inner) = payment
+            .parts()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        if inner[64..72] != [0; 8] {
+            let address = format!("pf{}", bytes_to_hex(&inner[84..104]));
+            if let Some((_, reason)) =
+                postfiat_execution::destination_address_rejection(&[("pq_exit", &address)])
+            {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, reason));
+            }
+        }
+    }
+    if payments.len() == 1 {
+        pq_payment_actions::verify_statement(payments[0], chain).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("PQ L1 verification failed: {e:?}"),
+            )
+        })?;
+        return Ok(());
+    }
+    // Verify up to PQ_REHEARSAL_PROOFS (4) proofs in parallel across scoped OS threads
+    // with cooperative early-abort: if any proof fails, siblings abort before heavy work.
+    let abort = std::sync::atomic::AtomicBool::new(false);
+    let results: Vec<Result<_, _>> = std::thread::scope(|scope| {
+        let abort_ref = &abort;
+        let handles: Vec<_> = payments
+            .iter()
+            .map(|payment| {
+                scope.spawn(move || {
+                    let res = pq_payment_actions::verify_statement_abortable(
+                        payment,
+                        chain,
+                        Some(abort_ref),
+                    );
+                    if res.is_err() {
+                        abort_ref.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    res
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| {
+                h.join().map_err(|_| {
+                    io::Error::new(io::ErrorKind::Other, "PQ verifier worker thread panicked")
+                })
+            })
+            .collect()
+    });
+    for result in results {
+        result?.map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("PQ L1 verification failed: {e:?}"),
+            )
+        })?;
+    }
+    Ok(())
+}
+
 pub fn verify_shielded_action_batch_id(
     genesis: &Genesis,
     batch: &ShieldedActionBatch,
 ) -> io::Result<()> {
-    if batch.atomic && (batch.actions.is_empty() || batch.actions.len() > 3) {
+    pq_payment_fixture::check_batch_domain(genesis, batch)?;
+    verify_development_pq_payments(genesis, batch)?;
+    if batch.atomic
+        && (batch.actions.is_empty() || batch.actions.len() > atomic_action_limit(&batch.actions))
+    {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "atomic shielded batch must contain between one and three actions",
+            "atomic shielded batch must contain between one and three ordinary actions or up to four PQ actions",
         ));
     }
     let expected = chain_bound_action_batch_id(
@@ -1750,7 +1973,16 @@ pub(super) fn write_shielded_action_batch_file(
 }
 
 pub(super) fn read_shielded_action_batch_file(path: &Path) -> io::Result<ShieldedActionBatch> {
-    read_json_file(path, "shielded action batch")
+    let raw = read_bounded_json_text_file(path, "shielded action batch")?;
+    if raw.len() > postfiat_types::pq_payment::REQUEST_LIMIT
+        && ShieldedActionBatch::contains_pq_json(&raw).map_err(invalid_data)?
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PQ batch transport exceeds 1048576 bytes",
+        ));
+    }
+    serde_json::from_str(&raw).map_err(invalid_data)
 }
 
 pub(super) fn build_bridge_action_batch(
@@ -3052,6 +3284,20 @@ pub(super) fn verify_external_lane_amendment_admission(
     }
 }
 
+pub(super) fn requires_signed_pq_governance(amendment: &GovernanceAmendment) -> bool {
+    postfiat_types::pq_fee_governance_kind(&amendment.kind)
+}
+
+pub(super) fn requires_pq_registry(
+    amendment: &GovernanceAmendment,
+    governance: &GovernanceState,
+    height: u64,
+) -> bool {
+    requires_signed_pq_governance(amendment)
+        || (amendment.kind == postfiat_types::PQ_REHEARSAL_V1
+            && governance.pq_fee_schedule_in_force(height))
+}
+
 pub(super) use verify_signed_governance_batch as verify_live_signed_governance_batch;
 
 pub(super) fn verify_signed_governance_batch(
@@ -3061,6 +3307,13 @@ pub(super) fn verify_signed_governance_batch(
     batch: &GovernanceActionBatch,
     proposal_slot: u64,
 ) -> io::Result<()> {
+    for amendment in &batch.amendments {
+        if let Some((_, message)) =
+            crate::execution_actions::pq_governance_domain_rejection(amendment, Some(genesis))
+        {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, message));
+        }
+    }
     verify_storage_commitment_action_bindings(genesis, batch)?;
     for activation in &batch.storage_commitment_activations {
         if activation.scheduling_block_height != proposal_slot {
@@ -3110,6 +3363,31 @@ pub(super) fn verify_signed_governance_batch(
                 proposal_slot,
             )
             .map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e))?;
+        }
+        if requires_pq_registry(amendment, governance, proposal_slot) {
+            validate_governance_genesis_quorum(amendment.quorum, validators.len())?;
+        }
+        if amendment.kind == postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1 {
+            let required = postfiat_types::pq_exit_freeze_quorum(validators.len());
+            if amendment.quorum < required {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!(
+                        "pq_exit_freeze_threshold: requires elevated quorum {required}/{} (got {})",
+                        validators.len(),
+                        amendment.quorum
+                    ),
+                ));
+            }
+            if amendment.value != 0
+                && u64::from(amendment.value)
+                    > proposal_slot.saturating_add(postfiat_types::MAX_PQ_EXIT_FREEZE_BLOCKS)
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "pq_exit_freeze_exceeds_cap",
+                ));
+            }
         }
         verify_external_lane_amendment_admission(
             genesis,

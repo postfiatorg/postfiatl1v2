@@ -50,6 +50,14 @@ DIRECT_PROVING_TEST_ALLOWLIST = {
         "scripts/test_native_prover_leaf.py",
         180,
     ): "b6e564cb533869d889f368f6d226be3f0c6bedbb65e899773ef548d110d23ee9",
+    (
+        "crates/node/src/tests/pq_wallet_merge.rs",
+        455,
+    ): "6a3dee807f6f9f633034ecec54e37346fc773dc2e3ab22ec1834af4c619fadd9",
+    (
+        "crates/node/src/tests/pq_wallet_merge.rs",
+        525,
+    ): "b655a1ad97e397ab7fff2582b81e4ceedafa3bad1267e29443c32b8a0868b984",
 }
 CARGO_PROVE_RE = re.compile(r"\bcargo\s+prove\b")
 COMMAND_ARRAY_RE = re.compile(r"(?:\[|,)\s*['\"](?:prove|prover)['\"]")

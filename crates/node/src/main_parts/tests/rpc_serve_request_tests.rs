@@ -84,6 +84,15 @@ mod rpc_serve_request_tests {
     }
 
     #[test]
+    fn private_action_submit_caps_the_entire_json_request_before_params_decoding() {
+        let frame = r#"{"params":{"unused":"x"},"method":"private_action_submi\u0074"}"#;
+        let at = frame.to_string()
+            + &" ".repeat(postfiat_types::pq_payment::REQUEST_LIMIT - frame.len());
+        assert!(validate_rpc_serve_request_line(&at).is_ok());
+        assert!(validate_rpc_serve_request_line(&(at + " ")).is_err());
+    }
+
+    #[test]
     fn rpc_serve_health_stamp_property_requires_each_preflight_file() {
         let root = node_serving_read_only_root("health-stamp-property");
         rpc_serve_health_stamp(&root, true).expect("complete preflight stamp");

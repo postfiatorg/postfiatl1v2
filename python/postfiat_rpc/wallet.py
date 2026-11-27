@@ -153,6 +153,9 @@ class SendPftResult:
     finality_timeout: bool = False
     confirmation: str = "pending"
     finality_evidence: dict[str, Any] | None = None
+    # Set when the local verifier failed after submission: the payment was sent
+    # under ``tx_id`` and stays ``pending`` until a later verification succeeds.
+    verification_error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -912,10 +915,19 @@ def send_pft(
         confirmation="local_apply" if submit_mode == "local_apply" else "pending",
     )
     if finality_trust is not None and local_evidence is not None:
-        if local_evidence["confirmation"] == "pending":
-            local_evidence = verify_payment_finality(finality_trust, local_evidence["tx_id"])
-        return _with_payment_evidence(result, local_evidence)
+        if local_evidence["confirmation"] != "pending":
+            return _with_payment_evidence(result, local_evidence)
+        return _verify_submitted_payment(result, finality_trust)
     return result
+
+
+def _verify_submitted_payment(result: SendPftResult, trust: FinalityTrust) -> SendPftResult:
+    """Verify a payment that was already submitted; a verifier failure must not lose its ID."""
+    try:
+        return _with_payment_evidence(result, verify_payment_finality(trust, result.tx_id))
+    except Exception as error:  # noqa: BLE001 - the submitted ID is returned with the error.
+        return replace(result, confirmation="pending", pending=True, finalized=False,
+                       verification_error=f"{type(error).__name__}: {error}"[:1000])
 
 
 def _with_payment_evidence(result: SendPftResult, evidence: dict[str, Any]) -> SendPftResult:
@@ -983,13 +995,12 @@ def send_pft_and_poll_finality(
             raise WalletCommandError("local verifier did not return a signed payment ID")
         result = replace(result, submit_mode="submit_and_poll")
         deadline = time.monotonic() + poll_timeout_seconds
-        while result.pending:
+        while result.pending and result.verification_error is None:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 return replace(result, finality_timeout=True)
             time.sleep(min(poll_interval_seconds, remaining))
-            evidence = verify_payment_finality(finality_trust, result.tx_id)
-            result = _with_payment_evidence(result, evidence)
+            result = _verify_submitted_payment(result, finality_trust)
         return result
 
     # When using finality submit, the round itself returns finality evidence.

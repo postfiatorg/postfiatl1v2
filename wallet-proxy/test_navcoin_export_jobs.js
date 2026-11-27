@@ -34,6 +34,10 @@ const config = {
     worker_timeout_ms: 60_000,
 };
 
+// One deadline for the whole run: a job is bound to its exact request, so two calls that read the
+// clock on either side of a second boundary would build two different requests for one packet.
+const DEADLINE = Math.floor(Date.now() / 1000) + 7200;
+
 function request(packet = PACKET, amount = '1000000') {
     return {
         route_id: ROUTE_ID,
@@ -42,7 +46,7 @@ function request(packet = PACKET, amount = '1000000') {
         packet_digest: DIGEST,
         ethereum_recipient: RECIPIENT,
         amount_atoms: amount,
-        deadline_seconds: Math.floor(Date.now() / 1000) + 7200,
+        deadline_seconds: DEADLINE,
     };
 }
 
@@ -191,6 +195,10 @@ function harness(root) {
             const replay = await amountJobs.submitNavcoinExportRelayJob(request(boundPacket, '1000000'));
             assert.strictEqual(replay.job_id, canonical.job_id);
             assert.strictEqual(replay.idempotent_replay, true);
+            // The same packet with a deadline one second later is another request, not a replay.
+            await assert.rejects(amountJobs.submitNavcoinExportRelayJob({ ...request(boundPacket, '1000000'), deadline_seconds: DEADLINE + 1 }),
+                error => error.code === 'navcoin_export_job_binding_conflict',
+                'a changed deadline for a bound packet must be a binding conflict');
         } finally {
             amountJobs.closeNavcoinExportRelayJobs();
             fs.rmSync(amountRoot, { recursive: true, force: true });

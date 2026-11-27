@@ -199,6 +199,13 @@ result records the certified unsuccessful receipt. Archive errors fail the
 verification. A polling timeout can precede finality, so continue looking
 up the existing ID before considering a replacement payment.
 
+If the local verifier fails after the payment was submitted, the wallet still
+returns the submitted `tx_id` with `confirmation: "pending"`, `finalized:
+false` and the verifier's error in `verification_error`. `pftl send` prints
+that result with `ok: true` and exit code 0, and writes one warning line to
+stderr. Verify the same ID again once the archive is usable; do not resubmit.
+A verifier failure before submission is still an error, and nothing is sent.
+
 ## Deposits
 
 Deposit attribution has two options. The repository's custody model recommends
@@ -221,7 +228,7 @@ deposit addresses. Then:
 `payment_v2` and `issued_payment_v2` can carry up to four memos (512 bytes total).
 The source implementation returns signed memo contents through `tx` and
 `account_tx`, alongside their hash, count and byte length. This source is in
-the running build (`04600868`). Rows written before it need an account history
+the running build (`9dcb689e`, `pq-r3`, on 27 November; earlier in `04600868`). Rows written before it need an account history
 index rebuild to carry v2 memos; whether the devnet's indexes were rebuilt is
 not recorded here.
 

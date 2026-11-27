@@ -82,7 +82,7 @@ async function main() {
     genesis_hash: '231b1cfb63439c23bdcc3f7ea2f7f3ce7a53f9abffef8f720f47421b575f16e7f2d9ad5e61298207be2e9ce08743f870',
     protocol_version: 1,
     from: result.address,
-    to: 'pf00000000000000000000000000000000000000',
+    to: 'pf' + '3'.repeat(40),
     amount: 1,
     sequence: 1,
     sequence_source: 'account',

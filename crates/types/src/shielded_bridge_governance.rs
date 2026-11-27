@@ -67,6 +67,73 @@ pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
 /// `external_lane_export_v1` is applied, on a chain whose genesis does not set it.
 pub const GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT: &str =
     "external_lane_export_root_activation_height";
+/// Signed amendment value is the earliest candidate height. Zero pauses Shield/Internal
+/// while leaving `Mode::Exit` open (two-tier circuit breaker).
+pub const PQ_REHEARSAL_V1: &str = "pq_payment_rehearsal_v1";
+/// Emergency exit-freeze amendment. `value` is the inclusive block height through
+/// which `Mode::Exit` is halted (`0` lifts an active freeze early). Hard-capped at
+/// `MAX_PQ_EXIT_FREEZE_BLOCKS` (~7 days at 1 s blocks) past inclusion height so an
+/// indefinite exit freeze is impossible at the protocol layer, and requires an
+/// elevated validator supermajority (`pq_exit_freeze_quorum`).
+pub const PQ_EXIT_FREEZE_UNTIL_V1: &str = "pq_exit_freeze_until_v1";
+pub const MAX_PQ_EXIT_FREEZE_BLOCKS: u64 = 604_800;
+
+pub fn pq_exit_freeze_quorum(validator_count: usize) -> usize {
+    if validator_count == 0 {
+        0
+    } else {
+        ((5 * validator_count) / 6 + 1).min(validator_count)
+    }
+}
+
+/// The rehearsal enables exactly one source series. Its optional fee suffix is
+/// covered by the signed amendment kind. The value remains the activation height.
+pub const PQ_REHEARSAL_FEE_PREFIX: &str = "pq_payment_rehearsal_v1:fee:";
+pub const PQ_FEE_WITHDRAW_PREFIX: &str = "pq_private_fee_withdraw_v1:";
+pub fn pq_rehearsal_fee(kind: &str) -> Option<u64> {
+    let text = kind.strip_prefix(PQ_REHEARSAL_FEE_PREFIX)?;
+    let amount: u64 = text.parse().ok()?;
+    (amount > 0 && amount.to_string() == text).then_some(amount)
+}
+
+pub fn is_pq_rehearsal_kind(kind: &str) -> bool {
+    kind == PQ_REHEARSAL_V1 || pq_rehearsal_fee(kind).is_some()
+}
+
+pub fn pq_fee_withdraw_recipient(kind: &str) -> Option<&str> {
+    let recipient = kind.strip_prefix(PQ_FEE_WITHDRAW_PREFIX)?;
+    pq_payment::destination(recipient).ok()?;
+    Some(recipient)
+}
+
+pub const PQ_REHEARSAL_CHAIN_ID: &str = "postfiat-pfsh02-m1-disposable";
+pub const PQ_REHEARSAL_GENESIS_HASH: &str = "e9c735eecfc4550f152330b52f782de84eea2aa7d59dc7e9e317718ed2ba28473854f0cb7c6c972f7f2825ba944b72e8";
+pub const PQ_DEVNET_CHAIN_ID: &str = "postfiat-wan-devnet-2";
+pub const PQ_DEVNET_GENESIS_HASH: &str = "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9";
+
+pub fn pq_rehearsal_domain(chain: &str, genesis: &str) -> bool {
+    (chain == PQ_REHEARSAL_CHAIN_ID && genesis == PQ_REHEARSAL_GENESIS_HASH)
+        || (chain == PQ_DEVNET_CHAIN_ID && genesis == PQ_DEVNET_GENESIS_HASH)
+}
+
+pub fn pq_fee_governance_kind(kind: &str) -> bool {
+    pq_rehearsal_fee(kind).is_some()
+        || pq_fee_withdraw_recipient(kind).is_some()
+        || kind == PQ_EXIT_FREEZE_UNTIL_V1
+}
+
+/// Exact development source series selected by the rehearsal amendment.
+pub const PQ_REHEARSAL_ISSUE: &str = "bbf2fb96437f2e87ff3b470f19aa2455ae226ab810b06b64ab327b0daa71a2d1ad14638a107b7bbd3b0cf3a6f4d56269";
+/// Published M2 archive vector. Account settlement has no enabled route for this issue.
+pub const PQ_ARCHIVE_FIXTURE_ISSUE: &str = "a1c5b7e096966c3736cbcf2291c0d10a166f3c2edee2d7c5faf9c870c565d0009ad5b0e23e1dbdee4ca9f7e07b954cb8";
+pub const PQ_REHEARSAL_PROOFS: usize = 4;
+pub const PQ_REHEARSAL_BYTES: usize = PQ_REHEARSAL_PROOFS * pq_payment::ARCHIVE_LIMIT;
+/// Profile-1 storage allocation per payment, in addition to its body and
+/// detached batch reference. The 238-byte MAC envelope/newline and 96-byte
+/// body key cover both supported archive backends.
+pub const PQ_REHEARSAL_ARCHIVE_OVERHEAD: usize = 334;
+pub const PQ_REHEARSAL_MIN_FEE: u64 = 1;
+
 pub const GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT: &str =
     "shielded_atomic_batch_activation_height";
 /// First block height at which an at-NAV Asset-Orchard swap pricing claim
@@ -178,6 +245,14 @@ pub struct ShieldedNote {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PqFixtureState {
+    pub commitments: Vec<String>,
+    pub spent_serials: Vec<String>,
+    pub root: String,
+    pub reserve: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShieldedState {
     #[serde(default)]
     pub next_note_position: u64,
@@ -187,6 +262,10 @@ pub struct ShieldedState {
     pub turnstile_events: Vec<TurnstileEvent>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub orchard: Option<OrchardPoolState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pq_fixture: Option<PqFixtureState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pq_pool_v1: Option<pq_payment::PqPool>,
 }
 
 impl ShieldedState {
@@ -198,6 +277,8 @@ impl ShieldedState {
 
     pub fn empty() -> Self {
         Self {
+            pq_fixture: None,
+            pq_pool_v1: None,
             next_note_position: 0,
             notes: Vec::new(),
             nullifiers: Vec::new(),
@@ -559,6 +640,10 @@ pub enum ShieldedAction {
     AssetOrchardPrivatePrimaryIssueV1(AssetOrchardPrivatePrimaryIssueActionPayload),
     #[serde(rename = "asset_orchard_private_primary_redeem_v1")]
     AssetOrchardPrivatePrimaryRedeemV1(AssetOrchardPrivatePrimaryRedeemActionPayload),
+    #[serde(rename = "pq_payment_v1")]
+    PqPaymentV1(pq_payment::PqPayment),
+    #[serde(rename = "pq_fixture_hop")]
+    PqFixtureHop { payment_hex: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -574,6 +659,22 @@ fn shielded_batch_atomic_is_false(value: &bool) -> bool {
 }
 
 impl ShieldedActionBatch {
+    /// Inspect only action kinds, without decoding payment bodies or proofs.
+    pub fn contains_pq_json(raw: &str) -> Result<bool, serde_json::Error> {
+        #[derive(Deserialize)]
+        struct Kinds {
+            actions: Vec<Kind>,
+        }
+        #[derive(Deserialize)]
+        struct Kind {
+            kind: String,
+        }
+        Ok(serde_json::from_str::<Kinds>(raw)?
+            .actions
+            .iter()
+            .any(|a| a.kind == "pq_payment_v1"))
+    }
+
     pub fn new(batch_id: impl Into<String>, actions: Vec<ShieldedAction>) -> Self {
         Self {
             batch_id: batch_id.into(),
@@ -1787,6 +1888,149 @@ impl GovernanceState {
             })
             .map(|amendment| u64::from(amendment.value))
             .min()
+    }
+
+    fn pq_schedule_at(&self, height: u64) -> Option<&GovernanceAmendment> {
+        self.amendments.iter().rev().find(|a| {
+            is_pq_rehearsal_kind(&a.kind)
+                && (a.kind == PQ_REHEARSAL_V1
+                    || (height >= a.activation_height && height >= u64::from(a.value)))
+        })
+    }
+
+    /// Once any fee-carrying PQ schedule has taken effect at or before `height`,
+    /// a subsequent standard pause (including bare `PQ_REHEARSAL_V1` with `value == 0`)
+    /// keeps the fee schedule in force so governance quorum, atomic-batch rules, and
+    /// unconfigured-fee protections cannot be bypassed while paused.
+    pub fn pq_fee_schedule_in_force(&self, height: u64) -> bool {
+        self.amendments.iter().any(|a| {
+            pq_rehearsal_fee(&a.kind).is_some()
+                && height >= a.activation_height
+                && (a.value == 0 || height >= u64::from(a.value))
+        })
+    }
+
+    /// For the candidate height, after checking the network and pool activation.
+    pub fn pq_issued_fee(&self, asset: &str, height: u64) -> Option<u64> {
+        if asset != PQ_REHEARSAL_ISSUE {
+            return None;
+        }
+        let schedule = self.pq_schedule_at(height)?;
+        if schedule.value == 0 || schedule.paused {
+            return None;
+        }
+        pq_rehearsal_fee(&schedule.kind)
+    }
+
+    /// Issued-asset fee lookup that also permits `Mode::Exit` during a standard
+    /// (exit-open) pool pause by using the most recent active fee schedule.
+    /// If the latest schedule is an unpaused bare schedule (no fee configured),
+    /// returns `None` (`pq_fee_unconfigured`).
+    pub fn pq_issued_fee_for_mode(
+        &self,
+        asset: &str,
+        height: u64,
+        mode: pq_payment::Mode,
+    ) -> Option<u64> {
+        if let Some(fee) = self.pq_issued_fee(asset, height) {
+            return Some(fee);
+        }
+        if mode != pq_payment::Mode::Exit || asset != PQ_REHEARSAL_ISSUE {
+            return None;
+        }
+        let latest = self.pq_schedule_at(height)?;
+        if latest.value != 0 && !latest.paused {
+            return None;
+        }
+        self.amendments.iter().rev().find_map(|a| {
+            let fee = pq_rehearsal_fee(&a.kind)?;
+            if !a.paused && a.value != 0 && height >= a.activation_height && height >= u64::from(a.value) {
+                Some(fee)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn pq_rehearsal_active(
+        &self, chain: &str, genesis: &str, protocol: u32, height: u64,
+    ) -> bool {
+        self.pq_schedule_at(height).is_some_and(|a| {
+            a.chain_id == chain
+                && a.genesis_hash == genesis
+                && a.protocol_version == protocol
+                && !a.paused
+                && a.value != 0
+                && height >= a.activation_height
+                && height >= u64::from(a.value)
+        })
+    }
+
+    /// True if the PQ pool was ever activated on this chain at or before `height`.
+    pub fn pq_ever_activated_by(
+        &self, chain: &str, genesis: &str, protocol: u32, height: u64,
+    ) -> bool {
+        self.amendments.iter().any(|a| {
+            is_pq_rehearsal_kind(&a.kind)
+                && a.chain_id == chain
+                && a.genesis_hash == genesis
+                && a.protocol_version == protocol
+                && !a.paused
+                && a.value != 0
+                && height >= a.activation_height
+                && height >= u64::from(a.value)
+        })
+    }
+
+    /// True if an auto-expiring emergency exit-freeze (`PQ_EXIT_FREEZE_UNTIL_V1`)
+    /// is actively blocking `Mode::Exit` at `height`. Automatically expires once
+    /// `height > value`, or immediately if superseded by a `value == 0` lift.
+    pub fn pq_exit_frozen_at(
+        &self, chain: &str, genesis: &str, protocol: u32, height: u64,
+    ) -> bool {
+        self.amendments
+            .iter()
+            .rev()
+            .find(|a| {
+                a.kind == PQ_EXIT_FREEZE_UNTIL_V1
+                    && a.chain_id == chain
+                    && a.genesis_hash == genesis
+                    && a.protocol_version == protocol
+                    && !a.paused
+                    && height >= a.activation_height
+            })
+            .is_some_and(|a| a.value != 0 && height <= u64::from(a.value))
+    }
+
+    /// Two-tier circuit breaker:
+    /// - `Shield` / `Internal` require the pool to be active (halted by a standard pause).
+    /// - `Exit` remains open during a standard pause once the pool has ever activated,
+    ///   and is halted ONLY by an active, auto-expiring `PQ_EXIT_FREEZE_UNTIL_V1`.
+    pub fn pq_rehearsal_mode_allowed(
+        &self,
+        chain: &str,
+        genesis: &str,
+        protocol: u32,
+        height: u64,
+        mode: pq_payment::Mode,
+    ) -> Result<(), &'static str> {
+        if self.pq_rehearsal_active(chain, genesis, protocol, height) {
+            if mode == pq_payment::Mode::Exit
+                && self.pq_exit_frozen_at(chain, genesis, protocol, height)
+            {
+                return Err("pq_exit_frozen");
+            }
+            return Ok(());
+        }
+        if mode == pq_payment::Mode::Exit
+            && self.pq_ever_activated_by(chain, genesis, protocol, height)
+        {
+            if self.pq_exit_frozen_at(chain, genesis, protocol, height) {
+                return Err("pq_exit_frozen");
+            }
+            return Ok(());
+        }
+        Err("pq_settlement_inactive")
     }
 
     pub fn shielded_atomic_batch_activation_height(&self) -> Option<u64> {

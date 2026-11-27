@@ -207,7 +207,7 @@ fn validate_nonuniform_proposal(
     {
         return Err("non-uniform governance proposal domain mismatch".to_string());
     }
-    validate_amendment_kind(&proposal.kind)?;
+    validate_domain_amendment_kind(domain, &proposal.kind)?;
     validate_amendment_value(&proposal.kind, proposal.value)?;
     let expected_instance_id =
         nonuniform_governance_instance_id(domain, graph, &proposal.kind, proposal.value);
@@ -1497,6 +1497,10 @@ pub fn verify_governance_amendment(
         postfiat_types::solana_exit::minimum_withdrawal(&amendment.kind)?;
     } else if second && amendment.kind.starts_with(postfiat_types::solana_exit::REFUND) {
         postfiat_types::solana_exit::refund_fields(&amendment.kind)?;
+    } else if postfiat_types::pq_rehearsal_domain(&domain.chain_id, &domain.genesis_hash)
+        && postfiat_types::pq_fee_governance_kind(&amendment.kind)
+    {
+        // Allowed on the PQ rehearsal domain.
     } else {
         validate_amendment_kind(&amendment.kind)?;
     }
@@ -1539,6 +1543,17 @@ pub fn verify_governance_amendment(
     }
     if amendment.support.len() < amendment.quorum {
         return Err("governance amendment support is below quorum".to_string());
+    }
+    if amendment.kind == postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1 {
+        let required = postfiat_types::pq_exit_freeze_quorum(amendment.validators.len());
+        if amendment.quorum < required || amendment.support.len() < required {
+            return Err(format!(
+                "pq_exit_freeze_threshold: requires elevated quorum {required}/{} (got quorum={}, support={})",
+                amendment.validators.len(),
+                amendment.quorum,
+                amendment.support.len(),
+            ));
+        }
     }
     // A release cap amendment or committee move needs the registry
     // threshold of its declared set (design sections 4.1 and 5.1);
@@ -1731,6 +1746,15 @@ fn build_cobalt_safety_witness_report(
     Ok(report)
 }
 
+fn validate_domain_amendment_kind(domain: &CobaltDomain, kind: &str) -> Result<(), String> {
+    if postfiat_types::pq_rehearsal_domain(&domain.chain_id, &domain.genesis_hash)
+        && postfiat_types::pq_fee_governance_kind(kind)
+    {
+        return Ok(());
+    }
+    validate_amendment_kind(kind)
+}
+
 /// Kinds a validator may ratify and certify. The second Solana exit release's minimum
 /// withdrawal is signable only where that release is active at the activation height; elsewhere
 /// it is refused as the first release refuses any unknown kind.
@@ -1757,7 +1781,7 @@ pub(crate) fn validate_signing_kind(
     {
         return postfiat_types::solana_exit::refund_fields(kind).map(|_| ());
     }
-    validate_amendment_kind(kind)
+    validate_domain_amendment_kind(domain, kind)
 }
 
 fn validate_amendment_kind(kind: &str) -> Result<(), String> {
@@ -1886,6 +1910,7 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
         | postfiat_types::GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT
         | postfiat_types::GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
+        | postfiat_types::PQ_REHEARSAL_V1
         | GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_ENFORCEMENT_ACTIVATION_HEIGHT
         | GOVERNANCE_KIND_ASSET_ORCHARD_PRICING_MAX_NAV_AGE_BLOCKS
@@ -1943,7 +1968,10 @@ fn validate_amendment_value(kind: &str, value: u32) -> Result<(), String> {
             )),
         };
     }
-    if value == 0 {
+    if value == 0
+        && !postfiat_types::is_pq_rehearsal_kind(kind)
+        && kind != postfiat_types::PQ_EXIT_FREEZE_UNTIL_V1
+    {
         return Err(format!(
             "governance amendment `{kind}` value must be nonzero"
         ));

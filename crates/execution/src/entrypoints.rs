@@ -2397,3 +2397,88 @@ pub fn execute_offer_transaction(
     }
     receipt
 }
+
+/// Prepare the public PFT side of a verified PQ action. The fixed wire account
+/// ID uses the same pf namespace and key derivation as a transparent transfer.
+pub fn prepare_pq_account_debit(
+    ledger: &LedgerState,
+    authorization: &postfiat_types::pq_payment::Account,
+    debit: u64,
+) -> Result<postfiat_types::Account, &'static str> {
+    let address = address_from_public_key(authorization.public_key.as_ref());
+    if address != format!("pf{}", bytes_to_hex(&authorization.id)) {
+        return Err("pq_source_authorization");
+    }
+    let mut account = ledger
+        .account(&address)
+        .cloned()
+        .ok_or("pq_unfunded_source")?;
+    let key = bytes_to_hex(authorization.public_key.as_ref());
+    if account.sequence.checked_add(1) != Some(authorization.sequence)
+        || account.public_key_hex.as_ref().is_some_and(|p| p != &key)
+    {
+        return Err("pq_source_authorization");
+    }
+    account.balance = account
+        .balance
+        .checked_sub(debit)
+        .filter(|v| *v >= required_account_reserve(&address))
+        .ok_or("pq_unfunded_source")?;
+    account.public_key_hex = Some(key);
+    account.sequence = authorization.sequence;
+    Ok(account)
+}
+
+/// Strict deposit-debit guard requiring the depositor's full 1,952-byte ML-DSA-65
+/// public key to already be pinned on-chain (`account.public_key_hex.is_some()`),
+/// eliminating the 160-bit unpinned address preimage window on brand-new accounts.
+pub fn prepare_pq_account_debit_pinned(
+    ledger: &LedgerState,
+    authorization: &postfiat_types::pq_payment::Account,
+    debit: u64,
+) -> Result<postfiat_types::Account, &'static str> {
+    let address = address_from_public_key(authorization.public_key.as_ref());
+    let account = ledger.account(&address).ok_or("pq_unfunded_source")?;
+    if account.public_key_hex.is_none() {
+        return Err("pq_unpinned_source_account");
+    }
+    prepare_pq_account_debit(ledger, authorization, debit)
+}
+
+pub fn check_pq_recipient(
+    ledger: &LedgerState,
+    address: &str,
+    height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> Result<(), &'static str> {
+    if destination_address_rejection(&[("pq_exit", address)]).is_some()
+        || address == FEE_COLLECTOR_ADDRESS
+    {
+        return Err("pq_recipient_policy");
+    }
+    require_destination_memo(ledger, address, 0, compatibility, height).map_err(|(code, _)| code)
+}
+
+pub fn prepare_pq_native_credit(
+    ledger: &LedgerState,
+    address: &str,
+    amount: u64,
+) -> Result<(postfiat_types::Account, u64), &'static str> {
+    let existing = ledger.account(address);
+    let creation_fee = if existing.is_none() {
+        TRANSFER_ACCOUNT_CREATION_FEE
+    } else {
+        0
+    };
+    let mut account = existing
+        .cloned()
+        .unwrap_or_else(|| postfiat_types::Account::new(address, 0, None));
+    account.balance = account
+        .balance
+        .checked_add(amount)
+        .ok_or("pq_recipient_overflow")?;
+    if account.balance < required_account_reserve(address) {
+        return Err("pq_recipient_reserve");
+    }
+    Ok((account, creation_fee))
+}

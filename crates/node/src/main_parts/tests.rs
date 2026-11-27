@@ -3,6 +3,14 @@ include!("tests/rpc_serve_request_tests.rs");
 include!("tests/validator_signer_socket_tests.rs");
 include!("tests/rpc_child_exe_tests.rs");
 include!("tests/private_action_six_validator_tests.rs");
+include!("tests/pq_payment_local_chain_tests.rs");
+include!("tests/pq_payment_rehearsal_tests.rs");
+#[cfg(test)]
+#[path = "tests/pq_rehearsal_inventory.rs"]
+mod pq_rehearsal_inventory;
+#[cfg(test)]
+#[path = "tests/pq_rehearsal_issue.rs"]
+mod pq_rehearsal_issue;
 include!("tests/private_action_proof_six_validator_tests.rs");
 include!("tests/private_action_pricing_six_validator_tests.rs");
 

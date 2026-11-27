@@ -206,6 +206,10 @@ fn asset_operation(
 }
 
 fn activate(data_dir: &Path, kind: &str, label: &str) {
+    activate_at(data_dir, kind, label, 1);
+}
+
+fn activate_at(data_dir: &Path, kind: &str, label: &str, height: u32) {
     let store = NodeStore::new(data_dir);
     let genesis = store.read_genesis().expect("genesis");
     let mut governance = store.read_governance().expect("governance");
@@ -221,7 +225,7 @@ fn activate(data_dir: &Path, kind: &str, label: &str) {
         validators: vec!["validator-0".to_string()],
         quorum: 1,
         kind: kind.to_string(),
-        value: 1,
+        value: height,
         activation_height: 0,
         veto_until_height: 0,
         paused: false,
@@ -317,6 +321,18 @@ fn spawn_rpc_serve(
     topology: &Path,
     key: &Path,
 ) -> Child {
+    spawn_admission_server(root, dir, validator, port, topology, key, false)
+}
+
+fn spawn_admission_server(
+    root: &Path,
+    dir: &Path,
+    validator: &str,
+    port: u16,
+    topology: &Path,
+    key: &Path,
+    operator: bool,
+) -> Child {
     let path = |p: &Path| p.to_str().expect("UTF-8 path").to_string();
     let rpc_ready = root.join(format!("{validator}.rpc.ready.json"));
     let _ = fs::remove_file(&rpc_ready);
@@ -354,6 +370,11 @@ fn spawn_rpc_serve(
             "--finality-quorum-early-full-propagation",
             "--keep-alive",
         ])
+        .args(if operator {
+            vec!["--allow-mempool-submit", "--allow-mempool-submit-finality"]
+        } else {
+            vec![]
+        })
         .stdout(Stdio::null())
         .stderr(
             fs::OpenOptions::new()
@@ -1487,4 +1508,249 @@ fn private_action_path_has_no_verification_switch() {
         "condition: environment variables and CLI flags on the private action path ({} files); observed: {found:?}; expected: none that could disable verification",
         files.len()
     );
+}
+
+#[test]
+fn pq_gateway_and_legacy_routes_follow_validator_activation() {
+    use postfiat_node::{init_consensus_v2, InitConsensusV2Options};
+    use postfiat_types::pq_payment::{PqPayment, POOL_ID};
+    assert!(
+        proxy_available(),
+        "install wallet-proxy dependencies for the PQ merge test"
+    );
+    let payment = PqPayment::from_bytes(
+        include_bytes!("../../../tools/pft-binius-shielded-pq/l1-vectors/pft-shield.bin").to_vec(),
+    )
+    .unwrap();
+    let payer = format!(
+        "pf{}",
+        bytes_to_hex(&payment.parts().unwrap().0.account.unwrap().id)
+    );
+    let action = ShieldedAction::PqPaymentV1(payment);
+    let action_json = serde_json::to_string(&action).unwrap();
+    let chain = "postfiat-pfsh02-m1-disposable";
+    for configured in [false, true] {
+        let mut h = Harness {
+            root: std::env::temp_dir()
+                .join(format!("pq-gateway-{}-{configured}", std::process::id())),
+            children: vec![],
+        };
+        fs::create_dir_all(&h.root).unwrap();
+        let mut dirs = Vec::new();
+        let mut ports = Vec::new();
+        let mut domain = None;
+        for index in [4, 5] {
+            let name = format!("validator-{index}");
+            let dir = h.root.join(&name);
+            init_consensus_v2(InitConsensusV2Options {
+                data_dir: dir.clone(),
+                chain_id: chain.into(),
+                node_id: name.clone(),
+                validator_count: 6,
+                activation_height: 1000,
+                storage_activation_height: None,
+            })
+            .unwrap();
+            activate(
+                &dir,
+                GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
+                "atomic",
+            );
+            if configured {
+                activate_at(&dir, postfiat_types::PQ_REHEARSAL_V1, "pq", 3);
+            }
+            fund(&dir, &payer, "opening");
+            let genesis = NodeStore::new(&dir).read_genesis().unwrap();
+            let net = NetworkDomain {
+                chain_id: chain.into(),
+                genesis_hash: genesis_hash(&genesis),
+                protocol_version: genesis.protocol_version,
+            };
+            let topology = local_topology(net, 6, free_base_port()).unwrap();
+            let path = dir.join("topology.json");
+            fs::write(&path, serde_json::to_vec(&topology).unwrap()).unwrap();
+            let port = free_port();
+            let key = split_validator_key(&dir, &name);
+            h.children.push(spawn_admission_server(
+                &h.root, &dir, &name, port, &path, &key, true,
+            ));
+            wait_for_file(
+                &h.root.join(format!("{name}.rpc.ready.json")),
+                Duration::from_secs(20),
+            );
+            ports.push(port);
+            dirs.push(dir);
+            domain = Some(postfiat_types::PrivateActionDomain {
+                chain_id: chain.into(),
+                genesis_hash: genesis_hash(&genesis),
+                protocol_version: genesis.protocol_version,
+            });
+        }
+        let domain = domain.unwrap();
+        let intent = postfiat_types::private_intent_id(&domain, &action_json).unwrap();
+        let body = json!({"address":payer,"intent_id":intent,"action_json":action_json});
+        let mut gateways = Vec::new();
+        for legacy in ["off", "on"] {
+            let port = free_port();
+            let home = h.root.join(legacy);
+            fs::create_dir_all(&home).unwrap();
+            let env: Vec<_> = [
+                ("PATH", std::env::var("PATH").unwrap()),
+                ("HOME", home.display().to_string()),
+                ("LISTEN_PORT", port.to_string()),
+                ("LISTEN_HOST", "127.0.0.1".into()),
+                ("ALLOWED_ORIGINS", ORIGIN.into()),
+                ("WALLET_PROXY_API_TOKEN", BROWSER_TOKEN.into()),
+                ("RPC_HOST", "127.0.0.1".into()),
+                ("RPC_PORT", ports[0].to_string()),
+                (
+                    "RPC_FLEET",
+                    format!(
+                        "validator-4=127.0.0.1:{},validator-5=127.0.0.1:{}",
+                        ports[0], ports[1]
+                    ),
+                ),
+                ("WALLET_PROXY_PRIVATE_ACTIONS_CHAIN_ID", chain.into()),
+                (
+                    "WALLET_PROXY_PRIVATE_ACTIONS_GENESIS_HASH",
+                    domain.genesis_hash.clone(),
+                ),
+                ("WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID", POOL_ID.into()),
+                (
+                    "WALLET_PROXY_PRIVATE_ACTIONS_STORE",
+                    home.join("admission").display().to_string(),
+                ),
+                ("WALLET_PROXY_LEGACY_SHIELDED_CERTIFICATION", legacy.into()),
+                ("NAVSWAP_IDEMPOTENCY_STORE_PATH", "off".into()),
+                ("NAVSWAP_RUN_STORE_PATH", "off".into()),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v))
+            .collect();
+            h.children.push(spawn_proxy(&home, &env, port));
+            gateways.push(port);
+        }
+        for height in 2..=4 {
+            if height > 2 {
+                for dir in &dirs {
+                    fund(dir, &payer, &format!("ordinary-{height}"));
+                }
+            }
+            let active = configured && height >= 3;
+            if height == 2 || (configured && height == 3) {
+                let (status, result) =
+                    http(gateways[0], "/api/private/v1/receipt", &body, BROWSER_TOKEN);
+                assert_eq!(status, 200, "{result}");
+                for dir in &dirs {
+                    assert!(postfiat_node::PrivateActionAdmissionStore::open(dir)
+                        .unwrap()
+                        .get(&intent)
+                        .is_none());
+                }
+            }
+            for (index, port) in gateways.iter().enumerate() {
+                let (status, result) = http(*port, "/api/private/v1/submit", &body, BROWSER_TOKEN);
+                if active {
+                    assert_eq!(status, 202, "{result}");
+                    assert_eq!(result["intent_id"], intent);
+                    let alias = serde_json::to_string_pretty(&action).unwrap();
+                    let alias_id = postfiat_types::private_intent_id(&domain, &alias).unwrap();
+                    let alternate =
+                        json!({"address":payer,"intent_id":alias_id,"action_json":alias});
+                    let (code, owner) =
+                        http(*port, "/api/private/v1/submit", &alternate, BROWSER_TOKEN);
+                    assert_eq!(code, 202, "{owner}");
+                    assert_eq!(owner["intent_id"], intent);
+                    let (code, receipt) =
+                        http(*port, "/api/private/v1/receipt", &alternate, BROWSER_TOKEN);
+                    assert_eq!(code, 200, "{receipt}");
+                    assert_eq!(receipt["intent_id"], intent);
+                    for dir in &dirs {
+                        let found = postfiat_node::PrivateActionAdmissionStore::open(dir).unwrap();
+                        assert_eq!(found.get(&intent).unwrap().domain.pool_id, POOL_ID);
+                    }
+                } else {
+                    assert_eq!(
+                        result["code"], "pq_settlement_inactive",
+                        "HTTP {status}: {result}"
+                    );
+                }
+                for route in ["ingress", "swap", "egress"] {
+                    let (status, result) = http(
+                        *port,
+                        &format!("/api/shielded-nav-swap/{route}"),
+                        &body,
+                        BROWSER_TOKEN,
+                    );
+                    assert_eq!(status, if index == 0 { 410 } else { 403 }, "{result}");
+                }
+            }
+            let genesis = NodeStore::new(&dirs[0]).read_genesis().unwrap();
+            let batch =
+                postfiat_node::build_atomic_shielded_action_batch(&genesis, vec![action.clone()])
+                    .unwrap();
+            let response = rpc(
+                ports[0],
+                "shield_batch_finality",
+                json!({"batch_json":serde_json::to_string(&batch).unwrap()}),
+            );
+            assert_eq!(
+                response["error"]["code"], "private_action_admission_required",
+                "{response}"
+            );
+            let file = dirs[0].join("simulation.json");
+            fs::write(&file, serde_json::to_vec(&batch).unwrap()).unwrap();
+            let simulation = postfiat_node::simulate_shielded_batch(
+                postfiat_node::ShieldedBatchSimulateOptions {
+                    data_dir: dirs[0].clone(),
+                    batch_file: file.clone(),
+                },
+            );
+            if active {
+                assert!(simulation.unwrap().all_accepted);
+                let fork = h.root.join(format!("cli-apply-{height}"));
+                copy_dir(&dirs[0], &fork);
+                let receipts = postfiat_node::apply_shielded_batch(ApplyBatchOptions {
+                    data_dir: fork,
+                    batch_file: file,
+                    certificate_file: None,
+                })
+                .unwrap();
+                assert_eq!(receipts.len(), 1);
+                assert!(receipts[0].accepted);
+            } else {
+                assert_eq!(
+                    simulation.unwrap_err().to_string(),
+                    "pq_settlement_inactive"
+                );
+                let err = postfiat_node::apply_shielded_batch(ApplyBatchOptions {
+                    data_dir: dirs[0].clone(),
+                    batch_file: file,
+                    certificate_file: None,
+                })
+                .unwrap_err();
+                assert_eq!(err.to_string(), "pq_settlement_inactive");
+            }
+        }
+        // Real source-IP counters survive new TCP connections. Reads still
+        // work after this caller exhausted its admission attempts.
+        let mut last = Value::Null;
+        for _ in 0..=16 {
+            last = rpc(
+                ports[0],
+                "private_action_submit",
+                json!({"intent_id": "ab".repeat(48)}),
+            );
+        }
+        assert_eq!(
+            last["error"]["code"], "private_action_rate_limited",
+            "{last}"
+        );
+        let read = rpc(
+            ports[0],
+            "private_action_receipt",
+            json!({"intent_id": "ab".repeat(48)}),
+        );
+        assert_eq!(read["result"]["state"], "pending_unknown");
+    }
 }
