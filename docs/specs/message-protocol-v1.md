@@ -82,6 +82,45 @@ serialize UTF-8 JSON per RFC 8785 (keys sorted recursively, no insignificant
 whitespace, deterministic number formatting). As with protobuf bodies,
 signatures and CIDs cover the exact transmitted `body_bytes`.
 
+### 2.4 Rules for Readers and for Later Changes
+
+Readers handle unknown fields (field numbers they do not know) by where the
+message is carried:
+
+| Where the message is carried | Unknown fields | Reason |
+|---|---|---|
+| Inside the signed `Envelope.header_bytes`, `encryption_header_bytes`, or `body_bytes`, including every message nested there | **Preserved:** readers ignore them and keep and pass on the exact received bytes | The signature and CID cover those exact bytes and are never recomputed from decoded fields (section 2.2). |
+| The outer `Envelope`, the `pf.ptr` v5 `Pointer` memo, and the x402 `PAYMENT-*` HTTP header messages | **Refused** | These bytes are outside the envelope signature; an added field in the outer `Envelope` changes its CID while its signature still verifies. |
+| `MessageKeyBinding` | **Refused** | Its signature covers only the fields in `key_bind_preimage` (section 4.3), so an unknown field would be unsigned. |
+
+1. **Enum zero means "not set":** the `0` value of every enum
+   (`*_UNSPECIFIED`) means no value. Where this document or a `.proto` comment
+   requires a value (for example `Envelope.signature_algorithm`,
+   `XWingEncryptionHeader.cipher_suite`, `MessageHeader.visibility`,
+   `MessageHeader.body_encoding`, `Pointer.target`, and
+   `FastPayPaymentRef.lane`), readers MUST refuse `0` and any value they do not
+   know. In other enum fields, readers read a value they do not know as `0`.
+2. **No reuse:** a field number or name, and an enum value number or name, once
+   published in a v1 `.proto` file is NEVER given to anything else, also not
+   after it is removed.
+3. **Removed fields are reserved:** a removed field's number and name are listed
+   in a `reserved` statement in its message (a removed enum value in its enum),
+   so `protoc` refuses any reuse. No v1 field or enum value has been removed, so
+   the `.proto` files carry no `reserved` statements.
+4. **Size or meaning changes take a new field:** a change to a field's size,
+   type, unit, or meaning NEVER reuses the field; it adds a new field with a new
+   number and name, and the old field is kept or reserved.
+   The one exception: the FastPay `order_hash` and `certificate_digest`
+   (`FastPayPaymentRef` fields 3 and 4, `X402PaymentSignature` field 7) were
+   corrected from 32 to 48 bytes in place, before any release, and this is the
+   only in-place size change. The SDKs on the `bm/w1-p2-sdk-x402` branch still
+   use 32 bytes and must follow 48 before either branch reaches `main`.
+5. **New fields are additive only:** a new field in a message whose unknown
+   fields are preserved may only add information that a reader which ignores it
+   still handles correctly. Anything an older reader must not ignore takes a new
+   `schema_name`, `MessageHeader.protocol_version`, `Envelope.version`, or
+   `memo_format` instead.
+
 ## 3. On-Chain `pf.ptr` v5 Memo Wire Rules
 
 `postfiatl1v2` supports memos on `payment_v2`, `issued_payment_v2`, and FastPay
@@ -266,11 +305,19 @@ stored inside a signed `Envelope` referenced by a `Pointer` with
 FastPay `account_tx` history indexing and x402 spent-payment deduplication
 across replicas MUST key on:
 
-- **`order_hash`** (32-byte immutable digest of the signed
-  `OwnedTransferOrderV3`) for `PAYMENT_LANE_FASTPAY`, NEVER `certificate_digest`
+- **`order_hash`** (48-byte immutable SHA3-384 digest of the signed
+  `OwnedTransferOrderV3`, computed by `fastpay_transfer_order_digest_v3`) for
+  `PAYMENT_LANE_FASTPAY`, NEVER `certificate_digest`
   (which varies with validator signature arrival order).
-- **`tx_hash`** for `PAYMENT_LANE_CONSENSUS_PFT` (`payment_v2`) and
+- **`tx_hash`** (48-byte SHA3-384 transaction id, computed by
+  `payment_v2_tx_id` or `asset_transaction_tx_id`) for
+  `PAYMENT_LANE_CONSENSUS_PFT` (`payment_v2`) and
   `PAYMENT_LANE_CONSENSUS_ISSUED` (`issued_payment_v2`, e.g. PFUSDC).
+
+`order_hash`, `tx_hash`, and the optional `certificate_digest` (computed by
+`fastpay_transfer_certificate_digest_v3`) are all the chain hash
+(`hash_bytes` in `crates/crypto_provider/src/lib.rs`, SHA3-384). They are
+carried as the raw 48 bytes of the 96-lowercase-hex strings the L1 RPC returns.
 
 ### 5.2 x402 v2 HTTP Header Transport
 
@@ -335,6 +382,8 @@ Before prompting any irreversible old-chain `NFTokenBurn`:
 2. **Single-block snapshot:** Every `SnapshotSourceRecord` inside
    `ProtocolSnapshot` (`pf.governance.snapshot.v1`) pins L1 reads to one
    `finalized_block_height` and stores `raw_response_sha256` + `raw_response_cid`.
+   `finalized_block_hash` is the 48-byte SHA3-384 chain hash of that block: the
+   raw bytes of its 96-lowercase-hex `BlockHeader.block_hash`.
 3. **Carry-over accountability:** Every `GovernancePacket`
    (`pf.governance.packet.v1`) explicitly scores every deliverable carried over
    from the prior session (`DONE`, `IN_PROGRESS`, `NOT_DONE`, or `DROPPED`) —
@@ -364,7 +413,11 @@ Before prompting any irreversible old-chain `NFTokenBurn`:
 ## 8. Deterministic Worked Hex Test Vectors
 
 The JSON block below is the machine-verified single source of truth checked in
-CI by `python3 scripts/test-message-protocol-vectors.py` (including `protoc`
+CI by `python3 scripts/test-message-protocol-vectors.py` (including a
+pure-Python check that every message and enum declared in the `.proto` files
+matches the script's tables field by field and value by value, that every byte
+size a `.proto` comment states matches them, and that every vector decodes
+against them, plus `protoc`
 decode/re-encode byte-identity round-trip checks when `protoc` is present).
 
 Fixture note: To keep the published wire vectors concise and human-inspectable,
@@ -416,18 +469,18 @@ compact `xwing_ciphertext` (`44 * 32`). Full normative production lengths
   },
   "V5_ENVELOPE_PRIVATE_XWING_REWARD": {
     "proto_type": "postfiat.message.v1.Envelope",
-    "order_hash_hex": "1fa9e64486fcda633292370aa97c47fa1ffa1463b8bc3804503e4d9a03c94094",
-    "header_hex": "08011211706f7374666961742d6465766e65742d321a0c70662e7265776172642e763120c90128063002380140024a2a7066317461736b6e6f64653030303030303030303030303030303030303030303030303030303030303050e0fcf394ac335a107461736b2d7265776172642d303030317abf0108011211706f7374666961742d6465766e65742d321a201fa9e64486fcda633292370aa97c47fa1ffa1463b8bc3804503e4d9a03c940942220986cb4a5f6ae7ce3b980118f577d54a1a32347ac8d467394479f43d340e04ef832035046543a2a7066317461736b6e6f646530303030303030303030303030303030303030303030303030303030303030422a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304880cab5ee01508208",
-    "aad_context_hex": "34df597e69504a383a97eba1f106a9286b71496de75c7a66af953d4cec167c70",
+    "order_hash_hex": "36480e7b3e38fec90ea5af2b15296f17da4d38b0077e4a67328a9a5ff655e8490720a9c51be74ed2e609d6c385ffa4af",
+    "header_hex": "08011211706f7374666961742d6465766e65742d321a0c70662e7265776172642e763120c90128063002380140024a2a7066317461736b6e6f64653030303030303030303030303030303030303030303030303030303030303050e0fcf394ac335a107461736b2d7265776172642d303030317adf0108011211706f7374666961742d6465766e65742d321a3036480e7b3e38fec90ea5af2b15296f17da4d38b0077e4a67328a9a5ff655e8490720a9c51be74ed2e609d6c385ffa4af2230de06e9927f18fb6fe9f75ffd54b23cacd56d28635a61af2d85dbbc51e6fcf69510eab54bbb147ad64d87a878c8ba15df32035046543a2a7066317461736b6e6f646530303030303030303030303030303030303030303030303030303030303030422a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304880cab5ee01508208",
+    "aad_context_hex": "b57d20818e367f1b68e8707871f1c0c880305f1a2314e91e89a5b76322f8b140",
     "derived_kem_seed_hex": "430e4662271619e3e43878bddafd267013540a0e72aec34a4eeb1225af12199a",
     "recipient_key_id_hex": "9f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4",
-    "derived_wrap_kek_hex": "3f70600a1a973a8b38b1868852cf8db36c2517f58aa389c6b02369678154f9eb",
+    "derived_wrap_kek_hex": "45276bc1f6737eded01434e1d9ab971820316dca764ac588b37c22e27061ca0a",
     "key_binding_preimage_sha256_hex": "6c4a3977bfc8b2f67e028c5b648d375fe21fe2dda86832e83ae6e5d0545560e4",
-    "encryption_header_hex": "080212187777777777777777777777777777777777777777777777771a2034df597e69504a383a97eba1f106a9286b71496de75c7a66af953d4cec167c702a1c706f7374666961742d6c312d76322f7877696e672d777261702f763132bc010a209f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4122a7066317265636970303030303030303030303030303030303030303030303030303030303030303030301a20444444444444444444444444444444444444444444444444444444444444444422185555555555555555555555555555555555555555555555552a30666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
-    "signing_preimage_sha256_hex": "32442d9bd94a1edb029e6293d6814ab5eaf58d2eaefc25c6d89fe5b3b09386b4",
-    "envelope_hex": "080112b50208011211706f7374666961742d6465766e65742d321a0c70662e7265776172642e763120c90128063002380140024a2a7066317461736b6e6f64653030303030303030303030303030303030303030303030303030303030303050e0fcf394ac335a107461736b2d7265776172642d303030317abf0108011211706f7374666961742d6465766e65742d321a201fa9e64486fcda633292370aa97c47fa1ffa1463b8bc3804503e4d9a03c940942220986cb4a5f6ae7ce3b980118f577d54a1a32347ac8d467394479f43d340e04ef832035046543a2a7066317461736b6e6f646530303030303030303030303030303030303030303030303030303030303030422a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304880cab5ee015082081a9b02080212187777777777777777777777777777777777777777777777771a2034df597e69504a383a97eba1f106a9286b71496de75c7a66af953d4cec167c702a1c706f7374666961742d6c312d76322f7877696e672d777261702f763132bc010a209f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4122a7066317265636970303030303030303030303030303030303030303030303030303030303030303030301a20444444444444444444444444444444444444444444444444444444444444444422185555555555555555555555555555555555555555555555552a3066666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666622408888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888828013220a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a13a20b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
-    "cid_bin_hex": "0155122073a90001a7ea8b4f5a317c76d97b06049fbd647300aafd4ab0d6ca1e72d100aa",
-    "cid_multibase": "bafkreidtveaadj7krnhvuml4o3mxwbqet66wi4yavl6uvmgwziphfuiavi"
+    "encryption_header_hex": "080212187777777777777777777777777777777777777777777777771a20b57d20818e367f1b68e8707871f1c0c880305f1a2314e91e89a5b76322f8b1402a1c706f7374666961742d6c312d76322f7877696e672d777261702f763132bc010a209f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4122a7066317265636970303030303030303030303030303030303030303030303030303030303030303030301a20444444444444444444444444444444444444444444444444444444444444444422185555555555555555555555555555555555555555555555552a30666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
+    "signing_preimage_sha256_hex": "c95c8e29207b30d5a11fbe3881f0c86e011aef71a225ca751c3956f3a97a68f5",
+    "envelope_hex": "080112d50208011211706f7374666961742d6465766e65742d321a0c70662e7265776172642e763120c90128063002380140024a2a7066317461736b6e6f64653030303030303030303030303030303030303030303030303030303030303050e0fcf394ac335a107461736b2d7265776172642d303030317adf0108011211706f7374666961742d6465766e65742d321a3036480e7b3e38fec90ea5af2b15296f17da4d38b0077e4a67328a9a5ff655e8490720a9c51be74ed2e609d6c385ffa4af2230de06e9927f18fb6fe9f75ffd54b23cacd56d28635a61af2d85dbbc51e6fcf69510eab54bbb147ad64d87a878c8ba15df32035046543a2a7066317461736b6e6f646530303030303030303030303030303030303030303030303030303030303030422a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304880cab5ee015082081a9b02080212187777777777777777777777777777777777777777777777771a20b57d20818e367f1b68e8707871f1c0c880305f1a2314e91e89a5b76322f8b1402a1c706f7374666961742d6c312d76322f7877696e672d777261702f763132bc010a209f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4122a7066317265636970303030303030303030303030303030303030303030303030303030303030303030301a20444444444444444444444444444444444444444444444444444444444444444422185555555555555555555555555555555555555555555555552a3066666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666622408888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888828013220a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a13a20b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "cid_bin_hex": "015512203bf9c430b3423d7503d30da0284e874248c2b6134e67834d14f8c4647551840f",
+    "cid_multibase": "bafkreib37hcdbm2chv2qhuynuaue5b2cjdblme2om6bu2fhyyrshkumeb4"
   },
   "V6_MANIFEST_MULTICHUNK": {
     "proto_type": "postfiat.message.v1.Manifest",
@@ -438,10 +491,10 @@ compact `xwing_ciphertext` (`44 * 32`). Full normative production lengths
     "required_proto_type": "postfiat.message.v1.X402PaymentRequired",
     "required_hex": "080210011a11706f7374666961743a6465766e65742d3220012a0350465430a08d063a2a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304220ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb564a10c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c150e0cf8295ac335a2568747470733a2f2f6170692e706f7374666961742e6f72672f76312f696e666572656e6365621968747470733a2f2f783430322e706f7374666961742e6f7267",
     "signature_proto_type": "postfiat.message.v1.X402PaymentSignature",
-    "signature_hex": "080210011a11706f7374666961743a6465766e65742d3220012a20ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb563210c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c13a2083367ad31fc90e2e2fcba5b711ffd80f264f92c5c68aca0241cb89477bc522e24a20d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2",
+    "signature_hex": "080210011a11706f7374666961743a6465766e65742d3220012a20ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb563210c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c13a30dbaa9afe5a060e7b3d3fa0a5d59bccdf2922f1bc179335d1a97884b99a9570ca258e7a6bfd8bef7c36f5e269a897bdac4a20d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2",
     "response_proto_type": "postfiat.message.v1.X402PaymentResponse",
-    "response_hex": "080210011abc0108011211706f7374666961742d6465766e65742d321a2083367ad31fc90e2e2fcba5b711ffd80f264f92c5c68aca0241cb89477bc522e22220c09c70d2488ee1e63c12bad892f3be484f363e34181e8c58d1a6dde8eda315f432035046543a2a70663173656e646572303030303030303030303030303030303030303030303030303030303030303030422a70663172656369703030303030303030303030303030303030303030303030303030303030303030303048a08d06501a20faa9f094ac332a17706f7374666961742d666163696c697461746f722d7631",
-    "dedup_order_hash_hex": "83367ad31fc90e2e2fcba5b711ffd80f264f92c5c68aca0241cb89477bc522e2"
+    "response_hex": "080210011adc0108011211706f7374666961742d6465766e65742d321a30dbaa9afe5a060e7b3d3fa0a5d59bccdf2922f1bc179335d1a97884b99a9570ca258e7a6bfd8bef7c36f5e269a897bdac22304916711407090bb42c52ef59dac8aa31a97554a224b5e9283196f50ccc4c6451d7e80713ecec9d05515d0086f732f19932035046543a2a70663173656e646572303030303030303030303030303030303030303030303030303030303030303030422a70663172656369703030303030303030303030303030303030303030303030303030303030303030303048a08d06501a20faa9f094ac332a17706f7374666961742d666163696c697461746f722d7631",
+    "dedup_order_hash_hex": "dbaa9afe5a060e7b3d3fa0a5d59bccdf2922f1bc179335d1a97884b99a9570ca258e7a6bfd8bef7c36f5e269a897bdac"
   },
   "V8_NFT_METADATA_AND_MIGRATION": {
     "claim_proto_type": "postfiat.nft.v1.MigrationClaim",
