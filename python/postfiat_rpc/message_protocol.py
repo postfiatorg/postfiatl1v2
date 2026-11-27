@@ -58,7 +58,32 @@ DOMAIN_MESSAGE_AAD = b"postfiat-l1-v2/message-aad/v1"
 DOMAIN_XWING_WRAP_INFO = b"postfiat-l1-v2/xwing-wrap/v1"
 DOMAIN_MESSAGE_KEY_KDF = b"postfiat-l1-v2/message-key/v1"
 DOMAIN_MESSAGE_KEY_BIND = b"postfiat-l1-v2/message-key-bind/v1"
+DOMAIN_CEK_COMMIT = b"postfiat-l1-v2/cek-commit/v1"
+DOMAIN_SEALED_RECIPIENT_TAG = b"postfiat-l1-v2/sealed-recipient-tag/v1"
 DOMAIN_ACCOUNT_ADDRESS = b"postfiat.address.v1\x00"
+
+
+def compute_cek_commitment(cek: bytes, aad_context: bytes) -> bytes:
+    """Compute 32-byte domain-separated key-commitment tag binding CEK and aad_context."""
+    if len(cek) != AEAD_KEY_BYTES:
+        raise MessageProtocolError(f"cek must be {AEAD_KEY_BYTES} bytes, got {len(cek)}")
+    if len(aad_context) != 32:
+        raise MessageProtocolError(f"aad_context must be 32 bytes, got {len(aad_context)}")
+    return hashlib.sha256(DOMAIN_CEK_COMMIT + b"\x00" + cek + aad_context).digest()
+
+
+def compute_sealed_recipient_tag(xwing_shared_secret: bytes, aad_context: bytes) -> bytes:
+    """Compute unlinkable per-message 32-byte SEALED recipient tag from X-Wing shared secret."""
+    if len(xwing_shared_secret) != 32:
+        raise MessageProtocolError(f"xwing_shared_secret must be 32 bytes, got {len(xwing_shared_secret)}")
+    if len(aad_context) != 32:
+        raise MessageProtocolError(f"aad_context must be 32 bytes, got {len(aad_context)}")
+    return hashlib.sha256(DOMAIN_SEALED_RECIPIENT_TAG + b"\x00" + xwing_shared_secret + aad_context).digest()
+
+
+def generate_rotatable_xwing_seed() -> bytes:
+    """Generate a CSPRNG 32-byte non-seed-derived X-Wing seed for epoch >= 1 forward secrecy."""
+    return os.urandom(32)
 
 
 def derive_account_address(account_pubkey: bytes) -> str:
@@ -807,6 +832,7 @@ class XWingEncryptionHeader:
     chunk_index: int = 0
     kdf_info: str = DOMAIN_XWING_WRAP_INFO.decode("ascii")
     recipients: tuple[RecipientWrap, ...] = ()
+    cek_commitment: bytes = b""
 
     def encode(self) -> bytes:
         parts = [
@@ -818,6 +844,8 @@ class XWingEncryptionHeader:
         ]
         for r in self.recipients:
             parts.append(pb_bytes(6, r.encode()))
+        if self.cek_commitment:
+            parts.append(pb_bytes(7, self.cek_commitment))
         return b"".join(parts)
 
     @classmethod
@@ -828,6 +856,7 @@ class XWingEncryptionHeader:
         chunk_index = 0
         kdf_info = ""
         recipients: list[RecipientWrap] = []
+        cek_commitment = b""
         for fn, wt, val in decode_wire_fields(data, enforce_canonical_order=enforce_canonical_order):
             if fn == 1:
                 _expect_wt(fn, wt, 0)
@@ -847,6 +876,9 @@ class XWingEncryptionHeader:
             elif fn == 6:
                 _expect_wt(fn, wt, 2)
                 recipients.append(RecipientWrap.decode(val, enforce_canonical_order=enforce_canonical_order))
+            elif fn == 7:
+                _expect_wt(fn, wt, 2)
+                cek_commitment = val
         return cls(
             cipher_suite=cipher_suite,
             aead_nonce=aead_nonce,
@@ -854,6 +886,7 @@ class XWingEncryptionHeader:
             chunk_index=chunk_index,
             kdf_info=kdf_info,
             recipients=tuple(recipients),
+            cek_commitment=cek_commitment,
         )
 
 
@@ -1749,6 +1782,116 @@ class OpenedEnvelopeResult:
     cid_ref: IpfsCidRef
 
 
+def create_message_key_binding(
+    *,
+    chain_id: str,
+    account: str,
+    xwing_public_key: bytes,
+    created_at_unix_ms: int,
+    key_epoch: int,
+    account_pubkey: bytes,
+    sign_fn: Callable[[bytes], bytes],
+) -> MessageKeyBinding:
+    """Create and sign a MessageKeyBinding (epoch 0 = Day-0 seed bootstrap; epoch >= 1 = rotatable forward-secret key)."""
+    if len(xwing_public_key) != XWING_PUBKEY_BYTES:
+        raise MessageProtocolError(f"xwing_public_key must be {XWING_PUBKEY_BYTES} bytes")
+    if account != derive_account_address(account_pubkey):
+        raise MessageProtocolError("account does not match derive_account_address(account_pubkey)")
+    key_id = compute_recipient_key_id(xwing_public_key)
+    preimage = compute_key_binding_preimage(
+        chain_id=chain_id,
+        account=account,
+        xwing_public_key=xwing_public_key,
+        key_id=key_id,
+        created_at_unix_ms=created_at_unix_ms,
+        key_epoch=key_epoch,
+    )
+    signature = sign_fn(preimage)
+    return MessageKeyBinding(
+        chain_id=chain_id,
+        account=account,
+        xwing_public_key=xwing_public_key,
+        key_id=key_id,
+        created_at_unix_ms=created_at_unix_ms,
+        key_epoch=key_epoch,
+        signature_algorithm=SignatureAlgorithm.ML_DSA_65,
+        account_pubkey=account_pubkey,
+        signature=signature,
+    )
+
+
+def rotate_message_key_binding(
+    *,
+    chain_id: str,
+    account: str,
+    new_xwing_public_key: bytes,
+    previous_key_epoch: int,
+    created_at_unix_ms: int,
+    account_pubkey: bytes,
+    sign_fn: Callable[[bytes], bytes],
+    new_key_epoch: int | None = None,
+) -> MessageKeyBinding:
+    """Rotate to a strictly higher epoch (>= 1) non-seed-derived X-Wing key for epoch forward secrecy."""
+    target_epoch = (previous_key_epoch + 1) if new_key_epoch is None else new_key_epoch
+    if target_epoch < 1 or target_epoch <= previous_key_epoch:
+        raise MessageProtocolError(
+            f"rotated key_epoch ({target_epoch}) must be >= 1 and strictly greater than previous_key_epoch ({previous_key_epoch})"
+        )
+    return create_message_key_binding(
+        chain_id=chain_id,
+        account=account,
+        xwing_public_key=new_xwing_public_key,
+        created_at_unix_ms=created_at_unix_ms,
+        key_epoch=target_epoch,
+        account_pubkey=account_pubkey,
+        sign_fn=sign_fn,
+    )
+
+
+def verify_message_key_binding(
+    binding_or_bytes: MessageKeyBinding | bytes,
+    *,
+    verify_signature_fn: Callable[[bytes, bytes, bytes], bool],
+    expected_chain_id: str | None = None,
+    expected_account: str | None = None,
+    min_known_epoch: int = 0,
+    enforce_canonical_order: bool = False,
+) -> MessageKeyBinding:
+    """Verify MessageKeyBinding signature, address derivation, chain_id, and monotonic key_epoch anti-downgrade."""
+    binding = (
+        MessageKeyBinding.decode(binding_or_bytes, enforce_canonical_order=enforce_canonical_order)
+        if isinstance(binding_or_bytes, (bytes, bytearray))
+        else binding_or_bytes
+    )
+    if binding.signature_algorithm != SignatureAlgorithm.ML_DSA_65:
+        raise MessageProtocolError("MessageKeyBinding requires ML-DSA-65")
+    if len(binding.xwing_public_key) != XWING_PUBKEY_BYTES:
+        raise MessageProtocolError(f"MessageKeyBinding xwing_public_key must be {XWING_PUBKEY_BYTES} bytes")
+    expected_key_id = compute_recipient_key_id(binding.xwing_public_key)
+    if len(binding.key_id) != 32 or not hmac.compare_digest(binding.key_id, expected_key_id):
+        raise MessageProtocolError("MessageKeyBinding key_id does not match SHA-256(xwing_public_key)")
+    derived = derive_account_address(binding.account_pubkey)
+    if binding.account != derived:
+        raise MessageProtocolError(
+            f"MessageKeyBinding account_pubkey address {derived} != binding.account {binding.account}"
+        )
+    if expected_chain_id is not None and binding.chain_id != expected_chain_id:
+        raise MessageProtocolError(
+            f"MessageKeyBinding chain_id mismatch: got {binding.chain_id!r}, expected {expected_chain_id!r}"
+        )
+    if expected_account is not None and binding.account != expected_account:
+        raise MessageProtocolError(
+            f"MessageKeyBinding account mismatch: got {binding.account!r}, expected {expected_account!r}"
+        )
+    if binding.key_epoch < min_known_epoch:
+        raise MessageProtocolError(
+            f"MessageKeyBinding key_epoch rollback rejected: got {binding.key_epoch} < min_known_epoch {min_known_epoch}"
+        )
+    if not verify_signature_fn(binding.signing_preimage(), binding.signature, binding.account_pubkey):
+        raise MessageProtocolError("MessageKeyBinding ML-DSA-65 signature invalid")
+    return binding
+
+
 def seal_envelope(
     *,
     header: MessageHeader,
@@ -1763,6 +1906,8 @@ def seal_envelope(
     chunk_index: int = 0,
     pointer_target: PointerTarget = PointerTarget.CONTENT_BLOB,
     extra_pointer_flags: int = 0,
+    blind_sealed_recipients: bool = True,
+    emit_cek_commitment: bool = True,
 ) -> SealedEnvelopeResult:
     """Frame, optionally X-Wing encrypt, and ML-DSA-65 sign a canonical pf.message.v1 Envelope.
 
@@ -1795,25 +1940,31 @@ def seal_envelope(
         content_key = cek if cek is not None else os.urandom(AEAD_KEY_BYTES)
         body_nonce = aead_nonce if aead_nonce is not None else os.urandom(AEAD_NONCE_BYTES)
         aad_context = compute_aad_context(header.chain_id, header_bytes, chunk_index)
+        cek_commitment = compute_cek_commitment(content_key, aad_context) if emit_cek_commitment else b""
         body_bytes = xchacha20_poly1305_encrypt(content_key, body_nonce, body_plaintext, aad_context)
 
         wraps_with_id: list[tuple[bytes, RecipientWrap]] = []
-        seen_ids: set[bytes] = set()
+        seen_static_ids: set[bytes] = set()
         for recipient in recipients:
-            key_id = compute_recipient_key_id(recipient.xwing_public_key)
-            if key_id in seen_ids:
+            static_key_id = compute_recipient_key_id(recipient.xwing_public_key)
+            if static_key_id in seen_static_ids:
                 raise MessageProtocolError("duplicate recipient_key_id in envelope")
-            seen_ids.add(key_id)
+            seen_static_ids.add(static_key_id)
             xwing_ct, shared_secret = xwing_encap_fn(recipient.xwing_public_key)
-            kek = derive_xwing_wrap_kek(shared_secret, aad_context, key_id)
+            wire_tag = (
+                compute_sealed_recipient_tag(shared_secret, aad_context)
+                if (header.visibility == Visibility.SEALED and blind_sealed_recipients)
+                else static_key_id
+            )
+            kek = derive_xwing_wrap_kek(shared_secret, aad_context, wire_tag)
             w_nonce = wrap_nonce_fn() if wrap_nonce_fn is not None else os.urandom(AEAD_NONCE_BYTES)
             wrapped_cek = xchacha20_poly1305_encrypt(kek, w_nonce, content_key, aad_context)
             recip_account = "" if header.visibility == Visibility.SEALED else recipient.account
             wraps_with_id.append(
                 (
-                    key_id,
+                    wire_tag,
                     RecipientWrap(
-                        recipient_key_id=key_id,
+                        recipient_key_id=wire_tag,
                         recipient_account=recip_account,
                         xwing_ciphertext=xwing_ct,
                         wrap_nonce=w_nonce,
@@ -1829,6 +1980,7 @@ def seal_envelope(
             chunk_index=chunk_index,
             kdf_info=DOMAIN_XWING_WRAP_INFO.decode("ascii"),
             recipients=tuple(w for _, w in wraps_with_id),
+            cek_commitment=cek_commitment,
         )
         encryption_header_bytes = enc_header.encode()
         vis_flag = int(PointerFlag.SEALED if header.visibility == Visibility.SEALED else PointerFlag.PRIVATE)
@@ -1884,6 +2036,7 @@ def open_envelope(
     recipient_key_id: bytes | None = None,
     xwing_decap_fn: Callable[[bytes], bytes] | None = None,
     enforce_canonical_order: bool = False,
+    require_cek_commitment: bool = False,
 ) -> OpenedEnvelopeResult:
     """Verify CID + raw-byte ML-DSA-65 signature BEFORE decoding nested fields, enforce anchor/sender bindings, then decrypt if private/sealed."""
     # Step 1: Verify CIDv1 raw over exact transmitted bytes (zero re-serialization).
@@ -1949,21 +2102,57 @@ def open_envelope(
     if not hmac.compare_digest(enc_header.aad_context, expected_aad):
         raise MessageProtocolError("XWingEncryptionHeader.aad_context mismatch")
 
-    if recipient_key_id is None or xwing_decap_fn is None:
-        raise MessageProtocolError("recipient_key_id and xwing_decap_fn are required to decrypt PRIVATE/SEALED")
+    if xwing_decap_fn is None:
+        raise MessageProtocolError("xwing_decap_fn is required to decrypt PRIVATE/SEALED")
 
-    matching_wrap = next((w for w in enc_header.recipients if hmac.compare_digest(w.recipient_key_id, recipient_key_id)), None)
-    if matching_wrap is None:
+    kdf_info = enc_header.kdf_info or DOMAIN_XWING_WRAP_INFO.decode("ascii")
+    matching_wrap = None
+    shared_secret: bytes | None = None
+
+    if recipient_key_id is not None:
+        matching_wrap = next(
+            (w for w in enc_header.recipients if hmac.compare_digest(w.recipient_key_id, recipient_key_id)),
+            None,
+        )
+
+    if matching_wrap is not None:
+        shared_secret = xwing_decap_fn(matching_wrap.xwing_ciphertext)
+    elif header.visibility == Visibility.SEALED:
+        # Blinded SEALED mode: trial-decapsulate wraps and match per-message unlinkable tag.
+        for candidate in enc_header.recipients:
+            if len(candidate.recipient_key_id) != 32:
+                continue
+            try:
+                ss = xwing_decap_fn(candidate.xwing_ciphertext)
+            except Exception:
+                continue
+            if len(ss) == 32 and hmac.compare_digest(
+                compute_sealed_recipient_tag(ss, expected_aad),
+                candidate.recipient_key_id,
+            ):
+                matching_wrap = candidate
+                shared_secret = ss
+                break
+        if matching_wrap is None or shared_secret is None:
+            raise MessageProtocolError("no matching RecipientWrap for recipient_key_id")
+    else:
+        if recipient_key_id is None:
+            raise MessageProtocolError("recipient_key_id and xwing_decap_fn are required to decrypt PRIVATE/SEALED")
         raise MessageProtocolError("no matching RecipientWrap for recipient_key_id")
 
-    shared_secret = xwing_decap_fn(matching_wrap.xwing_ciphertext)
     kek = derive_xwing_wrap_kek(
         shared_secret,
         expected_aad,
         matching_wrap.recipient_key_id,
-        kdf_info=enc_header.kdf_info or DOMAIN_XWING_WRAP_INFO.decode("ascii"),
+        kdf_info=kdf_info,
     )
     cek = xchacha20_poly1305_decrypt(kek, matching_wrap.wrap_nonce, matching_wrap.wrapped_cek, expected_aad)
+    if enc_header.cek_commitment:
+        expected_commit = compute_cek_commitment(cek, expected_aad)
+        if len(enc_header.cek_commitment) != 32 or not hmac.compare_digest(enc_header.cek_commitment, expected_commit):
+            raise MessageProtocolError("XWingEncryptionHeader.cek_commitment mismatch")
+    elif require_cek_commitment:
+        raise MessageProtocolError("XWingEncryptionHeader.cek_commitment missing")
     plaintext_body = xchacha20_poly1305_decrypt(cek, enc_header.aead_nonce, envelope.body_bytes, expected_aad)
     return OpenedEnvelopeResult(
         envelope=envelope,

@@ -422,6 +422,145 @@ async function testKeyBindingIsSignedByTheNamedAccount() {
   await assert.rejects(() => mp.verifyMessageKeyBinding(tampered), /signature invalid/);
 }
 
+async function testCekCommitmentBlindedSealedAndEpochRotation() {
+  const { mlDsa65, xwing } = await mp.loadPqModules();
+  const sender = mlDsa65.keygen(crypto.randomBytes(32));
+  const senderAddr = mp.deriveAccountAddress(sender.publicKey);
+  const bob = await mp.generateRotatableXWingKeypair();
+  const eve = await mp.generateRotatableXWingKeypair();
+
+  // 1) SEALED envelope emits 32B cek_commitment and blinded unlinkable recipient tags
+  const header = {
+    protocol_version: 1,
+    chain_id: 'postfiat-devnet-2',
+    sender_account: senderAddr,
+    created_at_unix_ms: 1764201600000,
+    kind: mp.ContentKind.CHAT,
+    visibility: mp.Visibility.SEALED,
+    cipher_suite: mp.CipherSuite.XWING_XCHACHA20_POLY1305,
+    body_encoding: mp.BodyEncoding.PROTOBUF,
+    schema_id: mp.SCHEMA_ID.TEXT_V1,
+    schema_name: 'pf.msg.text.v1',
+  };
+  const sealed = await mp.sealEnvelope({
+    header,
+    bodyPlaintext: Buffer.from('js-blinded-sealed-hello'),
+    senderPubkey: sender.publicKey,
+    senderSecretKey: sender.secretKey,
+    recipients: [{ xwingPublicKey: bob.publicKey, account: 'pf_ignored' }],
+  });
+  const encHdr = mp.decodeXWingEncryptionHeader(sealed.envelope.encryption_header_bytes);
+  assert.equal(encHdr.cek_commitment.length, 32);
+  for (const w of encHdr.recipients) {
+    assert.notDeepEqual(w.recipient_key_id, bob.keyId);
+    assert.equal(w.recipient_account, '');
+  }
+
+  // Bob opens blinded SEALED envelope with real X-Wing trial-decapsulation
+  const opened = await mp.openEnvelope(sealed.envelopeBytes, {
+    expectedCidBin: sealed.cidBin,
+    expectedChainId: 'postfiat-devnet-2',
+    expectedTxSender: senderAddr,
+    recipientKeyId: bob.keyId,
+    recipientXWingSecretKey: bob.secretKey,
+    requireCekCommitment: true,
+  });
+  assert.equal(opened.plaintextBody.toString('utf8'), 'js-blinded-sealed-hello');
+
+  // Eve cannot open blinded SEALED envelope
+  await assert.rejects(
+    () =>
+      mp.openEnvelope(sealed.envelopeBytes, {
+        expectedCidBin: sealed.cidBin,
+        recipientKeyId: eve.keyId,
+        recipientXWingSecretKey: eve.secretKey,
+      }),
+    /no matching RecipientWrap/
+  );
+
+  // 2) Key-commitment negative control: malicious sender wraps evil CEK while header commits to real CEK
+  const realCek = crypto.randomBytes(32);
+  const evilCek = crypto.randomBytes(32);
+  const hdrBytes = mp.encodeMessageHeader(header);
+  const aad = mp.computeAadContext('postfiat-devnet-2', hdrBytes, 0);
+  const bodyNonce = crypto.randomBytes(24);
+  const bodyCt = await mp.xchacha20Poly1305Encrypt(evilCek, bodyNonce, Buffer.from('evil-msg'), aad);
+  const encap = xwing.encapsulate(bob.publicKey);
+  const wrapNonce = crypto.randomBytes(24);
+  const kek = mp.deriveXWingWrapKek(Buffer.from(encap.sharedSecret), aad, bob.keyId);
+  const evilWrap = {
+    recipient_key_id: bob.keyId,
+    recipient_account: '',
+    xwing_ciphertext: Buffer.from(encap.cipherText),
+    wrap_nonce: wrapNonce,
+    wrapped_cek: await mp.xchacha20Poly1305Encrypt(kek, wrapNonce, evilCek, aad),
+  };
+  const forgedEncHdrBytes = mp.encodeXWingEncryptionHeader({
+    cipher_suite: mp.CipherSuite.XWING_XCHACHA20_POLY1305,
+    aead_nonce: bodyNonce,
+    aad_context: aad,
+    chunk_index: 0,
+    kdf_info: mp.DOMAIN_XWING_WRAP_INFO,
+    recipients: [evilWrap],
+    cek_commitment: mp.computeCekCommitment(realCek, aad),
+  });
+  const preimage = mp.envelopeSigningPreimage(1, hdrBytes, forgedEncHdrBytes, bodyCt);
+  const forgedEnv = mp.encodeEnvelope({
+    version: 1,
+    header_bytes: hdrBytes,
+    encryption_header_bytes: forgedEncHdrBytes,
+    body_bytes: bodyCt,
+    signature_algorithm: mp.SignatureAlgorithm.ML_DSA_65,
+    sender_pubkey: Buffer.from(sender.publicKey),
+    signature: Buffer.from(mlDsa65.sign(preimage, sender.secretKey)),
+  });
+  await assert.rejects(
+    () =>
+      mp.openEnvelope(forgedEnv, {
+        recipientKeyId: bob.keyId,
+        recipientXWingSecretKey: bob.secretKey,
+        requireCekCommitment: true,
+      }),
+    /cek_commitment mismatch/
+  );
+
+  // 3) Non-seed epoch rotation & monotonic anti-downgrade verification
+  const bootstrap = await mp.signMessageKeyBinding({
+    chain_id: 'postfiat-devnet-2',
+    account: senderAddr,
+    xwing_public_key: bob.publicKey,
+    created_at_unix_ms: 1764201600000,
+    key_epoch: 0,
+    account_pubkey: sender.publicKey,
+    account_secret_key: sender.secretKey,
+  });
+  const rotated = await mp.rotateMessageKeyBinding({
+    chain_id: 'postfiat-devnet-2',
+    account: senderAddr,
+    new_xwing_public_key: eve.publicKey,
+    previous_key_epoch: 0,
+    created_at_unix_ms: 1764201700000,
+    account_pubkey: sender.publicKey,
+    account_secret_key: sender.secretKey,
+  });
+  assert.equal(rotated.binding.key_epoch, 1);
+  const v1 = await mp.verifyMessageKeyBinding(rotated.bytes, {
+    expectedChainId: 'postfiat-devnet-2',
+    expectedAccount: senderAddr,
+    minKnownEpoch: 1,
+  });
+  assert.equal(v1.key_epoch, 1);
+  await assert.rejects(
+    () =>
+      mp.verifyMessageKeyBinding(bootstrap.bytes, {
+        expectedChainId: 'postfiat-devnet-2',
+        expectedAccount: senderAddr,
+        minKnownEpoch: 1,
+      }),
+    /key_epoch rollback rejected/
+  );
+}
+
 async function main() {
   const extension = Buffer.from('f00101', 'hex');
   for (const decode of [mp.decodeEnvelope, mp.decodeMessageKeyBinding, mp.decodeX402PaymentRequired,
@@ -433,7 +572,8 @@ async function main() {
   testCanonicalVectors();
   await testRealPqRoundtrips();
   await testKeyBindingIsSignedByTheNamedAccount();
-  console.log('test_message_protocol: all C1 vectors and real PQ (ML-DSA-65 + X-Wing + XChaCha20-Poly1305) tests passed');
+  await testCekCommitmentBlindedSealedAndEpochRotation();
+  console.log('test_message_protocol: all C1 vectors, real PQ, cek_commitment, blinded SEALED & epoch-rotation tests passed');
 }
 
 main().catch((err) => {

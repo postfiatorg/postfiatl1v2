@@ -483,6 +483,164 @@ class MessageProtocolVectorTests(unittest.TestCase):
         self.assertEqual(parsed["memo_data"], C1_VECTORS["V1_POINTER_V5_PUBLIC_TEXT"]["memo_data_hex"])
         self.assertEqual(parsed["aad"], C1_VECTORS["V5_ENVELOPE_PRIVATE_XWING_REWARD"]["aad_context_hex"])
 
+    def test_cek_commitment_blinded_sealed_and_epoch_rotation(self) -> None:
+        sender_pk = b"\x31" * mp.ML_DSA_65_PUBKEY_BYTES
+        sender_addr = mp.derive_account_address(sender_pk)
+        bob_pk = b"\x41" * mp.XWING_PUBKEY_BYTES
+        bob_static_id = mp.compute_recipient_key_id(bob_pk)
+        eve_pk = b"\x51" * mp.XWING_PUBKEY_BYTES
+
+        def fake_encap(pk: bytes) -> tuple[bytes, bytes]:
+            ct = hashlib.sha256(b"ct:" + pk).digest() * 35  # 1120 B
+            ss = hashlib.sha256(b"ss:" + pk).digest()
+            return ct, ss
+
+        def decap_for(owner_pk: bytes):
+            expected_ct = hashlib.sha256(b"ct:" + owner_pk).digest() * 35
+            expected_ss = hashlib.sha256(b"ss:" + owner_pk).digest()
+
+            def _decap(ct: bytes) -> bytes:
+                return expected_ss if ct == expected_ct else hashlib.sha256(b"wrong:" + ct).digest()
+
+            return _decap
+
+        sig_fn = lambda preimage: hashlib.sha256(preimage).digest() + b"\x00" * (mp.ML_DSA_65_SIGNATURE_BYTES - 32)
+        ver_fn = lambda preimage, sig, pk: sig == sig_fn(preimage) and pk == sender_pk
+
+        # 1) SEALED envelope uses blinded per-message recipient tag + 32B cek_commitment
+        sealed_hdr = mp.MessageHeader(
+            protocol_version=1,
+            chain_id="postfiat-devnet-2",
+            sender_account=sender_addr,
+            created_at_unix_ms=1764201600000,
+            kind=mp.ContentKind.CHAT,
+            visibility=mp.Visibility.SEALED,
+            cipher_suite=mp.CipherSuite.XWING_XCHACHA20_POLY1305,
+            body_encoding=mp.BodyEncoding.PROTOBUF,
+            schema_id=mp.SCHEMA_ID_TEXT_V1,
+            schema_name="pf.msg.text.v1",
+        )
+        sealed = mp.seal_envelope(
+            header=sealed_hdr,
+            body_plaintext=b"blinded-sealed-hello",
+            sender_pubkey=sender_pk,
+            sign_fn=sig_fn,
+            recipients=[mp.RecipientSpec(xwing_public_key=bob_pk, account="pf_ignored")],
+            xwing_encap_fn=fake_encap,
+        )
+        enc_hdr = mp.XWingEncryptionHeader.decode(sealed.envelope.encryption_header_bytes)
+        self.assertEqual(len(enc_hdr.cek_commitment), 32)
+        # Static bob_static_id MUST NOT appear on wire in blinded SEALED mode
+        for w in enc_hdr.recipients:
+            self.assertNotEqual(w.recipient_key_id, bob_static_id)
+            self.assertEqual(w.recipient_account, "")
+
+        # Bob opens blinded SEALED envelope without matching static key_id
+        opened = mp.open_envelope(
+            sealed.envelope_bytes,
+            verify_signature_fn=ver_fn,
+            expected_cid_bin=sealed.cid_bin,
+            expected_chain_id="postfiat-devnet-2",
+            expected_tx_sender=sender_addr,
+            recipient_key_id=bob_static_id,
+            xwing_decap_fn=decap_for(bob_pk),
+            require_cek_commitment=True,
+        )
+        self.assertEqual(opened.plaintext_body, b"blinded-sealed-hello")
+
+        # Eve cannot open blinded SEALED envelope
+        with self.assertRaisesRegex(mp.MessageProtocolError, "no matching RecipientWrap"):
+            mp.open_envelope(
+                sealed.envelope_bytes,
+                verify_signature_fn=ver_fn,
+                expected_cid_bin=sealed.cid_bin,
+                recipient_key_id=mp.compute_recipient_key_id(eve_pk),
+                xwing_decap_fn=decap_for(eve_pk),
+            )
+
+        # 2) Key-commitment negative control: malicious sender wraps wrong CEK to recipient
+        real_cek = b"\xaa" * 32
+        evil_cek = b"\xbb" * 32
+        aad = mp.compute_aad_context("postfiat-devnet-2", sealed_hdr.encode(), 0)
+        body_nonce = b"\x11" * 24
+        body_ct = mp.xchacha20_poly1305_encrypt(evil_cek, body_nonce, b"evil-branch", aad)
+        bob_ct, bob_ss = fake_encap(bob_pk)
+        kek = mp.derive_xwing_wrap_kek(bob_ss, aad, bob_static_id)
+        w_nonce = b"\x22" * 24
+        evil_wrap = mp.RecipientWrap(
+            recipient_key_id=bob_static_id,
+            recipient_account="",
+            xwing_ciphertext=bob_ct,
+            wrap_nonce=w_nonce,
+            wrapped_cek=mp.xchacha20_poly1305_encrypt(kek, w_nonce, evil_cek, aad),
+        )
+        # Signed encryption header commits to real_cek, while bob gets evil_cek
+        forged_enc_hdr = mp.XWingEncryptionHeader(
+            cipher_suite=mp.CipherSuite.XWING_XCHACHA20_POLY1305,
+            aead_nonce=body_nonce,
+            aad_context=aad,
+            chunk_index=0,
+            kdf_info=mp.DOMAIN_XWING_WRAP_INFO.decode("ascii"),
+            recipients=(evil_wrap,),
+            cek_commitment=mp.compute_cek_commitment(real_cek, aad),
+        ).encode()
+        hdr_bytes = sealed_hdr.encode()
+        preimage = mp.envelope_signing_preimage(1, hdr_bytes, forged_enc_hdr, body_ct)
+        forged_env = mp.Envelope(
+            version=1,
+            header_bytes=hdr_bytes,
+            encryption_header_bytes=forged_enc_hdr,
+            body_bytes=body_ct,
+            signature_algorithm=mp.SignatureAlgorithm.ML_DSA_65,
+            sender_pubkey=sender_pk,
+            signature=sig_fn(preimage),
+        ).encode()
+        with self.assertRaisesRegex(mp.MessageProtocolError, "cek_commitment mismatch"):
+            mp.open_envelope(
+                forged_env,
+                verify_signature_fn=ver_fn,
+                recipient_key_id=bob_static_id,
+                xwing_decap_fn=decap_for(bob_pk),
+                require_cek_commitment=True,
+            )
+
+        # 3) Forward-secrecy epoch rotation & monotonic anti-downgrade check
+        b0 = mp.create_message_key_binding(
+            chain_id="postfiat-devnet-2",
+            account=sender_addr,
+            xwing_public_key=bob_pk,
+            created_at_unix_ms=1764201600000,
+            key_epoch=0,
+            account_pubkey=sender_pk,
+            sign_fn=sig_fn,
+        )
+        b1 = mp.rotate_message_key_binding(
+            chain_id="postfiat-devnet-2",
+            account=sender_addr,
+            new_xwing_public_key=eve_pk,
+            previous_key_epoch=0,
+            created_at_unix_ms=1764201700000,
+            account_pubkey=sender_pk,
+            sign_fn=sig_fn,
+        )
+        self.assertEqual(b1.key_epoch, 1)
+        verified_b1 = mp.verify_message_key_binding(
+            b1.encode(),
+            verify_signature_fn=ver_fn,
+            expected_chain_id="postfiat-devnet-2",
+            expected_account=sender_addr,
+            min_known_epoch=1,
+        )
+        self.assertEqual(verified_b1.key_epoch, 1)
+        with self.assertRaisesRegex(mp.MessageProtocolError, "key_epoch rollback rejected"):
+            mp.verify_message_key_binding(
+                b0.encode(),
+                verify_signature_fn=ver_fn,
+                expected_chain_id="postfiat-devnet-2",
+                expected_account=sender_addr,
+                min_known_epoch=1,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
