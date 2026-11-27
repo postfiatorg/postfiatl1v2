@@ -18,8 +18,8 @@ head moved between two reads that straddle midnight, or two reads are more than
 incomplete. Nothing is inferred for the time before the observer started.
 
 How a vote is counted: a validator is credited for a block when its vote is in
-the block's precommit or prepare certificate, or when the proposer's vote
-record for that block lists it as accepted (also after the quorum closed).
+the block's precommit or prepare certificate. Unsigned late-vote reports are
+kept for diagnostics. A certificate shortfall alone cannot authorize a penalty.
 
 Signing and verifying are done by `postfiat-node` (observer-uptime-sign,
 observer-uptime-bundle, observer-uptime-verify).
@@ -283,7 +283,7 @@ def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now:
 
 
 def read_vote_records(state: dict[str, Any], sources: list[Source], today: dt.date) -> None:
-    """Add the votes the certificates left out. A source holds records only for the blocks it proposed."""
+    """Collect diagnostic claims about late votes without changing certificate counts."""
     wanted: dict[int, dict[str, Any]] = {}
     for date_text, day in state["days"].items():
         if (today - contract.parse_date(date_text)).days > VOTE_RECORD_RETRY_DAYS:
@@ -485,9 +485,29 @@ def cmd_run(args: argparse.Namespace) -> int:
     for path in (state_file, output):
         refuse_validator_data_dir(path.parent)
     now = parse_now(args.now)
-    state = poll(load_state(state_file), [Source(spec) for spec in args.source], args.network, now)
+    previous = load_state(state_file)
+    state = poll(previous, [Source(spec) for spec in args.source], args.network, now)
+    if bool(args.bootstrap_feed) != bool(args.bootstrap_keyset):
+        raise ObserverError("bootstrap requires a feed and its independently pinned keyset")
+    if previous is None and args.bootstrap_feed:
+        # Verify exactly the bytes from which we import lifecycle metadata.
+        raw = Path(args.bootstrap_feed).read_bytes()
+        feed = json.loads(raw)
+        if feed["chain"] != state["chain"] or feed["quorum_policy"]["observer_keyset_id"] != args.keyset_id:
+            raise ObserverError("bootstrap feed differs from observed chain or configured generation")
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = Path(tmp) / "checkpoint.json"
+            snapshot.write_bytes(raw)
+            verified = subprocess.run([args.node_bin, "observer-uptime-verify", "--feed-file", str(snapshot),
+                                      "--keyset-file", args.bootstrap_keyset, "--now-unix", str(int(now.timestamp()))],
+                                      capture_output=True, text=True, check=False)
+        if verified.returncode or json.loads(verified.stdout)["indeterminate"]:
+            raise ObserverError("bootstrap checkpoint failed quorum verification")
+        for row in feed["validators"]:
+            if state["registry"].get(row["validator_id"]) == row["ml_dsa_public_key"]:
+                state["validators"][row["validator_id"]] = {k: row[k] for k in FACT_KEYS if k != "days"}
     rows = build_rows(state, now)
-    if rows:
+    if state["last_height"] > 0:
         envelope = attest(state, rows, args.keyset_id, Path(args.key_file), args.node_bin, now)
         atomic_write_json(output, envelope)
     # The state is written last: a run that failed above is repeated from the same state.
@@ -540,12 +560,14 @@ def main(argv: list[str] | None = None) -> int:
 
     run = sub.add_parser("run", help="read the chain once and write one signed attestation")
     run.add_argument("--source", action="append", required=True,
-                     help="read-only RPC: tcp://host:port or https://host/rpc. Repeat for every validator whose vote records should count; the one furthest ahead gives the blocks")
+                     help="read-only RPC: tcp://host:port or https://host/rpc. Repeat for sources of diagnostic vote records; the one furthest ahead gives the blocks")
     run.add_argument("--network", required=True, choices=["l1-devnet", "l1-testnet", "l1-mainnet"])
     run.add_argument("--keyset-id", required=True, help="keyset_id of the pinned observer keyset this observer is in")
     run.add_argument("--key-file", required=True, help="this observer's key file (observer-key-create)")
     run.add_argument("--state-file", required=True)
     run.add_argument("--output", required=True, help="where the signed attestation is written")
+    run.add_argument("--bootstrap-feed", help="fresh quorum-signed checkpoint for a first run")
+    run.add_argument("--bootstrap-keyset", help="independently pinned keyset for the bootstrap checkpoint")
     run.add_argument("--node-bin", default="postfiat-node")
     run.add_argument("--now", help=argparse.SUPPRESS)  # tests
     run.set_defaults(handler=cmd_run)

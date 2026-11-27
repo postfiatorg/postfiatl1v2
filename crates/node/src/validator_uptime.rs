@@ -30,10 +30,7 @@ pub const OBSERVER_KEY_PURPOSE: &str = "validator-uptime-observer";
 
 pub const UPTIME_METRIC_VERSION: &str = "certificate-votes-observer-brackets-v2";
 /// A vote counts when any one of these shows it.
-pub const UPTIME_CREDIT_SOURCES: [&str; 2] = [
-    "precommit_certificate",
-    "prepare_certificate",
-];
+pub const UPTIME_CREDIT_SOURCES: [&str; 2] = ["precommit_certificate", "prepare_certificate"];
 pub const UPTIME_TIME_BASIS: &str = "observer_brackets";
 pub const UPTIME_MAX_OBSERVATION_GAP_SECONDS: u64 = 900;
 pub const UPTIME_EVALUATION_HORIZON_DAYS: u32 = 30;
@@ -525,7 +522,9 @@ pub fn derive_claim(
     let ramp_in = within_days_after(facts.first_active_date.as_ref(), window_end_day)?;
     let in_recovery = within_days_after(facts.recovery_floor_date.as_ref(), window_end_day)?;
     let liveness_met = facts.registry_active
-        && (observed_days == 0 || (observed_days < UPTIME_MIN_OBSERVED_DAYS && !ramp_in && !in_recovery) || mean.is_some_and(|mean| mean >= UPTIME_LIVENESS_THRESHOLD_BPS));
+        && (observed_days == 0
+            || (observed_days < UPTIME_MIN_OBSERVED_DAYS && !ramp_in && !in_recovery)
+            || mean.is_some_and(|mean| mean >= UPTIME_LIVENESS_THRESHOLD_BPS));
 
     let (reason, hub, reward, removal) = match facts.access_state.as_str() {
         "pending" => ("awaiting_ratification", false, false, false),
@@ -886,10 +885,8 @@ fn check_attestation(
     if observed_at < window_end || observed_at >= window_end + SECONDS_PER_DAY {
         return Err("observed_at is outside the evaluation day of this window".to_string());
     }
-    if attestation.finalized_height == 0 || attestation.validator_claims.is_empty() {
-        return Err(
-            "an attestation names a finalized height and at least one validator".to_string(),
-        );
+    if attestation.finalized_height == 0 {
+        return Err("an attestation names a positive finalized height".to_string());
     }
     let mut keys = BTreeSet::new();
     for pair in attestation.validator_claims.windows(2) {

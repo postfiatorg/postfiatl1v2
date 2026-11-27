@@ -203,6 +203,19 @@ pub fn run_rpc_http_edge_with_listener(
     options: RpcHttpEdgeOptions,
     listener: Option<TcpListener>,
 ) -> Result<(), String> {
+    serve_with_proxy(
+        options,
+        listener,
+        std::env::var("POSTFIAT_RPC_EDGE_PROXY_TOKEN").ok(),
+    )
+}
+
+fn serve_with_proxy(
+    options: RpcHttpEdgeOptions,
+    listener: Option<TcpListener>,
+    proxy_token: Option<String>,
+) -> Result<(), String> {
+    let proxy_token = Arc::new(proxy_token.filter(|token| !token.is_empty()));
     if !is_loopback(&options.listen_host) {
         return Err(format!(
             "rpc_http_edge_bind_forbidden: the edge listens on loopback only (got `{}`); put a TLS proxy in front of it",
@@ -239,11 +252,17 @@ pub fn run_rpc_http_edge_with_listener(
             write_error(&mut stream, 503, "edge_busy", "too many connections");
         } else {
             let worker_active = Arc::clone(&active);
+            let proxy_token = Arc::clone(&proxy_token);
             let worker_options = Arc::clone(&options);
             let worker_limiter = Arc::clone(&limiter);
             let worker = std::thread::spawn(move || {
                 let mut stream = stream;
-                handle_connection(&mut stream, &worker_options, &worker_limiter);
+                handle_connection(
+                    &mut stream,
+                    &worker_options,
+                    &worker_limiter,
+                    proxy_token.as_deref(),
+                );
                 worker_active.fetch_sub(1, Ordering::SeqCst);
             });
             if options.max_requests.is_some() {
@@ -273,21 +292,52 @@ enum ReadError {
     Closed,
 }
 
-fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, ReadError> {
+fn read_http_request(
+    stream: &mut TcpStream,
+    timeout: Duration,
+    proxy_token: Option<&str>,
+) -> Result<HttpRequest, ReadError> {
+    let direct = stream
+        .peer_addr()
+        .map_err(|_| ReadError::Closed)?
+        .ip()
+        .to_string();
+    let deadline = std::time::Instant::now()
+        .checked_add(timeout)
+        .ok_or(ReadError::Closed)?;
+    let mut reader = BufReader::new(&mut *stream);
+    let set_remaining = |reader: &BufReader<&mut TcpStream>| -> Result<(), ReadError> {
+        let remaining = deadline
+            .checked_duration_since(std::time::Instant::now())
+            .ok_or(ReadError::Closed)?;
+        reader
+            .get_ref()
+            .set_read_timeout(Some(remaining))
+            .map_err(|_| ReadError::Closed)
+    };
     let mut head = Vec::new();
-    let mut byte = [0_u8; 1];
     while !head.ends_with(b"\r\n\r\n") {
-        match stream.read(&mut byte) {
-            Ok(1) => head.push(byte[0]),
-            _ => return Err(ReadError::Closed),
+        set_remaining(&reader)?;
+        let buf = reader.fill_buf().map_err(|_| ReadError::Closed)?;
+        if buf.is_empty() {
+            return Err(ReadError::Closed);
         }
-        if head.len() > MAX_HEADER_BYTES {
-            return Err(ReadError::Status(
-                431,
-                "headers_too_large",
-                "request headers exceed 8 KiB",
-            ));
+        let mut used = 0;
+        for &byte in buf {
+            head.push(byte);
+            used += 1;
+            if head.len() > MAX_HEADER_BYTES {
+                return Err(ReadError::Status(
+                    431,
+                    "headers_too_large",
+                    "request headers exceed 8 KiB",
+                ));
+            }
+            if head.ends_with(b"\r\n\r\n") {
+                break;
+            }
         }
+        reader.consume(used);
     }
     let head = String::from_utf8(head)
         .map_err(|_| ReadError::Status(400, "bad_request", "request head is not UTF-8"))?;
@@ -308,7 +358,8 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, ReadError> {
         return Err(ReadError::Status(400, "bad_request", "HTTP/1.x only"));
     }
     let mut content_length: Option<usize> = None;
-    let mut client = "direct".to_string();
+    let mut forwarded = None;
+    let mut trusted = false;
     for line in lines {
         let Some((name, value)) = line.split_once(':') else {
             continue;
@@ -321,15 +372,14 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, ReadError> {
                 "send Content-Length, not a transfer encoding",
             ));
         }
+        if name == "x-postfiat-proxy-token" {
+            trusted = proxy_token.is_some_and(|expected| expected == value.trim());
+        }
         if name == "x-forwarded-for" {
-            if let Some(last) = value
+            forwarded = value
                 .rsplit(',')
                 .next()
-                .map(str::trim)
-                .filter(|v| !v.is_empty())
-            {
-                client = last.chars().take(64).collect();
-            }
+                .and_then(|address| address.trim().parse::<std::net::IpAddr>().ok());
         }
         if name == "content-length" {
             let parsed = value.trim().parse::<usize>().map_err(|_| {
@@ -354,9 +404,20 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, ReadError> {
         ));
     }
     let mut body = vec![0_u8; length];
-    stream
-        .read_exact(&mut body)
-        .map_err(|_| ReadError::Closed)?;
+    let mut offset = 0;
+    while offset < length {
+        set_remaining(&reader)?;
+        let count = reader
+            .read(&mut body[offset..])
+            .map_err(|_| ReadError::Closed)?;
+        if count == 0 {
+            return Err(ReadError::Closed);
+        }
+        offset += count;
+    }
+    let client = forwarded
+        .filter(|_| trusted)
+        .map_or(direct, |ip| ip.to_string());
     Ok(HttpRequest {
         method: method.to_string(),
         path: path.split('?').next().unwrap_or_default().to_string(),
@@ -420,8 +481,13 @@ fn handle_connection(
     stream: &mut TcpStream,
     options: &RpcHttpEdgeOptions,
     limiter: &std::sync::Mutex<RateLimiter>,
+    proxy_token: Option<&str>,
 ) {
-    let request = match read_http_request(stream) {
+    let request = match read_http_request(
+        stream,
+        Duration::from_millis(options.timeout_ms),
+        proxy_token,
+    ) {
         Ok(request) => request,
         Err(ReadError::Status(status, code, message)) => {
             return write_error(stream, status, code, message)
@@ -441,7 +507,7 @@ fn handle_connection(
             write_response(stream, if ready { 200 } else { 503 }, body.as_bytes());
         }
         ("POST", "/rpc") => {
-            let allowed = limiter.lock().map_or(true, |mut limiter| {
+            let allowed = limiter.lock().is_ok_and(|mut limiter| {
                 limiter.allow(
                     &request.client,
                     options.rate_per_second,
@@ -742,7 +808,11 @@ mod tests {
             429,
             "a spoofed first entry buys nothing"
         );
-        assert_eq!(call("203.0.113.8"), 200);
+        assert_eq!(
+            call("203.0.113.8"),
+            429,
+            "an unauthenticated direct client shares the socket peer budget"
+        );
     }
 
     #[test]

@@ -131,7 +131,7 @@ A removal proposal is only made possible here. The validators still ratify it ex
 
 ### 5.2 Active
 
-An observer without verified activation history uses a null activation date and all 30 window days. Cold start gives no ramp-in. Insufficient observations preserve current access and hold new admissions, restorations and credits.
+An observer without verified activation history uses a null activation date and all 30 window days. Cold start gives no ramp-in. An operator can restore lifecycle dates from a fresh quorum-signed checkpoint verified against the pinned generation and the observed chain. Each observer collects its own new daily evidence. When it withholds all validator rows it publishes a signed empty claim list, superseding the previous observation. Insufficient observations preserve current access and hold new admissions, restorations and credits.
 
 A validator becomes `active` the day it is ratified; `first_active_date` is that UTC day. It stays active while `liveness_met` holds. The reason says which case applies, in this order:
 

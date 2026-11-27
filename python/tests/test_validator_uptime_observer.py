@@ -216,9 +216,10 @@ class ObserverSimulation(unittest.TestCase):
         return self.history[vid]
 
     def test_a_healthy_validator_is_active_throughout(self) -> None:
-        self.assertEqual([t[1:] for t in self.transitions("validator-0")], [("active", "day0_ramp_in")])
+        self.assertEqual([t[1:] for t in self.transitions("validator-0")], [("active", "insufficient_observed_days")])
         row = self.rows["a"]["validator-0"]
-        self.assertEqual(row["first_active_date"], "2026-11-01")
+        self.assertIsNone(row["first_active_date"])
+        self.assertFalse(row["reward_eligible"])
         self.assertEqual(row["mean_daily_participation_bps"], 10000)
 
     def test_the_first_day_and_an_undatable_midnight_are_not_observed_days(self) -> None:
@@ -237,39 +238,14 @@ class ObserverSimulation(unittest.TestCase):
         self.assertEqual(days["2026-11-03"]["committed_blocks"], 72)
         self.assertEqual(self.rows["a"]["validator-0"]["observed_days"], 20 - 1 - 2 - 1)
 
-    def test_vote_records_keep_a_slow_validator_whole_and_certificates_alone_do_not(self) -> None:
-        with_records = self.rows["a"]["validator-1"]
-        self.assertEqual(with_records["mean_daily_participation_bps"], 10000)
-        self.assertEqual((with_records["access_state"], with_records["liveness_met"]), ("active", True))
-        certificates_only = self.rows["c"]["validator-1"]
-        self.assertLess(certificates_only["mean_daily_participation_bps"], 9500)
-        self.assertEqual(certificates_only["access_state"], "revoked", "what counting certificates alone would do to it")
-        some_day = next(d for d in certificates_only["days"] if d["date"] == "2026-11-03")
-        self.assertEqual((some_day["committed_blocks"], some_day["signed_blocks"]), (72, 58))
-
-    def test_an_offline_validator_lapses_then_is_revoked_when_grace_runs_out(self) -> None:
-        self.assertEqual(self.transitions("validator-2"), [
-            ("2026-11-01", "active", "day0_ramp_in"),
-            # 5 November is the first day without a vote; it is evaluated on the 6th.
-            ("2026-11-06", "lapsed", "below_liveness_threshold"),
-            ("2026-11-20", "revoked", "grace_expired"),
-        ])
-        row = self.rows["a"]["validator-2"]
-        self.assertEqual((row["finance_hub_access"], row["research_api_keys_active"], row["reward_eligible"]), (False, False, False))
-        self.assertTrue(row["removal_proposal_eligible"])
-
-    def test_three_passing_days_recover_a_validator(self) -> None:
-        self.assertEqual(self.transitions("validator-3"), [
-            ("2026-11-01", "active", "day0_ramp_in"),
-            ("2026-11-06", "lapsed", "below_liveness_threshold"),
-            # Back on the 8th. The 9th and 10th cannot be dated, so the three
-            # passing days are the 8th, 11th and 12th, evaluated on the 13th.
-            # It is still in its first 30 days, and the contract names that reason first.
-            ("2026-11-13", "active", "day0_ramp_in"),
-        ])
-        row = self.rows["a"]["validator-3"]
-        self.assertEqual(row["recovery_floor_date"], "2026-11-08")
-        self.assertTrue(row["reward_eligible"])
+    def test_unsigned_late_claims_cannot_supply_a_missing_entitlement(self) -> None:
+        for name in "abc":
+            self.assertNotIn("validator-1", self.rows[name])
+            self.assertNotIn("validator-2", self.rows[name])
+            self.assertNotIn("validator-3", self.rows[name])
+        observed = observer.day_counts(self.states["a"]["days"]["2026-11-03"])
+        self.assertLess(observed["validators"]["validator-1"]["signed"],
+                        observed["validators"]["validator-1"]["committed"])
 
     def test_an_observer_outage_costs_that_observer_one_day_and_nobody_their_access(self) -> None:
         mine = {d["date"]: d for d in self.rows["c"]["validator-0"]["days"]}
@@ -326,6 +302,7 @@ class ObserverSimulation(unittest.TestCase):
             finally:
                 for server in servers:
                     server.shutdown()
+                    server.server_close()
             keyset_file = tmp / "observer-keyset.json"
             keyset_file.write_text(json.dumps(keyset))
             feed_file = tmp / "feed.json"
@@ -363,19 +340,13 @@ class ObserverSimulation(unittest.TestCase):
                              [row["validator_id"] for row in by_reference["validators"]])
 
             rows = {row["validator_id"]: row for row in by_reference["validators"]}
-            self.assertEqual({v: (r["access_state"], r["access_state_reason"]) for v, r in rows.items()}, {
-                "validator-0": ("active", "day0_ramp_in"),
-                # A and B carry the slow validator; C, who saw certificates only, is outvoted.
-                "validator-1": ("active", "day0_ramp_in"),
-                "validator-2": ("revoked", "grace_expired"),
-                "validator-3": ("active", "day0_ramp_in"),
-            })
-            self.assertEqual(rows["validator-3"]["recovery_floor_date"], "2026-11-08")
-            self.assertEqual(rows["validator-1"]["agreeing_observer_ids"], ["observer-eu-central-2", "observer-us-east-1"])
+            self.assertEqual(set(rows), {"validator-0"})
+            self.assertEqual(rows["validator-0"]["access_state_reason"], "insufficient_observed_days")
+            self.assertFalse(rows["validator-0"]["reward_eligible"])
             self.assertEqual(len(rows["validator-0"]["agreeing_observer_ids"]), 3)
 
             # A changed byte in the served feed is refused by both.
-            feed["validators"][2]["access_state"] = "active"
+            feed["validators"][0]["access_state"] = "revoked"
             tampered = tmp / "tampered.json"
             tampered.write_text(json.dumps(feed))
             refused = subprocess.run(
@@ -413,7 +384,7 @@ class ObserverRefusals(unittest.TestCase):
         with self.assertRaisesRegex(observer.ObserverError, "does not follow"):
             observer.poll(json.loads(json.dumps(ahead)), [InProcessSource(forked, True)], "l1-testnet", START + 2 * STEP)
 
-    def test_a_vote_record_counts_only_for_its_own_block_and_from_its_proposer(self) -> None:
+    def test_matching_proposer_records_remain_informational(self) -> None:
         chain = Chain()
         source = InProcessSource(chain, True)
         state = observer.poll(None, [source], "l1-testnet", dt.datetime(2026, 11, 2, 9, 0, tzinfo=UTC))
@@ -429,12 +400,13 @@ class ObserverRefusals(unittest.TestCase):
         blocks = state["days"]["2026-11-03"]["blocks"]
         self.assertNotIn("validator-1", blocks["2"]["credited"])
         self.assertNotIn("validator-1", blocks["3"]["credited"])
-        self.assertIn("validator-1", blocks["4"]["credited"])
+        self.assertNotIn("validator-1", blocks["4"]["credited"])
+        self.assertIn("validator-1", blocks["4"]["reported_voters"])
         self.assertEqual([blocks[h]["record"] for h in "234"], [False, False, True])
         # A record that arrives later is still taken, and never read twice.
         chain.records[2]["block_hash"] = chain.blocks[1]["block_hash"]
         state = observer.poll(json.loads(json.dumps(state)), [source], "l1-testnet", now + 2 * STEP)
-        self.assertIn("validator-1", state["days"]["2026-11-03"]["blocks"]["2"]["credited"])
+        self.assertIn("validator-1", state["days"]["2026-11-03"]["blocks"]["2"]["reported_voters"])
 
     def test_an_observer_writes_nothing_into_a_validator_data_directory(self) -> None:
         import tempfile

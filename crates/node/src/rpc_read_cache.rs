@@ -164,9 +164,10 @@ fn rpc_replica_lag_refusal(
     if !context.rpc_profile.is_replica() {
         return None;
     }
-    let local_height = rpc_serve_cached_status(&context.data_dir, &context.health_cache)
-        .ok()
-        .map(|(report, _)| report.block_height)?;
+    let local_height = match postfiat_storage::NodeStore::new(&context.data_dir).read_chain_tip() {
+        Ok(tip) => tip.height,
+        Err(_) => return Some(rpc_serve_error_response(request_id, "replica_lagging", "cannot read local replica tip")),
+    };
     match rpc_replica_lag(
         &context.data_dir,
         local_height,
@@ -195,6 +196,7 @@ fn rpc_replica_lag_refusal(
 
 #[derive(Debug, Clone)]
 struct RpcCachedReadEntry {
+    inserted_at: std::time::Instant,
     height: u64,
     approx_bytes: usize,
     response: RpcResponse,
@@ -220,7 +222,7 @@ impl RpcServeReadCache {
     ) -> Option<RpcResponse> {
         let key = (method.to_string(), canonical_params.to_string());
         if let Some(entry) = self.entries.get(&key) {
-            if entry.height == height {
+            if entry.height == height && entry.inserted_at.elapsed() < Duration::from_secs(2) {
                 self.hits = self.hits.saturating_add(1);
                 let mut response = entry.response.clone();
                 response.id = request_id.to_string();
@@ -260,6 +262,7 @@ impl RpcServeReadCache {
         self.entries.insert(
             key,
             RpcCachedReadEntry {
+                inserted_at: std::time::Instant::now(),
                 height,
                 approx_bytes,
                 response,

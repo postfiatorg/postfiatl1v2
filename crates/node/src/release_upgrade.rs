@@ -284,6 +284,8 @@ pub struct UpgradeJournalV1 {
     pub signer_guard_dir: String,
     /// Set from `backed_up` on.
     pub backup_root: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inventory_sha256: Option<String>,
     pub service_units: Vec<String>,
     pub exclude_paths: Vec<String>,
 }
@@ -405,7 +407,9 @@ impl UpgradeSystemHooks for LiveUpgradeSystemHooks {
                 let (flag, inline) = arg
                     .split_once('=')
                     .map_or((arg, None), |(flag, value)| (flag, Some(value)));
-                if flag == "--vote-dir" || flag.ends_with("-key-file") || flag == "--key-file" {
+                if matches!(flag, "--vote-dir" | "--key-file" | "--validator-key-dir")
+                    || flag.ends_with("-key-file")
+                {
                     let value = inline
                         .or_else(|| argv.next())
                         .ok_or("missing service key path")?;
@@ -1525,15 +1529,16 @@ fn create_pre_upgrade_backup(
         ));
     }
     let (backup_binary, backup_data_dir) = backup_paths(&snapshot_dir);
-    fs::create_dir_all(&snapshot_dir)
-        .map_err(|error| format!("create backup dir failed: {error}"))?;
-    // The backup belongs to the owner of the data directory and to nobody else.
+    fs::create_dir_all(backup_dir).map_err(|error| format!("create backup parent: {error}"))?;
+    let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&snapshot_dir, fs::Permissions::from_mode(0o700))
-            .map_err(|error| format!("chmod backup dir failed: {error}"))?;
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
     }
+    builder
+        .create(&snapshot_dir)
+        .map_err(|error| format!("create private snapshot: {error}"))?;
 
     let data_files = copy_chain_state_tree(data_dir, &backup_data_dir, &canonical_guard, excludes)
         .map_err(|error| format!("chain-state backup failed: {error}"))?;
@@ -2219,8 +2224,18 @@ pub fn execute_upgrade(
         .configured_paths(&options.service_units)
         .and_then(|paths| {
             let data = resolve_normalized_path(&options.data_dir).map_err(|e| e.to_string())?;
+            let mut protected = Vec::new();
             for path in paths {
-                let path = resolve_normalized_path(&path).map_err(|e| e.to_string())?;
+                protected.push(resolve_normalized_path(&path).map_err(|e| e.to_string())?);
+                if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
+                    protected.push(
+                        resolve_normalized_path(parent)
+                            .map_err(|e| e.to_string())?
+                            .join(name),
+                    );
+                }
+            }
+            for path in protected {
                 if let Ok(relative) = path.strip_prefix(&data) {
                     if relative.as_os_str().is_empty() {
                         return Err("key or vote path equals data-dir".into());
@@ -2252,6 +2267,7 @@ pub fn execute_upgrade(
         binary_path: options.binary_path.display().to_string(),
         signer_guard_dir: options.signer_guard_dir.display().to_string(),
         backup_root: None,
+        inventory_sha256: None,
         service_units: options.service_units.clone(),
         exclude_paths: excludes
             .iter()
@@ -2294,7 +2310,9 @@ pub fn execute_upgrade(
     };
     if let Err(error) = stop_for_restore(hooks, &options.service_units) {
         discard_candidate(&downloaded_temp);
-        abort_before_swap(&mut report, "service_stop_failed", error);
+        report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+        report.error_code = Some("service_stop_failed".into());
+        report.message = Some(error);
         return report;
     }
 
@@ -2320,6 +2338,15 @@ pub fn execute_upgrade(
         }
     };
     report.backup_path = Some(backup_root.display().to_string());
+    journal.inventory_sha256 = match sha256_file_and_size(&backup_root.join("backup-manifest.json"))
+    {
+        Ok((digest, _)) => Some(digest),
+        Err(error) => {
+            discard_candidate(&downloaded_temp);
+            abort_before_swap(&mut report, "backup_failed", error.to_string());
+            return report;
+        }
+    };
     journal.step = "backed_up".to_string();
     journal.backup_root = Some(backup_root.display().to_string());
     if let Err(error) = write_json_atomically(&journal_path, &journal) {
@@ -2332,6 +2359,7 @@ pub fn execute_upgrade(
         rollback_and_verify(
             hooks,
             &options.service_units,
+            journal.inventory_sha256.as_deref(),
             &backup_binary,
             &backup_data_dir,
             &options.binary_path,
@@ -2466,6 +2494,13 @@ fn recover_interrupted_upgrade(
         }
         return report;
     }
+    if journal.binary_path != options.binary_path.display().to_string()
+        || journal.data_dir != options.data_dir.display().to_string()
+    {
+        report.exit_code = UPGRADE_EXIT_ROLLBACK_FAILED;
+        report.error_code = Some("journal_installation_mismatch".into());
+        return report;
+    }
     let cause = format!(
         "an earlier upgrade to `{}` was interrupted at step `{}`",
         journal.release_id, journal.step
@@ -2492,6 +2527,7 @@ fn recover_interrupted_upgrade(
             rollback_and_verify(
                 hooks,
                 &journal.service_units,
+                journal.inventory_sha256.as_deref(),
                 &backup_binary,
                 &backup_data_dir,
                 Path::new(&journal.binary_path),
@@ -2557,6 +2593,7 @@ fn recover_interrupted_upgrade(
 fn rollback_and_verify(
     hooks: &dyn UpgradeSystemHooks,
     service_units: &[String],
+    inventory_sha256: Option<&str>,
     backup_binary: &Path,
     backup_data_dir: &Path,
     binary_path: &Path,
@@ -2570,6 +2607,19 @@ fn rollback_and_verify(
 ) -> UpgradeReportV1 {
     let health = stop_for_restore(hooks, service_units)
         .and_then(|()| {
+            let expected = inventory_sha256
+                .ok_or("no trusted inventory digest in this journal; operator recovery required")?;
+            let inventory = backup_data_dir
+                .parent()
+                .ok_or("no snapshot parent")?
+                .join("backup-manifest.json");
+            if sha256_file_and_size(&inventory)
+                .map_err(|e| e.to_string())?
+                .0
+                != expected
+            {
+                return Err("backup inventory differs from installation journal".into());
+            }
             restore_pre_upgrade_backup(
                 backup_binary,
                 backup_data_dir,
@@ -2715,6 +2765,7 @@ mod tests {
         height: u64,
         /// The new binary starts but never answers its health probe.
         new_binary_unhealthy: bool,
+        refuse_candidate_stop: bool,
         /// The new binary casts a vote before it is found unhealthy.
         new_binary_votes: bool,
         /// Nothing answers after a rollback either.
@@ -2733,6 +2784,7 @@ mod tests {
                 free_bytes: 10 * 1024 * 1024 * 1024,
                 height: 432_000,
                 new_binary_unhealthy: false,
+                refuse_candidate_stop: false,
                 new_binary_votes: false,
                 dead_after_rollback: false,
                 dead_unit: None,
@@ -2750,6 +2802,9 @@ mod tests {
 
     impl UpgradeSystemHooks for MockHooks {
         fn stop_units(&self, _units: &[String]) -> Result<(), String> {
+            if self.refuse_candidate_stop && self.new_binary_installed() {
+                return Err("candidate did not stop".into());
+            }
             *self.running.lock().expect("running") = false;
             self.log.lock().expect("log").push("stop".to_string());
             Ok(())
@@ -3444,6 +3499,44 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_candidate_stop_leaves_the_installation_and_journal_intact() {
+        let fixture = Fixture::new("refuse-stop");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        hooks.refuse_candidate_stop = true;
+        let failed = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(failed.exit_code, UPGRADE_EXIT_ROLLBACK_FAILED);
+        assert_eq!(hooks.log(), ["stop", "start"]);
+        assert!(hooks.new_binary_installed());
+        assert_eq!(fixture.data("ledger.dat"), b"REWRITTEN_BY_NEW_BINARY");
+        assert!(fixture.journal().exists());
+    }
+
+    #[test]
+    fn corrupt_snapshot_stays_stopped_on_recovery() {
+        let fixture = Fixture::new("corrupt-backup");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        hooks.dead_after_rollback = true;
+        let failed = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(failed.exit_code, UPGRADE_EXIT_ROLLBACK_FAILED);
+        let root = PathBuf::from(failed.backup_path.unwrap());
+        fs::write(root.join("chain-data/ledger.dat"), b"damaged").unwrap();
+        let recovery = fixture.hooks();
+        let failed = execute_upgrade(&fixture.options, &recovery);
+        assert_eq!(failed.exit_code, UPGRADE_EXIT_ROLLBACK_FAILED);
+        assert_eq!(recovery.log(), ["stop"]);
+        assert!(fixture.journal().exists());
+        fs::write(root.join("backup-manifest.json"), b"{}").unwrap();
+        let retry = fixture.hooks();
+        assert_eq!(
+            execute_upgrade(&fixture.options, &retry).exit_code,
+            UPGRADE_EXIT_ROLLBACK_FAILED
+        );
+        assert_eq!(retry.log(), ["stop"]);
+    }
+
+    #[test]
     fn an_interrupted_upgrade_is_rolled_back_before_anything_else() {
         // Interrupted after the swap: the new binary is in place, the journal says so.
         let fixture = Fixture::new("interrupted");
@@ -3519,6 +3612,7 @@ mod tests {
                 binary_path: early.options.binary_path.display().to_string(),
                 signer_guard_dir: early.options.signer_guard_dir.display().to_string(),
                 backup_root: None,
+                inventory_sha256: None,
                 service_units: early.options.service_units.clone(),
                 exclude_paths: Vec::new(),
             },
