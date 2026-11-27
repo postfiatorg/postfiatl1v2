@@ -82,6 +82,40 @@ serialize UTF-8 JSON per RFC 8785 (keys sorted recursively, no insignificant
 whitespace, deterministic number formatting). As with protobuf bodies,
 signatures and CIDs cover the exact transmitted `body_bytes`.
 
+### 2.4 Rules for Readers and for Later Changes
+
+Readers handle unknown fields (field numbers they do not know) by where the
+message is carried:
+
+| Where the message is carried | Unknown fields | Reason |
+|---|---|---|
+| Inside the signed `Envelope.header_bytes`, `encryption_header_bytes`, or `body_bytes`, including every message nested there | **Preserved:** readers ignore them and keep and pass on the exact received bytes | The signature and CID cover those exact bytes and are never recomputed from decoded fields (section 2.2). |
+| The outer `Envelope`, the `pf.ptr` v5 `Pointer` memo, and the x402 `PAYMENT-*` HTTP header messages | **Refused** | These bytes are outside the envelope signature; an added field in the outer `Envelope` changes its CID while its signature still verifies. |
+| `MessageKeyBinding` | **Refused** | Its signature covers only the fields in `key_bind_preimage` (section 4.3), so an unknown field would be unsigned. |
+
+1. **Enum zero means "not set":** the `0` value of every enum
+   (`*_UNSPECIFIED`) means no value. Where this document or a `.proto` comment
+   requires a value (for example `Envelope.signature_algorithm`,
+   `XWingEncryptionHeader.cipher_suite`, `MessageHeader.visibility`,
+   `MessageHeader.body_encoding`, `Pointer.target`, and
+   `FastPayPaymentRef.lane`), readers MUST refuse `0` and any value they do not
+   know. In other enum fields, readers read a value they do not know as `0`.
+2. **No reuse:** a field number or name, and an enum value number or name, once
+   published in a v1 `.proto` file is NEVER given to anything else, also not
+   after it is removed.
+3. **Removed fields are reserved:** a removed field's number and name are listed
+   in a `reserved` statement in its message (a removed enum value in its enum),
+   so `protoc` refuses any reuse. No v1 field or enum value has been removed, so
+   the `.proto` files carry no `reserved` statements.
+4. **Size or meaning changes take a new field:** a change to a field's size,
+   type, unit, or meaning NEVER reuses the field; it adds a new field with a new
+   number and name, and the old field is kept or reserved.
+5. **New fields are additive only:** a new field in a message whose unknown
+   fields are preserved may only add information that a reader which ignores it
+   still handles correctly. Anything an older reader must not ignore takes a new
+   `schema_name`, `MessageHeader.protocol_version`, `Envelope.version`, or
+   `memo_format` instead.
+
 ## 3. On-Chain `pf.ptr` v5 Memo Wire Rules
 
 `postfiatl1v2` supports memos on `payment_v2`, `issued_payment_v2`, and FastPay
