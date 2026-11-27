@@ -130,7 +130,7 @@ async function main() {
         validatorId: validators[1].id,
         secretKey: validators[1].secretKey,
       });
-      const certDigest = mp.sha256(mp.canonicalJsonBytes({ epoch: committeeRegistry.activeEpoch(), votes: [v1, v2] }));
+      const certDigest = mp.sha3_384(mp.canonicalJsonBytes({ epoch: committeeRegistry.activeEpoch(), votes: [v1, v2] }));
       return { accepted: true, certificateDigest: certDigest, finalizedHeight: 0 };
     },
     async settleConsensus(verified) {

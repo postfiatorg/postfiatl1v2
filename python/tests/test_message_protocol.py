@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -15,63 +17,35 @@ from postfiat_rpc import message_protocol as mp
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Exact frozen Contract C1 published hex test vectors (from docs/specs/message-protocol-v1.md)
-C1_VECTORS = {
-    "V1_POINTER_V5_PUBLIC_TEXT": {
-        "memo_type_hex": "70662e707472",
-        "memo_format_hex": "7635",
-        "memo_data_hex": "0a24015512202acc209da9af312de8e9d20175c075a22b31b329a3e6d856dec9cf66436d523d100118042064320d7468726561642d63312d3030314002",
-        "byte_len": 61,
-        "cid_bin_hex": "015512202acc209da9af312de8e9d20175c075a22b31b329a3e6d856dec9cf66436d523d",
-        "cid_multibase": "bafkreibkzqqj3knpgew6r2osaf24a5ncfmy3gknd43mfnxwjz5teg3kshu",
-    },
-    "V2A_POINTER_V5_WORST_CASE_BUDGET": {
-        "memo_data_hex": "0a24015512202acc209da9af312de8e9d20175c075a22b31b329a3e6d856dec9cf66436d523d1002180c20012a287461736b2d323032362d31312d32372d3030303030303030303030303030303030303030303030313228676f762d73657373696f6e2d323032362d31312d32372d30303030303030303030303030303030313a286374782d736e617073686f742d323032362d31312d32372d303030303030303030303030303030314012521c6f72672e6578616d706c652e637573746f6d2e7061636b65742e7631",
-        "byte_len": 202,
-    },
-    "V2B_POINTER_V5_INLINE_X402": {
-        "request_hash_hex": "ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb56",
-        "memo_data_hex": "1003180e20920340064a20ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb56",
-        "byte_len": 43,
-    },
-    "V3_LEGACY_POINTER_V4_DECODE": {
-        "memo_type_hex": "70662E707472",
-        "memo_format_hex": "7634",
-        "memo_data_hex_upper": "0A3B6261666B726569676832616B69736361696C646371616273796733646672366368753366677072656769796D73636B376537617161347335327A791001180620012A107461736B2D6C65676163792D303034324001",
-        "byte_len": 87,
-    },
-    "V4_ENVELOPE_PUBLIC_TEXT": {
-        "header_hex": "08011211706f7374666961742d6465766e65742d321a1270662e6d6573736167652e746578742e7631206428043001380140014a2a70663173656e6465723030303030303030303030303030303030303030303030303030303030303030305080a8f094ac33620d7468726561642d63312d303031",
-        "body_hex": "0a1548656c6c6f20506f73742046696174204c31763221120a746578742f706c61696e",
-        "signing_preimage_sha256_hex": "e9d50d27fa79f160fda793f8133fc9ce19f5a507ed539e2a4bbea19d67c53ba7",
-        "envelope_hex": "0801127508011211706f7374666961742d6465766e65742d321a1270662e6d6573736167652e746578742e7631206428043001380140014a2a70663173656e6465723030303030303030303030303030303030303030303030303030303030303030305080a8f094ac33620d7468726561642d63312d30303122230a1548656c6c6f20506f73742046696174204c31763221120a746578742f706c61696e28013220a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a13a20b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
-        "cid_bin_hex": "015512202acc209da9af312de8e9d20175c075a22b31b329a3e6d856dec9cf66436d523d",
-        "cid_multibase": "bafkreibkzqqj3knpgew6r2osaf24a5ncfmy3gknd43mfnxwjz5teg3kshu",
-    },
-    "V5_ENVELOPE_PRIVATE_XWING_REWARD": {
-        "order_hash_hex": "1fa9e64486fcda633292370aa97c47fa1ffa1463b8bc3804503e4d9a03c94094",
-        "header_hex": "08011211706f7374666961742d6465766e65742d321a0c70662e7265776172642e763120c90128063002380140024a2a7066317461736b6e6f64653030303030303030303030303030303030303030303030303030303030303050e0fcf394ac335a107461736b2d7265776172642d303030317abf0108011211706f7374666961742d6465766e65742d321a201fa9e64486fcda633292370aa97c47fa1ffa1463b8bc3804503e4d9a03c940942220986cb4a5f6ae7ce3b980118f577d54a1a32347ac8d467394479f43d340e04ef832035046543a2a7066317461736b6e6f646530303030303030303030303030303030303030303030303030303030303030422a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304880cab5ee01508208",
-        "aad_context_hex": "34df597e69504a383a97eba1f106a9286b71496de75c7a66af953d4cec167c70",
-        "derived_kem_seed_hex": "430e4662271619e3e43878bddafd267013540a0e72aec34a4eeb1225af12199a",
-        "recipient_key_id_hex": "9f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4",
-        "derived_wrap_kek_hex": "3f70600a1a973a8b38b1868852cf8db36c2517f58aa389c6b02369678154f9eb",
-        "key_binding_preimage_sha256_hex": "6c4a3977bfc8b2f67e028c5b648d375fe21fe2dda86832e83ae6e5d0545560e4",
-        "encryption_header_hex": "080212187777777777777777777777777777777777777777777777771a2034df597e69504a383a97eba1f106a9286b71496de75c7a66af953d4cec167c702a1c706f7374666961742d6c312d76322f7877696e672d777261702f763132bc010a209f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4122a7066317265636970303030303030303030303030303030303030303030303030303030303030303030301a20444444444444444444444444444444444444444444444444444444444444444422185555555555555555555555555555555555555555555555552a30666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
-        "signing_preimage_sha256_hex": "32442d9bd94a1edb029e6293d6814ab5eaf58d2eaefc25c6d89fe5b3b09386b4",
-        "envelope_hex": "080112b50208011211706f7374666961742d6465766e65742d321a0c70662e7265776172642e763120c90128063002380140024a2a7066317461736b6e6f64653030303030303030303030303030303030303030303030303030303030303050e0fcf394ac335a107461736b2d7265776172642d303030317abf0108011211706f7374666961742d6465766e65742d321a201fa9e64486fcda633292370aa97c47fa1ffa1463b8bc3804503e4d9a03c940942220986cb4a5f6ae7ce3b980118f577d54a1a32347ac8d467394479f43d340e04ef832035046543a2a7066317461736b6e6f646530303030303030303030303030303030303030303030303030303030303030422a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304880cab5ee015082081a9b02080212187777777777777777777777777777777777777777777777771a2034df597e69504a383a97eba1f106a9286b71496de75c7a66af953d4cec167c702a1c706f7374666961742d6c312d76322f7877696e672d777261702f763132bc010a209f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4122a7066317265636970303030303030303030303030303030303030303030303030303030303030303030301a20444444444444444444444444444444444444444444444444444444444444444422185555555555555555555555555555555555555555555555552a3066666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666622408888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888828013220a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a13a20b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
-        "cid_bin_hex": "0155122073a90001a7ea8b4f5a317c76d97b06049fbd647300aafd4ab0d6ca1e72d100aa",
-        "cid_multibase": "bafkreidtveaadj7krnhvuml4o3mxwbqet66wi4yavl6uvmgwziphfuiavi",
-    },
-    "V6_MANIFEST_MULTICHUNK": {
-        "manifest_hex": "0801108080601880804022186170706c69636174696f6e2f6f637465742d73747265616d2a1570662e646f63756d656e742e62756e646c652e76313004380242830112670a24015512200147e682a1ce4cf491afa19c10b08a40f6559f657576398a7788c37c60fcf88a109080401a3b6261666b72656961626937746966696f6f6a74326a646c35627471696c62637361367a6b7a367a6c766f79347975353469796e36676237687972691a18909090909090909090909090909090909090909090909090428501080112670a24015512205b914ae0bd580f1a94824cfc2cff2cf61c2988f46c36e00aa87c5e46ecb584c2109080201a3b6261666b72656963337366666f62706b7962346e6a6a61736d37717770366c6877647175797235646d67337161766b64346c7a646f7a6e6d6579691a18919191919191919191919191919191919191919191919191",
-        "byte_len": 333,
-    },
-    "V7_X402_HEADERS": {
-        "required_hex": "080210011a11706f7374666961743a6465766e65742d3220012a0350465430a08d063a2a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304220ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb564a10c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c150e0cf8295ac335a2568747470733a2f2f6170692e706f7374666961742e6f72672f76312f696e666572656e6365621968747470733a2f2f783430322e706f7374666961742e6f7267",
-        "signature_hex": "080210011a11706f7374666961743a6465766e65742d3220012a20ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb563210c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c13a2083367ad31fc90e2e2fcba5b711ffd80f264f92c5c68aca0241cb89477bc522e24a20d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2",
-        "response_hex": "080210011abc0108011211706f7374666961742d6465766e65742d321a2083367ad31fc90e2e2fcba5b711ffd80f264f92c5c68aca0241cb89477bc522e22220c09c70d2488ee1e63c12bad892f3be484f363e34181e8c58d1a6dde8eda315f432035046543a2a70663173656e646572303030303030303030303030303030303030303030303030303030303030303030422a70663172656369703030303030303030303030303030303030303030303030303030303030303030303048a08d06501a20faa9f094ac332a17706f7374666961742d666163696c697461746f722d7631",
-        "dedup_order_hash_hex": "83367ad31fc90e2e2fcba5b711ffd80f264f92c5c68aca0241cb89477bc522e2",
-    },
+# The frozen Contract C1 vectors: the JSON block of docs/specs/message-protocol-v1.md is the one source.
+_SPEC_DOC = REPO_ROOT / "docs" / "specs" / "message-protocol-v1.md"
+_VECTOR_BLOCK_RE = re.compile(
+    r"<!--\s*BEGIN_CANONICAL_TEST_VECTORS_JSON\s*-->\s*```json\s*(\{.*?\})\s*```\s*<!--\s*END_CANONICAL_TEST_VECTORS_JSON\s*-->",
+    re.DOTALL,
+)
+C1_VECTORS = json.loads(_VECTOR_BLOCK_RE.search(_SPEC_DOC.read_text(encoding="utf-8")).group(1))
+
+
+def _canonical_vector_payloads() -> list[tuple[str, str, bytes]]:
+    """Every protobuf payload of the canonical vectors, as listed by scripts/test-message-protocol-vectors.py."""
+    spec = importlib.util.spec_from_file_location("c1_vectors", REPO_ROOT / "scripts" / "test-message-protocol-vectors.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.vector_proto_payloads(C1_VECTORS)
+
+
+# Message types this SDK encodes; the NFT and governance types are outside it.
+_SDK_TYPES = {
+    "postfiat.message.v1.Pointer": mp.Pointer,
+    "postfiat.message.v1.LegacyPointerV4": mp.LegacyPointerV4,
+    "postfiat.message.v1.Envelope": mp.Envelope,
+    "postfiat.message.v1.MessageHeader": mp.MessageHeader,
+    "postfiat.message.v1.TextMessage": mp.TextMessage,
+    "postfiat.message.v1.XWingEncryptionHeader": mp.XWingEncryptionHeader,
+    "postfiat.message.v1.Manifest": mp.Manifest,
+    "postfiat.message.v1.X402PaymentRequired": mp.X402PaymentRequired,
+    "postfiat.message.v1.X402PaymentSignature": mp.X402PaymentSignature,
+    "postfiat.message.v1.X402PaymentResponse": mp.X402PaymentResponse,
 }
 
 
@@ -104,6 +78,24 @@ def _toy_xwing_kem(seed_secret: bytes):
 
 
 class MessageProtocolVectorTests(unittest.TestCase):
+    def test_unsigned_wire_fields_are_refused(self) -> None:
+        extension = bytes.fromhex("f00101")
+        for reader in (mp.Envelope, mp.MessageKeyBinding, mp.X402PaymentRequired,
+                       mp.X402PaymentSignature, mp.X402PaymentResponse):
+            with self.subTest(reader=reader.__name__), self.assertRaisesRegex(mp.MessageProtocolError, "unknown"):
+                reader.decode(extension)
+        header = mp.MessageHeader.decode(bytes.fromhex("820103") + extension)
+        self.assertIsNotNone(header.x402_receipt)
+
+    def test_pointer_reader_contract(self) -> None:
+        ptr = mp.Pointer(target=mp.PointerTarget.INLINE, flags=int(mp.PointerFlag.PUBLIC), inline_payload=b"x")
+        canonical = ptr.encode()
+        self.assertEqual(mp.Pointer.decode(canonical, enforce_canonical_order=True), ptr)
+        with self.assertRaises(mp.MessageProtocolError):
+            mp.Pointer.decode(canonical + bytes([88, 1]))
+        with self.assertRaises(mp.MessageProtocolError):
+            mp.Pointer.decode(canonical + canonical[-3:], enforce_canonical_order=True)
+
     def test_bundled_proto_files_and_protoc_roundtrip(self) -> None:
         proto_files = (
             "postfiat/message/v1/message.proto",
@@ -115,7 +107,11 @@ class MessageProtocolVectorTests(unittest.TestCase):
             self.assertTrue(bundled.is_file(), f"missing bundled proto {bundled}")
             root_proto = REPO_ROOT / "proto" / rel
             if root_proto.is_file():
-                self.assertEqual(bundled.read_bytes(), root_proto.read_bytes(), f"proto drift in {rel}")
+                self.assertEqual(
+                    bundled.read_bytes(),
+                    root_proto.read_bytes(),
+                    f"proto drift in {rel}; run: cp proto/{rel} python/postfiat_rpc/proto/{rel}",
+                )
 
         protoc = shutil.which("protoc")
         if not protoc:
@@ -160,6 +156,42 @@ class MessageProtocolVectorTests(unittest.TestCase):
                     capture_output=True,
                 )
                 self.assertEqual(reenc.stdout, raw, f"protoc roundtrip mismatch for {msg_type}")
+
+    def test_every_canonical_payload_encodes_byte_for_byte(self) -> None:
+        checked = 0
+        for label, msg_type, raw in _canonical_vector_payloads():
+            cls = _SDK_TYPES.get(msg_type)
+            if cls is None:
+                self.assertTrue(msg_type.startswith(("postfiat.nft.", "postfiat.governance.")), msg_type)
+                continue
+            # LegacyPointerV4 is a decode-only compatibility type without a canonical-order option.
+            strict = {} if cls is mp.LegacyPointerV4 else {"enforce_canonical_order": True}
+            decoded = cls.decode(raw, **strict)
+            self.assertEqual(decoded.encode(), raw, f"{label} {msg_type} does not re-encode byte for byte")
+            checked += 1
+        self.assertEqual(checked, 17)
+
+    def test_payment_ref_hashes_are_48_bytes(self) -> None:
+        h48, h32 = b"\x11" * mp.CHAIN_HASH_BYTES, b"\x11" * 32
+        self.assertEqual(mp.CHAIN_HASH_BYTES, 48)
+        ref = mp.FastPayPaymentRef(lane=mp.PaymentLane.FASTPAY, order_hash=h48, certificate_digest=h48)
+        self.assertEqual(mp.FastPayPaymentRef.decode(ref.encode()), ref)
+        self.assertEqual(ref.dedup_key(), h48)
+        consensus = mp.FastPayPaymentRef(lane=mp.PaymentLane.CONSENSUS_PFT, tx_hash=h48)
+        self.assertEqual(consensus.dedup_key(), h48)
+        sig = mp.X402PaymentSignature(order_hash=h48, tx_hash=h48)
+        self.assertEqual(mp.X402PaymentSignature.decode(sig.encode()), sig)
+        for field, number in (("order_hash", 3), ("certificate_digest", 4), ("tx_hash", 5)):
+            with self.assertRaisesRegex(mp.MessageProtocolError, f"FastPayPaymentRef.{field} must be 48 bytes"):
+                mp.FastPayPaymentRef(lane=mp.PaymentLane.FASTPAY, **{field: h32})
+            # A 32-byte value on the wire is refused on decode too.
+            with self.assertRaises(mp.MessageProtocolError):
+                mp.FastPayPaymentRef.decode(mp.pb_bytes(number, h32))
+        for field, number in (("order_hash", 7), ("tx_hash", 8)):
+            with self.assertRaisesRegex(mp.MessageProtocolError, f"X402PaymentSignature.{field} must be 48 bytes"):
+                mp.X402PaymentSignature(**{field: h32})
+            with self.assertRaises(mp.MessageProtocolError):
+                mp.X402PaymentSignature.decode(mp.pb_bytes(number, h32))
 
     def test_v1_v2_v3_pointer_vectors(self) -> None:
         v1 = C1_VECTORS["V1_POINTER_V5_PUBLIC_TEXT"]

@@ -11,68 +11,53 @@ const mp = require('./message-protocol');
 
 const ADDRESS_VECTORS_PATH = path.resolve(__dirname, '..', 'docs', 'fixtures', 'addresses', 'pftl-address-vectors-v1.json');
 
+// The frozen Contract C1 vectors: the JSON block of docs/specs/message-protocol-v1.md is the one source.
+const SPEC_DOC_PATH = path.resolve(__dirname, '..', 'docs', 'specs', 'message-protocol-v1.md');
+const C1_DOC = JSON.parse(
+  /<!--\s*BEGIN_CANONICAL_TEST_VECTORS_JSON\s*-->\s*```json\s*(\{[\s\S]*?\})\s*```\s*<!--\s*END_CANONICAL_TEST_VECTORS_JSON\s*-->/.exec(
+    fs.readFileSync(SPEC_DOC_PATH, 'utf8')
+  )[1]
+);
 const C1 = {
-  V1: {
-    memo_type_hex: '70662e707472',
-    memo_format_hex: '7635',
-    memo_data_hex:
-      '0a24015512202acc209da9af312de8e9d20175c075a22b31b329a3e6d856dec9cf66436d523d100118042064320d7468726561642d63312d3030314002',
-    cid_bin_hex: '015512202acc209da9af312de8e9d20175c075a22b31b329a3e6d856dec9cf66436d523d',
-    cid_multibase: 'bafkreibkzqqj3knpgew6r2osaf24a5ncfmy3gknd43mfnxwjz5teg3kshu',
-  },
-  V2A: {
-    memo_data_hex:
-      '0a24015512202acc209da9af312de8e9d20175c075a22b31b329a3e6d856dec9cf66436d523d1002180c20012a287461736b2d323032362d31312d32372d3030303030303030303030303030303030303030303030313228676f762d73657373696f6e2d323032362d31312d32372d30303030303030303030303030303030313a286374782d736e617073686f742d323032362d31312d32372d303030303030303030303030303030314012521c6f72672e6578616d706c652e637573746f6d2e7061636b65742e7631',
-  },
-  V2B: {
-    request_hash_hex: 'ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb56',
-    memo_data_hex: '1003180e20920340064a20ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb56',
-  },
-  V3: {
-    memo_type_hex: '70662E707472',
-    memo_format_hex: '7634',
-    memo_data_hex_upper:
-      '0A3B6261666B726569676832616B69736361696C646371616273796733646672366368753366677072656769796D73636B376537617161347335327A791001180620012A107461736B2D6C65676163792D303034324001',
-  },
-  V4: {
-    header_hex:
-      '08011211706f7374666961742d6465766e65742d321a1270662e6d6573736167652e746578742e7631206428043001380140014a2a70663173656e6465723030303030303030303030303030303030303030303030303030303030303030305080a8f094ac33620d7468726561642d63312d303031',
-    body_hex: '0a1548656c6c6f20506f73742046696174204c31763221120a746578742f706c61696e',
-    signing_preimage_sha256_hex: 'e9d50d27fa79f160fda793f8133fc9ce19f5a507ed539e2a4bbea19d67c53ba7',
-    envelope_hex:
-      '0801127508011211706f7374666961742d6465766e65742d321a1270662e6d6573736167652e746578742e7631206428043001380140014a2a70663173656e6465723030303030303030303030303030303030303030303030303030303030303030305080a8f094ac33620d7468726561642d63312d30303122230a1548656c6c6f20506f73742046696174204c31763221120a746578742f706c61696e28013220a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a13a20b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2',
-    cid_bin_hex: '015512202acc209da9af312de8e9d20175c075a22b31b329a3e6d856dec9cf66436d523d',
-    cid_multibase: 'bafkreibkzqqj3knpgew6r2osaf24a5ncfmy3gknd43mfnxwjz5teg3kshu',
-  },
-  V5: {
-    header_hex:
-      '08011211706f7374666961742d6465766e65742d321a0c70662e7265776172642e763120c90128063002380140024a2a7066317461736b6e6f64653030303030303030303030303030303030303030303030303030303030303050e0fcf394ac335a107461736b2d7265776172642d303030317abf0108011211706f7374666961742d6465766e65742d321a201fa9e64486fcda633292370aa97c47fa1ffa1463b8bc3804503e4d9a03c940942220986cb4a5f6ae7ce3b980118f577d54a1a32347ac8d467394479f43d340e04ef832035046543a2a7066317461736b6e6f646530303030303030303030303030303030303030303030303030303030303030422a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304880cab5ee01508208',
-    aad_context_hex: '34df597e69504a383a97eba1f106a9286b71496de75c7a66af953d4cec167c70',
-    derived_kem_seed_hex: '430e4662271619e3e43878bddafd267013540a0e72aec34a4eeb1225af12199a',
-    recipient_key_id_hex: '9f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4',
-    derived_wrap_kek_hex: '3f70600a1a973a8b38b1868852cf8db36c2517f58aa389c6b02369678154f9eb',
-    key_binding_preimage_sha256_hex: '6c4a3977bfc8b2f67e028c5b648d375fe21fe2dda86832e83ae6e5d0545560e4',
-    encryption_header_hex:
-      '080212187777777777777777777777777777777777777777777777771a2034df597e69504a383a97eba1f106a9286b71496de75c7a66af953d4cec167c702a1c706f7374666961742d6c312d76322f7877696e672d777261702f763132bc010a209f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4122a7066317265636970303030303030303030303030303030303030303030303030303030303030303030301a20444444444444444444444444444444444444444444444444444444444444444422185555555555555555555555555555555555555555555555552a30666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666',
-    signing_preimage_sha256_hex: '32442d9bd94a1edb029e6293d6814ab5eaf58d2eaefc25c6d89fe5b3b09386b4',
-    envelope_hex:
-      '080112b50208011211706f7374666961742d6465766e65742d321a0c70662e7265776172642e763120c90128063002380140024a2a7066317461736b6e6f64653030303030303030303030303030303030303030303030303030303030303050e0fcf394ac335a107461736b2d7265776172642d303030317abf0108011211706f7374666961742d6465766e65742d321a201fa9e64486fcda633292370aa97c47fa1ffa1463b8bc3804503e4d9a03c940942220986cb4a5f6ae7ce3b980118f577d54a1a32347ac8d467394479f43d340e04ef832035046543a2a7066317461736b6e6f646530303030303030303030303030303030303030303030303030303030303030422a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304880cab5ee015082081a9b02080212187777777777777777777777777777777777777777777777771a2034df597e69504a383a97eba1f106a9286b71496de75c7a66af953d4cec167c702a1c706f7374666961742d6c312d76322f7877696e672d777261702f763132bc010a209f72ea0cf49536e3c66c787f705186df9a4378083753ae9536d65b3ad7fcddc4122a7066317265636970303030303030303030303030303030303030303030303030303030303030303030301a20444444444444444444444444444444444444444444444444444444444444444422185555555555555555555555555555555555555555555555552a3066666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666622408888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888828013220a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a13a20b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2',
-    cid_bin_hex: '0155122073a90001a7ea8b4f5a317c76d97b06049fbd647300aafd4ab0d6ca1e72d100aa',
-    cid_multibase: 'bafkreidtveaadj7krnhvuml4o3mxwbqet66wi4yavl6uvmgwziphfuiavi',
-  },
-  V6: {
-    manifest_hex:
-      '0801108080601880804022186170706c69636174696f6e2f6f637465742d73747265616d2a1570662e646f63756d656e742e62756e646c652e76313004380242830112670a24015512200147e682a1ce4cf491afa19c10b08a40f6559f657576398a7788c37c60fcf88a109080401a3b6261666b72656961626937746966696f6f6a74326a646c35627471696c62637361367a6b7a367a6c766f79347975353469796e36676237687972691a18909090909090909090909090909090909090909090909090428501080112670a24015512205b914ae0bd580f1a94824cfc2cff2cf61c2988f46c36e00aa87c5e46ecb584c2109080201a3b6261666b72656963337366666f62706b7962346e6a6a61736d37717770366c6877647175797235646d67337161766b64346c7a646f7a6e6d6579691a18919191919191919191919191919191919191919191919191',
-  },
-  V7: {
-    required_hex:
-      '080210011a11706f7374666961743a6465766e65742d3220012a0350465430a08d063a2a7066317265636970303030303030303030303030303030303030303030303030303030303030303030304220ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb564a10c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c150e0cf8295ac335a2568747470733a2f2f6170692e706f7374666961742e6f72672f76312f696e666572656e6365621968747470733a2f2f783430322e706f7374666961742e6f7267',
-    signature_hex:
-      '080210011a11706f7374666961743a6465766e65742d3220012a20ee159abe7875173448aac81f2ac10748b46f3f8261f8d78d2b2d98b063a2bb563210c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c13a2083367ad31fc90e2e2fcba5b711ffd80f264f92c5c68aca0241cb89477bc522e24a20d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2',
-    response_hex:
-      '080210011abc0108011211706f7374666961742d6465766e65742d321a2083367ad31fc90e2e2fcba5b711ffd80f264f92c5c68aca0241cb89477bc522e22220c09c70d2488ee1e63c12bad892f3be484f363e34181e8c58d1a6dde8eda315f432035046543a2a70663173656e646572303030303030303030303030303030303030303030303030303030303030303030422a70663172656369703030303030303030303030303030303030303030303030303030303030303030303048a08d06501a20faa9f094ac332a17706f7374666961742d666163696c697461746f722d7631',
-  },
+  V1: C1_DOC.V1_POINTER_V5_PUBLIC_TEXT,
+  V2A: C1_DOC.V2A_POINTER_V5_WORST_CASE_BUDGET,
+  V2B: C1_DOC.V2B_POINTER_V5_INLINE_X402,
+  V3: C1_DOC.V3_LEGACY_POINTER_V4_DECODE,
+  V4: C1_DOC.V4_ENVELOPE_PUBLIC_TEXT,
+  V5: C1_DOC.V5_ENVELOPE_PRIVATE_XWING_REWARD,
+  V6: C1_DOC.V6_MANIFEST_MULTICHUNK,
+  V7: C1_DOC.V7_X402_HEADERS,
+  V8: C1_DOC.V8_NFT_METADATA_AND_MIGRATION,
+  V9: C1_DOC.V9_GOVERNANCE_PACKET_AND_LIFECYCLE,
 };
+
+// Every protobuf payload of the canonical vectors, as listed by vector_proto_payloads in
+// scripts/test-message-protocol-vectors.py: [vector, field, message type].
+const CANONICAL_PAYLOADS = [
+  ['V1', 'memo_data_hex', 'Pointer'],
+  ['V2A', 'memo_data_hex', 'Pointer'],
+  ['V2B', 'memo_data_hex', 'Pointer'],
+  ['V3', 'memo_data_hex_upper', 'LegacyPointerV4'],
+  ['V4', 'envelope_hex', 'Envelope'],
+  ['V4', 'header_hex', 'MessageHeader'],
+  ['V4', 'body_hex', 'TextMessage'],
+  ['V5', 'envelope_hex', 'Envelope'],
+  ['V5', 'header_hex', 'MessageHeader'],
+  ['V5', 'encryption_header_hex', 'XWingEncryptionHeader'],
+  ['V6', 'manifest_hex', 'Manifest'],
+  ['V7', 'required_hex', 'X402PaymentRequired'],
+  ['V7', 'signature_hex', 'X402PaymentSignature'],
+  ['V7', 'response_hex', 'X402PaymentResponse'],
+  ['V8', 'claim_hex', null], // postfiat.nft.v1.MigrationClaim: outside this SDK
+  ['V8', 'metadata_hex', null], // postfiat.nft.v1.NftMetadata: outside this SDK
+  ['V8', 'metadata_envelope_hex', 'Envelope'],
+  ['V9', 'packet_proto_hex', null], // postfiat.governance.v1.GovernancePacket: outside this SDK
+  ['V9', 'packet_envelope_hex', 'Envelope'],
+  ['V9', 'anchor_pointer_v5_hex', 'Pointer'],
+  ['V9', 'transcript_hex', null], // postfiat.governance.v1.SessionTranscript: outside this SDK
+  ['V9', 'minutes_hex', null], // postfiat.governance.v1.GovernanceMinutes: outside this SDK
+  ['V9', 'ruling_hex', null], // postfiat.governance.v1.RulingAnchor: outside this SDK
+];
 
 function testCanonicalVectors() {
   // V1 Pointer v5
@@ -92,6 +77,10 @@ function testCanonicalVectors() {
   assert.equal(mp.encodePointer(mp.decodePointerV5Memo(memo1, { enforceCanonicalOrder: true })).toString('hex'), C1.V1.memo_data_hex);
 
   // V2A worst-case 256-byte budget + V2B inline x402
+  const rawPointer = Buffer.from(C1.V1.memo_data_hex, 'hex');
+  assert.throws(() => mp.decodePointer(Buffer.concat([rawPointer, Buffer.from([88, 1])])));
+  assert.throws(() => mp.decodePointer(Buffer.concat([rawPointer, rawPointer]), { enforceCanonicalOrder: true }));
+
   const ptr2a = mp.decodePointer(Buffer.from(C1.V2A.memo_data_hex, 'hex'), { enforceCanonicalOrder: true });
   assert.equal(mp.encodePointer(ptr2a).toString('hex'), C1.V2A.memo_data_hex);
   assert.equal(ptr2a.schema_name, 'org.example.custom.packet.v1');
@@ -159,6 +148,45 @@ function testCanonicalVectors() {
   assert.equal(mp.encodeX402PaymentResponse(resp).toString('hex'), C1.V7.response_hex);
   const b64 = mp.encodeX402Header(Buffer.from(C1.V7.required_hex, 'hex'));
   assert.equal(mp.decodeX402Header(b64).toString('hex'), C1.V7.required_hex);
+}
+
+function testEveryCanonicalPayloadEncodesByteForByte() {
+  let checked = 0;
+  for (const [vector, field, type] of CANONICAL_PAYLOADS) {
+    const hex = C1[vector][field];
+    assert.equal(typeof hex, 'string', `${vector}.${field} missing from the canonical vectors`);
+    if (type === null) continue;
+    const raw = Buffer.from(hex, 'hex');
+    const opts = type === 'LegacyPointerV4' ? undefined : { enforceCanonicalOrder: true };
+    const reencoded = mp[`encode${type}`](mp[`decode${type}`](raw, opts));
+    assert.equal(reencoded.toString('hex'), raw.toString('hex'), `${vector}.${field} ${type} does not re-encode byte for byte`);
+    checked += 1;
+  }
+  assert.equal(checked, 17);
+}
+
+function testPaymentRefHashesAre48Bytes() {
+  assert.equal(mp.CHAIN_HASH_BYTES, 48);
+  const h48 = Buffer.alloc(48, 0x11);
+  const h32 = Buffer.alloc(32, 0x11);
+  const wireBytesField = (number, value) => Buffer.concat([Buffer.from([(number << 3) | 2, value.length]), value]);
+  const ref = { lane: mp.PaymentLane.FASTPAY, order_hash: h48, certificate_digest: h48 };
+  const decodedRef = mp.decodeFastPayPaymentRef(mp.encodeFastPayPaymentRef(ref));
+  assert.deepEqual(decodedRef.order_hash, h48);
+  assert.deepEqual(decodedRef.certificate_digest, h48);
+  const decodedSig = mp.decodeX402PaymentSignature(mp.encodeX402PaymentSignature({ order_hash: h48, tx_hash: h48 }));
+  assert.deepEqual(decodedSig.order_hash, h48);
+  assert.deepEqual(decodedSig.tx_hash, h48);
+  for (const [field, number] of [['order_hash', 3], ['certificate_digest', 4], ['tx_hash', 5]]) {
+    const message = new RegExp(`FastPayPaymentRef\\.${field} must be 48 bytes`);
+    assert.throws(() => mp.encodeFastPayPaymentRef({ lane: mp.PaymentLane.FASTPAY, [field]: h32 }), message);
+    assert.throws(() => mp.decodeFastPayPaymentRef(wireBytesField(number, h32)), message);
+  }
+  for (const [field, number] of [['order_hash', 7], ['tx_hash', 8]]) {
+    const message = new RegExp(`X402PaymentSignature\\.${field} must be 48 bytes`);
+    assert.throws(() => mp.encodeX402PaymentSignature({ [field]: h32 }), message);
+    assert.throws(() => mp.decodeX402PaymentSignature(wireBytesField(number, h32)), message);
+  }
 }
 
 async function testRealPqRoundtrips() {
@@ -558,7 +586,16 @@ async function testCekCommitmentBlindedSealedAndEpochRotation() {
 }
 
 async function main() {
+  const extension = Buffer.from('f00101', 'hex');
+  for (const decode of [mp.decodeEnvelope, mp.decodeMessageKeyBinding, mp.decodeX402PaymentRequired,
+    mp.decodeX402PaymentSignature, mp.decodeX402PaymentResponse]) {
+    assert.throws(() => decode(extension), /unknown/);
+  }
+  assert.ok(mp.decodeMessageHeader(Buffer.concat([Buffer.from('820103', 'hex'), extension])).x402_receipt);
+
   testCanonicalVectors();
+  testEveryCanonicalPayloadEncodesByteForByte();
+  testPaymentRefHashesAre48Bytes();
   await testRealPqRoundtrips();
   await testKeyBindingIsSignedByTheNamedAccount();
   await testCekCommitmentBlindedSealedAndEpochRotation();

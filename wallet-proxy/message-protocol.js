@@ -30,6 +30,8 @@ const AEAD_TAG_BYTES = 16;
 const WRAPPED_CEK_BYTES = AEAD_KEY_BYTES + AEAD_TAG_BYTES;
 const CIDV1_RAW_PREFIX = Buffer.from([0x01, 0x55, 0x12, 0x20]);
 const CIDV1_RAW_BYTES = 36;
+// Chain hash size (SHA3-384): FastPay order_hash and certificate_digest, consensus tx_hash.
+const CHAIN_HASH_BYTES = 48;
 
 // Canonical domain separation strings (Contract C1)
 const DOMAIN_ENVELOPE_SIGN = Buffer.from('postfiat-l1-v2/message-envelope/v1', 'ascii');
@@ -254,6 +256,16 @@ function pbBytes(fieldNum, value) {
   const buf = asBuf(value);
   if (buf.length === 0) return Buffer.alloc(0);
   return Buffer.concat([encodeVarint((fieldNum << 3) | 2), encodeVarint(buf.length), buf]);
+}
+
+// Refuse a set chain hash field that is not CHAIN_HASH_BYTES long (an empty field stays allowed).
+function checkChainHashes(message, hashes) {
+  for (const [name, value] of Object.entries(hashes)) {
+    const len = asBuf(value).length;
+    if (len !== 0 && len !== CHAIN_HASH_BYTES) {
+      throw new MessageProtocolError(`${message}.${name} must be ${CHAIN_HASH_BYTES} bytes (SHA3-384), got ${len}`);
+    }
+  }
 }
 
 function pbString(fieldNum, value) {
@@ -731,8 +743,10 @@ function decodePointer(bytes, opts = {}) {
     else if (f.fieldNum === 8) { expectWt(f, 0); out.flags = Number(f.value); }
     else if (f.fieldNum === 9) { expectWt(f, 2); out.inline_payload = Buffer.from(f.value); }
     else if (f.fieldNum === 10) { expectWt(f, 2); out.schema_name = f.value.toString('utf8'); }
+    else throw new MessageProtocolError(`unknown Pointer field ${f.fieldNum}`);
   }
   validatePointer(out);
+  if (opts.enforceCanonicalOrder && !encodePointer(out).equals(buf)) throw new MessageProtocolError('non-canonical Pointer encoding');
   return out;
 }
 
@@ -867,11 +881,22 @@ function decodeMessageKeyBinding(bytes, opts = {}) {
     else if (f.fieldNum === 7) { expectWt(f, 0); out.signature_algorithm = Number(f.value); }
     else if (f.fieldNum === 8) { expectWt(f, 2); out.account_pubkey = Buffer.from(f.value); }
     else if (f.fieldNum === 9) { expectWt(f, 2); out.signature = Buffer.from(f.value); }
+    else { throw new MessageProtocolError(`unknown MessageKeyBinding field ${f.fieldNum}`); }
   }
   return out;
 }
 
+function checkFastPayPaymentRef(ref) {
+  checkChainHashes('FastPayPaymentRef', {
+    order_hash: ref.order_hash,
+    certificate_digest: ref.certificate_digest,
+    tx_hash: ref.tx_hash,
+  });
+  return ref;
+}
+
 function encodeFastPayPaymentRef(ref) {
+  checkFastPayPaymentRef(ref);
   return Buffer.concat([
     pbVarint(1, ref.lane || 0),
     pbString(2, ref.chain_id || ''),
@@ -914,7 +939,7 @@ function decodeFastPayPaymentRef(bytes, opts = {}) {
     else if (f.fieldNum === 10) { expectWt(f, 0); out.fee_atoms = toSafeNumber(f.value); }
     else if (f.fieldNum === 11) { expectWt(f, 0); out.finalized_height = toSafeNumber(f.value); }
   }
-  return out;
+  return checkFastPayPaymentRef(out);
 }
 
 function encodeX402PaymentRequired(req) {
@@ -962,11 +987,13 @@ function decodeX402PaymentRequired(bytes, opts = {}) {
     else if (f.fieldNum === 10) { expectWt(f, 0); out.expires_at_unix_ms = toSafeNumber(f.value); }
     else if (f.fieldNum === 11) { expectWt(f, 2); out.resource_uri = f.value.toString('utf8'); }
     else if (f.fieldNum === 12) { expectWt(f, 2); out.facilitator_url = f.value.toString('utf8'); }
+    else { throw new MessageProtocolError(`unknown X402PaymentRequired field ${f.fieldNum}`); }
   }
   return out;
 }
 
 function encodeX402PaymentSignature(sig) {
+  checkChainHashes('X402PaymentSignature', { order_hash: sig.order_hash, tx_hash: sig.tx_hash });
   return Buffer.concat([
     pbVarint(1, sig.x402_version || 0),
     pbVarint(2, sig.scheme || 0),
@@ -1005,7 +1032,9 @@ function decodeX402PaymentSignature(bytes, opts = {}) {
     else if (f.fieldNum === 8) { expectWt(f, 2); out.tx_hash = Buffer.from(f.value); }
     else if (f.fieldNum === 9) { expectWt(f, 2); out.signed_payload = Buffer.from(f.value); }
     else if (f.fieldNum === 10) { expectWt(f, 2); out.certificate_payload = Buffer.from(f.value); }
+    else { throw new MessageProtocolError(`unknown X402PaymentSignature field ${f.fieldNum}`); }
   }
+  checkChainHashes('X402PaymentSignature', { order_hash: out.order_hash, tx_hash: out.tx_hash });
   return out;
 }
 
@@ -1033,6 +1062,7 @@ function decodeX402PaymentResponse(bytes, opts = {}) {
     else if (f.fieldNum === 3) { expectWt(f, 2); out.payment_ref = decodeFastPayPaymentRef(f.value, opts); }
     else if (f.fieldNum === 4) { expectWt(f, 0); out.settled_at_unix_ms = toSafeNumber(f.value); }
     else if (f.fieldNum === 5) { expectWt(f, 2); out.facilitator_id = f.value.toString('utf8'); }
+    else if (!opts.insideSignedHeader) { throw new MessageProtocolError(`unknown X402PaymentResponse field ${f.fieldNum}`); }
   }
   return out;
 }
@@ -1093,7 +1123,7 @@ function decodeMessageHeader(bytes, opts = {}) {
     else if (f.fieldNum === 13) { expectWt(f, 2); out.context_id = f.value.toString('utf8'); }
     else if (f.fieldNum === 14) { expectWt(f, 2); out.reply_to_cid = decodeIpfsCidRef(f.value, opts); }
     else if (f.fieldNum === 15) { expectWt(f, 2); out.payment_ref = decodeFastPayPaymentRef(f.value, opts); }
-    else if (f.fieldNum === 16) { expectWt(f, 2); out.x402_receipt = decodeX402PaymentResponse(f.value, opts); }
+    else if (f.fieldNum === 16) { expectWt(f, 2); out.x402_receipt = decodeX402PaymentResponse(f.value, { ...opts, insideSignedHeader: true }); }
   }
   return out;
 }
@@ -1136,6 +1166,7 @@ function decodeEnvelope(bytes, opts = {}) {
     else if (f.fieldNum === 5) { expectWt(f, 0); out.signature_algorithm = Number(f.value); }
     else if (f.fieldNum === 6) { expectWt(f, 2); out.sender_pubkey = Buffer.from(f.value); }
     else if (f.fieldNum === 7) { expectWt(f, 2); out.signature = Buffer.from(f.value); }
+    else { throw new MessageProtocolError(`unknown Envelope field ${f.fieldNum}`); }
   }
   return out;
 }
@@ -1881,6 +1912,7 @@ module.exports = {
   WRAPPED_CEK_BYTES,
   CIDV1_RAW_PREFIX,
   CIDV1_RAW_BYTES,
+  CHAIN_HASH_BYTES,
   DOMAIN_ENVELOPE_SIGN,
   DOMAIN_MESSAGE_AAD,
   DOMAIN_XWING_WRAP_INFO,

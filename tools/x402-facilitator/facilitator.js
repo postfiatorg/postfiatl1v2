@@ -30,6 +30,7 @@ const http = require('node:http');
 const path = require('node:path');
 
 const mp = require('../../wallet-proxy/message-protocol');
+const nativeChain = require('./native-chain');
 
 const HEADER_PAYMENT_REQUIRED = 'payment-required';
 const HEADER_PAYMENT_SIGNATURE = 'payment-signature';
@@ -130,12 +131,12 @@ function extractX402RequestHashFromMemos(memos) {
 
 function computeFastPayOrderHash(order) {
   const canonical = mp.canonicalJsonBytes(order);
-  return mp.sha256(Buffer.concat([DOMAIN_FASTPAY_ORDER_HASH, canonical]));
+  return mp.sha3_384(Buffer.concat([DOMAIN_FASTPAY_ORDER_HASH, canonical]));
 }
 
 function computeConsensusTxHash(tx) {
   const canonical = mp.canonicalJsonBytes(tx);
-  return mp.sha256(Buffer.concat([DOMAIN_CONSENSUS_TX_HASH, canonical]));
+  return mp.sha3_384(Buffer.concat([DOMAIN_CONSENSUS_TX_HASH, canonical]));
 }
 
 async function signFastPayOrder(order, { publicKey, secretKey }) {
@@ -181,7 +182,7 @@ async function signFastPayValidatorVote({ orderHash, epoch, validatorId, secretK
 }
 
 function computeCertificateDigest(cert) {
-  return mp.sha256(mp.canonicalJsonBytes(cert));
+  return mp.sha3_384(mp.canonicalJsonBytes(cert));
 }
 
 // ---------------------------------------------------------------------------
@@ -443,7 +444,7 @@ class CommitteeRegistry {
     }
   }
 
-  rotateCommittee({ epoch, threshold, validators, retainPreviousEpochs = 0 }) {
+  rotateCommittee({ epoch, threshold, validators, domain = null, retainPreviousEpochs = 0 }) {
     if (!Number.isInteger(epoch) || epoch <= this._activeEpoch) {
       throw new X402Error(400, 'invalid_committee_epoch', 'committee epoch must strictly increase');
     }
@@ -455,9 +456,13 @@ class CommitteeRegistry {
     }
     const map = new Map();
     for (const v of validators) {
-      map.set(String(v.id), Buffer.from(v.pubkeyHex, 'hex'));
+      const pk = Buffer.from(v.pubkeyHex, 'hex');
+      if (pk.length !== mp.ML_DSA_65_PUBKEY_BYTES) {
+        throw new X402Error(400, 'invalid_validator_pubkey', `validator ${v.id} pubkey must be ${mp.ML_DSA_65_PUBKEY_BYTES} bytes`);
+      }
+      map.set(String(v.id), pk);
     }
-    this._committees.set(epoch, { epoch, threshold, validators: map });
+    this._committees.set(epoch, { epoch, threshold, validators: map, domain });
     this._activeEpoch = epoch;
     const minRetained = epoch - Math.max(0, retainPreviousEpochs);
     for (const oldEpoch of this._committees.keys()) {
@@ -469,12 +474,44 @@ class CommitteeRegistry {
     return this._activeEpoch;
   }
 
-  async verifyCertificate(certificatePayload, expectedOrderHash) {
+  getCommittee(epoch = this._activeEpoch) {
+    return this._committees.get(epoch) || null;
+  }
+
+  getActiveCommittee() {
+    return this.getCommittee(this._activeEpoch);
+  }
+
+  async verifyCertificate(certificatePayload, expectedOrderHash, { expectedDomain = null, requireNative = false } = {}) {
     let cert;
     try {
       cert = JSON.parse(Buffer.from(certificatePayload).toString('utf8'));
     } catch (_) {
       throw new X402Error(400, 'invalid_certificate_payload', 'certificate_payload must be valid JSON');
+    }
+    if (nativeChain.isNativeOwnedTransferCertificateV3(cert)) {
+      const epoch = Number(cert.order?.recovery?.committee_epoch);
+      const committee = this._committees.get(epoch);
+      if (!committee) {
+        throw new X402Error(409, 'stale_or_unknown_committee_epoch', `committee epoch ${epoch} is not accepted`);
+      }
+      const check = await nativeChain.verifyNativeOwnedTransferCertificateV3(cert, {
+        committee,
+        expectedDomain: expectedDomain || committee.domain,
+        expectedOrderHash,
+      });
+      if (!check.ok) {
+        const status = check.reason.startsWith('insufficient_quorum') ? 401 : 400;
+        throw new X402Error(status, check.reason, `native FastPay v3 certificate rejected: ${check.reason}`);
+      }
+      return {
+        epoch: check.epoch,
+        quorumCount: check.quorumCount,
+        certificateDigest: check.certificateDigest,
+      };
+    }
+    if (requireNative) {
+      throw new X402Error(400, 'native_certificate_required', 'native OwnedTransferCertificateV3 is required');
     }
     const committee = this._committees.get(cert?.epoch);
     if (!committee) {
@@ -535,6 +572,8 @@ function createFacilitatorCore({
   spentStore = new MemorySpentStore(),
   committeeRegistry = new CommitteeRegistry(),
   settlementAdapter = null,
+  expectedDomain = null,
+  requireNativePayloads = false,
   ipRateLimit = 60,
   keyRateLimit = 60,
   rateWindowMs = 60_000,
@@ -717,6 +756,155 @@ function createFacilitatorCore({
       throw new X402Error(400, 'invalid_signed_payload', 'signed_payload must be valid canonical JSON');
     }
 
+    // Native chain payload path: SignedOwnedTransferOrderV3 / SignedPaymentV2
+    if (sigMsg.lane === mp.PaymentLane.FASTPAY && nativeChain.isNativeSignedOwnedTransferOrderV3(parsedPayload)) {
+      const nativeCheck = await nativeChain.verifyNativeOwnedTransferOrderV3(parsedPayload);
+      if (!nativeCheck.ok) {
+        const status = nativeCheck.reason.includes('signature') ? 401 : 400;
+        throw new X402Error(status, nativeCheck.reason, `native OwnedTransferOrderV3 invalid: ${nativeCheck.reason}`);
+      }
+      const order = parsedPayload.order;
+      if (order.domain.chain_id !== chainId) {
+        throw new X402Error(400, 'chain_id_mismatch', `expected chain_id ${chainId}`);
+      }
+      if (expectedDomain && !nativeChain.domainsMatch(order.domain, expectedDomain)) {
+        throw new X402Error(400, 'domain_mismatch', 'OwnedTransferOrderV3 domain does not match facilitator domain');
+      }
+      let payeeAmount = 0;
+      for (const out of order.outputs) {
+        if (String(out.asset || '') !== req.asset_id) continue;
+        const pkBuf = Buffer.from(String(out.owner_pubkey_hex || ''), 'hex');
+        if (pkBuf.length !== mp.ML_DSA_65_PUBKEY_BYTES) {
+          throw new X402Error(400, 'invalid_output_pubkey', 'FastPay output owner_pubkey_hex must be ML-DSA-65 pubkey');
+        }
+        if (mp.deriveAccountAddress(pkBuf) === req.pay_to) {
+          payeeAmount += Number(out.value || 0);
+        }
+      }
+      if (!Number.isSafeInteger(payeeAmount) || payeeAmount < req.max_amount_atoms) {
+        throw new X402Error(402, 'insufficient_payment_amount', 'native FastPay order payee output below required amount');
+      }
+      if (expectedTerms && payeeAmount !== expectedTerms.priceAtoms) {
+        throw new X402Error(400, 'payment_amount_mismatch', `the gate takes exactly ${expectedTerms.priceAtoms} atoms`);
+      }
+      const minFee = computeMinimumFastPayFeeAtoms({
+        weightBytes: nativeCheck.signingBytes.length,
+        inputCount: order.inputs.length,
+        outputCount: order.outputs.length,
+      });
+      if (!Number.isSafeInteger(order.fee) || order.fee < minFee) {
+        throw new X402Error(400, 'insufficient_fastpay_fee', `FastPay fee ${order.fee} below floor ${minFee}`);
+      }
+      const memoHash = extractX402RequestHashFromMemos(order.memos);
+      if (!crypto.timingSafeEqual(memoHash, req.request_hash)) {
+        throw new X402Error(400, 'memo_request_hash_mismatch', 'pf.ptr v5 INLINE memo hash does not match request_hash');
+      }
+      if (sigMsg.order_hash.length !== mp.CHAIN_HASH_BYTES || !crypto.timingSafeEqual(sigMsg.order_hash, nativeCheck.orderHash)) {
+        throw new X402Error(400, 'order_hash_mismatch', 'PAYMENT-SIGNATURE order_hash does not match native order digest');
+      }
+      const payerKeyFingerprint = mp.sha256(nativeCheck.pubkeyBuf).toString('hex').slice(0, 16);
+      const dedupKey = `fastpay:${nativeCheck.orderHashHex}`;
+      return {
+        dedupKey,
+        lane: mp.PaymentLane.FASTPAY,
+        scheme: sigMsg.scheme,
+        required: req,
+        signature: sigMsg,
+        requestHash: memoHash,
+        payerKeyFingerprint,
+        orderHash: nativeCheck.orderHash,
+        txHash: Buffer.alloc(0),
+        payerAccount: nativeCheck.payerAccount,
+        payeeAccount: req.pay_to,
+        assetId: req.asset_id,
+        amountAtoms: payeeAmount,
+        feeAtoms: order.fee,
+        signedOrder: parsedPayload,
+        nativeFastPay: true,
+        nativeSignedOrderV3: parsedPayload,
+      };
+    }
+
+    if (
+      sigMsg.lane === mp.PaymentLane.CONSENSUS_PFT &&
+      nativeChain.isNativeSignedPaymentV2(parsedPayload)
+    ) {
+      const nativeCheck = await nativeChain.verifyNativePaymentV2(parsedPayload);
+      if (!nativeCheck.ok) {
+        const status = nativeCheck.reason.includes('signature') || nativeCheck.reason.includes('pubkey') ? 401 : 400;
+        throw new X402Error(status, nativeCheck.reason, `native SignedPaymentV2 invalid: ${nativeCheck.reason}`);
+      }
+      const unsigned = nativeCheck.unsigned;
+      if (unsigned.chain_id !== chainId) {
+        throw new X402Error(400, 'chain_id_mismatch', `expected chain_id ${chainId}`);
+      }
+      if (expectedDomain?.genesis_hash && unsigned.genesis_hash !== String(expectedDomain.genesis_hash).toLowerCase()) {
+        throw new X402Error(400, 'genesis_hash_mismatch', 'SignedPaymentV2 genesis_hash mismatch');
+      }
+      if (req.asset_id !== 'PFT') {
+        throw new X402Error(400, 'asset_mismatch', 'native payment_v2 only settles PFT');
+      }
+      if (!Number.isSafeInteger(unsigned.sequence) || unsigned.sequence <= 0) {
+        throw new X402Error(400, 'missing_explicit_sequence', 'native payment_v2 requires positive sequence');
+      }
+      if (unsigned.to !== req.pay_to) {
+        throw new X402Error(400, 'pay_to_mismatch', `expected payee ${req.pay_to}, got ${unsigned.to}`);
+      }
+      if (!Number.isSafeInteger(unsigned.amount) || unsigned.amount < req.max_amount_atoms) {
+        throw new X402Error(402, 'insufficient_payment_amount', 'native payment_v2 amount below required amount');
+      }
+      if (expectedTerms && unsigned.amount !== expectedTerms.priceAtoms) {
+        throw new X402Error(400, 'payment_amount_mismatch', `the gate takes exactly ${expectedTerms.priceAtoms} atoms`);
+      }
+      const memoHash = extractX402RequestHashFromMemos(unsigned.memos);
+      if (!crypto.timingSafeEqual(memoHash, req.request_hash)) {
+        throw new X402Error(400, 'memo_request_hash_mismatch', 'pf.ptr v5 INLINE memo hash does not match request_hash');
+      }
+      if (sigMsg.tx_hash.length !== mp.CHAIN_HASH_BYTES || !crypto.timingSafeEqual(sigMsg.tx_hash, nativeCheck.txId)) {
+        throw new X402Error(400, 'tx_hash_mismatch', 'PAYMENT-SIGNATURE tx_hash does not match native payment_v2 tx_id');
+      }
+      const payerKeyFingerprint = mp.sha256(nativeCheck.pubkeyBuf).toString('hex').slice(0, 16);
+      const dedupKey = `consensus:${nativeCheck.txIdHex}`;
+      return {
+        dedupKey,
+        lane: sigMsg.lane,
+        scheme: sigMsg.scheme,
+        required: req,
+        signature: sigMsg,
+        requestHash: memoHash,
+        payerKeyFingerprint,
+        orderHash: Buffer.alloc(0),
+        txHash: nativeCheck.txId,
+        payerAccount: unsigned.from,
+        payeeAccount: unsigned.to,
+        assetId: 'PFT',
+        amountAtoms: unsigned.amount,
+        feeAtoms: unsigned.fee,
+        signedTx: {
+          chain_id: unsigned.chain_id,
+          payer_account: unsigned.from,
+          payee_account: unsigned.to,
+          asset_id: 'PFT',
+          amount_atoms: unsigned.amount,
+          fee_atoms: unsigned.fee,
+          sequence: unsigned.sequence,
+          memos: unsigned.memos,
+          tx_id: nativeCheck.txIdHex,
+          signed_payment_v2: parsedPayload,
+        },
+        nativeConsensus: true,
+        nativeSignedPaymentV2: parsedPayload,
+      };
+    }
+
+    if (requireNativePayloads) {
+      throw new X402Error(
+        400,
+        'native_chain_payload_required',
+        'production facilitator requires native SignedOwnedTransferOrderV3 or SignedPaymentV2 payloads'
+      );
+    }
+
     const { mlDsa65 } = await mp.loadPqModules();
     const payerPubkeyBuf = parsedPayload?.payer_pubkey_b64
       ? Buffer.from(String(parsedPayload.payer_pubkey_b64), 'base64url')
@@ -764,7 +952,7 @@ function createFacilitatorCore({
         throw new X402Error(400, 'memo_request_hash_mismatch', 'pf.ptr v5 INLINE memo hash does not match request_hash');
       }
       const computedOrderHash = computeFastPayOrderHash(order);
-      if (sigMsg.order_hash.length !== 32 || !crypto.timingSafeEqual(sigMsg.order_hash, computedOrderHash)) {
+      if (sigMsg.order_hash.length !== mp.CHAIN_HASH_BYTES || !crypto.timingSafeEqual(sigMsg.order_hash, computedOrderHash)) {
         throw new X402Error(400, 'order_hash_mismatch', 'PAYMENT-SIGNATURE order_hash does not match signed order');
       }
       const preimage = Buffer.concat([DOMAIN_FASTPAY_ORDER_SIGN, mp.canonicalJsonBytes(order)]);
@@ -821,7 +1009,7 @@ function createFacilitatorCore({
         throw new X402Error(400, 'memo_request_hash_mismatch', 'pf.ptr v5 INLINE memo hash does not match request_hash');
       }
       const computedTxHash = computeConsensusTxHash(tx);
-      if (sigMsg.tx_hash.length !== 32 || !crypto.timingSafeEqual(sigMsg.tx_hash, computedTxHash)) {
+      if (sigMsg.tx_hash.length !== mp.CHAIN_HASH_BYTES || !crypto.timingSafeEqual(sigMsg.tx_hash, computedTxHash)) {
         throw new X402Error(400, 'tx_hash_mismatch', 'PAYMENT-SIGNATURE tx_hash does not match signed consensus tx');
       }
       const preimage = Buffer.concat([DOMAIN_CONSENSUS_TX_SIGN, mp.canonicalJsonBytes(tx)]);
@@ -925,7 +1113,8 @@ function createFacilitatorCore({
         }
         const certCheck = await committeeRegistry.verifyCertificate(
           verified.signature.certificate_payload,
-          verified.orderHash
+          verified.orderHash,
+          { expectedDomain, requireNative: requireNativePayloads }
         );
         certificateDigest = certCheck.certificateDigest;
       } else {
@@ -935,6 +1124,9 @@ function createFacilitatorCore({
         const settled = await settlementAdapter.settleFastPay(verified);
         if (!settled?.accepted) {
           throw new X402Error(502, 'fastpay_settlement_rejected', settled?.reason || 'FastPay quorum rejected order');
+        }
+        if (settled.orderHashHex !== undefined && settled.orderHashHex !== verified.orderHash.toString('hex')) {
+          throw new X402Error(502, 'chain_order_hash_mismatch', 'settled FastPay order hash does not match signed order');
         }
         certificateDigest = Buffer.isBuffer(settled.certificateDigest)
           ? settled.certificateDigest
@@ -952,6 +1144,9 @@ function createFacilitatorCore({
       if (receipt.txId !== undefined) {
         if (typeof receipt.txId !== 'string' || !/^[0-9a-f]{96}$/.test(receipt.txId)) {
           throw new X402Error(502, 'invalid_chain_tx_id', 'invalid settled transaction ID');
+        }
+        if (verified.nativeConsensus && receipt.txId !== verified.txHash.toString('hex')) {
+          throw new X402Error(502, 'chain_tx_id_mismatch', 'settled native payment_v2 tx_id disagrees with signed transaction');
         }
         settledTxHash = Buffer.from(receipt.txId, 'hex');
         spentKey = `consensus:${receipt.txId}`;
