@@ -60,6 +60,22 @@ gave out before is unknown, and a payer who already settled a
 3. **Committee rotation:** `pf-fastpay-settled` quorum certificates verify
    against epoch-tagged ML-DSA-65 validator committees and reject stale epochs.
 
+## Paying Client
+
+`X402HttpClient` and `X402McpClient` (`mcp-client.js`) pay a `402` challenge
+once per call and retry.
+
+- `maxBudgetAtoms` is a total for the lifetime of the client object, fees
+  included. A payment counts the moment it is signed and is never given back:
+  whoever receives a signed payment can settle it, whatever they answer. When
+  the next payment does not fit, the call fails with `budget_exceeded`.
+- A caller can state what it agreed to pay:
+  `request(url, { expectedPayment: { amountAtoms, assetId, payTo } })` or
+  `callTool(name, args, { expectedPayment })`. A challenge with another price,
+  asset or recipient is refused with `payment_terms_mismatch` and nothing is
+  signed. Without `expectedPayment` the server's challenge sets all three,
+  limited only by the budget and the `allowedAssets` / `allowedNetworks` lists.
+
 ## Endpoints
 
 - `GET /healthz` — liveness and active committee epoch metadata.
@@ -74,7 +90,7 @@ gave out before is unknown, and a payer who already settled a
 # Run automated end-to-end smoke + replay + committee-rotation + MCP tests:
 node tools/x402-facilitator/test_x402_e2e.js
 
-# Run the refusal tests (gate terms, used payments, daemon start):
+# Run the refusal tests (gate terms, used payments, daemon start, client budget):
 node tools/x402-facilitator/test_x402_refusals.js
 
 # Run standalone facilitator daemon (binds 127.0.0.1:4020 by default).

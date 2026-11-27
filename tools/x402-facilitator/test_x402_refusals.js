@@ -27,6 +27,7 @@ const {
   signConsensusTransfer,
   signFastPayOrder,
 } = require('./facilitator');
+const { X402HttpClient, X402McpClient } = require('./mcp-client');
 
 const CHAIN_ID = 'postfiat-devnet-2';
 const NETWORK = 'postfiat:devnet-2';
@@ -717,6 +718,133 @@ function daemonRefusesToStartWithoutADurableStore() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// The paying client: a total budget, and the terms the caller agreed to
+// ---------------------------------------------------------------------------
+
+// A server that asks for `terms` on every call, takes the signed payment and never serves.
+async function startTakingServer(terms) {
+  const taken = [];
+  const server = http.createServer({ maxHeaderSize: 65_536 }, async (req, res) => {
+    const rawBody = await readRawBody(req);
+    const paymentHeader = req.headers[HEADER_PAYMENT_SIGNATURE];
+    if (paymentHeader) {
+      const payment = mp.decodeX402PaymentSignature(mp.decodeX402Header(String(paymentHeader)));
+      const { order } = JSON.parse(payment.signed_payload.toString('utf8'));
+      taken.push({ to: order.payee_account, atoms: order.amount_atoms + order.fee_atoms });
+      res.writeHead(500, { 'content-type': JSON_CONTENT_TYPE });
+      res.end('{"error":"try again later"}');
+      return;
+    }
+    const required = {
+      x402_version: 2,
+      scheme: mp.X402Scheme.EXACT,
+      network: NETWORK,
+      lane: mp.PaymentLane.FASTPAY,
+      asset_id: terms.assetId,
+      max_amount_atoms: terms.priceAtoms,
+      pay_to: terms.payTo,
+      request_hash: computeHttpRequestHash({
+        method: req.method,
+        urlPath: req.url,
+        contentType: req.headers['content-type'],
+        body: rawBody,
+      }),
+      nonce: crypto.randomBytes(16),
+      expires_at_unix_ms: Date.now() + 60_000,
+    };
+    res.writeHead(402, {
+      'content-type': JSON_CONTENT_TYPE,
+      [HEADER_PAYMENT_REQUIRED]: mp.encodeX402Header(mp.encodeX402PaymentRequired(required)),
+    });
+    res.end('{}');
+  });
+  const port = await listen(server);
+  return { taken, endpointUrl: `http://127.0.0.1:${port}/mcp`, close: () => closeServer(server) };
+}
+
+function payingClient(payerKeys, maxBudgetAtoms) {
+  return new X402HttpClient({
+    chainId: CHAIN_ID,
+    payerAccount: PAYER,
+    payerPublicKey: payerKeys.publicKey,
+    payerSecretKey: payerKeys.secretKey,
+    maxBudgetAtoms,
+    allowedAssets: ['PFT', PFUSDC_ASSET_ID],
+  });
+}
+
+async function errorCodesOfCalls(mcpClient, calls, options) {
+  const codes = [];
+  for (let i = 0; i < calls; i += 1) {
+    try {
+      await mcpClient.callTool('cheap_lookup', { q: i }, options);
+      codes.push('served');
+    } catch (err) {
+      codes.push(err.code);
+    }
+  }
+  return codes;
+}
+
+// A server that asks on every call and never serves must not get more than the budget in total.
+async function clientBudgetIsATotalAcrossCalls({ payerKeys }) {
+  const budgetAtoms = 500_000;
+  const askedPerCall = 200_000;
+  const server = await startTakingServer({ priceAtoms: askedPerCall, assetId: 'PFT', payTo: OTHER_ACCOUNT });
+  try {
+    const mcpClient = new X402McpClient({ endpointUrl: server.endpointUrl, httpClient: payingClient(payerKeys, budgetAtoms) });
+    const codes = await errorCodesOfCalls(mcpClient, 5);
+
+    assert.deepEqual(codes, ['mcp_call_failed', 'mcp_call_failed', 'budget_exceeded', 'budget_exceeded', 'budget_exceeded']);
+    assert.equal(server.taken.length, 2);
+    const signedAtoms = server.taken.reduce((sum, payment) => sum + payment.atoms, 0);
+    assert.ok(signedAtoms <= budgetAtoms, `signed ${signedAtoms} atoms with a budget of ${budgetAtoms}`);
+
+    // The fee is part of what leaves the account, so a budget equal to the price is not enough.
+    const exactPriceClient = new X402McpClient({ endpointUrl: server.endpointUrl, httpClient: payingClient(payerKeys, askedPerCall) });
+    assert.deepEqual(await errorCodesOfCalls(exactPriceClient, 1), ['budget_exceeded']);
+    assert.equal(server.taken.length, 2);
+  } finally {
+    await server.close();
+  }
+  assert.throws(() => payingClient(payerKeys, Number.NaN), /maxBudgetAtoms/);
+}
+
+async function clientRefusesTermsTheCallerDidNotAgreeTo({ payerKeys }) {
+  const agreed = { amountAtoms: 50_000, assetId: 'PFT', payTo: PAYEE };
+  const asked = { priceAtoms: agreed.amountAtoms, assetId: agreed.assetId, payTo: agreed.payTo };
+  const otherTerms = {
+    price: { ...asked, priceAtoms: agreed.amountAtoms + 1 },
+    asset: { ...asked, assetId: PFUSDC_ASSET_ID },
+    recipient: { ...asked, payTo: OTHER_ACCOUNT },
+  };
+  for (const [name, terms] of Object.entries(otherTerms)) {
+    const server = await startTakingServer(terms);
+    try {
+      const mcpClient = new X402McpClient({ endpointUrl: server.endpointUrl, httpClient: payingClient(payerKeys, 1_000_000) });
+      const codes = await errorCodesOfCalls(mcpClient, 1, { expectedPayment: agreed });
+      assert.deepEqual(codes, ['payment_terms_mismatch'], `another ${name} than the caller agreed to`);
+      assert.equal(server.taken.length, 0, `no payment may be signed for another ${name}`);
+    } finally {
+      await server.close();
+    }
+  }
+
+  const server = await startTakingServer(asked);
+  try {
+    const mcpClient = new X402McpClient({ endpointUrl: server.endpointUrl, httpClient: payingClient(payerKeys, 1_000_000) });
+    const incomplete = { amountAtoms: agreed.amountAtoms, assetId: agreed.assetId };
+    assert.deepEqual(await errorCodesOfCalls(mcpClient, 1, { expectedPayment: incomplete }), ['invalid_expected_payment']);
+    assert.equal(server.taken.length, 0);
+
+    assert.deepEqual(await errorCodesOfCalls(mcpClient, 1, { expectedPayment: agreed }), ['mcp_call_failed']);
+    assert.deepEqual(server.taken.map((payment) => payment.to), [PAYEE]);
+  } finally {
+    await server.close();
+  }
+}
+
 const CASES = [
   ['a gate serves a payment for its own challenge once', gateServesItsOwnChallengeOnce],
   ['a gate refuses a payment made for another gate', gateRefusesPaymentMadeForAnotherGate],
@@ -735,6 +863,8 @@ const CASES = [
   ['a gate refuses when the used-payment record cannot be written', gateRefusesWhenTheUsedPaymentRecordCannotBeWritten],
   ['a used payment stays used after a restart', usedPaymentStaysUsedAfterARestart],
   ['the daemon refuses to start without a durable store', daemonRefusesToStartWithoutADurableStore],
+  ['the client budget is a total across calls', clientBudgetIsATotalAcrossCalls],
+  ['the client refuses terms the caller did not agree to', clientRefusesTermsTheCallerDidNotAgreeTo],
 ];
 
 async function main() {
