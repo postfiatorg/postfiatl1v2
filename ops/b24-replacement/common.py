@@ -23,6 +23,16 @@ ROUTE='pftl-b24-ethereum-wB24-usdc-v1'
 OLD_ROUTE='pftl-pfdep-schwab-primary-pfusdc-v1'
 KEY_DIR=Path('/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private')
 KEYS={ISSUER:KEY_DIR/'faucet-key.json',ALICE:KEY_DIR/'holder-key.json'}
+# The issuer's key also lives on validator-0, where the chain put it at genesis. The local folder
+# above was deleted on 2026-11-27; when the local file is absent the issuer's signature is made
+# there, by the same signing binary (sha256 3039c21a…), so the key is not copied anywhere.
+ISSUER_REMOTE=('root@64.176.220.75','/opt/postfiat/releases/b23-release4-20261113/postfiat-node','/var/lib/postfiat/validator-0/faucet_key.json')
+def sign_argv(args,source):
+    """args is [node, command, '--key-file', path, ...]; returns the command that signs."""
+    if source!=ISSUER or Path(args[3]).is_file():return args
+    import shlex
+    host,node,key=ISSUER_REMOTE
+    return ['ssh','-oBatchMode=yes','-oConnectTimeout=15',host,shlex.join(['runuser','-u','postfiat','--',node,args[1],'--key-file',key,*args[4:]])]
 
 def load(path):return json.loads(Path(path).read_bytes())
 def save(path,value):Path(path).write_text(json.dumps(value,indent=2)+'\n')
@@ -74,7 +84,7 @@ class Copy:
             '--chain-id',self.base['tip']['chain_id'],'--genesis-hash',self.base['tip']['genesis_hash'],
             '--protocol-version',str(self.base['tip']['protocol_version']),'--fee','1000','--sequence',str(account['sequence']+1),
             '--operation-json',json.dumps(op,separators=(',',':'))]
-        signed=self.signer(state,op,source,kind,self.output/label) if self.signer else json.loads(subprocess.check_output(args,stderr=subprocess.PIPE))
+        signed=self.signer(state,op,source,kind,self.output/label) if self.signer else json.loads(subprocess.check_output(sign_argv(args,source),stderr=subprocess.PIPE))
         h=height or self.height+1;steps=self.output/(label+'-steps.json');target=self.output/(label+'-state.json')
         save(steps,[dict(label=label,height=h,transaction=signed,kind=kind,expect_accepted=accepted,expect_code=code)])
         result=subprocess.run([str(CANARY),'apply','--snapshot',str(self.current),'--steps',str(steps),'--output',str(target)],capture_output=True)

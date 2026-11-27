@@ -13,7 +13,7 @@ def sign_fields(fields,kind,prefix):
     source=fields['source'];input_path=Path(str(prefix)+'-fields.json');output=Path(str(prefix)+'-signed.json');save(input_path,dict(kind=kind,fields=fields))
     if source in KEYS:
         args=[str(NODE),'wallet-sign-'+kind+'-transaction','--key-file',str(KEYS[source]),'--chain-id',fields['chain_id'],'--genesis-hash',fields['genesis_hash'],'--protocol-version',str(fields['protocol_version']),'--fee',str(fields['fee']),'--sequence',str(fields['sequence']),'--operation-json',json.dumps(fields['operation'],separators=(',',':'))]
-        result=json.loads(subprocess.check_output(args,stderr=subprocess.PIPE));save(output,result)
+        result=json.loads(subprocess.check_output(sign_argv(args,source),stderr=subprocess.PIPE));save(output,result)
     elif source==BOB:
         subprocess.run(['/home/postfiat/repos/StakeHub/.venv/bin/python',str(HERE/'sign_bob.py'),str(input_path),str(output)],check=True)
     elif source==TEST:
