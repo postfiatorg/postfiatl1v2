@@ -1,7 +1,7 @@
 # RPC Method Inventory
 
 Status: code-derived inventory
-Date: 2026-11-25
+Date: 2026-11-27
 Report: `docs/runbooks/rpc-method-inventory.json`
 
 This inventory is generated from Rust SDK method constants, node RPC dispatch,
@@ -14,8 +14,8 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 171
-- Read-only public methods: 88
+- Total methods observed: 174
+- Read-only public methods: 91
 - Public cryptographically authorized protocol mutations: 12
 - Controlled write gated methods: 17
 - Privacy-alpha gated methods: 4
@@ -52,6 +52,7 @@ method lacks an explicit posture.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | account | read_only_public | yes | no | yes | yes | yes | XRP-like transparent account read |
 | account_assets | read_only_public | yes | no | yes | yes | yes |  |
+| account_bridge_holds | read_only_public | yes | no | yes | no | no | read-only aggregated bridge holds for a recipient account |
 | account_escrows | read_only_public | yes | no | yes | yes | yes |  |
 | account_lines | read_only_public | yes | no | yes | yes | yes |  |
 | account_nfts | read_only_public | yes | no | yes | yes | yes |  |
@@ -62,6 +63,7 @@ method lacks an explicit posture.
 | apply_bridge_batch | operator_or_local_only | no | no | yes | yes | no | operator/state-apply path; not public RPC |
 | apply_shield_batch | operator_or_local_only | no | no | yes | yes | no | operator/state-apply path; not public RPC |
 | archive_window | read_only_public | yes | no | yes | yes | yes | bounded archive-window bundle read |
+| asset_bridge_holds | read_only_public | yes | no | yes | no | no | read-only cursor-paginated aggregated bridge holds for an issued asset |
 | asset_fee_quote | read_only_public | yes | no | yes | yes | yes |  |
 | asset_info | read_only_public | yes | no | yes | yes | yes |  |
 | asset_orchard_action_status | read_only_public | yes | no | yes | no | yes | public private-action finality/status read |
@@ -92,6 +94,7 @@ method lacks an explicit posture.
 | fastlane_asset_control_prepare | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
 | fastlane_asset_control_preview | read_only_public | yes | no | no | yes | no |  |
 | fastlane_exit | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
+| fastpay_fee_quote | read_only_public | yes | no | yes | no | no | read-only FastPay v3 fee quote and owned-object capacity status |
 | fastpay_recovery_committee | read_only_public | yes | no | yes | no | yes | committed FastPay recovery committee (validator ids, public keys, registry root, order range) and policy, active or by epoch |
 | fastswap_apply | authorized_protocol_mutation_public | yes | no | no | yes | no |  |
 | fastswap_cancel_apply | authorized_protocol_mutation_public | yes | no | no | yes | no |  |

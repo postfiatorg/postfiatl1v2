@@ -426,3 +426,65 @@ fn mempool_admission_uses_the_block_rules_after_train_a_activation() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Point 9 (A13, B12): once the asset gate is active, the asset fee quote
+/// includes the implicit-line fee that execution charges.
+#[test]
+fn asset_fee_quote_includes_the_implicit_line_fee_after_the_asset_gate() {
+    let (dir, store, genesis) = store_with_train_a_active("asset-fee-quote");
+    let governance = store.read_governance().expect("read governance");
+    let compatibility =
+        asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance);
+    let issuer = review_key(91);
+    let recipient = review_key(92);
+    let asset = postfiat_types::AssetDefinition::new(&genesis.chain_id, &issuer.address, "QTE", 1, 6)
+        .expect("asset");
+    let mut ledger = store.read_ledger().expect("read ledger");
+    ledger
+        .accounts
+        .extend([review_account(&issuer), review_account(&recipient)]);
+    ledger.asset_definitions.push(asset.clone());
+    store.write_ledger(&ledger).expect("write ledger");
+    let operation =
+        postfiat_types::AssetTransactionOperation::IssuedPayment(postfiat_types::IssuedPaymentOperation {
+            from: issuer.address.clone(),
+            to: recipient.address.clone(),
+            asset_id: asset.asset_id.clone(),
+            issuer: issuer.address.clone(),
+            amount: 1,
+        });
+    let quote = asset_fee_quote(AssetFeeQuoteOptions {
+        data_dir: dir.clone(),
+        source: issuer.address.clone(),
+        operation_json: serde_json::to_string(&operation).expect("operation json"),
+        sequence: None,
+    })
+    .expect("asset fee quote");
+    let signed = quote_signed_asset_transaction(
+        &genesis,
+        issuer.address.clone(),
+        quote.minimum_fee,
+        quote.sequence,
+        operation,
+    )
+    .expect("quoted transaction");
+    let legacy = postfiat_execution::asset_transaction_state_expansion_fee(&ledger, &signed);
+    let enforced = postfiat_execution::asset_transaction_state_expansion_fee_with_compatibility(
+        &ledger,
+        &signed,
+        6,
+        compatibility,
+    );
+    assert!(enforced > legacy, "the gate adds an implicit-line fee");
+    assert_eq!(quote.state_expansion_fee, enforced);
+    assert_eq!(
+        quote.minimum_fee,
+        postfiat_execution::minimum_asset_transaction_fee_for_ledger_with_compatibility(
+            &ledger,
+            &signed,
+            6,
+            compatibility,
+        )
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

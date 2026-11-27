@@ -1783,7 +1783,12 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
             operation.clone(),
         )?;
         let base_asset_fee = minimum_asset_transaction_fee(&signed);
-        let state_expansion_fee = asset_transaction_state_expansion_fee(&quote_ledger, &signed);
+        let state_expansion_fee = asset_transaction_state_expansion_fee_with_compatibility(
+            &quote_ledger,
+            &signed,
+            block_height,
+            asset_execution_compatibility,
+        );
         let minimum_fee = base_asset_fee.saturating_add(state_expansion_fee);
         if fee >= minimum_fee {
             break (

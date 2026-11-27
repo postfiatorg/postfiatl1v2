@@ -72,6 +72,13 @@ fn apply_nft_operation(
             nft.validate_for_chain(&genesis.chain_id)
                 .map_err(|error| ("bad_nft_definition", error))?;
             if scaling_active {
+                if operation.serial & postfiat_types::NFT_MIGRATED_SERIAL_BIT != 0 {
+                    return Err((
+                        "nft_migrated_serial_reserved",
+                        "nft serials with the migrated-serial bit are reserved for migrated records"
+                            .to_string(),
+                    ));
+                }
                 if ledger.used_nft_serials.contains_key(&nft.nft_id) {
                     return Err((
                         "nft_serial_already_used",

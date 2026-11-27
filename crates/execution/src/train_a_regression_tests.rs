@@ -1664,7 +1664,8 @@ fn pillar4_keyed_nft_migration_tombstones_issuer_burn_and_spam_guard() {
 
     // Non-issuer-burnable NFT cannot be burned by issuer (`nft_not_issuer_burnable`).
     let seq = ledger.account(&issuer.address).unwrap().sequence + 1;
-    let migrated_serial = NFT_MIGRATED_SERIAL_BIT | 42;
+    // A native serial; bit 63 is reserved for migrated records.
+    let plain_serial = 42;
     let mint_non_issuer_burn = sign_nft_tx(
         &genesis,
         &issuer,
@@ -1674,10 +1675,10 @@ fn pillar4_keyed_nft_migration_tombstones_issuer_burn_and_spam_guard() {
         NftTransactionOperation::NftMint(NftMintOperation {
             issuer: issuer.address.clone(),
             collection_id: "COL-A".to_string(),
-            serial: migrated_serial,
+            serial: plain_serial,
             owner: owner.address.clone(),
             metadata_hash: "33".repeat(48),
-            metadata_uri: "ipfs://migrated-42".to_string(),
+            metadata_uri: "ipfs://plain-42".to_string(),
             flags: NFT_FLAG_TRANSFERABLE,
             collection_flags: 0,
             issuer_transfer_fee: 0,
@@ -1693,7 +1694,7 @@ fn pillar4_keyed_nft_migration_tombstones_issuer_burn_and_spam_guard() {
         )
         .accepted
     );
-    let migrated_id = nft_id(&genesis.chain_id, &issuer.address, "COL-A", migrated_serial).unwrap();
+    let plain_id = nft_id(&genesis.chain_id, &issuer.address, "COL-A", plain_serial).unwrap();
 
     let seq = ledger.account(&issuer.address).unwrap().sequence + 1;
     let bad_issuer_burn = sign_nft_tx(
@@ -1703,7 +1704,7 @@ fn pillar4_keyed_nft_migration_tombstones_issuer_burn_and_spam_guard() {
         50_000,
         NFT_BURN_TRANSACTION_KIND,
         NftTransactionOperation::NftBurn(NftBurnOperation {
-            nft_id: migrated_id,
+            nft_id: plain_id,
             owner: owner.address.clone(),
             issuer: issuer.address.clone(),
         }),
@@ -1862,6 +1863,55 @@ fn pillar2_fastpay_fee_v1_formula_admission_and_account_soft_cap() {
     )
     .unwrap_err();
     assert!(matches!(err, OwnedTransferError::InsufficientFee { .. }));
+}
+
+/// Point 9 (A12): after NFT scaling, a native mint cannot use a serial with
+/// the migrated-serial bit; before activation the old rules are unchanged.
+#[test]
+fn native_nft_mints_cannot_use_the_migrated_serial_bit_after_nft_scaling() {
+    let genesis = test_genesis();
+    let issuer = test_key(74);
+    let owner = test_key(75);
+    let ledger = LedgerState::new(vec![
+        funded_account(&issuer, 10_000_000),
+        funded_account(&owner, 10_000_000),
+    ]);
+    let mint = sign_nft_tx(
+        &genesis,
+        &issuer,
+        1,
+        50_000,
+        NFT_MINT_TRANSACTION_KIND,
+        NftTransactionOperation::NftMint(NftMintOperation {
+            issuer: issuer.address.clone(),
+            collection_id: "COL".to_string(),
+            serial: NFT_MIGRATED_SERIAL_BIT | 7,
+            owner: owner.address.clone(),
+            metadata_hash: "11".repeat(48),
+            metadata_uri: "ipfs://x".to_string(),
+            flags: NFT_FLAG_TRANSFERABLE,
+            collection_flags: 0,
+            issuer_transfer_fee: 0,
+        }),
+    );
+    let scheduled =
+        AssetExecutionCompatibility::strict().with_nft_scaling_v1_activation_height(Some(10));
+    let before = execute_nft_transaction_with_compatibility(
+        &genesis,
+        &mut ledger.clone(),
+        &mint,
+        9,
+        scheduled,
+    );
+    assert!(before.accepted, "{before:?}");
+    let after = execute_nft_transaction_with_compatibility(
+        &genesis,
+        &mut ledger.clone(),
+        &mint,
+        10,
+        scheduled,
+    );
+    assert_eq!(after.code, "nft_migrated_serial_reserved", "{after:?}");
 }
 
 /// Point 4 (A9, B01): before NFT scaling is active, `nft_burn` keeps main's
