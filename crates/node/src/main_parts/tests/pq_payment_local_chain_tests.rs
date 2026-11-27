@@ -432,7 +432,7 @@ mod pq_payment_local_chain_tests {
             postfiat_node::verify_shielded_action_batch_id(&foreign, &batch)
                 .unwrap_err()
                 .to_string()
-                .contains("development genesis")
+                .contains("enabled PQ domains")
         );
         let opts = proposal(proposer, &fleet.root, &batch);
         let proposed = propose_batch_with_timings(opts.clone()).unwrap();

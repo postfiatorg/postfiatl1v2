@@ -228,7 +228,7 @@ deposit addresses. Then:
 `payment_v2` and `issued_payment_v2` can carry up to four memos (512 bytes total).
 The source implementation returns signed memo contents through `tx` and
 `account_tx`, alongside their hash, count and byte length. This source is in
-the running build (`04600868`). Rows written before it need an account history
+the running build (`9dcb689e`, `pq-r3`, on 27 November; earlier in `04600868`). Rows written before it need an account history
 index rebuild to carry v2 memos; whether the devnet's indexes were rebuilt is
 not recorded here.
 
