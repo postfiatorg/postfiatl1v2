@@ -12,6 +12,7 @@ pub(super) fn apply_proof(
     height: u64,
     compatibility: AssetExecutionCompatibility,
     orchard_balances: &[AssetOrchardAssetBalance],
+    bridge_hold_events: &mut Vec<postfiat_types::AssetBridgeHoldReceiptEventV1>,
 ) -> Result<(), Rejection> {
     let secondary = ledger
         .additional_solana_routes
@@ -100,6 +101,7 @@ pub(super) fn apply_proof(
         height,
         compatibility,
         orchard_balances,
+        bridge_hold_events,
     )
 }
 
@@ -115,6 +117,7 @@ fn credit_verified(
     height: u64,
     compatibility: AssetExecutionCompatibility,
     orchard_balances: &[AssetOrchardAssetBalance],
+    bridge_hold_events: &mut Vec<postfiat_types::AssetBridgeHoldReceiptEventV1>,
 ) -> Result<(), Rejection> {
     let profile = &route.profile;
     let pins = profile
@@ -241,22 +244,76 @@ fn credit_verified(
             &bucket,
             format!("{} · Solana", family.code),
         )?;
-        let index = issued_asset_credit_recipient_line_index(
-            ledger,
-            &series,
-            &recipient,
-            amount,
-            "Solana deposit",
-        )?;
-        let (balance, limit) = prepare_issued_asset_credit(
-            ledger,
-            &series,
-            &recipient,
-            index,
-            amount,
-            "Solana deposit",
-        )?;
-        commit_bridge_receipt_credit(
+        let settlement = if compatibility.asset_gate_v1_active(height) {
+            match asset_gate(
+                ledger,
+                &series,
+                None,
+                Some(&recipient),
+                AssetMovementOpKind::BridgeCredit,
+                height,
+            ) {
+                AssetGateOutcome::Allow => {
+                    let index = issued_asset_credit_recipient_line_index_gated(
+                        ledger,
+                        &series,
+                        &recipient,
+                        amount,
+                        "Solana deposit",
+                    )?;
+                    let (balance, limit) = prepare_issued_asset_credit_gated(
+                        ledger,
+                        &series,
+                        &recipient,
+                        index,
+                        amount,
+                        "Solana deposit",
+                    )?;
+                    BridgeCreditSettlement::Trustline {
+                        recipient_index: index,
+                        recipient_after: balance,
+                        recipient_required: limit,
+                    }
+                }
+                AssetGateOutcome::RouteToHold { reason_code } => {
+                    BridgeCreditSettlement::Hold(Box::new(BridgeCreditHold {
+                        asset: series.clone(),
+                        recipient: recipient.clone(),
+                        source_reference: receipt.source_tx_or_attestation.clone(),
+                        reason_code,
+                    }))
+                }
+                AssetGateOutcome::AllowReturnOnly => {
+                    return Err((
+                        "asset_gate_recipient_ineligible",
+                        "Solana deposit is not a return-only exit".into(),
+                    ));
+                }
+                AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+            }
+        } else {
+            let index = issued_asset_credit_recipient_line_index(
+                ledger,
+                &series,
+                &recipient,
+                amount,
+                "Solana deposit",
+            )?;
+            let (balance, limit) = prepare_issued_asset_credit(
+                ledger,
+                &series,
+                &recipient,
+                index,
+                amount,
+                "Solana deposit",
+            )?;
+            BridgeCreditSettlement::Trustline {
+                recipient_index: index,
+                recipient_after: balance,
+                recipient_required: limit,
+            }
+        };
+        if let Some(event) = commit_bridge_receipt_credit_settled(
             genesis,
             ledger,
             receipt,
@@ -265,10 +322,10 @@ fn credit_verified(
             height,
             true,
             create_series,
-            index,
-            balance,
-            limit,
-        )?;
+            settlement,
+        )? {
+            bridge_hold_events.push(event);
+        }
         update_bridge_cap(ledger, &family.asset_id, supply, height, checkpoint)?;
     }
     Ok(())
@@ -391,6 +448,7 @@ mod tests {
         route: &SolanaRouteState,
         values: &[u8],
     ) -> Result<(), Rejection> {
+        let mut hold_events = Vec::new();
         credit_verified(
             genesis,
             ledger,
@@ -400,6 +458,7 @@ mod tests {
             10,
             AssetExecutionCompatibility::strict(),
             &[],
+            &mut hold_events,
         )
     }
 
@@ -1287,6 +1346,7 @@ mod tests {
                 10,
                 AssetExecutionCompatibility::strict(),
                 &[],
+                &mut Vec::new(),
             )
             .unwrap();
             let client = &ledger.solana_route.as_ref().unwrap().client;
@@ -1300,6 +1360,7 @@ mod tests {
                 10,
                 AssetExecutionCompatibility::strict(),
                 &[],
+                &mut Vec::new(),
             )
             .unwrap_err();
             assert_eq!(error.0, "invalid_solana_handoff");
@@ -1323,6 +1384,7 @@ mod tests {
             10,
             AssetExecutionCompatibility::strict(),
             &[],
+            &mut Vec::new(),
         )
         .unwrap();
         let rotated = ledger.solana_route.as_ref().unwrap();
@@ -1339,7 +1401,8 @@ mod tests {
             &backfill,
             10,
             AssetExecutionCompatibility::strict(),
-            &[]
+            &[],
+            &mut Vec::new(),
         )
         .is_err());
         assert_eq!(ledger, before);

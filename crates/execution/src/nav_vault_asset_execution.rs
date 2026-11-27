@@ -874,21 +874,68 @@ fn apply_nav_redeem_vault_bridge_settlement(
         }
     }
 
-    let to_index = issued_asset_credit_recipient_line_index(
-        ledger,
-        &settlement_asset,
-        &redemption.owner,
-        operation.settlement_amount_atoms,
-        "nav redeem settlement",
-    )?;
-    let (recipient_after, recipient_required) = prepare_issued_asset_credit(
-        ledger,
-        &settlement_asset,
-        &redemption.owner,
-        to_index,
-        operation.settlement_amount_atoms,
-        "nav redeem settlement",
-    )?;
+    let gate_active = compatibility.asset_gate_v1_active(block_height);
+    if gate_active {
+        match asset_gate(
+            ledger,
+            &settlement_asset,
+            None,
+            Some(&redemption.owner),
+            AssetMovementOpKind::NavRedeemSettle,
+            block_height,
+        ) {
+            AssetGateOutcome::Allow => {}
+            AssetGateOutcome::AllowReturnOnly => {
+                return Err((
+                    "asset_gate_recipient_ineligible",
+                    "nav redeem settlement is not a return-only exit".to_string(),
+                ));
+            }
+            AssetGateOutcome::RouteToHold { reason_code } => {
+                return Err((
+                    reason_code,
+                    "nav redeem settlement rejected by asset_gate".to_string(),
+                ));
+            }
+            AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+        }
+    }
+    let to_index = if gate_active {
+        issued_asset_credit_recipient_line_index_gated(
+            ledger,
+            &settlement_asset,
+            &redemption.owner,
+            operation.settlement_amount_atoms,
+            "nav redeem settlement",
+        )?
+    } else {
+        issued_asset_credit_recipient_line_index(
+            ledger,
+            &settlement_asset,
+            &redemption.owner,
+            operation.settlement_amount_atoms,
+            "nav redeem settlement",
+        )?
+    };
+    let (recipient_after, recipient_required) = if gate_active {
+        prepare_issued_asset_credit_gated(
+            ledger,
+            &settlement_asset,
+            &redemption.owner,
+            to_index,
+            operation.settlement_amount_atoms,
+            "nav redeem settlement",
+        )?
+    } else {
+        prepare_issued_asset_credit(
+            ledger,
+            &settlement_asset,
+            &redemption.owner,
+            to_index,
+            operation.settlement_amount_atoms,
+            "nav redeem settlement",
+        )?
+    };
     let supply_after = issued_asset_family_supply(ledger, &operation.settlement_asset_id)?
         .checked_add(operation.settlement_amount_atoms)
         .ok_or_else(|| {
@@ -2277,6 +2324,27 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
     compatibility: AssetExecutionCompatibility,
     orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Result<(), (&'static str, String)> {
+    let mut hold_events = Vec::new();
+    apply_vault_bridge_deposit_claim_with_orchard_and_holds(
+        genesis,
+        ledger,
+        operation,
+        block_height,
+        compatibility,
+        orchard_balances,
+        &mut hold_events,
+    )
+}
+
+pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard_and_holds(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    operation: &VaultBridgeDepositClaimOperation,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+    orchard_balances: &[AssetOrchardAssetBalance],
+    bridge_hold_events: &mut Vec<postfiat_types::AssetBridgeHoldReceiptEventV1>,
+) -> Result<(), (&'static str, String)> {
     let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
         (
             "missing_nav_asset",
@@ -2549,21 +2617,75 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         None
     };
 
-    let recipient_index = issued_asset_credit_recipient_line_index(
-        ledger,
-        &credit_asset,
-        &recipient,
-        claim_amount,
-        "vault bridge asset bridge deposit claim",
-    )?;
-    let (recipient_after, recipient_required) = prepare_issued_asset_credit(
-        ledger,
-        &credit_asset,
-        &recipient,
-        recipient_index,
-        claim_amount,
-        "vault bridge asset bridge deposit claim",
-    )?;
+    let settlement = if compatibility.asset_gate_v1_active(block_height) {
+        match asset_gate(
+            ledger,
+            &credit_asset,
+            None,
+            Some(&recipient),
+            AssetMovementOpKind::BridgeCredit,
+            block_height,
+        ) {
+            AssetGateOutcome::Allow => {
+                let recipient_index = issued_asset_credit_recipient_line_index_gated(
+                    ledger,
+                    &credit_asset,
+                    &recipient,
+                    claim_amount,
+                    "vault bridge asset bridge deposit claim",
+                )?;
+                let (recipient_after, recipient_required) = prepare_issued_asset_credit_gated(
+                    ledger,
+                    &credit_asset,
+                    &recipient,
+                    recipient_index,
+                    claim_amount,
+                    "vault bridge asset bridge deposit claim",
+                )?;
+                BridgeCreditSettlement::Trustline {
+                    recipient_index,
+                    recipient_after,
+                    recipient_required,
+                }
+            }
+            AssetGateOutcome::RouteToHold { reason_code } => {
+                BridgeCreditSettlement::Hold(Box::new(BridgeCreditHold {
+                    asset: credit_asset.clone(),
+                    recipient: recipient.clone(),
+                    source_reference: record.evidence.source_tx_or_attestation(),
+                    reason_code,
+                }))
+            }
+            AssetGateOutcome::AllowReturnOnly => {
+                return Err((
+                    "asset_gate_recipient_ineligible",
+                    "vault bridge deposit claim is not a return-only exit".to_string(),
+                ));
+            }
+            AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+        }
+    } else {
+        let recipient_index = issued_asset_credit_recipient_line_index(
+            ledger,
+            &credit_asset,
+            &recipient,
+            claim_amount,
+            "vault bridge asset bridge deposit claim",
+        )?;
+        let (recipient_after, recipient_required) = prepare_issued_asset_credit(
+            ledger,
+            &credit_asset,
+            &recipient,
+            recipient_index,
+            claim_amount,
+            "vault bridge asset bridge deposit claim",
+        )?;
+        BridgeCreditSettlement::Trustline {
+            recipient_index,
+            recipient_after,
+            recipient_required,
+        }
+    };
 
     let expected_receipt = VaultBridgeReceipt::new(
         &genesis.chain_id,
@@ -2581,9 +2703,19 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         Some(record.evidence.clone()),
     )
     .map_err(|error| ("bad_vault_bridge_receipt", error))?;
-    commit_bridge_receipt_credit(genesis, ledger, expected_receipt, &record.evidence_root,
-        &operation.asset_id, block_height, source_series_active, source_asset_to_create,
-        recipient_index, recipient_after, recipient_required)?;
+    if let Some(event) = commit_bridge_receipt_credit_settled(
+        genesis,
+        ledger,
+        expected_receipt,
+        &record.evidence_root,
+        &operation.asset_id,
+        block_height,
+        source_series_active,
+        source_asset_to_create,
+        settlement,
+    )? {
+        bridge_hold_events.push(event);
+    }
     if let Some(campaign) = claimed_fast_campaign {
         let current = ledger
             .fast_ingress_campaign_mut(&campaign.route_profile_hash, campaign.route_epoch)
@@ -2703,12 +2835,34 @@ fn bridge_supply_after_claim(ledger: &LedgerState, asset: &AssetDefinition, clai
     Ok(supply_after_claim)
 }
 
+struct BridgeCreditHold {
+    asset: AssetDefinition,
+    recipient: String,
+    source_reference: String,
+    reason_code: &'static str,
+}
+
+enum BridgeCreditSettlement {
+    Trustline {
+        recipient_index: usize,
+        recipient_after: u64,
+        recipient_required: u64,
+    },
+    Hold(Box<BridgeCreditHold>),
+}
+
 #[allow(clippy::too_many_arguments)]
-fn commit_bridge_receipt_credit(genesis: &Genesis, ledger: &mut LedgerState,
-    expected_receipt: VaultBridgeReceipt, evidence_root: &str, family_id: &str,
-    block_height: u64, source_series_active: bool, source_asset_to_create: Option<AssetDefinition>,
-    recipient_index: usize, recipient_after: u64, recipient_required: u64)
-    -> Result<(), (&'static str, String)> {
+fn commit_bridge_receipt_credit_settled(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    expected_receipt: VaultBridgeReceipt,
+    evidence_root: &str,
+    family_id: &str,
+    block_height: u64,
+    source_series_active: bool,
+    source_asset_to_create: Option<AssetDefinition>,
+    settlement: BridgeCreditSettlement,
+) -> Result<Option<postfiat_types::AssetBridgeHoldReceiptEventV1>, (&'static str, String)> {
     let claim_amount = expected_receipt.amount_atoms;
     let receipt_index = ledger
         .vault_bridge_receipts
@@ -2917,13 +3071,39 @@ fn commit_bridge_receipt_credit(genesis: &Genesis, ledger: &mut LedgerState,
         // but both become visible only in the successful outer transition.
         ledger.asset_definitions.push(source_asset);
     }
-    apply_prepared_issued_asset_credit(
-        ledger,
-        recipient_index,
-        recipient_after,
-        recipient_required,
-    );
-    Ok(())
+    match settlement {
+        BridgeCreditSettlement::Trustline {
+            recipient_index,
+            recipient_after,
+            recipient_required,
+        } => {
+            apply_prepared_issued_asset_credit(
+                ledger,
+                recipient_index,
+                recipient_after,
+                recipient_required,
+            );
+            Ok(None)
+        }
+        BridgeCreditSettlement::Hold(hold) => {
+            let BridgeCreditHold {
+                asset,
+                recipient,
+                source_reference,
+                reason_code,
+            } = *hold;
+            let event = route_bridge_credit_to_hold(
+                ledger,
+                &asset,
+                &recipient,
+                claim_amount,
+                &source_reference,
+                reason_code,
+                block_height,
+            )?;
+            Ok(Some(event))
+        }
+    }
 }
 
 /// Execute the production bridge-claim transition against a cloned ledger.
@@ -3370,6 +3550,8 @@ fn apply_vault_bridge_mint_from_receipts(
     transaction: &SignedAssetTransaction,
     operation: &VaultBridgeMintFromReceiptsOperation,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+    bridge_hold_events: &mut Vec<postfiat_types::AssetBridgeHoldReceiptEventV1>,
 ) -> Result<(), (&'static str, String)> {
     let nav_asset = ledger
         .nav_asset(&operation.asset_id)
@@ -3418,21 +3600,75 @@ fn apply_vault_bridge_mint_from_receipts(
             ));
         }
     }
-    let to_index = issued_asset_credit_recipient_line_index(
-        ledger,
-        &asset,
-        &operation.to,
-        operation.amount_atoms,
-        "vault bridge asset mint",
-    )?;
-    let (recipient_after, recipient_required) = prepare_issued_asset_credit(
-        ledger,
-        &asset,
-        &operation.to,
-        to_index,
-        operation.amount_atoms,
-        "vault bridge asset mint",
-    )?;
+    let mint_settlement = if compatibility.asset_gate_v1_active(block_height) {
+        match asset_gate(
+            ledger,
+            &asset,
+            None,
+            Some(&operation.to),
+            AssetMovementOpKind::BridgeCredit,
+            block_height,
+        ) {
+            AssetGateOutcome::Allow => {
+                let to_index = issued_asset_credit_recipient_line_index_gated(
+                    ledger,
+                    &asset,
+                    &operation.to,
+                    operation.amount_atoms,
+                    "vault bridge asset mint",
+                )?;
+                let (recipient_after, recipient_required) = prepare_issued_asset_credit_gated(
+                    ledger,
+                    &asset,
+                    &operation.to,
+                    to_index,
+                    operation.amount_atoms,
+                    "vault bridge asset mint",
+                )?;
+                BridgeCreditSettlement::Trustline {
+                    recipient_index: to_index,
+                    recipient_after,
+                    recipient_required,
+                }
+            }
+            AssetGateOutcome::RouteToHold { reason_code } => {
+                BridgeCreditSettlement::Hold(Box::new(BridgeCreditHold {
+                    asset: asset.clone(),
+                    recipient: operation.to.clone(),
+                    source_reference: format!("vault_bridge_mint:{}", operation.bucket_id),
+                    reason_code,
+                }))
+            }
+            AssetGateOutcome::AllowReturnOnly => {
+                return Err((
+                    "asset_gate_recipient_ineligible",
+                    "vault bridge asset mint is not a return-only exit".to_string(),
+                ));
+            }
+            AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+        }
+    } else {
+        let to_index = issued_asset_credit_recipient_line_index(
+            ledger,
+            &asset,
+            &operation.to,
+            operation.amount_atoms,
+            "vault bridge asset mint",
+        )?;
+        let (recipient_after, recipient_required) = prepare_issued_asset_credit(
+            ledger,
+            &asset,
+            &operation.to,
+            to_index,
+            operation.amount_atoms,
+            "vault bridge asset mint",
+        )?;
+        BridgeCreditSettlement::Trustline {
+            recipient_index: to_index,
+            recipient_after,
+            recipient_required,
+        }
+    };
 
     let bucket_index = ledger
         .vault_bridge_bucket_states
@@ -3574,7 +3810,38 @@ fn apply_vault_bridge_mint_from_receipts(
         ledger.vault_bridge_allocations.push(allocation);
     }
     ledger.vault_bridge_bucket_states[bucket_index] = bucket_after;
-    apply_prepared_issued_asset_credit(ledger, to_index, recipient_after, recipient_required);
+    match mint_settlement {
+        BridgeCreditSettlement::Trustline {
+            recipient_index,
+            recipient_after,
+            recipient_required,
+        } => {
+            apply_prepared_issued_asset_credit(
+                ledger,
+                recipient_index,
+                recipient_after,
+                recipient_required,
+            );
+        }
+        BridgeCreditSettlement::Hold(hold) => {
+            let BridgeCreditHold {
+                asset,
+                recipient,
+                source_reference,
+                reason_code,
+            } = *hold;
+            let event = route_bridge_credit_to_hold(
+                ledger,
+                &asset,
+                &recipient,
+                operation.amount_atoms,
+                &source_reference,
+                reason_code,
+                block_height,
+            )?;
+            bridge_hold_events.push(event);
+        }
+    }
     Ok(())
 }
 
@@ -4058,11 +4325,14 @@ fn apply_pftl_uniswap_primary_subscribe(
     ledger: &mut LedgerState,
     operation: &PftlUniswapPrimarySubscribeOperation,
     block_height: u64,
-    allow_disabled_live_value_replay: bool,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
-    ensure_pftl_uniswap_route_live(&route, allow_disabled_live_value_replay)?;
+    ensure_pftl_uniswap_route_live(
+        &route,
+        compatibility.allow_legacy_pftl_uniswap_disabled_live_value_replay,
+    )?;
     let native_nav_asset = pftl_uniswap_pricing_nav_asset(ledger, &route, block_height)?;
     if operation.pricing_nav_epoch != native_nav_asset.finalized_epoch {
         return Err((
@@ -4168,11 +4438,14 @@ fn apply_pftl_uniswap_primary_subscribe(
         settlement_debit_atoms,
         "PFTL-Uniswap primary subscription settlement debit",
     )?;
-    credit_issued_asset_balance(
+    credit_issued_asset_balance_gated(
         ledger,
         &operation.subscriber,
         &route.native_nav_asset_id,
         minted_nav_atoms,
+        AssetMovementOpKind::NavMint,
+        block_height,
+        compatibility,
         "PFTL-Uniswap primary subscription NAV credit",
     )?;
 
@@ -4689,6 +4962,7 @@ fn apply_pftl_uniswap_order_release(
     ledger: &mut LedgerState,
     operation: &PftlUniswapOrderReleaseOperation,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let mut next_route = ledger.pftl_uniswap_routes[route_index].clone();
@@ -4747,11 +5021,14 @@ fn apply_pftl_uniswap_order_release(
     if let Some(refund_atoms) = escrow_refund {
         let source_route = ledger.pftl_uniswap_routes[route_index].clone();
         let funding_asset = pftl_source_release(ledger, &source_route, &operation.reservation_id, refund_atoms)?;
-        credit_issued_asset_balance_from_custody(
+        credit_issued_asset_balance_from_custody_gated(
             ledger,
             &owner,
             &funding_asset,
             refund_atoms,
+            AssetMovementOpKind::EscrowCancelRefund,
+            block_height,
+            compatibility,
             "PFTL-Uniswap released reservation refund",
         )?;
     }
@@ -4780,6 +5057,7 @@ fn apply_pftl_uniswap_primary_subscribe_v2(
     ledger: &mut LedgerState,
     operation: &PftlUniswapPrimarySubscribeV2Operation,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
@@ -4881,19 +5159,25 @@ fn apply_pftl_uniswap_primary_subscribe_v2(
         })?;
     let funding_asset = pftl_source_subscription(ledger, &route, &operation.reservation_id, base_value, spread)?;
     if reservation_refund != 0 {
-        credit_issued_asset_balance_from_custody(
+        credit_issued_asset_balance_from_custody_gated(
             ledger,
             &operation.subscriber,
             &funding_asset,
             reservation_refund,
+            AssetMovementOpKind::EscrowCancelRefund,
+            block_height,
+            compatibility,
             "PFTL-Uniswap subscription reservation refund",
         )?;
     }
-    credit_issued_asset_balance(
+    credit_issued_asset_balance_gated(
         ledger,
         &operation.subscriber,
         &route.native_nav_asset_id,
         reservation.mint_amount_atoms,
+        AssetMovementOpKind::NavMint,
+        block_height,
+        compatibility,
         "PFTL-Uniswap v2 subscription NAV credit",
     )?;
     let mut next_route = route;
@@ -5415,6 +5699,7 @@ fn apply_pftl_uniswap_primary_redeem(
     ledger: &mut LedgerState,
     operation: &PftlUniswapPrimaryRedeemOperation,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
@@ -5502,13 +5787,16 @@ fn apply_pftl_uniswap_primary_redeem(
         "PFTL-Uniswap primary redemption NAV debit",
     )?;
     if spread_recipient.is_none() {
-    credit_issued_asset_balance_from_custody(
-        ledger,
-        &operation.settlement_recipient,
-        &payout_asset,
-        settlement_output,
-        "PFTL-Uniswap primary redemption settlement credit",
-    )?;
+        credit_issued_asset_balance_from_custody_gated(
+            ledger,
+            &operation.settlement_recipient,
+            &payout_asset,
+            settlement_output,
+            AssetMovementOpKind::NavRedeemSettle,
+            block_height,
+            compatibility,
+            "PFTL-Uniswap primary redemption settlement credit",
+        )?;
     }
     let mut next_route = route;
     let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
@@ -5586,11 +5874,27 @@ fn apply_pftl_uniswap_primary_redeem(
     // does not transiently exceed its supply cap. The transaction executor rolls
     // back the entire candidate ledger if either credit fails.
     if let Some(recipient) = &spread_recipient {
-        credit_issued_asset_balance_from_custody(ledger, &operation.settlement_recipient,
-            &payout_asset, settlement_output, "PFTL-Uniswap redeemer credit")?;
+        credit_issued_asset_balance_from_custody_gated(
+            ledger,
+            &operation.settlement_recipient,
+            &payout_asset,
+            settlement_output,
+            AssetMovementOpKind::NavRedeemSettle,
+            block_height,
+            compatibility,
+            "PFTL-Uniswap redeemer credit",
+        )?;
         if spread > 0 {
-            credit_issued_asset_balance_from_custody(ledger, recipient, &payout_asset,
-                spread, "PFTL-Uniswap management credit")?;
+            credit_issued_asset_balance_from_custody_gated(
+                ledger,
+                recipient,
+                &payout_asset,
+                spread,
+                AssetMovementOpKind::NavRedeemSettle,
+                block_height,
+                compatibility,
+                "PFTL-Uniswap management credit",
+            )?;
         }
     }
     append_pftl_uniswap_consensus_receipt(
@@ -6182,6 +6486,7 @@ fn apply_pftl_uniswap_refund_source(
     ledger: &mut LedgerState,
     operation: &PftlUniswapRefundSourceOperation,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
@@ -6226,11 +6531,14 @@ fn apply_pftl_uniswap_refund_source(
             "export packet cannot be refunded before refund window".to_string(),
         ));
     }
-    credit_issued_asset_balance(
+    credit_issued_asset_balance_gated(
         ledger,
         &packet.source_wallet,
         &route.native_nav_asset_id,
         packet.amount_atoms,
+        AssetMovementOpKind::EscrowCancelRefund,
+        block_height,
+        compatibility,
         "PFTL-Uniswap export refund NAV credit",
     )?;
 
@@ -6385,6 +6693,8 @@ fn apply_pftl_uniswap_return_import(
     ledger: &mut LedgerState,
     operation: &PftlUniswapReturnImportOperation,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+    bridge_hold_events: &mut Vec<postfiat_types::AssetBridgeHoldReceiptEventV1>,
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
@@ -6457,13 +6767,84 @@ fn apply_pftl_uniswap_return_import(
             "return import exceeds route Ethereum spendable supply".to_string(),
         ));
     }
-    credit_issued_asset_balance(
-        ledger,
-        &operation.pftl_recipient,
-        &route.native_nav_asset_id,
-        operation.amount_atoms,
-        "PFTL-Uniswap return import NAV credit",
-    )?;
+    if compatibility.asset_gate_v1_active(block_height) {
+        let asset = ledger
+            .asset_definition(&route.native_nav_asset_id)
+            .cloned()
+            .ok_or_else(|| {
+                (
+                    "missing_asset",
+                    format!(
+                        "PFTL-Uniswap return import NAV credit: asset `{}` is missing",
+                        route.native_nav_asset_id
+                    ),
+                )
+            })?;
+        match asset_gate(
+            ledger,
+            &asset,
+            None,
+            Some(&operation.pftl_recipient),
+            AssetMovementOpKind::BridgeCredit,
+            block_height,
+        ) {
+            AssetGateOutcome::Allow => {
+                ensure_not_vault_bridge_out_of_lane_mint(
+                    ledger,
+                    &route.native_nav_asset_id,
+                    "PFTL-Uniswap return import NAV credit",
+                )?;
+                let to_index = issued_asset_credit_recipient_line_index_gated(
+                    ledger,
+                    &asset,
+                    &operation.pftl_recipient,
+                    operation.amount_atoms,
+                    "PFTL-Uniswap return import NAV credit",
+                )?;
+                let (recipient_after, required_limit) = prepare_issued_asset_credit_gated(
+                    ledger,
+                    &asset,
+                    &operation.pftl_recipient,
+                    to_index,
+                    operation.amount_atoms,
+                    "PFTL-Uniswap return import NAV credit",
+                )?;
+                apply_prepared_issued_asset_credit(
+                    ledger,
+                    to_index,
+                    recipient_after,
+                    required_limit,
+                );
+            }
+            AssetGateOutcome::RouteToHold { reason_code } => {
+                let event = route_bridge_credit_to_hold(
+                    ledger,
+                    &asset,
+                    &operation.pftl_recipient,
+                    operation.amount_atoms,
+                    &operation.burn_event_hash,
+                    reason_code,
+                    block_height,
+                )?;
+                bridge_hold_events.push(event);
+            }
+            AssetGateOutcome::AllowReturnOnly => {
+                return Err((
+                    "asset_gate_recipient_ineligible",
+                    "PFTL-Uniswap return import is not a return-only exit".to_string(),
+                ));
+            }
+            AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+        }
+    } else {
+        credit_issued_asset_balance(
+            ledger,
+            &operation.pftl_recipient,
+            &route.native_nav_asset_id,
+            operation.amount_atoms,
+            "PFTL-Uniswap return import NAV credit",
+        )?;
+    }
 
     let mut next_route = route;
     let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
@@ -6854,6 +7235,95 @@ fn pftl_uniswap_debit_native_route_balance(
             .native_spendable_balances_atoms
             .insert(wallet.to_string(), next);
     }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn credit_issued_asset_balance_gated(
+    ledger: &mut LedgerState,
+    account: &str,
+    asset_id: &str,
+    amount_atoms: u64,
+    op_kind: AssetMovementOpKind,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+    context: &str,
+) -> Result<(), (&'static str, String)> {
+    ensure_not_vault_bridge_out_of_lane_mint(ledger, asset_id, context)?;
+    credit_issued_asset_balance_from_custody_gated(
+        ledger,
+        account,
+        asset_id,
+        amount_atoms,
+        op_kind,
+        block_height,
+        compatibility,
+        context,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn credit_issued_asset_balance_from_custody_gated(
+    ledger: &mut LedgerState,
+    account: &str,
+    asset_id: &str,
+    amount_atoms: u64,
+    op_kind: AssetMovementOpKind,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+    context: &str,
+) -> Result<(), (&'static str, String)> {
+    if !compatibility.asset_gate_v1_active(block_height) {
+        return credit_issued_asset_balance_from_custody(
+            ledger,
+            account,
+            asset_id,
+            amount_atoms,
+            context,
+        );
+    }
+    let asset = ledger.asset_definition(asset_id).cloned().ok_or_else(|| {
+        (
+            "missing_asset",
+            format!("{context}: asset `{asset_id}` is missing"),
+        )
+    })?;
+    match asset_gate(ledger, &asset, None, Some(account), op_kind, block_height) {
+        AssetGateOutcome::Allow | AssetGateOutcome::AllowReturnOnly => {}
+        AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+        AssetGateOutcome::RouteToHold { reason_code } => {
+            return Err((
+                reason_code,
+                format!("{context}: recipient is not eligible to receive gated asset"),
+            ));
+        }
+    }
+    let to_index = issued_asset_credit_recipient_line_index_gated(
+        ledger,
+        &asset,
+        account,
+        amount_atoms,
+        context,
+    )?;
+    let (recipient_after, required_limit) =
+        prepare_issued_asset_credit_gated(ledger, &asset, account, to_index, amount_atoms, context)?;
+    let supply_after = issued_asset_supply(ledger, asset_id)?
+        .checked_add(amount_atoms)
+        .ok_or_else(|| {
+            (
+                "issued_supply_overflow",
+                format!("{context}: issued supply would overflow"),
+            )
+        })?;
+    if let Some(max_supply) = asset.max_supply {
+        if supply_after > max_supply {
+            return Err((
+                "issued_supply_cap_exceeded",
+                format!("{context}: issued supply cap would be exceeded"),
+            ));
+        }
+    }
+    apply_prepared_issued_asset_credit(ledger, to_index, recipient_after, required_limit);
     Ok(())
 }
 
@@ -7334,7 +7804,27 @@ fn apply_vault_bridge_burn_to_redeem(
                     .to_string(),
             )
         })?;
-    ensure_line_can_move(&movement_asset, &ledger.trustlines[owner_index])?;
+    if compatibility.asset_gate_v1_active(block_height) {
+        match asset_gate(
+            ledger,
+            &movement_asset,
+            Some(&operation.owner),
+            None,
+            AssetMovementOpKind::NavRedeem,
+            block_height,
+        ) {
+            AssetGateOutcome::Allow | AssetGateOutcome::AllowReturnOnly => {}
+            AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+            AssetGateOutcome::RouteToHold { .. } => {
+                return Err((
+                    "asset_gate_sender_ineligible",
+                    "vault bridge burn-to-redeem cannot redirect to bridge hold".to_string(),
+                ));
+            }
+        }
+    } else {
+        ensure_line_can_move(&movement_asset, &ledger.trustlines[owner_index])?;
+    }
     if ledger.trustlines[owner_index].balance < operation.amount_atoms {
         return Err((
             "insufficient_issued_balance",
@@ -7436,6 +7926,10 @@ fn apply_vault_bridge_burn_to_redeem(
         .map_err(|error| ("bad_vault_bridge_bucket", error))?;
 
     ledger.trustlines[owner_index].balance -= operation.amount_atoms;
+    if compatibility.asset_gate_v1_active(block_height) {
+        let _ =
+            auto_prune_empty_implicit_trustline(ledger, &operation.owner, &movement_asset.asset_id);
+    }
     ledger.vault_bridge_bucket_states[bucket_index] = bucket_after;
     ledger.vault_bridge_redemptions.push(redemption);
     Ok(())

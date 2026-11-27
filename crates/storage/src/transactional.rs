@@ -103,6 +103,8 @@ const ALLOWED_ADDITIONAL_STATE_DOMAINS: &[&str] = &[
     "retained_history_checkpoint",
 ];
 const FASTPAY_ANCHOR_KEY_PREFIX: &[u8] = b"fastpay_anchor_v1\0";
+const FASTPAY_ORDER_INDEX_KEY_PREFIX: &[u8] = b"fastpay_order_v1\0";
+pub const FASTPAY_ORDER_INDEX_SCHEMA_V1: &str = "postfiat-fastpay-order-index-entry-v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageErrorCode {
@@ -1027,6 +1029,30 @@ impl TransactionalStore {
         }
     }
 
+    /// Point lookup of a confirmed FastPay order by its canonical immutable `order_hash`.
+    pub fn fastpay_order_index_entry(
+        &self,
+        order_hash: &str,
+    ) -> StorageResult<Option<FastPayOrderIndexEntryV1>> {
+        let key = fastpay_order_index_key(order_hash)?;
+        let record: Option<FastPayOrderIndexEntryV1> =
+            self.read_json_record(HISTORY_INDEXES, HISTORY_INDEXES_TABLE, &key)?;
+        match record {
+            Some(record)
+                if record.schema == FASTPAY_ORDER_INDEX_SCHEMA_V1
+                    && record.block_height > 0
+                    && record.order_hash == order_hash =>
+            {
+                Ok(Some(record))
+            }
+            Some(_) => Err(StorageError::new(
+                StorageErrorCode::CorruptRecord,
+                "FastPay order index has an invalid schema, height, or order hash",
+            )),
+            None => Ok(None),
+        }
+    }
+
     pub fn ordered_batch_by_ordinal(&self, ordinal: u64) -> StorageResult<Option<String>> {
         if ordinal == 0 {
             return Err(StorageError::new(
@@ -1362,7 +1388,8 @@ impl TransactionalStore {
             let mut history_indexes = transaction
                 .open_table(HISTORY_INDEXES)
                 .map_err(database_error)?;
-            for effect in &commit.block.fastpay_pre_state_effects {
+            for (effect_index, effect) in commit.block.fastpay_pre_state_effects.iter().enumerate()
+            {
                 let record = StoredFastPayAnchorV1 {
                     schema: STORED_FASTPAY_ANCHOR_SCHEMA.to_owned(),
                     finalized_height: commit.new_tip.height,
@@ -1377,6 +1404,21 @@ impl TransactionalStore {
                     &self.integrity_key,
                     &self.counters,
                 )?;
+                if let Some(order_entry) = fastpay_order_index_entry_from_effect(
+                    effect,
+                    commit.new_tip.height,
+                    effect_index as u32,
+                ) {
+                    insert_authenticated(
+                        &mut history_indexes,
+                        HISTORY_INDEXES_TABLE,
+                        &fastpay_order_index_key(&order_entry.order_hash)?,
+                        &encode_json(&order_entry, MAX_RECORD_BYTES)?,
+                        MAX_RECORD_BYTES,
+                        &self.integrity_key,
+                        &self.counters,
+                    )?;
+                }
             }
         }
 
@@ -2129,6 +2171,7 @@ impl TransactionalStore {
 
         let mut referenced_receipts = BTreeSet::<(String, u64)>::new();
         let mut expected_fastpay_anchors = BTreeMap::<String, StoredFastPayAnchorV1>::new();
+        let mut expected_fastpay_orders = BTreeMap::<String, FastPayOrderIndexEntryV1>::new();
         let mut previous_block_hash: Option<String> = None;
         for height in meta.history_base_height.saturating_add(1)..=meta.finalized_height {
             let height_key = ordered_u64_key(height);
@@ -2163,7 +2206,7 @@ impl TransactionalStore {
             validate_identifier("block hash", &block.header.block_hash)?;
             validate_identifier("batch kind", &block.header.batch_kind)?;
             validate_identifier("batch id", &block.header.batch_id)?;
-            for effect in &block.fastpay_pre_state_effects {
+            for (effect_index, effect) in block.fastpay_pre_state_effects.iter().enumerate() {
                 effect.validate_shape().map_err(|error| {
                     StorageError::new(
                         StorageErrorCode::CorruptRecord,
@@ -2183,6 +2226,21 @@ impl TransactionalStore {
                         StorageErrorCode::CorruptRecord,
                         format!("canonical block {height} duplicates a retained FastPay anchor"),
                     ));
+                }
+                if let Some(order_entry) =
+                    fastpay_order_index_entry_from_effect(effect, height, effect_index as u32)
+                {
+                    if expected_fastpay_orders
+                        .insert(order_entry.order_hash.clone(), order_entry)
+                        .is_some()
+                    {
+                        return Err(StorageError::new(
+                            StorageErrorCode::CorruptRecord,
+                            format!(
+                                "canonical block {height} duplicates a retained FastPay order hash"
+                            ),
+                        ));
+                    }
                 }
             }
 
@@ -2382,9 +2440,24 @@ impl TransactionalStore {
                         "current ledger contains a duplicate FastPay anchor",
                     ));
                 }
+                if let Some(order_entry) =
+                    fastpay_order_index_entry_from_effect(effect, meta.history_base_height, 0)
+                {
+                    if expected_fastpay_orders
+                        .insert(order_entry.order_hash.clone(), order_entry)
+                        .is_some()
+                    {
+                        return Err(StorageError::new(
+                            StorageErrorCode::CorruptRecord,
+                            "current ledger contains a duplicate FastPay order hash",
+                        ));
+                    }
+                }
             }
         }
-        if history_indexes.len().map_err(database_error)? != expected_fastpay_anchors.len() as u64 {
+        let expected_history_entries =
+            expected_fastpay_anchors.len() as u64 + expected_fastpay_orders.len() as u64;
+        if history_indexes.len().map_err(database_error)? != expected_history_entries {
             return Err(StorageError::new(
                 StorageErrorCode::CountMismatch,
                 "history-index entries do not match canonical FastPay effects",
@@ -2410,6 +2483,29 @@ impl TransactionalStore {
                 return Err(StorageError::new(
                     StorageErrorCode::CorruptRecord,
                     format!("FastPay anchor `{lock_id}` conflicts with canonical history"),
+                ));
+            }
+        }
+        for (order_hash, expected) in &expected_fastpay_orders {
+            let raw = read_authenticated(
+                &history_indexes,
+                HISTORY_INDEXES_TABLE,
+                &fastpay_order_index_key(order_hash)?,
+                MAX_RECORD_BYTES,
+                &self.integrity_key,
+                &self.counters,
+            )?
+            .ok_or_else(|| {
+                StorageError::new(
+                    StorageErrorCode::CorruptRecord,
+                    format!("FastPay order `{order_hash}` is missing from the history index"),
+                )
+            })?;
+            let observed: FastPayOrderIndexEntryV1 = decode_json(&raw)?;
+            if observed != *expected {
+                return Err(StorageError::new(
+                    StorageErrorCode::CorruptRecord,
+                    format!("FastPay order `{order_hash}` conflicts with canonical history"),
                 ));
             }
         }
@@ -3014,6 +3110,17 @@ struct StoredFastPayAnchorV1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FastPayOrderIndexEntryV1 {
+    pub schema: String,
+    pub order_hash: String,
+    pub certificate_digest: String,
+    pub lock_id: String,
+    pub operation: postfiat_types::FastPayOperationKindV1,
+    pub block_height: u64,
+    pub effect_index: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LogicalIntegrityReport {
     pub schema: String,
     pub storage_format: String,
@@ -3491,6 +3598,17 @@ fn ensure_commit_keys_absent(
             integrity_key,
             counters,
         )?;
+        if let postfiat_types::FastPayRecoveryDecisionV1::Confirmed { order_digest, .. } =
+            &effect.decision
+        {
+            ensure_absent(
+                &history_indexes,
+                HISTORY_INDEXES_TABLE,
+                &fastpay_order_index_key(order_digest)?,
+                integrity_key,
+                counters,
+            )?;
+        }
     }
     Ok(())
 }
@@ -3640,7 +3758,7 @@ fn verify_idempotent_commit(
     let history_indexes = transaction
         .open_table(HISTORY_INDEXES)
         .map_err(database_error)?;
-    for effect in &commit.block.fastpay_pre_state_effects {
+    for (effect_index, effect) in commit.block.fastpay_pre_state_effects.iter().enumerate() {
         let stored: StoredFastPayAnchorV1 = required_json_record(
             &history_indexes,
             HISTORY_INDEXES_TABLE,
@@ -3653,6 +3771,22 @@ fn verify_idempotent_commit(
             || stored.effect != *effect
         {
             return Err(idempotent_conflict("FastPay anchor index"));
+        }
+        if let Some(expected_order) = fastpay_order_index_entry_from_effect(
+            effect,
+            commit.new_tip.height,
+            effect_index as u32,
+        ) {
+            let stored_order: FastPayOrderIndexEntryV1 = required_json_record(
+                &history_indexes,
+                HISTORY_INDEXES_TABLE,
+                &fastpay_order_index_key(&expected_order.order_hash)?,
+                integrity_key,
+                counters,
+            )?;
+            if stored_order != expected_order {
+                return Err(idempotent_conflict("FastPay order index"));
+            }
         }
     }
     verify_current_state(transaction, commit.current_state, integrity_key, counters)
@@ -4186,6 +4320,38 @@ fn fastpay_anchor_key(lock_id: &str) -> StorageResult<Vec<u8>> {
     Ok(key)
 }
 
+fn fastpay_order_index_key(order_hash: &str) -> StorageResult<Vec<u8>> {
+    validate_identifier("FastPay order hash", order_hash)?;
+    let mut key = Vec::with_capacity(FASTPAY_ORDER_INDEX_KEY_PREFIX.len() + order_hash.len());
+    key.extend_from_slice(FASTPAY_ORDER_INDEX_KEY_PREFIX);
+    key.extend_from_slice(order_hash.as_bytes());
+    validate_raw_key(&key)?;
+    Ok(key)
+}
+
+fn fastpay_order_index_entry_from_effect(
+    effect: &FastPayVersionFenceV1,
+    block_height: u64,
+    effect_index: u32,
+) -> Option<FastPayOrderIndexEntryV1> {
+    let postfiat_types::FastPayRecoveryDecisionV1::Confirmed {
+        order_digest,
+        certificate_digest,
+    } = &effect.decision
+    else {
+        return None;
+    };
+    Some(FastPayOrderIndexEntryV1 {
+        schema: FASTPAY_ORDER_INDEX_SCHEMA_V1.to_owned(),
+        order_hash: order_digest.clone(),
+        certificate_digest: certificate_digest.clone(),
+        lock_id: effect.lock_id.clone(),
+        operation: effect.operation,
+        block_height,
+        effect_index,
+    })
+}
+
 pub const fn ordered_u64_key(value: u64) -> [u8; 8] {
     value.to_be_bytes()
 }
@@ -4378,6 +4544,7 @@ mod tests {
             offer_id: None,
             offer_fills: Vec::new(),
             atomic_swap_legs: None,
+            bridge_hold_events: Vec::new(),
         }
     }
 
@@ -5083,8 +5250,28 @@ mod tests {
             store
                 .anchored_fastpay_effect(&effect.lock_id)
                 .expect("read rebuilt retained-suffix FastPay anchor"),
-            Some(effect)
+            Some(effect.clone())
         );
+        if let postfiat_types::FastPayRecoveryDecisionV1::Confirmed {
+            order_digest,
+            certificate_digest,
+        } = &effect.decision
+        {
+            assert_eq!(
+                store
+                    .fastpay_order_index_entry(order_digest)
+                    .expect("read rebuilt retained-suffix FastPay order entry"),
+                Some(FastPayOrderIndexEntryV1 {
+                    schema: FASTPAY_ORDER_INDEX_SCHEMA_V1.to_owned(),
+                    order_hash: order_digest.clone(),
+                    certificate_digest: certificate_digest.clone(),
+                    lock_id: effect.lock_id.clone(),
+                    operation: effect.operation,
+                    block_height: 2,
+                    effect_index: 0,
+                })
+            );
+        }
         let report = store
             .verify_logical_integrity()
             .expect("verify retained suffix after index rebuild");
@@ -5097,7 +5284,7 @@ mod tests {
             1
         );
         assert_eq!(report.block_count, 1);
-        assert_eq!(report.history_index_count, 1);
+        assert_eq!(report.history_index_count, 2);
     }
 
     #[test]

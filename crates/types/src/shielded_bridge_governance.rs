@@ -59,6 +59,13 @@ pub const GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT: &str =
 /// `recipient_format_activation_height`.
 pub const GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT: &str =
     "recipient_format_v2_activation_height";
+/// Train A governance activation gates (latest committed amendment wins).
+pub const GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT: &str =
+    "fastpay_fee_v1_activation_height";
+pub const GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT: &str =
+    "nft_scaling_v1_activation_height";
+pub const GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT: &str =
+    "asset_gate_v1_activation_height";
 pub const GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT: &str =
     "replicated_state_v2_activation_height";
 pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
@@ -1848,6 +1855,21 @@ impl GovernanceState {
     /// Execution gate for require-memo; latest amendment wins.
     pub fn require_memo_v2_activation_height(&self) -> Option<u64> {
         self.latest_amendment_value(GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT)
+    }
+
+    /// Execution gate for Train A FastPay fee & owned-object spam guard; latest amendment wins.
+    pub fn fastpay_fee_v1_activation_height(&self) -> Option<u64> {
+        self.latest_amendment_value(GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT)
+    }
+
+    /// Execution gate for Train A keyed NFT storage & serial tombstones; latest amendment wins.
+    pub fn nft_scaling_v1_activation_height(&self) -> Option<u64> {
+        self.latest_amendment_value(GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT)
+    }
+
+    /// Execution gate for Train A unified `asset_gate(...)` & bridge holds; latest amendment wins.
+    pub fn asset_gate_v1_activation_height(&self) -> Option<u64> {
+        self.latest_amendment_value(GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT)
     }
 
     fn latest_amendment_value(&self, kind: &str) -> Option<u64> {

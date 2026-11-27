@@ -182,6 +182,20 @@ pub fn execute_fastlane_control(
                 next.fastswap_activation_height = Some(*activation_height);
             }
         }
+        FastLaneControlActionV1::RevokeHolderPermit {
+            permit_id,
+            revoked_at_height,
+            reason_code,
+        } => {
+            if reason_code.is_empty() || reason_code.len() > postfiat_types::MAX_TEXT_FIELD_BYTES {
+                return Err(FastSwapControlError::InvalidHolderPermit);
+            }
+            let permit_hex = postfiat_crypto_provider::bytes_to_hex(&permit_id.0);
+            next.revoked_fast_lane_holder_permits
+                .entry(permit_hex)
+                .and_modify(|existing| *existing = (*existing).min(*revoked_at_height))
+                .or_insert(*revoked_at_height);
+        }
     }
     *ledger = next;
     Ok(())

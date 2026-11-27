@@ -12,7 +12,7 @@ pub(super) fn write_block_anchors(
         .open_table(HISTORY_INDEXES)
         .map_err(database_error)?;
     let mut lock_ids = BTreeSet::new();
-    for effect in &block.fastpay_pre_state_effects {
+    for (effect_index, effect) in block.fastpay_pre_state_effects.iter().enumerate() {
         effect.validate_shape().map_err(|error| {
             StorageError::new(
                 StorageErrorCode::CorruptRecord,
@@ -45,17 +45,47 @@ pub(super) fn write_block_anchors(
                     "retained FastPay block anchor conflicts with another canonical effect",
                 ));
             }
-            continue;
+        } else {
+            insert_authenticated(
+                &mut indexes,
+                HISTORY_INDEXES_TABLE,
+                &key,
+                &encode_json(&record, MAX_RECORD_BYTES)?,
+                MAX_RECORD_BYTES,
+                integrity_key,
+                counters,
+            )?;
         }
-        insert_authenticated(
-            &mut indexes,
-            HISTORY_INDEXES_TABLE,
-            &key,
-            &encode_json(&record, MAX_RECORD_BYTES)?,
-            MAX_RECORD_BYTES,
-            integrity_key,
-            counters,
-        )?;
+        if let Some(order_entry) =
+            fastpay_order_index_entry_from_effect(effect, block.header.height, effect_index as u32)
+        {
+            let order_key = fastpay_order_index_key(&order_entry.order_hash)?;
+            if let Some(raw) = read_authenticated(
+                &indexes,
+                HISTORY_INDEXES_TABLE,
+                &order_key,
+                MAX_RECORD_BYTES,
+                integrity_key,
+                counters,
+            )? {
+                if decode_json::<FastPayOrderIndexEntryV1>(&raw)? != order_entry {
+                    return Err(StorageError::new(
+                        StorageErrorCode::InitializationConflict,
+                        "retained FastPay order index conflicts with another canonical effect",
+                    ));
+                }
+            } else {
+                insert_authenticated(
+                    &mut indexes,
+                    HISTORY_INDEXES_TABLE,
+                    &order_key,
+                    &encode_json(&order_entry, MAX_RECORD_BYTES)?,
+                    MAX_RECORD_BYTES,
+                    integrity_key,
+                    counters,
+                )?;
+            }
+        }
     }
     Ok(())
 }
@@ -121,6 +151,36 @@ pub(super) fn write_checkpoint_anchors(
             integrity_key,
             counters,
         )?;
+        if let Some(order_entry) =
+            fastpay_order_index_entry_from_effect(effect, finalized_height, 0)
+        {
+            let order_key = fastpay_order_index_key(&order_entry.order_hash)?;
+            if let Some(raw) = read_authenticated(
+                &indexes,
+                HISTORY_INDEXES_TABLE,
+                &order_key,
+                MAX_RECORD_BYTES,
+                integrity_key,
+                counters,
+            )? {
+                if decode_json::<FastPayOrderIndexEntryV1>(&raw)? != order_entry {
+                    return Err(StorageError::new(
+                        StorageErrorCode::InitializationConflict,
+                        "retained FastPay order index conflicts with checkpoint state",
+                    ));
+                }
+            } else {
+                insert_authenticated(
+                    &mut indexes,
+                    HISTORY_INDEXES_TABLE,
+                    &order_key,
+                    &encode_json(&order_entry, MAX_RECORD_BYTES)?,
+                    MAX_RECORD_BYTES,
+                    integrity_key,
+                    counters,
+                )?;
+            }
+        }
     }
     Ok(())
 }

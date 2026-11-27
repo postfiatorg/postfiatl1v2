@@ -2,13 +2,12 @@ pub fn nft_transfer_issuer_fee_terms(
     ledger: &LedgerState,
     operation: &NftTransferOperation,
 ) -> Result<(String, u64), (&'static str, String)> {
-    let index = nft_index(ledger, &operation.nft_id).ok_or_else(|| {
+    let nft = ledger.nft(&operation.nft_id).ok_or_else(|| {
         (
             "missing_nft",
             format!("nft `{}` does not exist", operation.nft_id),
         )
     })?;
-    let nft = &ledger.nfts[index];
     if nft.burned {
         return Err(("nft_burned", "nft is burned".to_string()));
     }
@@ -36,7 +35,13 @@ fn apply_nft_operation(
     genesis: &Genesis,
     ledger: &mut LedgerState,
     transaction: &SignedNftTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
+    let scaling_active = compatibility.nft_scaling_v1_active(block_height);
+    if scaling_active {
+        migrate_nfts_to_keyed_state_if_needed(ledger, block_height, compatibility);
+    }
     match &transaction.unsigned.operation {
         NftTransactionOperation::NftMint(operation) => {
             if transaction.unsigned.transaction_kind != NFT_MINT_TRANSACTION_KIND {
@@ -66,6 +71,61 @@ fn apply_nft_operation(
             nft.issuer_transfer_fee = operation.issuer_transfer_fee;
             nft.validate_for_chain(&genesis.chain_id)
                 .map_err(|error| ("bad_nft_definition", error))?;
+            if scaling_active {
+                if ledger.used_nft_serials.contains_key(&nft.nft_id) {
+                    return Err((
+                        "nft_serial_already_used",
+                        format!("nft serial `{}` was already used", nft.nft_id),
+                    ));
+                }
+                if ledger.nfts_by_id.contains_key(&nft.nft_id) {
+                    return Err((
+                        "duplicate_nft",
+                        format!("nft `{}` already exists", nft.nft_id),
+                    ));
+                }
+                // Unsolicited permanent-lock spam guard (Pillar 4):
+                if operation.owner != operation.issuer
+                    && (operation.collection_flags & NFT_COLLECTION_FLAG_BURN_LOCKED != 0)
+                    && ((operation.collection_flags & NFT_COLLECTION_FLAG_TRANSFER_LOCKED != 0)
+                        || (operation.flags & NFT_FLAG_TRANSFERABLE == 0))
+                {
+                    return Err((
+                        "nft_unsolicited_permanent_lock_forbidden",
+                        "cannot mint a burn-locked and non-transferable NFT to another account"
+                            .to_string(),
+                    ));
+                }
+                let policy_key = postfiat_types::nft_collection_policy_key(
+                    &nft.issuer,
+                    &nft.collection_id,
+                );
+                if let Some(existing) = ledger.nft_collection_policies.get(&policy_key) {
+                    if existing.collection_flags != nft.collection_flags {
+                        return Err((
+                            "nft_collection_policy_mismatch",
+                            format!(
+                                "nft collection `{}` for issuer `{}` already uses collection_flags {}",
+                                nft.collection_id, nft.issuer, existing.collection_flags
+                            ),
+                        ));
+                    }
+                } else {
+                    ledger.nft_collection_policies.insert(
+                        policy_key,
+                        postfiat_types::NftCollectionPolicyV1 {
+                            issuer: nft.issuer.clone(),
+                            collection_id: nft.collection_id.clone(),
+                            collection_flags: nft.collection_flags,
+                            first_minted_height: block_height,
+                        },
+                    );
+                }
+                let id = nft.nft_id.clone();
+                ledger.nfts_by_id.insert(id.clone(), nft);
+                ledger.used_nft_serials.insert(id, block_height);
+                return Ok(());
+            }
             if ledger.nft(&nft.nft_id).is_some() {
                 return Err((
                     "duplicate_nft",
@@ -101,28 +161,28 @@ fn apply_nft_operation(
                     format!("nft recipient `{}` does not exist", operation.to),
                 ));
             }
-            let index = nft_index(ledger, &operation.nft_id).ok_or_else(|| {
+            let nft_snapshot = ledger.nft(&operation.nft_id).cloned().ok_or_else(|| {
                 (
                     "missing_nft",
                     format!("nft `{}` does not exist", operation.nft_id),
                 )
             })?;
-            if ledger.nfts[index].burned {
+            if nft_snapshot.burned {
                 return Err(("nft_burned", "nft is burned".to_string()));
             }
-            if ledger.nfts[index].owner != operation.from {
+            if nft_snapshot.owner != operation.from {
                 return Err((
                     "nft_owner_mismatch",
                     "nft_transfer from does not match current owner".to_string(),
                 ));
             }
-            if ledger.nfts[index].flags & NFT_FLAG_TRANSFERABLE == 0 {
+            if nft_snapshot.flags & NFT_FLAG_TRANSFERABLE == 0 {
                 return Err((
                     "nft_not_transferable",
                     "nft does not allow owner transfer".to_string(),
                 ));
             }
-            if ledger.nfts[index].collection_flags & NFT_COLLECTION_FLAG_TRANSFER_LOCKED != 0 {
+            if nft_snapshot.collection_flags & NFT_COLLECTION_FLAG_TRANSFER_LOCKED != 0 {
                 return Err((
                     "nft_collection_transfer_locked",
                     "nft collection policy does not allow owner transfer".to_string(),
@@ -196,7 +256,13 @@ fn apply_nft_operation(
                         )
                     })?;
             }
-            ledger.nfts[index].owner = operation.to.clone();
+            let nft_mut = ledger.nft_mut(&operation.nft_id).ok_or_else(|| {
+                (
+                    "missing_nft",
+                    format!("nft `{}` does not exist", operation.nft_id),
+                )
+            })?;
+            nft_mut.owner = operation.to.clone();
             Ok(())
         }
         NftTransactionOperation::NftBurn(operation) => {
@@ -206,28 +272,51 @@ fn apply_nft_operation(
                     "nft_burn transaction kind mismatch".to_string(),
                 ));
             }
-            let index = nft_index(ledger, &operation.nft_id).ok_or_else(|| {
+            if !operation.issuer.is_empty() && !scaling_active {
+                return Err((
+                    "nft_issuer_burn_not_active",
+                    format!(
+                        "issuer-initiated nft_burn is not active at block height {block_height}"
+                    ),
+                ));
+            }
+            let nft = ledger.nft_mut(&operation.nft_id).ok_or_else(|| {
                 (
                     "missing_nft",
                     format!("nft `{}` does not exist", operation.nft_id),
                 )
             })?;
-            if ledger.nfts[index].burned {
+            if nft.burned {
                 return Err(("nft_burned", "nft is already burned".to_string()));
             }
-            if ledger.nfts[index].owner != operation.owner {
-                return Err((
-                    "nft_owner_mismatch",
-                    "nft_burn owner does not match current owner".to_string(),
-                ));
-            }
-            if ledger.nfts[index].collection_flags & NFT_COLLECTION_FLAG_BURN_LOCKED != 0 {
+            if nft.collection_flags & NFT_COLLECTION_FLAG_BURN_LOCKED != 0 {
                 return Err((
                     "nft_collection_burn_locked",
                     "nft collection policy does not allow burn".to_string(),
                 ));
             }
-            ledger.nfts[index].burned = true;
+            if nft.owner != operation.owner {
+                return Err((
+                    "nft_owner_mismatch",
+                    "nft_burn owner does not match current owner".to_string(),
+                ));
+            }
+            if !operation.issuer.is_empty() {
+                if nft.issuer != operation.issuer {
+                    return Err((
+                        "nft_issuer_mismatch",
+                        "nft_burn issuer does not match nft issuer".to_string(),
+                    ));
+                }
+                if nft.flags & postfiat_types::NFT_FLAG_ISSUER_BURNABLE == 0 {
+                    return Err((
+                        "nft_not_issuer_burnable",
+                        "nft does not enable NFT_FLAG_ISSUER_BURNABLE".to_string(),
+                    ));
+                }
+            }
+            // Mark burned; NEVER delete `used_nft_serials` tombstone.
+            nft.burned = true;
             Ok(())
         }
     }
@@ -238,7 +327,9 @@ fn apply_escrow_operation(
     ledger: &mut LedgerState,
     transaction: &SignedEscrowTransaction,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
+    let gate_active = compatibility.asset_gate_v1_active(block_height);
     match &transaction.unsigned.operation {
         EscrowTransactionOperation::EscrowCreate(operation) => {
             if transaction.unsigned.transaction_kind != ESCROW_CREATE_TRANSACTION_KIND {
@@ -279,7 +370,7 @@ fn apply_escrow_operation(
                 }
                 owner.balance = owner_after_lock;
             } else {
-                lock_issued_asset_for_escrow(ledger, operation)?;
+                lock_issued_asset_for_escrow(ledger, operation, block_height, gate_active)?;
             }
             let escrow = Escrow::new(
                 &genesis.chain_id,
@@ -296,6 +387,9 @@ fn apply_escrow_operation(
             )
             .map_err(|error| ("bad_escrow", error))?;
             ledger.escrows.push(escrow);
+            if gate_active && operation.asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
+                auto_prune_empty_implicit_trustline(ledger, &operation.owner, &operation.asset_id)?;
+            }
             Ok(())
         }
         EscrowTransactionOperation::EscrowFinish(operation) => {
@@ -356,7 +450,7 @@ fn apply_escrow_operation(
                 let recipient = ledger.ensure_account(&escrow.recipient);
                 recipient.balance = recipient_after_credit;
             } else {
-                release_issued_asset_escrow_to_recipient(ledger, &escrow)?;
+                release_issued_asset_escrow_to_recipient(ledger, &escrow, block_height, gate_active)?;
             }
             ledger.escrows[escrow_index].state = ESCROW_STATE_FINISHED.to_string();
             Ok(())
@@ -414,7 +508,7 @@ fn apply_escrow_operation(
                 let owner = ledger.ensure_account(&escrow.owner);
                 owner.balance = owner_after_credit;
             } else {
-                refund_issued_asset_escrow_to_owner(ledger, &escrow)?;
+                refund_issued_asset_escrow_to_owner(ledger, &escrow, block_height, gate_active)?;
             }
             ledger.escrows[escrow_index].state = ESCROW_STATE_CANCELED.to_string();
             Ok(())
@@ -425,6 +519,8 @@ fn apply_escrow_operation(
 fn lock_issued_asset_for_escrow(
     ledger: &mut LedgerState,
     operation: &EscrowCreateOperation,
+    block_height: u64,
+    gate_active: bool,
 ) -> Result<(), (&'static str, String)> {
     let asset = ledger
         .asset_definition(&operation.asset_id)
@@ -442,6 +538,32 @@ fn lock_issued_asset_for_escrow(
         ));
     }
 
+    if gate_active {
+        match asset_gate(
+            ledger,
+            &asset,
+            Some(&operation.owner),
+            Some(&operation.recipient),
+            AssetMovementOpKind::EscrowCreate,
+            block_height,
+        ) {
+            AssetGateOutcome::Allow => {}
+            AssetGateOutcome::AllowReturnOnly => {
+                return Err((
+                    "asset_gate_sender_ineligible",
+                    "escrow create is not a return-only exit".to_string(),
+                ));
+            }
+            AssetGateOutcome::RouteToHold { reason_code } => {
+                return Err((
+                    reason_code,
+                    "escrow create rejected by asset_gate".to_string(),
+                ));
+            }
+            AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+        }
+    }
+
     let owner_index =
         trustline_index(ledger, &operation.owner, &operation.asset_id).ok_or_else(|| {
             (
@@ -457,8 +579,10 @@ fn lock_issued_asset_for_escrow(
             )
         })?;
 
-    ensure_line_can_move(&asset, &ledger.trustlines[owner_index])?;
-    ensure_line_can_move(&asset, &ledger.trustlines[recipient_index])?;
+    if !gate_active {
+        ensure_line_can_move(&asset, &ledger.trustlines[owner_index])?;
+        ensure_line_can_move(&asset, &ledger.trustlines[recipient_index])?;
+    }
 
     if ledger.trustlines[owner_index].balance < operation.amount {
         return Err((
@@ -498,6 +622,8 @@ fn lock_issued_asset_for_escrow(
 fn release_issued_asset_escrow_to_recipient(
     ledger: &mut LedgerState,
     escrow: &Escrow,
+    block_height: u64,
+    gate_active: bool,
 ) -> Result<(), (&'static str, String)> {
     let asset = ledger
         .asset_definition(&escrow.asset_id)
@@ -508,6 +634,31 @@ fn release_issued_asset_escrow_to_recipient(
                 format!("asset `{}` does not exist", escrow.asset_id),
             )
         })?;
+    if gate_active {
+        match asset_gate(
+            ledger,
+            &asset,
+            Some(&escrow.owner),
+            Some(&escrow.recipient),
+            AssetMovementOpKind::EscrowFinish,
+            block_height,
+        ) {
+            AssetGateOutcome::Allow => {}
+            AssetGateOutcome::AllowReturnOnly => {
+                return Err((
+                    "asset_gate_sender_ineligible",
+                    "escrow finish is not a return-only exit".to_string(),
+                ));
+            }
+            AssetGateOutcome::RouteToHold { reason_code } => {
+                return Err((
+                    reason_code,
+                    "escrow finish rejected by asset_gate".to_string(),
+                ));
+            }
+            AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+        }
+    }
     let recipient_index =
         trustline_index(ledger, &escrow.recipient, &escrow.asset_id).ok_or_else(|| {
             (
@@ -515,7 +666,9 @@ fn release_issued_asset_escrow_to_recipient(
                 "issued-asset escrow recipient has no trustline for asset".to_string(),
             )
         })?;
-    ensure_line_can_move(&asset, &ledger.trustlines[recipient_index])?;
+    if !gate_active {
+        ensure_line_can_move(&asset, &ledger.trustlines[recipient_index])?;
+    }
 
     let recipient_after = ledger.trustlines[recipient_index]
         .balance
@@ -556,6 +709,8 @@ fn release_issued_asset_escrow_to_recipient(
 fn refund_issued_asset_escrow_to_owner(
     ledger: &mut LedgerState,
     escrow: &Escrow,
+    block_height: u64,
+    gate_active: bool,
 ) -> Result<(), (&'static str, String)> {
     let asset = ledger
         .asset_definition(&escrow.asset_id)
@@ -566,6 +721,50 @@ fn refund_issued_asset_escrow_to_owner(
                 format!("asset `{}` does not exist", escrow.asset_id),
             )
         })?;
+    if gate_active {
+        // Self-unlock refund never strands funds (`EscrowCancelRefund` always returns `Allow`).
+        let _ = asset_gate(
+            ledger,
+            &asset,
+            Some(&escrow.owner),
+            Some(&escrow.owner),
+            AssetMovementOpKind::EscrowCancelRefund,
+            block_height,
+        );
+        let owner_index = issued_asset_credit_recipient_line_index_gated(
+            ledger,
+            &asset,
+            &escrow.owner,
+            escrow.amount,
+            "escrow cancel refund",
+        )?;
+        let owner_after = ledger.trustlines[owner_index]
+            .balance
+            .checked_add(escrow.amount)
+            .ok_or_else(|| {
+                (
+                    "issued_balance_overflow",
+                    "owner issued-asset escrow refund would overflow".to_string(),
+                )
+            })?;
+        let reserved_after_cancel = issued_asset_reserved_total_for_account(
+            ledger,
+            &escrow.owner,
+            &escrow.asset_id,
+            Some(&escrow.escrow_id),
+            None,
+        )?;
+        let required_limit = owner_after
+            .checked_add(reserved_after_cancel)
+            .ok_or_else(|| {
+                (
+                    "issued_balance_overflow",
+                    "owner issued-asset escrow reservations would overflow".to_string(),
+                )
+            })?;
+        apply_prepared_issued_asset_credit(ledger, owner_index, owner_after, required_limit);
+        return Ok(());
+    }
     let owner_index =
         trustline_index(ledger, &escrow.owner, &escrow.asset_id).ok_or_else(|| {
             (
@@ -658,6 +857,10 @@ pub struct AssetExecutionCompatibility {
     /// an accepted export is provable; before it `external_lane_export_v1` is
     /// refused. `None` refuses every export.
     pub external_lane_export_root_activation_height: Option<u64>,
+    /// Train A governance activation heights (`activation_height.is_some_and(|a| a > 0 && h >= a)`).
+    pub fastpay_fee_v1_activation_height: Option<u64>,
+    pub nft_scaling_v1_activation_height: Option<u64>,
+    pub asset_gate_v1_activation_height: Option<u64>,
 }
 
 /// Which external-lane inputs of an [`AssetExecutionCompatibility`] came
@@ -735,6 +938,9 @@ impl AssetExecutionCompatibility {
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
             external_lane_governed: ExternalLaneGovernedInputs::NONE,
             external_lane_export_root_activation_height: None,
+            fastpay_fee_v1_activation_height: None,
+            nft_scaling_v1_activation_height: None,
+            asset_gate_v1_activation_height: None,
         }
     }
 
@@ -767,6 +973,9 @@ impl AssetExecutionCompatibility {
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
             external_lane_governed: ExternalLaneGovernedInputs::NONE,
             external_lane_export_root_activation_height: None,
+            fastpay_fee_v1_activation_height: None,
+            nft_scaling_v1_activation_height: None,
+            asset_gate_v1_activation_height: None,
         }
     }
 
@@ -799,6 +1008,9 @@ impl AssetExecutionCompatibility {
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
             external_lane_governed: ExternalLaneGovernedInputs::NONE,
             external_lane_export_root_activation_height: None,
+            fastpay_fee_v1_activation_height: None,
+            nft_scaling_v1_activation_height: None,
+            asset_gate_v1_activation_height: None,
         }
     }
 
@@ -831,6 +1043,9 @@ impl AssetExecutionCompatibility {
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
             external_lane_governed: ExternalLaneGovernedInputs::NONE,
             external_lane_export_root_activation_height: None,
+            fastpay_fee_v1_activation_height: None,
+            nft_scaling_v1_activation_height: None,
+            asset_gate_v1_activation_height: None,
         }
     }
 
@@ -863,6 +1078,9 @@ impl AssetExecutionCompatibility {
             external_lane_committees: postfiat_types::ExternalLaneCommittees::genesis(),
             external_lane_governed: ExternalLaneGovernedInputs::NONE,
             external_lane_export_root_activation_height: None,
+            fastpay_fee_v1_activation_height: None,
+            nft_scaling_v1_activation_height: None,
+            asset_gate_v1_activation_height: None,
         }
     }
 
@@ -1027,6 +1245,77 @@ impl AssetExecutionCompatibility {
         self.asset_orchard_pricing_enforcement_activation_height
             .is_some_and(|activation_height| block_height >= activation_height)
     }
+
+    pub const fn with_fastpay_fee_v1_activation_height(
+        mut self,
+        activation_height: Option<u64>,
+    ) -> Self {
+        self.fastpay_fee_v1_activation_height = activation_height;
+        self
+    }
+
+    pub fn fastpay_fee_v1_active(&self, block_height: u64) -> bool {
+        self.fastpay_fee_v1_activation_height
+            .is_some_and(|a| a > 0 && block_height >= a)
+    }
+
+    pub const fn with_nft_scaling_v1_activation_height(
+        mut self,
+        activation_height: Option<u64>,
+    ) -> Self {
+        self.nft_scaling_v1_activation_height = activation_height;
+        self
+    }
+
+    pub fn nft_scaling_v1_active(&self, block_height: u64) -> bool {
+        self.nft_scaling_v1_activation_height
+            .is_some_and(|a| a > 0 && block_height >= a)
+    }
+
+    pub const fn with_asset_gate_v1_activation_height(
+        mut self,
+        activation_height: Option<u64>,
+    ) -> Self {
+        self.asset_gate_v1_activation_height = activation_height;
+        self
+    }
+
+    pub fn asset_gate_v1_active(&self, block_height: u64) -> bool {
+        self.asset_gate_v1_activation_height
+            .is_some_and(|a| a > 0 && block_height >= a)
+    }
+}
+
+/// Deterministic one-time activation migration of `ledger.nfts` into keyed maps
+/// (`nfts_by_id`, `used_nft_serials`, `nft_collection_policies`) once
+/// `nft_scaling_v1_activation_height` is reached.
+pub fn migrate_nfts_to_keyed_state_if_needed(
+    ledger: &mut LedgerState,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+) {
+    if !compatibility.nft_scaling_v1_active(block_height) || ledger.nfts.is_empty() {
+        return;
+    }
+    let legacy_nfts = std::mem::take(&mut ledger.nfts);
+    for nft in legacy_nfts {
+        let policy_key =
+            postfiat_types::nft_collection_policy_key(&nft.issuer, &nft.collection_id);
+        ledger
+            .nft_collection_policies
+            .entry(policy_key)
+            .or_insert_with(|| postfiat_types::NftCollectionPolicyV1 {
+                issuer: nft.issuer.clone(),
+                collection_id: nft.collection_id.clone(),
+                collection_flags: nft.collection_flags,
+                first_minted_height: 0,
+            });
+        ledger
+            .used_nft_serials
+            .entry(nft.nft_id.clone())
+            .or_insert(0);
+        ledger.nfts_by_id.insert(nft.nft_id.clone(), nft);
+    }
 }
 
 fn apply_asset_operation(
@@ -1036,13 +1325,22 @@ fn apply_asset_operation(
     block_height: u64,
     compatibility: AssetExecutionCompatibility,
     orchard_balances: &[AssetOrchardAssetBalance],
+    bridge_hold_events: &mut Vec<postfiat_types::AssetBridgeHoldReceiptEventV1>,
 ) -> Result<(), (&'static str, String)> {
     match &transaction.unsigned.operation {
         AssetTransactionOperation::SolanaBridgeProof(operation) => {
             if transaction.unsigned.transaction_kind != "solana_bridge_proof_v1" {
                 return Err(("wrong_transaction_kind", "Solana proof transaction kind differs".into()));
             }
-            solana_bridge::apply_proof(genesis, ledger, operation, block_height, compatibility, orchard_balances)
+            solana_bridge::apply_proof(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+                orchard_balances,
+                bridge_hold_events,
+            )
         }
         AssetTransactionOperation::YoloTargetRegisterV1(operation) => {
             if transaction.unsigned.transaction_kind != postfiat_types::YOLO_TARGET_REGISTER_TRANSACTION_KIND_V1 {
@@ -1304,6 +1602,23 @@ fn apply_asset_operation(
                     "asset_burn issuer does not match asset issuer".to_string(),
                 ));
             }
+            let gate_active = compatibility.asset_gate_v1_active(block_height);
+            if gate_active {
+                match asset_gate(
+                    ledger,
+                    &asset,
+                    Some(&operation.owner),
+                    None,
+                    AssetMovementOpKind::AssetBurn,
+                    block_height,
+                ) {
+                    AssetGateOutcome::Allow | AssetGateOutcome::AllowReturnOnly => {}
+                    AssetGateOutcome::RouteToHold { reason_code } => {
+                        return Err((reason_code, "asset_burn rejected by asset_gate".to_string()));
+                    }
+                    AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+                }
+            }
             let index = trustline_index(ledger, &operation.owner, &operation.asset_id).ok_or_else(
                 || {
                     (
@@ -1312,7 +1627,9 @@ fn apply_asset_operation(
                     )
                 },
             )?;
-            ensure_line_can_move(&asset, &ledger.trustlines[index])?;
+            if !gate_active {
+                ensure_line_can_move(&asset, &ledger.trustlines[index])?;
+            }
             if ledger.trustlines[index].balance < operation.amount {
                 return Err((
                     "insufficient_issued_balance",
@@ -1320,6 +1637,9 @@ fn apply_asset_operation(
                 ));
             }
             ledger.trustlines[index].balance -= operation.amount;
+            if gate_active {
+                auto_prune_empty_implicit_trustline(ledger, &operation.owner, &operation.asset_id)?;
+            }
             Ok(())
         }
         AssetTransactionOperation::AssetClawback(operation) => {
@@ -1342,6 +1662,220 @@ fn apply_asset_operation(
                 return Err((
                     "asset_issuer_mismatch",
                     "asset_clawback issuer does not match asset issuer".to_string(),
+                ));
+            }
+            let gate_active = compatibility.asset_gate_v1_active(block_height);
+            let has_extended_targets = !operation.offer_ids.is_empty()
+                || !operation.escrow_ids.is_empty()
+                || operation.include_bridge_hold;
+            if gate_active {
+                match asset_gate(
+                    ledger,
+                    &asset,
+                    Some(&operation.owner),
+                    None,
+                    AssetMovementOpKind::AssetClawback,
+                    block_height,
+                ) {
+                    AssetGateOutcome::Allow => {}
+                    AssetGateOutcome::AllowReturnOnly => {}
+                    AssetGateOutcome::RouteToHold { reason_code } => {
+                        return Err((
+                            reason_code,
+                            "asset_clawback rejected by asset_gate".to_string(),
+                        ));
+                    }
+                    AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+                }
+                let target_count = operation
+                    .offer_ids
+                    .len()
+                    .saturating_add(operation.escrow_ids.len())
+                    .saturating_add(usize::from(operation.include_bridge_hold));
+                if target_count > postfiat_types::MAX_CLAWBACK_LOCKED_TARGETS {
+                    return Err((
+                        "clawback_target_limit_exceeded",
+                        format!(
+                            "asset_clawback locked target count exceeds {}",
+                            postfiat_types::MAX_CLAWBACK_LOCKED_TARGETS
+                        ),
+                    ));
+                }
+                // Pre-validate all listed offer and escrow targets before mutating state.
+                let mut offer_indices = Vec::with_capacity(operation.offer_ids.len());
+                for offer_id in &operation.offer_ids {
+                    let Some(idx) = offer_index(ledger, offer_id) else {
+                        return Err((
+                            "clawback_target_mismatch",
+                            format!("clawback offer `{offer_id}` does not exist"),
+                        ));
+                    };
+                    let offer = &ledger.offers[idx];
+                    if offer.owner != operation.owner
+                        || offer.state != OFFER_STATE_OPEN
+                        || offer.taker_gets_asset_id != operation.asset_id
+                    {
+                        return Err((
+                            "clawback_target_mismatch",
+                            format!(
+                                "clawback offer `{offer_id}` does not match owner, open state, or asset"
+                            ),
+                        ));
+                    }
+                    offer_indices.push(idx);
+                }
+                let mut escrow_indices = Vec::with_capacity(operation.escrow_ids.len());
+                for escrow_id in &operation.escrow_ids {
+                    let Some(idx) = escrow_index(ledger, escrow_id) else {
+                        return Err((
+                            "clawback_target_mismatch",
+                            format!("clawback escrow `{escrow_id}` does not exist"),
+                        ));
+                    };
+                    let escrow = &ledger.escrows[idx];
+                    if escrow.owner != operation.owner
+                        || escrow.state != ESCROW_STATE_OPEN
+                        || escrow.asset_id != operation.asset_id
+                    {
+                        return Err((
+                            "clawback_target_mismatch",
+                            format!(
+                                "clawback escrow `{escrow_id}` does not match owner, open state, or asset"
+                            ),
+                        ));
+                    }
+                    escrow_indices.push(idx);
+                }
+                // Deterministic sweep order:
+                // 1) Free trustline balance
+                // 2) Aggregated bridge hold (if `include_bridge_hold`)
+                // 3) Listed open offers (canceling & refunding PFT reserve to owner)
+                // 4) Listed open escrows (marking canceled)
+                let mut remaining = operation.amount;
+                if let Some(index) = trustline_index(ledger, &operation.owner, &operation.asset_id)
+                {
+                    let take = remaining.min(ledger.trustlines[index].balance);
+                    ledger.trustlines[index].balance -= take;
+                    remaining -= take;
+                }
+                if remaining > 0 && operation.include_bridge_hold {
+                    let hold_key =
+                        postfiat_types::asset_bridge_hold_key(&operation.asset_id, &operation.owner);
+                    if let Some(hold) = ledger.asset_bridge_holds.get_mut(&hold_key) {
+                        let take = remaining.min(hold.amount);
+                        hold.amount -= take;
+                        hold.last_updated_height = block_height;
+                        remaining -= take;
+                        if hold.amount == 0 {
+                            ledger.asset_bridge_holds.remove(&hold_key);
+                        }
+                    }
+                }
+                for idx in offer_indices {
+                    if remaining == 0 {
+                        break;
+                    }
+                    let locked = ledger.offers[idx].taker_gets_amount_remaining;
+                    let reserve = ledger.offers[idx].reserve_paid;
+                    let take = remaining.min(locked);
+                    let leftover = locked - take;
+                    remaining -= take;
+                    ledger.offers[idx].taker_gets_amount_remaining = 0;
+                    ledger.offers[idx].taker_pays_amount_remaining = 0;
+                    ledger.offers[idx].state = OFFER_STATE_CANCELED.to_string();
+                    ledger.offers[idx].reserve_paid = 0;
+                    refund_offer_reserve(ledger, &operation.owner, reserve)?;
+                    if leftover > 0 {
+                        let line_idx = issued_asset_credit_recipient_line_index_gated(
+                            ledger,
+                            &asset,
+                            &operation.owner,
+                            leftover,
+                            "asset_clawback offer leftover",
+                        )?;
+                        let after = ledger.trustlines[line_idx]
+                            .balance
+                            .checked_add(leftover)
+                            .ok_or_else(|| {
+                                (
+                                    "issued_balance_overflow",
+                                    "clawback offer leftover overflow".to_string(),
+                                )
+                            })?;
+                        let reserved = issued_asset_reserved_total_for_account(
+                            ledger,
+                            &operation.owner,
+                            &operation.asset_id,
+                            None,
+                            None,
+                        )?;
+                        let required = after.checked_add(reserved).ok_or_else(|| {
+                            (
+                                "issued_balance_overflow",
+                                "clawback offer leftover reservation overflow".to_string(),
+                            )
+                        })?;
+                        apply_prepared_issued_asset_credit(ledger, line_idx, after, required);
+                    }
+                }
+                for idx in escrow_indices {
+                    if remaining == 0 {
+                        break;
+                    }
+                    let locked = ledger.escrows[idx].amount;
+                    let take = remaining.min(locked);
+                    let leftover = locked - take;
+                    remaining -= take;
+                    ledger.escrows[idx].state = ESCROW_STATE_CANCELED.to_string();
+                    if leftover > 0 {
+                        let line_idx = issued_asset_credit_recipient_line_index_gated(
+                            ledger,
+                            &asset,
+                            &operation.owner,
+                            leftover,
+                            "asset_clawback escrow leftover",
+                        )?;
+                        let after = ledger.trustlines[line_idx]
+                            .balance
+                            .checked_add(leftover)
+                            .ok_or_else(|| {
+                                (
+                                    "issued_balance_overflow",
+                                    "clawback escrow leftover overflow".to_string(),
+                                )
+                            })?;
+                        let reserved = issued_asset_reserved_total_for_account(
+                            ledger,
+                            &operation.owner,
+                            &operation.asset_id,
+                            None,
+                            None,
+                        )?;
+                        let required = after.checked_add(reserved).ok_or_else(|| {
+                            (
+                                "issued_balance_overflow",
+                                "clawback escrow leftover reservation overflow".to_string(),
+                            )
+                        })?;
+                        apply_prepared_issued_asset_credit(ledger, line_idx, after, required);
+                    }
+                }
+                if remaining > 0 {
+                    return Err((
+                        "insufficient_clawback_balance",
+                        "reachable balance across free line and listed targets is below clawback amount"
+                            .to_string(),
+                    ));
+                }
+                auto_prune_empty_implicit_trustline(ledger, &operation.owner, &operation.asset_id)?;
+                return Ok(());
+            }
+            if has_extended_targets {
+                return Err((
+                    "asset_gate_not_active",
+                    format!(
+                        "extended asset_clawback targets are not active at block height {block_height}"
+                    ),
                 ));
             }
             if !asset.clawback_enabled {
@@ -2505,21 +3039,65 @@ fn apply_asset_operation(
                     ));
                 }
             }
-            let to_index = issued_asset_credit_recipient_line_index(
-                ledger,
-                &asset,
-                &operation.to,
-                operation.amount,
-                "nav mint",
-            )?;
-            let (recipient_after, required_limit) = prepare_issued_asset_credit(
-                ledger,
-                &asset,
-                &operation.to,
-                to_index,
-                operation.amount,
-                "nav mint",
-            )?;
+            let gate_active = compatibility.asset_gate_v1_active(block_height);
+            if gate_active {
+                match asset_gate(
+                    ledger,
+                    &asset,
+                    None,
+                    Some(&operation.to),
+                    AssetMovementOpKind::NavMint,
+                    block_height,
+                ) {
+                    AssetGateOutcome::Allow => {}
+                    AssetGateOutcome::AllowReturnOnly => {
+                        return Err((
+                            "asset_gate_recipient_ineligible",
+                            "nav mint is not a return-only exit".to_string(),
+                        ));
+                    }
+                    AssetGateOutcome::RouteToHold { reason_code } => {
+                        return Err((reason_code, "nav mint rejected by asset_gate".to_string()));
+                    }
+                    AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+                }
+            }
+            let to_index = if gate_active {
+                issued_asset_credit_recipient_line_index_gated(
+                    ledger,
+                    &asset,
+                    &operation.to,
+                    operation.amount,
+                    "nav mint",
+                )?
+            } else {
+                issued_asset_credit_recipient_line_index(
+                    ledger,
+                    &asset,
+                    &operation.to,
+                    operation.amount,
+                    "nav mint",
+                )?
+            };
+            let (recipient_after, required_limit) = if gate_active {
+                prepare_issued_asset_credit_gated(
+                    ledger,
+                    &asset,
+                    &operation.to,
+                    to_index,
+                    operation.amount,
+                    "nav mint",
+                )?
+            } else {
+                prepare_issued_asset_credit(
+                    ledger,
+                    &asset,
+                    &operation.to,
+                    to_index,
+                    operation.amount,
+                    "nav mint",
+                )?
+            };
             if operation.has_vault_bridge_settlement() {
                 apply_nav_mint_vault_bridge_settlement(ledger, &nav_asset, operation, block_height)?;
             }
@@ -2570,6 +3148,26 @@ fn apply_asset_operation(
                         "nav asset precision scale would overflow".to_string(),
                     )
                 })?;
+            let gate_active = compatibility.asset_gate_v1_active(block_height);
+            if gate_active {
+                match asset_gate(
+                    ledger,
+                    &asset,
+                    Some(&operation.owner),
+                    None,
+                    AssetMovementOpKind::NavRedeem,
+                    block_height,
+                ) {
+                    AssetGateOutcome::Allow | AssetGateOutcome::AllowReturnOnly => {}
+                    AssetGateOutcome::RouteToHold { reason_code } => {
+                        return Err((
+                            reason_code,
+                            "nav redeem rejected by asset_gate".to_string(),
+                        ));
+                    }
+                    AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+                }
+            }
             let owner_index =
                 trustline_index(ledger, &operation.owner, &operation.asset_id).ok_or_else(
                     || {
@@ -2579,7 +3177,9 @@ fn apply_asset_operation(
                         )
                     },
                 )?;
-            ensure_line_can_move(&asset, &ledger.trustlines[owner_index])?;
+            if !gate_active {
+                ensure_line_can_move(&asset, &ledger.trustlines[owner_index])?;
+            }
             if ledger.trustlines[owner_index].balance < operation.amount {
                 return Err((
                     "insufficient_issued_balance",
@@ -2621,6 +3221,9 @@ fn apply_asset_operation(
                 redemption.created_at_height = block_height;
             }
             ledger.nav_redemptions.push(redemption);
+            if gate_active {
+                auto_prune_empty_implicit_trustline(ledger, &operation.owner, &operation.asset_id)?;
+            }
             Ok(())
         }
         AssetTransactionOperation::NavHalt(operation) => {
@@ -2919,13 +3522,14 @@ fn apply_asset_operation(
                 block_height,
                 orchard_balances,
             );
-            apply_vault_bridge_deposit_claim_with_orchard(
+            apply_vault_bridge_deposit_claim_with_orchard_and_holds(
                 genesis,
                 ledger,
                 operation,
                 block_height,
                 compatibility,
                 orchard_balances,
+                bridge_hold_events,
             )
         }
         AssetTransactionOperation::VaultBridgeFastIngressLifecycle(operation) => {
@@ -2970,7 +3574,15 @@ fn apply_asset_operation(
                     "vault_bridge_mint_from_receipts transaction kind mismatch".to_string(),
                 ));
             }
-            apply_vault_bridge_mint_from_receipts(genesis, ledger, transaction, operation, block_height)
+            apply_vault_bridge_mint_from_receipts(
+                genesis,
+                ledger,
+                transaction,
+                operation,
+                block_height,
+                compatibility,
+                bridge_hold_events,
+            )
         }
         AssetTransactionOperation::VaultBridgeBurnToRedeem(operation) => {
             if transaction.unsigned.transaction_kind != VAULT_BRIDGE_BURN_TO_REDEEM_TRANSACTION_KIND {
@@ -3083,7 +3695,7 @@ fn apply_asset_operation(
                 ledger,
                 operation,
                 block_height,
-                compatibility.allow_legacy_pftl_uniswap_disabled_live_value_replay,
+                compatibility,
             )
         }
         AssetTransactionOperation::PftlUniswapOrderReserve(operation) => {
@@ -3106,7 +3718,7 @@ fn apply_asset_operation(
                     "pftl_uniswap_order_release transaction kind mismatch".to_string(),
                 ));
             }
-            apply_pftl_uniswap_order_release(ledger, operation, block_height)
+            apply_pftl_uniswap_order_release(ledger, operation, block_height, compatibility)
         }
         AssetTransactionOperation::PftlUniswapPrimarySubscribeV2(operation) => {
             if transaction.unsigned.transaction_kind
@@ -3128,7 +3740,7 @@ fn apply_asset_operation(
                     genesis, ledger, route,
                 )?;
             }
-            apply_pftl_uniswap_primary_subscribe_v2(ledger, operation, block_height)
+            apply_pftl_uniswap_primary_subscribe_v2(ledger, operation, block_height, compatibility)
         }
         AssetTransactionOperation::PftlUniswapRedemptionFund(operation) => {
             if transaction.unsigned.transaction_kind
@@ -3150,7 +3762,7 @@ fn apply_asset_operation(
                     "pftl_uniswap_primary_redeem transaction kind mismatch".to_string(),
                 ));
             }
-            apply_pftl_uniswap_primary_redeem(ledger, operation, block_height)
+            apply_pftl_uniswap_primary_redeem(ledger, operation, block_height, compatibility)
         }
         AssetTransactionOperation::PftlUniswapRouteEpochAdvance(operation) => {
             if transaction.unsigned.transaction_kind
@@ -3258,7 +3870,7 @@ fn apply_asset_operation(
                     genesis, ledger, route, packet, operation,
                 )?;
             }
-            apply_pftl_uniswap_refund_source(genesis, ledger, operation, block_height)
+            apply_pftl_uniswap_refund_source(genesis, ledger, operation, block_height, compatibility)
         }
         AssetTransactionOperation::PftlUniswapReturnImport(operation) => {
             if transaction.unsigned.transaction_kind != PFTL_UNISWAP_RETURN_IMPORT_TRANSACTION_KIND {
@@ -3278,7 +3890,14 @@ fn apply_asset_operation(
                     genesis, ledger, route, operation,
                 )?;
             }
-            apply_pftl_uniswap_return_import(genesis, ledger, operation, block_height)
+            apply_pftl_uniswap_return_import(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+                bridge_hold_events,
+            )
         }
         AssetTransactionOperation::PftlUniswapRouteBridgePolicyUpdate(operation) => {
             if transaction.unsigned.transaction_kind
@@ -3330,6 +3949,198 @@ fn apply_asset_operation(
                 compatibility.external_lane_governed.caps,
                 compatibility.external_lane_export_root_active(block_height),
             )
+        }
+        AssetTransactionOperation::BridgeHoldClaim(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::BRIDGE_HOLD_CLAIM_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "bridge_hold_claim transaction kind mismatch".to_string(),
+                ));
+            }
+            if !compatibility.asset_gate_v1_active(block_height) {
+                return Err((
+                    "asset_gate_not_active",
+                    format!("bridge_hold_claim is not active at block height {block_height}"),
+                ));
+            }
+            let asset = ledger
+                .asset_definition(&operation.asset_id)
+                .cloned()
+                .ok_or_else(|| {
+                    (
+                        "missing_asset",
+                        format!("asset `{}` does not exist", operation.asset_id),
+                    )
+                })?;
+            let hold_key =
+                postfiat_types::asset_bridge_hold_key(&operation.asset_id, &operation.recipient);
+            let hold_amount = ledger
+                .asset_bridge_holds
+                .get(&hold_key)
+                .ok_or_else(|| {
+                    (
+                        "missing_bridge_hold",
+                        format!(
+                            "no bridge hold exists for asset `{}` and recipient `{}`",
+                            operation.asset_id, operation.recipient
+                        ),
+                    )
+                })?
+                .amount;
+            if operation.amount > hold_amount {
+                return Err((
+                    "insufficient_bridge_hold_balance",
+                    "bridge_hold_claim amount exceeds held balance".to_string(),
+                ));
+            }
+            match asset_gate(
+                ledger,
+                &asset,
+                None,
+                Some(&operation.recipient),
+                AssetMovementOpKind::BridgeHoldClaim,
+                block_height,
+            ) {
+                AssetGateOutcome::Allow => {}
+                AssetGateOutcome::AllowReturnOnly => {
+                    return Err((
+                        "asset_gate_recipient_ineligible",
+                        "bridge_hold_claim requires normal holder eligibility".to_string(),
+                    ));
+                }
+                AssetGateOutcome::RouteToHold { reason_code } => {
+                    return Err((
+                        reason_code,
+                        "bridge_hold_claim rejected by asset_gate".to_string(),
+                    ));
+                }
+                AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+            }
+            let to_index = issued_asset_credit_recipient_line_index_gated(
+                ledger,
+                &asset,
+                &operation.recipient,
+                operation.amount,
+                "bridge_hold_claim",
+            )?;
+            let (recipient_after, required_limit) = prepare_issued_asset_credit_gated(
+                ledger,
+                &asset,
+                &operation.recipient,
+                to_index,
+                operation.amount,
+                "bridge_hold_claim",
+            )?;
+            apply_prepared_issued_asset_credit(ledger, to_index, recipient_after, required_limit);
+            let hold = ledger
+                .asset_bridge_holds
+                .get_mut(&hold_key)
+                .expect("bridge hold verified above");
+            hold.amount -= operation.amount;
+            hold.last_updated_height = block_height;
+            if hold.amount == 0 {
+                ledger.asset_bridge_holds.remove(&hold_key);
+            }
+            bridge_hold_events.push(postfiat_types::AssetBridgeHoldReceiptEventV1 {
+                hold_key,
+                asset_id: operation.asset_id.clone(),
+                recipient: operation.recipient.clone(),
+                amount: operation.amount,
+                source_reference: asset_transaction_tx_id(transaction),
+                reason_code: "bridge_hold_claimed".to_string(),
+            });
+            Ok(())
+        }
+        AssetTransactionOperation::BridgeHoldReturn(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::BRIDGE_HOLD_RETURN_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "bridge_hold_return transaction kind mismatch".to_string(),
+                ));
+            }
+            if !compatibility.asset_gate_v1_active(block_height) {
+                return Err((
+                    "asset_gate_not_active",
+                    format!("bridge_hold_return is not active at block height {block_height}"),
+                ));
+            }
+            let asset = ledger
+                .asset_definition(&operation.asset_id)
+                .cloned()
+                .ok_or_else(|| {
+                    (
+                        "missing_asset",
+                        format!("asset `{}` does not exist", operation.asset_id),
+                    )
+                })?;
+            let hold_key =
+                postfiat_types::asset_bridge_hold_key(&operation.asset_id, &operation.recipient);
+            let hold_amount = ledger
+                .asset_bridge_holds
+                .get(&hold_key)
+                .ok_or_else(|| {
+                    (
+                        "missing_bridge_hold",
+                        format!(
+                            "no bridge hold exists for asset `{}` and recipient `{}`",
+                            operation.asset_id, operation.recipient
+                        ),
+                    )
+                })?
+                .amount;
+            if operation.amount > hold_amount {
+                return Err((
+                    "insufficient_bridge_hold_balance",
+                    "bridge_hold_return amount exceeds held balance".to_string(),
+                ));
+            }
+            match asset_gate(
+                ledger,
+                &asset,
+                Some(&operation.recipient),
+                if operation.burn {
+                    None
+                } else {
+                    Some(asset.issuer.as_str())
+                },
+                AssetMovementOpKind::BridgeHoldReturnOrBurn,
+                block_height,
+            ) {
+                AssetGateOutcome::Allow | AssetGateOutcome::AllowReturnOnly => {}
+                AssetGateOutcome::RouteToHold { reason_code } => {
+                    return Err((
+                        reason_code,
+                        "bridge_hold_return rejected by asset_gate".to_string(),
+                    ));
+                }
+                AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+            }
+            let hold = ledger
+                .asset_bridge_holds
+                .get_mut(&hold_key)
+                .expect("bridge hold verified above");
+            hold.amount -= operation.amount;
+            hold.last_updated_height = block_height;
+            if hold.amount == 0 {
+                ledger.asset_bridge_holds.remove(&hold_key);
+            }
+            bridge_hold_events.push(postfiat_types::AssetBridgeHoldReceiptEventV1 {
+                hold_key,
+                asset_id: operation.asset_id.clone(),
+                recipient: operation.recipient.clone(),
+                amount: operation.amount,
+                source_reference: asset_transaction_tx_id(transaction),
+                reason_code: if operation.burn {
+                    "bridge_hold_burned".to_string()
+                } else {
+                    "bridge_hold_returned".to_string()
+                },
+            });
+            Ok(())
         }
     }
 }

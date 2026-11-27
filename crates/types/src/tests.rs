@@ -1332,6 +1332,9 @@ fn asset_transaction_validation_covers_all_asset_operations() {
             issuer: issuer.to_string(),
             asset_id: asset_id.clone(),
             amount: 5,
+            offer_ids: Vec::new(),
+            escrow_ids: Vec::new(),
+            include_bridge_hold: false,
         }),
         ..asset_burn.clone()
     };
@@ -1364,6 +1367,9 @@ fn asset_transaction_validation_covers_all_asset_operations() {
             issuer: issuer.to_string(),
             asset_id: "PFT".to_string(),
             amount: 5,
+            offer_ids: Vec::new(),
+            escrow_ids: Vec::new(),
+            include_bridge_hold: false,
         }),
         ..asset_clawback
     };
@@ -1601,6 +1607,7 @@ fn nft_transaction_validation_covers_all_operations() {
         operation: NftTransactionOperation::NftBurn(NftBurnOperation {
             nft_id,
             owner: owner.to_string(),
+            issuer: String::new(),
         }),
         ..mint.clone()
     };

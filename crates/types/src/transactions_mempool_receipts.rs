@@ -550,12 +550,25 @@ impl AssetBurnOperation {
     }
 }
 
+fn is_false_bool(value: &bool) -> bool {
+    !*value
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetClawbackOperation {
     pub owner: String,
     pub issuer: String,
     pub asset_id: String,
     pub amount: u64,
+    /// Optional bounded list of open offers owned by `owner` selling `asset_id` to sweep.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub offer_ids: Vec<String>,
+    /// Optional bounded list of open escrows owned by `owner` locking `asset_id` to sweep.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub escrow_ids: Vec<String>,
+    /// When true, also sweep `owner`'s aggregated `(asset_id, owner)` bridge hold.
+    #[serde(default, skip_serializing_if = "is_false_bool")]
+    pub include_bridge_hold: bool,
 }
 
 impl AssetClawbackOperation {
@@ -573,13 +586,114 @@ impl AssetClawbackOperation {
         if self.amount == 0 {
             return Err("asset_clawback.amount must be nonzero".to_string());
         }
+        let target_count = self
+            .offer_ids
+            .len()
+            .saturating_add(self.escrow_ids.len())
+            .saturating_add(usize::from(self.include_bridge_hold));
+        if target_count > MAX_CLAWBACK_LOCKED_TARGETS {
+            return Err(format!(
+                "asset_clawback locked targets must not exceed {MAX_CLAWBACK_LOCKED_TARGETS}"
+            ));
+        }
+        let mut seen_offers = BTreeSet::new();
+        for offer_id in &self.offer_ids {
+            validate_lower_hex_len("asset_clawback.offer_id", offer_id, OFFER_ID_HEX_LEN)?;
+            if !seen_offers.insert(offer_id.as_str()) {
+                return Err(format!("duplicate asset_clawback offer_id `{offer_id}`"));
+            }
+        }
+        let mut seen_escrows = BTreeSet::new();
+        for escrow_id in &self.escrow_ids {
+            validate_lower_hex_len("asset_clawback.escrow_id", escrow_id, ESCROW_ID_HEX_LEN)?;
+            if !seen_escrows.insert(escrow_id.as_str()) {
+                return Err(format!("duplicate asset_clawback escrow_id `{escrow_id}`"));
+            }
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        let mut bytes = format!(
+            "owner={}\nissuer={}\nasset_id={}\namount={}\n",
+            self.owner, self.issuer, self.asset_id, self.amount
+        )
+        .into_bytes();
+        if !self.offer_ids.is_empty() {
+            bytes.extend_from_slice(
+                format!("offer_ids={}\n", self.offer_ids.join(",")).as_bytes(),
+            );
+        }
+        if !self.escrow_ids.is_empty() {
+            bytes.extend_from_slice(
+                format!("escrow_ids={}\n", self.escrow_ids.join(",")).as_bytes(),
+            );
+        }
+        if self.include_bridge_hold {
+            bytes.extend_from_slice(b"include_bridge_hold=true\n");
+        }
+        bytes
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BridgeHoldClaimOperation {
+    pub recipient: String,
+    pub asset_id: String,
+    pub amount: u64,
+}
+
+impl BridgeHoldClaimOperation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("bridge_hold_claim.recipient", &self.recipient)?;
+        validate_lower_hex_len(
+            "bridge_hold_claim.asset_id",
+            &self.asset_id,
+            ISSUED_ASSET_ID_HEX_LEN,
+        )?;
+        if self.amount == 0 {
+            return Err("bridge_hold_claim.amount must be nonzero".to_string());
+        }
         Ok(())
     }
 
     fn signing_bytes(&self) -> Vec<u8> {
         format!(
-            "owner={}\nissuer={}\nasset_id={}\namount={}\n",
-            self.owner, self.issuer, self.asset_id, self.amount
+            "recipient={}\nasset_id={}\namount={}\n",
+            self.recipient, self.asset_id, self.amount
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BridgeHoldReturnOperation {
+    pub recipient: String,
+    pub asset_id: String,
+    pub amount: u64,
+    /// `true` burns held units permanently; `false` returns units to issuer (decrements supply).
+    #[serde(default)]
+    pub burn: bool,
+}
+
+impl BridgeHoldReturnOperation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("bridge_hold_return.recipient", &self.recipient)?;
+        validate_lower_hex_len(
+            "bridge_hold_return.asset_id",
+            &self.asset_id,
+            ISSUED_ASSET_ID_HEX_LEN,
+        )?;
+        if self.amount == 0 {
+            return Err("bridge_hold_return.amount must be nonzero".to_string());
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "recipient={}\nasset_id={}\namount={}\nburn={}\n",
+            self.recipient, self.asset_id, self.amount, self.burn
         )
         .into_bytes()
     }
@@ -3871,6 +3985,10 @@ pub enum AssetTransactionOperation {
     ExternalLaneReleaseV1(ExternalLaneReleaseOperationV1),
     #[serde(rename = "external_lane_export_v1")]
     ExternalLaneExportV1(ExternalLaneExportOperationV1),
+    #[serde(rename = "bridge_hold_claim")]
+    BridgeHoldClaim(BridgeHoldClaimOperation),
+    #[serde(rename = "bridge_hold_return")]
+    BridgeHoldReturn(BridgeHoldReturnOperation),
 }
 
 impl<'de> Deserialize<'de> for AssetTransactionOperation {
@@ -4054,6 +4172,12 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
             "external_lane_export_v1" => {
                 decode_operation!(ExternalLaneExportOperationV1, ExternalLaneExportV1)
             }
+            "bridge_hold_claim" => {
+                decode_operation!(BridgeHoldClaimOperation, BridgeHoldClaim)
+            }
+            "bridge_hold_return" => {
+                decode_operation!(BridgeHoldReturnOperation, BridgeHoldReturn)
+            }
             other => Err(serde::de::Error::custom(format!(
                 "unknown asset operation `{other}`"
             ))),
@@ -4141,6 +4265,8 @@ impl AssetTransactionOperation {
             }
             Self::ExternalLaneReleaseV1(_) => EXTERNAL_LANE_RELEASE_TRANSACTION_KIND_V1,
             Self::ExternalLaneExportV1(_) => EXTERNAL_LANE_EXPORT_TRANSACTION_KIND_V1,
+            Self::BridgeHoldClaim(_) => BRIDGE_HOLD_CLAIM_TRANSACTION_KIND,
+            Self::BridgeHoldReturn(_) => BRIDGE_HOLD_RETURN_TRANSACTION_KIND,
         }
     }
 
@@ -4203,6 +4329,8 @@ impl AssetTransactionOperation {
             Self::PftlUniswapRouteBridgePolicyUpdate(operation) => operation.validate(),
             Self::ExternalLaneReleaseV1(operation) => operation.validate(),
             Self::ExternalLaneExportV1(operation) => operation.validate(),
+            Self::BridgeHoldClaim(operation) => operation.validate(),
+            Self::BridgeHoldReturn(operation) => operation.validate(),
         }
     }
 
@@ -4287,6 +4415,8 @@ impl AssetTransactionOperation {
             Self::PftlUniswapRouteBridgePolicyUpdate(operation) => operation.issuer == source,
             Self::ExternalLaneReleaseV1(operation) => operation.submitter == source,
             Self::ExternalLaneExportV1(operation) => operation.sender == source,
+            Self::BridgeHoldClaim(operation) => operation.recipient == source,
+            Self::BridgeHoldReturn(operation) => operation.recipient == source,
         }
     }
 
@@ -4436,6 +4566,12 @@ impl AssetTransactionOperation {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
             Self::ExternalLaneExportV1(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::BridgeHoldClaim(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::BridgeHoldReturn(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
         }
@@ -5153,17 +5289,29 @@ impl NftTransferOperation {
 pub struct NftBurnOperation {
     pub nft_id: String,
     pub owner: String,
+    /// Optional issuer address for issuer-initiated burn when
+    /// `nft.flags & NFT_FLAG_ISSUER_BURNABLE != 0`.
+    /// Omitted (empty) for standard owner-initiated burn.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub issuer: String,
 }
 
 impl NftBurnOperation {
     pub fn validate(&self) -> Result<(), String> {
         validate_lower_hex_len("nft_burn.nft_id", &self.nft_id, NFT_ID_HEX_LEN)?;
         validate_text_field("nft_burn.owner", &self.owner)?;
+        if !self.issuer.is_empty() {
+            validate_text_field("nft_burn.issuer", &self.issuer)?;
+        }
         Ok(())
     }
 
     fn signing_bytes(&self) -> Vec<u8> {
-        format!("nft_id={}\nowner={}\n", self.nft_id, self.owner).into_bytes()
+        let mut bytes = format!("nft_id={}\nowner={}\n", self.nft_id, self.owner).into_bytes();
+        if !self.issuer.is_empty() {
+            bytes.extend_from_slice(format!("issuer={}\n", self.issuer).as_bytes());
+        }
+        bytes
     }
 }
 
@@ -5199,7 +5347,13 @@ impl NftTransactionOperation {
         match self {
             Self::NftMint(operation) => operation.issuer == source,
             Self::NftTransfer(operation) => operation.from == source,
-            Self::NftBurn(operation) => operation.owner == source,
+            Self::NftBurn(operation) => {
+                if operation.issuer.is_empty() {
+                    operation.owner == source
+                } else {
+                    operation.issuer == source
+                }
+            }
         }
     }
 
@@ -5380,12 +5534,55 @@ impl OfferCancelOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OfferPruneIneligibleOperation {
+    pub pruner: String,
+    /// 1..=64 distinct open offer IDs (96 lowercase hex each).
+    pub offer_ids: Vec<String>,
+}
+
+impl OfferPruneIneligibleOperation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("offer_prune_ineligible.pruner", &self.pruner)?;
+        if self.offer_ids.is_empty() || self.offer_ids.len() > MAX_OFFER_PRUNE_BATCH {
+            return Err(format!(
+                "offer_prune_ineligible.offer_ids must contain 1..={MAX_OFFER_PRUNE_BATCH} offer IDs"
+            ));
+        }
+        let mut seen = BTreeSet::new();
+        for offer_id in &self.offer_ids {
+            validate_lower_hex_len(
+                "offer_prune_ineligible.offer_id",
+                offer_id,
+                OFFER_ID_HEX_LEN,
+            )?;
+            if !seen.insert(offer_id.as_str()) {
+                return Err(format!(
+                    "duplicate offer_prune_ineligible offer_id `{offer_id}`"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "pruner={}\noffer_ids={}\n",
+            self.pruner,
+            self.offer_ids.join(",")
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "operation")]
 pub enum OfferTransactionOperation {
     #[serde(rename = "offer_create")]
     OfferCreate(OfferCreateOperation),
     #[serde(rename = "offer_cancel")]
     OfferCancel(OfferCancelOperation),
+    #[serde(rename = "offer_prune_ineligible")]
+    OfferPruneIneligible(OfferPruneIneligibleOperation),
 }
 
 impl OfferTransactionOperation {
@@ -5393,6 +5590,7 @@ impl OfferTransactionOperation {
         match self {
             Self::OfferCreate(_) => OFFER_CREATE_TRANSACTION_KIND,
             Self::OfferCancel(_) => OFFER_CANCEL_TRANSACTION_KIND,
+            Self::OfferPruneIneligible(_) => OFFER_PRUNE_INELIGIBLE_TRANSACTION_KIND,
         }
     }
 
@@ -5400,6 +5598,7 @@ impl OfferTransactionOperation {
         match self {
             Self::OfferCreate(operation) => operation.validate(),
             Self::OfferCancel(operation) => operation.validate(),
+            Self::OfferPruneIneligible(operation) => operation.validate(),
         }
     }
 
@@ -5407,6 +5606,7 @@ impl OfferTransactionOperation {
         match self {
             Self::OfferCreate(operation) => operation.owner == source,
             Self::OfferCancel(operation) => operation.owner == source,
+            Self::OfferPruneIneligible(operation) => operation.pruner == source,
         }
     }
 
@@ -5415,6 +5615,9 @@ impl OfferTransactionOperation {
         match self {
             Self::OfferCreate(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
             Self::OfferCancel(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
+            Self::OfferPruneIneligible(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
         }
         bytes
     }
@@ -5965,6 +6168,8 @@ pub struct Receipt {
     pub offer_fills: Vec<OfferFillReceipt>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub atomic_swap_legs: Option<Vec<AtomicSwapLegReceipt>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bridge_hold_events: Vec<AssetBridgeHoldReceiptEventV1>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -6012,6 +6217,7 @@ impl Receipt {
             offer_id: None,
             offer_fills: Vec::new(),
             atomic_swap_legs: None,
+            bridge_hold_events: Vec::new(),
         }
     }
 
@@ -6036,6 +6242,7 @@ impl Receipt {
             offer_id: None,
             offer_fills: Vec::new(),
             atomic_swap_legs: None,
+            bridge_hold_events: Vec::new(),
         }
     }
 
@@ -6062,6 +6269,11 @@ impl Receipt {
 
     pub fn with_atomic_swap_legs(mut self, legs: Vec<AtomicSwapLegReceipt>) -> Self {
         self.atomic_swap_legs = Some(legs);
+        self
+    }
+
+    pub fn with_bridge_hold_events(mut self, events: Vec<AssetBridgeHoldReceiptEventV1>) -> Self {
+        self.bridge_hold_events = events;
         self
     }
 

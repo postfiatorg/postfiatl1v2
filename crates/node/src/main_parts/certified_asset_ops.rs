@@ -385,6 +385,8 @@ fn certified_asset_op_source(
         postfiat_types::AssetTransactionOperation::PftlUniswapReturnImport(operation) => Ok(&operation.operator),
         postfiat_types::AssetTransactionOperation::ExternalLaneReleaseV1(operation) => Ok(&operation.submitter),
         postfiat_types::AssetTransactionOperation::ExternalLaneExportV1(operation) => Ok(&operation.sender),
+        postfiat_types::AssetTransactionOperation::BridgeHoldClaim(operation) => Ok(&operation.recipient),
+        postfiat_types::AssetTransactionOperation::BridgeHoldReturn(operation) => Ok(&operation.recipient),
     }
 }
 

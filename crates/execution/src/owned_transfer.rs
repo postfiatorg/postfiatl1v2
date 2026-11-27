@@ -45,6 +45,40 @@ pub enum OwnedTransferError {
     InvalidRecovery,
     NotYetValid,
     VersionFenced,
+    InsufficientFee { fee: u64, required: u64 },
+    AccountOwnedObjectCapExceeded {
+        owner_pubkey_hex: String,
+        current: usize,
+        limit: usize,
+    },
+}
+
+/// Deterministic Sui-inspired minimum FastPay fee (active at `fastpay_fee_v1_activation_height`).
+pub fn fastpay_minimum_fee_atoms(
+    weight_bytes: usize,
+    inputs_consumed: usize,
+    outputs_created: usize,
+) -> Result<u64, OwnedTransferError> {
+    let byte_quanta = u64::try_from(weight_bytes.div_ceil(postfiat_types::FASTPAY_FEE_BYTE_QUANTUM))
+        .map_err(|_| OwnedTransferError::Overflow)?;
+    let byte_fee = byte_quanta
+        .checked_mul(postfiat_types::FASTPAY_FEE_PER_BYTE_QUANTUM_ATOMS)
+        .ok_or(OwnedTransferError::Overflow)?;
+    let net_new_objects = u64::try_from(outputs_created.saturating_sub(inputs_consumed))
+        .map_err(|_| OwnedTransferError::Overflow)?;
+    let new_object_fee = net_new_objects
+        .checked_mul(postfiat_types::FASTPAY_FEE_PER_NEW_OBJECT_ATOMS)
+        .ok_or(OwnedTransferError::Overflow)?;
+    let input_fee = u64::try_from(inputs_consumed)
+        .map_err(|_| OwnedTransferError::Overflow)?
+        .checked_mul(postfiat_types::FASTPAY_FEE_PER_INPUT_ATOMS)
+        .ok_or(OwnedTransferError::Overflow)?;
+
+    postfiat_types::FASTPAY_MIN_BASE_FEE_ATOMS
+        .checked_add(byte_fee)
+        .and_then(|v| v.checked_add(new_object_fee))
+        .and_then(|v| v.checked_add(input_fee))
+        .ok_or(OwnedTransferError::Overflow)
 }
 
 fn ensure_owned_object_capacity(
@@ -61,6 +95,56 @@ fn ensure_owned_object_capacity(
         .ok_or(OwnedTransferError::ResourceLimitExceeded)?;
     if next > postfiat_types::MAX_OWNED_OBJECTS {
         return Err(OwnedTransferError::ResourceLimitExceeded);
+    }
+    Ok(())
+}
+
+fn ensure_owned_object_capacity_v2(
+    ledger: &LedgerState,
+    owner_pubkey_hex: &str,
+    inputs_consumed: usize,
+    output_owners: &[&str],
+) -> Result<(), OwnedTransferError> {
+    let outputs_created = output_owners.len();
+    if outputs_created > inputs_consumed {
+        let additional = outputs_created - inputs_consumed;
+        let next_total = ledger
+            .owned_objects
+            .len()
+            .checked_add(additional)
+            .ok_or(OwnedTransferError::ResourceLimitExceeded)?;
+        if next_total > postfiat_types::MAX_OWNED_OBJECTS_GLOBAL_V2 {
+            return Err(OwnedTransferError::ResourceLimitExceeded);
+        }
+    }
+    let mut created_by_owner = std::collections::BTreeMap::<&str, usize>::new();
+    for target_pk in output_owners {
+        *created_by_owner.entry(*target_pk).or_insert(0) += 1;
+    }
+    for (target_pk, created_for_owner) in created_by_owner {
+        let consumed_for_owner = if target_pk == owner_pubkey_hex {
+            inputs_consumed
+        } else {
+            0
+        };
+        if created_for_owner > consumed_for_owner {
+            let current_for_owner = ledger
+                .owned_objects
+                .iter()
+                .filter(|obj| obj.owner_pubkey_hex == target_pk)
+                .count();
+            let next_for_owner = current_for_owner
+                .saturating_sub(consumed_for_owner)
+                .checked_add(created_for_owner)
+                .ok_or(OwnedTransferError::Overflow)?;
+            if next_for_owner > postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP {
+                return Err(OwnedTransferError::AccountOwnedObjectCapExceeded {
+                    owner_pubkey_hex: target_pk.to_string(),
+                    current: current_for_owner,
+                    limit: postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP,
+                });
+            }
+        }
     }
     Ok(())
 }
@@ -378,7 +462,17 @@ pub fn apply_owned_transfer(
     order: &postfiat_types::OwnedTransferOrder,
     owner_pubkey_hex: &str,
 ) -> Result<OwnedTransferOutcome, OwnedTransferError> {
-    let mut consume_indices = prepare_owned_transfer(ledger, order, owner_pubkey_hex)?;
+    apply_owned_transfer_with_cap_v2(ledger, order, owner_pubkey_hex, false)
+}
+
+pub(crate) fn apply_owned_transfer_with_cap_v2(
+    ledger: &mut LedgerState,
+    order: &postfiat_types::OwnedTransferOrder,
+    owner_pubkey_hex: &str,
+    cap_v2: bool,
+) -> Result<OwnedTransferOutcome, OwnedTransferError> {
+    let mut consume_indices =
+        prepare_owned_transfer_with_cap_v2(ledger, order, owner_pubkey_hex, cap_v2)?;
 
     // Retire consumed inputs (descending so swap_remove keeps earlier indices valid).
     consume_indices.sort_unstable_by(|a, b| b.cmp(a));
@@ -399,6 +493,15 @@ fn prepare_owned_transfer(
     order: &postfiat_types::OwnedTransferOrder,
     owner_pubkey_hex: &str,
 ) -> Result<Vec<usize>, OwnedTransferError> {
+    prepare_owned_transfer_with_cap_v2(ledger, order, owner_pubkey_hex, false)
+}
+
+fn prepare_owned_transfer_with_cap_v2(
+    ledger: &LedgerState,
+    order: &postfiat_types::OwnedTransferOrder,
+    owner_pubkey_hex: &str,
+    cap_v2: bool,
+) -> Result<Vec<usize>, OwnedTransferError> {
     if order.inputs.is_empty() {
         return Err(OwnedTransferError::EmptyInputs);
     }
@@ -411,11 +514,25 @@ fn prepare_owned_transfer(
         return Err(OwnedTransferError::ResourceLimitExceeded);
     }
     validate_owned_memos(&order.memos)?;
-    ensure_owned_object_capacity(
-        ledger.owned_objects.len(),
-        order.inputs.len(),
-        order.outputs.len(),
-    )?;
+    if cap_v2 {
+        let output_owners = order
+            .outputs
+            .iter()
+            .map(|o| o.owner_pubkey_hex.as_str())
+            .collect::<Vec<_>>();
+        ensure_owned_object_capacity_v2(
+            ledger,
+            owner_pubkey_hex,
+            order.inputs.len(),
+            &output_owners,
+        )?;
+    } else {
+        ensure_owned_object_capacity(
+            ledger.owned_objects.len(),
+            order.inputs.len(),
+            order.outputs.len(),
+        )?;
+    }
 
     let mut input_value = 0u64;
     let mut asset: Option<&str> = None;
@@ -484,6 +601,15 @@ pub fn apply_owned_unwrap(
     order: &postfiat_types::OwnedUnwrapOrder,
     owner_pubkey_hex: &str,
 ) -> Result<OwnedUnwrapOutcome, OwnedTransferError> {
+    apply_owned_unwrap_with_cap_v2(ledger, order, owner_pubkey_hex, false)
+}
+
+pub(crate) fn apply_owned_unwrap_with_cap_v2(
+    ledger: &mut LedgerState,
+    order: &postfiat_types::OwnedUnwrapOrder,
+    owner_pubkey_hex: &str,
+    cap_v2: bool,
+) -> Result<OwnedUnwrapOutcome, OwnedTransferError> {
     let (mut consume_indices, input_value) =
         prepare_owned_unwrap(ledger, order, owner_pubkey_hex)?;
     let required = order
@@ -491,11 +617,25 @@ pub fn apply_owned_unwrap(
         .checked_add(order.fee)
         .ok_or(OwnedTransferError::Overflow)?;
     let change = input_value - required;
-    ensure_owned_object_capacity(
-        ledger.owned_objects.len(),
-        order.inputs.len(),
-        usize::from(change > 0),
-    )?;
+    if cap_v2 {
+        let output_owners: Vec<&str> = if change > 0 {
+            vec![owner_pubkey_hex]
+        } else {
+            Vec::new()
+        };
+        ensure_owned_object_capacity_v2(
+            ledger,
+            owner_pubkey_hex,
+            order.inputs.len(),
+            &output_owners,
+        )?;
+    } else {
+        ensure_owned_object_capacity(
+            ledger.owned_objects.len(),
+            order.inputs.len(),
+            usize::from(change > 0),
+        )?;
+    }
 
     let credited_balance = ledger
         .account(&order.to_address)

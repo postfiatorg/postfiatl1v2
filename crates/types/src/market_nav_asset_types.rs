@@ -3866,6 +3866,24 @@ pub struct LedgerState {
     /// Genesis external lane records; empty on every chain without lanes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub external_lanes: Vec<ExternalLaneState>,
+    /// Keyed NFT store active at `nft_scaling_v1_activation_height`.
+    /// Key: `nft_id` (96 lowercase hex).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub nfts_by_id: BTreeMap<String, NftDefinition>,
+    /// Permanent serial-reuse tombstones active at `nft_scaling_v1_activation_height`.
+    /// Key: `nft_id` (96 lowercase hex). Value: block height minted (0 for migrated pre-activation records).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub used_nft_serials: BTreeMap<String, u64>,
+    /// Keyed collection policy map eliminating O(N) linear scan on `nft_mint`.
+    /// Key: `nft_collection_policy_key(issuer, collection_id)` (96 lowercase hex).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub nft_collection_policies: BTreeMap<String, NftCollectionPolicyV1>,
+    /// Aggregated cross-chain bridge holds keyed strictly by `asset_bridge_hold_key(asset_id, recipient)`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub asset_bridge_holds: BTreeMap<String, AssetBridgeHoldV1>,
+    /// Revoked fast-lane holder permits keyed by `permit_id_hex` -> `revoked_at_height`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub revoked_fast_lane_holder_permits: BTreeMap<String, u64>,
 }
 
 impl LedgerState {
@@ -4038,6 +4056,11 @@ impl LedgerState {
             additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
+            nfts_by_id: BTreeMap::new(),
+            used_nft_serials: BTreeMap::new(),
+            nft_collection_policies: BTreeMap::new(),
+            asset_bridge_holds: BTreeMap::new(),
+            revoked_fast_lane_holder_permits: BTreeMap::new(),
         }
     }
 
@@ -4095,6 +4118,11 @@ impl LedgerState {
             additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
+            nfts_by_id: BTreeMap::new(),
+            used_nft_serials: BTreeMap::new(),
+            nft_collection_policies: BTreeMap::new(),
+            asset_bridge_holds: BTreeMap::new(),
+            revoked_fast_lane_holder_permits: BTreeMap::new(),
         }
     }
 
@@ -4153,6 +4181,11 @@ impl LedgerState {
             additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
+            nfts_by_id: BTreeMap::new(),
+            used_nft_serials: BTreeMap::new(),
+            nft_collection_policies: BTreeMap::new(),
+            asset_bridge_holds: BTreeMap::new(),
+            revoked_fast_lane_holder_permits: BTreeMap::new(),
         }
     }
 
@@ -4206,6 +4239,11 @@ impl LedgerState {
             additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
+            nfts_by_id: BTreeMap::new(),
+            used_nft_serials: BTreeMap::new(),
+            nft_collection_policies: BTreeMap::new(),
+            asset_bridge_holds: BTreeMap::new(),
+            revoked_fast_lane_holder_permits: BTreeMap::new(),
         }
     }
 
@@ -4264,6 +4302,11 @@ impl LedgerState {
             additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
+            nfts_by_id: BTreeMap::new(),
+            used_nft_serials: BTreeMap::new(),
+            nft_collection_policies: BTreeMap::new(),
+            asset_bridge_holds: BTreeMap::new(),
+            revoked_fast_lane_holder_permits: BTreeMap::new(),
         }
     }
 
@@ -4317,6 +4360,11 @@ impl LedgerState {
             additional_solana_routes: BTreeMap::new(),
             fast_ingress_campaigns: Vec::new(),
             external_lanes: Vec::new(),
+            nfts_by_id: BTreeMap::new(),
+            used_nft_serials: BTreeMap::new(),
+            nft_collection_policies: BTreeMap::new(),
+            asset_bridge_holds: BTreeMap::new(),
+            revoked_fast_lane_holder_permits: BTreeMap::new(),
         }
     }
 
@@ -4370,7 +4418,34 @@ impl LedgerState {
     }
 
     pub fn nft(&self, nft_id: &str) -> Option<&NftDefinition> {
-        self.nfts.iter().find(|nft| nft.nft_id == nft_id)
+        self.nfts_by_id
+            .get(nft_id)
+            .or_else(|| self.nfts.iter().find(|nft| nft.nft_id == nft_id))
+    }
+
+    pub fn nft_mut(&mut self, nft_id: &str) -> Option<&mut NftDefinition> {
+        if let Some(nft) = self.nfts_by_id.get_mut(nft_id) {
+            return Some(nft);
+        }
+        self.nfts.iter_mut().find(|nft| nft.nft_id == nft_id)
+    }
+
+    pub fn all_nfts(&self) -> impl Iterator<Item = &NftDefinition> {
+        self.nfts_by_id.values().chain(self.nfts.iter())
+    }
+
+    pub fn asset_bridge_hold(&self, asset_id: &str, recipient: &str) -> Option<&AssetBridgeHoldV1> {
+        let key = asset_bridge_hold_key(asset_id, recipient);
+        self.asset_bridge_holds.get(&key)
+    }
+
+    pub fn asset_bridge_hold_mut(
+        &mut self,
+        asset_id: &str,
+        recipient: &str,
+    ) -> Option<&mut AssetBridgeHoldV1> {
+        let key = asset_bridge_hold_key(asset_id, recipient);
+        self.asset_bridge_holds.get_mut(&key)
     }
 
     pub fn offer(&self, offer_id: &str) -> Option<&Offer> {
@@ -4633,7 +4708,7 @@ impl LedgerState {
     pub fn nft_indexes(&self, chain_id: &str) -> Result<NftIndexes, String> {
         self.validate_nft_state(chain_id)?;
         let mut indexes = NftIndexes::default();
-        for nft in &self.nfts {
+        for nft in self.all_nfts() {
             if !nft.burned {
                 indexes
                     .by_owner
@@ -4936,6 +5011,26 @@ impl LedgerState {
                 ));
             }
         }
+        for (hold_key, hold) in &self.asset_bridge_holds {
+            hold.validate()?;
+            if hold_key != &hold.hold_key {
+                return Err(format!(
+                    "asset_bridge_hold map key `{hold_key}` does not match hold_key `{}`",
+                    hold.hold_key
+                ));
+            }
+            let Some(asset) = assets_by_id.get(&hold.asset_id) else {
+                return Err(format!(
+                    "asset_bridge_hold `{hold_key}` references missing asset `{}`",
+                    hold.asset_id
+                ));
+            };
+            if hold.issuer != asset.issuer {
+                return Err(format!(
+                    "asset_bridge_hold `{hold_key}` issuer does not match asset issuer"
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -4954,7 +5049,15 @@ impl LedgerState {
         let mut nft_ids = BTreeSet::new();
         let mut collection_serials = BTreeSet::new();
         let mut collection_flags_by_key = BTreeMap::new();
-        for nft in &self.nfts {
+        for (key, nft) in &self.nfts_by_id {
+            if key != &nft.nft_id {
+                return Err(format!(
+                    "nfts_by_id key `{key}` does not match nft_id `{}`",
+                    nft.nft_id
+                ));
+            }
+        }
+        for nft in self.all_nfts() {
             nft.validate_for_chain(chain_id)?;
             if !nft_ids.insert(nft.nft_id.clone()) {
                 return Err(format!("duplicate nft id `{}`", nft.nft_id));
@@ -4974,6 +5077,27 @@ impl LedgerState {
                     return Err(format!(
                         "nft collection flags mismatch for issuer `{}` collection `{}`",
                         nft.issuer, nft.collection_id
+                    ));
+                }
+            }
+        }
+        for tombstone_id in self.used_nft_serials.keys() {
+            validate_lower_hex_len("used_nft_serials.nft_id", tombstone_id, NFT_ID_HEX_LEN)?;
+        }
+        for (policy_key, policy) in &self.nft_collection_policies {
+            policy.validate()?;
+            let expected_key = nft_collection_policy_key(&policy.issuer, &policy.collection_id);
+            if policy_key != &expected_key {
+                return Err(format!(
+                    "nft_collection_policies key `{policy_key}` does not match issuer/collection"
+                ));
+            }
+            let tuple = (policy.issuer.clone(), policy.collection_id.clone());
+            if let Some(&flags) = collection_flags_by_key.get(&tuple) {
+                if flags != policy.collection_flags {
+                    return Err(format!(
+                        "nft_collection_policies mismatch for issuer `{}` collection `{}`",
+                        policy.issuer, policy.collection_id
                     ));
                 }
             }

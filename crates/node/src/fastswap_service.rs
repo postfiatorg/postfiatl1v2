@@ -2408,6 +2408,7 @@ mod tests {
                 terminal_tombstones: BTreeMap::new(),
                 asset_rules: BTreeMap::from([(rule_0, asset_rule_0), (rule_1, asset_rule_1)]),
                 holder_permits: BTreeMap::new(),
+                revoked_holder_permits: BTreeMap::new(),
                 policy_snapshots: BTreeMap::from([(policy_hash, policy)]),
                 prepare_fences: BTreeMap::new(),
                 pending_fee_burns: BTreeMap::new(),

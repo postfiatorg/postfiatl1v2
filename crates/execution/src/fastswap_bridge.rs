@@ -418,6 +418,9 @@ pub fn execute_fastlane_deposit(
                 || permit.owner_pubkey != deposit.destination_owner_pubkey
                 || finalized_height < permit.valid_from_height
                 || finalized_height > permit.valid_through_height
+                || ledger
+                    .revoked_fast_lane_holder_permits
+                    .contains_key(&bytes_to_hex(&permit_id.0))
             {
                 return Err(FastLaneBridgeError::HolderPermitInvalid);
             }
@@ -743,6 +746,7 @@ mod tests {
             terminal_tombstones: BTreeMap::new(),
             asset_rules: BTreeMap::from([(rule_hash, rule)]),
             holder_permits: BTreeMap::new(),
+            revoked_holder_permits: BTreeMap::new(),
             policy_snapshots: BTreeMap::new(),
             prepare_fences: BTreeMap::new(),
             pending_fee_burns: BTreeMap::new(),

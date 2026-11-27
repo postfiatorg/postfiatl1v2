@@ -978,7 +978,20 @@ fn execute_asset_transaction_with_checked_preimage(
             allow_legacy_vault_bridge_consume_supply_operator,
         )
     {
-        return Receipt::rejected(tx_id, "bad_asset_transaction_envelope", error);
+        let code = match &transaction.unsigned.operation {
+            AssetTransactionOperation::AssetClawback(op)
+                if op
+                    .offer_ids
+                    .len()
+                    .saturating_add(op.escrow_ids.len())
+                    .saturating_add(usize::from(op.include_bridge_hold))
+                    > postfiat_types::MAX_CLAWBACK_LOCKED_TARGETS =>
+            {
+                "clawback_target_limit_exceeded"
+            }
+            _ => "bad_asset_transaction_envelope",
+        };
+        return Receipt::rejected(tx_id, code, error);
     }
 
     if compatibility.recipient_format_active(block_height) {
@@ -1107,8 +1120,18 @@ fn execute_asset_transaction_with_checked_preimage(
         );
     }
 
-    let state_expansion_fee = asset_transaction_state_expansion_fee(ledger, transaction);
-    let minimum_fee = minimum_asset_transaction_fee_for_ledger(ledger, transaction);
+    let state_expansion_fee = asset_transaction_state_expansion_fee_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    );
+    let minimum_fee = minimum_asset_transaction_fee_for_ledger_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    );
     if transaction.unsigned.fee < minimum_fee {
         return Receipt::rejected(
             tx_id,
@@ -1158,6 +1181,7 @@ fn execute_asset_transaction_with_checked_preimage(
     source.balance = source_after_fee;
     source.sequence = expected_sequence;
 
+    let mut bridge_hold_events = Vec::new();
     if let Err((code, message)) = apply_asset_operation(
         genesis,
         &mut next_ledger,
@@ -1165,6 +1189,7 @@ fn execute_asset_transaction_with_checked_preimage(
         block_height,
         compatibility,
         orchard_balances,
+        &mut bridge_hold_events,
     )
     .and_then(|()| {
         if postfiat_types::solana_exit::release_height(
@@ -1232,14 +1257,18 @@ fn execute_asset_transaction_with_checked_preimage(
     }
 
     *ledger = next_ledger;
-    Receipt::accepted(tx_id, "asset transaction applied; fee burned")
+    let mut receipt = Receipt::accepted(tx_id, "asset transaction applied; fee burned")
         .with_fee_policy_and_state_expansion(
             transaction.unsigned.fee,
             transaction.unsigned.fee,
             minimum_fee,
             ACCOUNT_RESERVE,
             state_expansion_fee,
-        )
+        );
+    if !bridge_hold_events.is_empty() {
+        receipt = receipt.with_bridge_hold_events(bridge_hold_events);
+    }
+    receipt
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1459,12 +1488,13 @@ pub fn execute_atomic_swap_transaction_with_compatibility(
             asset_id: leg.asset_id.clone(),
             amount: leg.amount,
         };
-        if let Err(error) = apply_issued_payment(
+        if let Err(error) = apply_issued_payment_for_op(
             genesis,
             &mut next_ledger,
             &operation,
             block_height,
             compatibility,
+            AssetMovementOpKind::AtomicSwap,
         ) {
             let (code, message) = atomic_swap_issued_payment_error(error);
             return reject(code, message);
@@ -1710,6 +1740,22 @@ pub fn execute_escrow_transaction(
     transaction: &SignedEscrowTransaction,
     block_height: u64,
 ) -> Receipt {
+    execute_escrow_transaction_inner(
+        genesis,
+        ledger,
+        transaction,
+        block_height,
+        AssetExecutionCompatibility::strict(),
+    )
+}
+
+fn execute_escrow_transaction_inner(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    transaction: &SignedEscrowTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> Receipt {
     let tx_id = escrow_transaction_tx_id(transaction);
 
     if let Err(error) = transaction.validate() {
@@ -1889,9 +1935,13 @@ pub fn execute_escrow_transaction(
     source.balance = source_after_fee;
     source.sequence = expected_sequence;
 
-    if let Err((code, message)) =
-        apply_escrow_operation(genesis, &mut next_ledger, transaction, block_height)
-    {
+    if let Err((code, message)) = apply_escrow_operation(
+        genesis,
+        &mut next_ledger,
+        transaction,
+        block_height,
+        compatibility,
+    ) {
         return Receipt::rejected(tx_id, code, message).with_fee_policy_and_state_expansion(
             0,
             0,
@@ -1936,6 +1986,22 @@ pub fn execute_nft_transaction(
     genesis: &Genesis,
     ledger: &mut LedgerState,
     transaction: &SignedNftTransaction,
+) -> Receipt {
+    execute_nft_transaction_inner(
+        genesis,
+        ledger,
+        transaction,
+        0,
+        AssetExecutionCompatibility::strict(),
+    )
+}
+
+fn execute_nft_transaction_inner(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    transaction: &SignedNftTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Receipt {
     let tx_id = nft_transaction_tx_id(transaction);
 
@@ -2116,7 +2182,13 @@ pub fn execute_nft_transaction(
     source.balance = source_after_fee;
     source.sequence = expected_sequence;
 
-    if let Err((code, message)) = apply_nft_operation(genesis, &mut next_ledger, transaction) {
+    if let Err((code, message)) = apply_nft_operation(
+        genesis,
+        &mut next_ledger,
+        transaction,
+        block_height,
+        compatibility,
+    ) {
         return Receipt::rejected(tx_id, code, message).with_fee_policy_and_state_expansion(
             0,
             0,
@@ -2166,10 +2238,35 @@ pub fn execute_offer_transaction(
     transaction: &SignedOfferTransaction,
     block_height: u64,
 ) -> Receipt {
+    execute_offer_transaction_with_compatibility(
+        genesis,
+        ledger,
+        transaction,
+        block_height,
+        AssetExecutionCompatibility::strict(),
+    )
+}
+
+pub fn execute_offer_transaction_with_compatibility(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    transaction: &SignedOfferTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> Receipt {
     let tx_id = offer_transaction_tx_id(transaction);
 
     if let Err(error) = transaction.validate() {
-        return Receipt::rejected(tx_id, "bad_offer_transaction_envelope", error);
+        let code = match &transaction.unsigned.operation {
+            OfferTransactionOperation::OfferPruneIneligible(op)
+                if op.offer_ids.is_empty()
+                    || op.offer_ids.len() > postfiat_types::MAX_OFFER_PRUNE_BATCH =>
+            {
+                "offer_prune_batch_limit_exceeded"
+            }
+            _ => "bad_offer_transaction_envelope",
+        };
+        return Receipt::rejected(tx_id, code, error);
     }
 
     if transaction.unsigned.chain_id != genesis.chain_id {
@@ -2346,8 +2443,13 @@ pub fn execute_offer_transaction(
     source.balance = source_after_fee;
     source.sequence = expected_sequence;
 
-    let offer_outcome =
-        match apply_offer_operation(genesis, &mut next_ledger, transaction, block_height) {
+    let offer_outcome = match apply_offer_operation(
+        genesis,
+        &mut next_ledger,
+        transaction,
+        block_height,
+        compatibility,
+    ) {
             Ok(outcome) => outcome,
             Err((code, message)) => {
                 return Receipt::rejected(tx_id, code, message)
