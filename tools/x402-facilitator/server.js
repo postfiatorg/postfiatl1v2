@@ -3,10 +3,13 @@
 // Standalone CLI entrypoint for the Post Fiat x402 v2 facilitator.
 // Defaults to loopback 127.0.0.1:4020; configure via environment variables.
 //
-// The daemon started from this file is a prototype: it has no settlement adapter, so it can
-// issue and check challenges but settles nothing on the chain (see the top of facilitator.js).
+// In `X402_MODE=production`, the facilitator requires BOTH:
+//  - durable spent-payment storage (`X402_SPENT_STORE_PATH`), AND
+//  - either an injected settlement adapter OR `X402_RPC_URLS` paired with pinned
+//    `X402_COMMITTEE_JSON` + `X402_DOMAIN_JSON` so FastPay quorum votes and apply
+//    acknowledgements are cryptographically authenticated against the active committee.
 
-const { FileSpentStore, createFacilitatorCore, createFacilitatorServer } = require('./facilitator');
+const { CommitteeRegistry, FileSpentStore, createFacilitatorCore, createFacilitatorServer } = require('./facilitator');
 const { createChainSettlementAdapter } = require('./chain-adapter');
 
 const MODE_PROTOTYPE = 'prototype';
@@ -16,29 +19,60 @@ function isSettlementAdapter(adapter) {
   return typeof adapter?.settleFastPay === 'function' && typeof adapter?.settleConsensus === 'function';
 }
 
-// Throws when the environment does not describe a facilitator that may run.
-// When `X402_RPC_URLS` is configured and no custom `settlementAdapter` is injected,
-// builds the live postfiatl1v2 JSON-RPC settlement adapter automatically.
+function parseJsonEnv(raw, name) {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`${name} must be valid JSON: ${err.message}`);
+  }
+}
+
 function createFacilitatorFromEnv(env = process.env, { settlementAdapter = null } = {}) {
   const mode = String(env.X402_MODE || MODE_PROTOTYPE).trim().toLowerCase();
   if (mode !== MODE_PROTOTYPE && mode !== MODE_PRODUCTION) {
     throw new Error(`X402_MODE must be "${MODE_PROTOTYPE}" or "${MODE_PRODUCTION}", got "${mode}"`);
   }
+
+  const committeeCfg = parseJsonEnv(String(env.X402_COMMITTEE_JSON || '').trim(), 'X402_COMMITTEE_JSON');
+  const expectedDomain = parseJsonEnv(String(env.X402_DOMAIN_JSON || '').trim(), 'X402_DOMAIN_JSON');
+  const committeeRegistry = new CommitteeRegistry(
+    committeeCfg ? { ...committeeCfg, domain: expectedDomain || committeeCfg.domain || null } : null
+  );
+
   let resolvedAdapter = settlementAdapter;
   const rpcUrlsRaw = String(env.X402_RPC_URLS || '').trim();
-  if (mode === MODE_PROTOTYPE && !resolvedAdapter && rpcUrlsRaw) {
-    const quorum = env.X402_QUORUM_THRESHOLD ? Number(env.X402_QUORUM_THRESHOLD) : null;
-    resolvedAdapter = createChainSettlementAdapter({
-      rpcUrls: rpcUrlsRaw,
-      quorumThreshold: quorum,
-      rpcTimeoutMs: env.X402_RPC_TIMEOUT_MS ? Number(env.X402_RPC_TIMEOUT_MS) : undefined,
-      finalityTimeoutMs: env.X402_FINALITY_TIMEOUT_MS ? Number(env.X402_FINALITY_TIMEOUT_MS) : undefined,
-    });
+  const quorum = env.X402_QUORUM_THRESHOLD ? Number(env.X402_QUORUM_THRESHOLD) : null;
+
+  if (!resolvedAdapter && rpcUrlsRaw) {
+    if (mode === MODE_PRODUCTION) {
+      if (committeeCfg && expectedDomain) {
+        resolvedAdapter = createChainSettlementAdapter({
+          rpcUrls: rpcUrlsRaw,
+          quorumThreshold: quorum,
+          committeeRegistry,
+          expectedDomain,
+          requireAuthenticatedCommittee: true,
+          rpcTimeoutMs: env.X402_RPC_TIMEOUT_MS ? Number(env.X402_RPC_TIMEOUT_MS) : undefined,
+          finalityTimeoutMs: env.X402_FINALITY_TIMEOUT_MS ? Number(env.X402_FINALITY_TIMEOUT_MS) : undefined,
+        });
+      }
+    } else {
+      resolvedAdapter = createChainSettlementAdapter({
+        rpcUrls: rpcUrlsRaw,
+        quorumThreshold: quorum,
+        committeeRegistry: committeeCfg ? committeeRegistry : null,
+        expectedDomain,
+        rpcTimeoutMs: env.X402_RPC_TIMEOUT_MS ? Number(env.X402_RPC_TIMEOUT_MS) : undefined,
+        finalityTimeoutMs: env.X402_FINALITY_TIMEOUT_MS ? Number(env.X402_FINALITY_TIMEOUT_MS) : undefined,
+      });
+    }
   }
+
   if (mode === MODE_PRODUCTION && !isSettlementAdapter(resolvedAdapter)) {
     throw new Error(
-      `X402_MODE=${MODE_PRODUCTION} requires an injected settlement adapter with verified chain certificates ` +
-        'backed by postfiatl1v2 validator JSON-RPC endpoints'
+      `X402_MODE=${MODE_PRODUCTION} requires an injected settlement adapter or X402_RPC_URLS paired with pinned ` +
+        'X402_COMMITTEE_JSON and X402_DOMAIN_JSON for verified chain certificates'
     );
   }
 
@@ -53,10 +87,13 @@ function createFacilitatorFromEnv(env = process.env, { settlementAdapter = null 
 
   const core = createFacilitatorCore({
     facilitatorId: env.X402_FACILITATOR_ID || 'postfiat-facilitator-v1',
-    chainId: env.X402_CHAIN_ID || 'postfiat-devnet-2',
+    chainId: env.X402_CHAIN_ID || expectedDomain?.chain_id || 'postfiat-devnet-2',
     network: env.X402_NETWORK || 'postfiat:devnet-2',
     facilitatorUrl: env.X402_PUBLIC_URL || `http://${listenHost}:${listenPort}`,
     spentStore: new FileSpentStore(spentStorePath),
+    committeeRegistry,
+    expectedDomain,
+    requireNativePayloads: mode === MODE_PRODUCTION,
     settlementAdapter: resolvedAdapter,
     ipRateLimit: Number(env.X402_IP_RATE_LIMIT || 60),
     keyRateLimit: Number(env.X402_KEY_RATE_LIMIT || 60),
