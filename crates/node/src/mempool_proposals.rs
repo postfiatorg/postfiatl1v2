@@ -305,11 +305,12 @@ fn admit_signed_transfer_to_mempool(
         &orchard_balances,
     )?;
     for pending in &mempool.pending_escrow_transactions {
-        let pending_receipt = execute_escrow_transaction(
+        let pending_receipt = execute_escrow_transaction_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -322,8 +323,13 @@ fn admit_signed_transfer_to_mempool(
         }
     }
     for pending in &mempool.pending_nft_transactions {
-        let pending_receipt =
-            execute_nft_transaction(&genesis, &mut dry_run_ledger, &pending.transaction);
+        let pending_receipt = execute_nft_transaction_with_compatibility(
+            &genesis,
+            &mut dry_run_ledger,
+            &pending.transaction,
+            block_height,
+            asset_execution_compatibility,
+        );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -335,11 +341,12 @@ fn admit_signed_transfer_to_mempool(
         }
     }
     for pending in &mempool.pending_offer_transactions {
-        let pending_receipt = execute_offer_transaction(
+        let pending_receipt = execute_offer_transaction_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -452,11 +459,12 @@ fn admit_signed_payment_v2_to_mempool(
         &orchard_balances,
     )?;
     for pending in &mempool.pending_escrow_transactions {
-        let pending_receipt = execute_escrow_transaction(
+        let pending_receipt = execute_escrow_transaction_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -469,8 +477,13 @@ fn admit_signed_payment_v2_to_mempool(
         }
     }
     for pending in &mempool.pending_nft_transactions {
-        let pending_receipt =
-            execute_nft_transaction(&genesis, &mut dry_run_ledger, &pending.transaction);
+        let pending_receipt = execute_nft_transaction_with_compatibility(
+            &genesis,
+            &mut dry_run_ledger,
+            &pending.transaction,
+            block_height,
+            asset_execution_compatibility,
+        );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -482,11 +495,12 @@ fn admit_signed_payment_v2_to_mempool(
         }
     }
     for pending in &mempool.pending_offer_transactions {
-        let pending_receipt = execute_offer_transaction(
+        let pending_receipt = execute_offer_transaction_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -606,11 +620,12 @@ fn admit_signed_asset_transaction_to_mempool(
         orchard_balances,
     )?;
     for pending in &mempool.pending_escrow_transactions {
-        let pending_receipt = execute_escrow_transaction(
+        let pending_receipt = execute_escrow_transaction_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -623,8 +638,13 @@ fn admit_signed_asset_transaction_to_mempool(
         }
     }
     for pending in &mempool.pending_nft_transactions {
-        let pending_receipt =
-            execute_nft_transaction(&genesis, &mut dry_run_ledger, &pending.transaction);
+        let pending_receipt = execute_nft_transaction_with_compatibility(
+            &genesis,
+            &mut dry_run_ledger,
+            &pending.transaction,
+            block_height,
+            asset_execution_compatibility,
+        );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -636,11 +656,12 @@ fn admit_signed_asset_transaction_to_mempool(
         }
     }
     for pending in &mempool.pending_offer_transactions {
-        let pending_receipt = execute_offer_transaction(
+        let pending_receipt = execute_offer_transaction_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -976,11 +997,12 @@ fn admit_signed_escrow_transaction_to_mempool(
         &orchard_balances,
     )?;
     for pending in &mempool.pending_escrow_transactions {
-        let pending_receipt = execute_escrow_transaction(
+        let pending_receipt = execute_escrow_transaction_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -992,8 +1014,13 @@ fn admit_signed_escrow_transaction_to_mempool(
             ));
         }
     }
-    let dry_run_receipt =
-        execute_escrow_transaction(&genesis, &mut dry_run_ledger, &signed, block_height);
+    let dry_run_receipt = execute_escrow_transaction_with_compatibility(
+        &genesis,
+        &mut dry_run_ledger,
+        &signed,
+        block_height,
+        asset_execution_compatibility,
+    );
     if !dry_run_receipt.accepted {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -1004,8 +1031,13 @@ fn admit_signed_escrow_transaction_to_mempool(
         ));
     }
     for pending in &mempool.pending_nft_transactions {
-        let pending_receipt =
-            execute_nft_transaction(&genesis, &mut dry_run_ledger, &pending.transaction);
+        let pending_receipt = execute_nft_transaction_with_compatibility(
+            &genesis,
+            &mut dry_run_ledger,
+            &pending.transaction,
+            block_height,
+            asset_execution_compatibility,
+        );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -1017,11 +1049,12 @@ fn admit_signed_escrow_transaction_to_mempool(
         }
     }
     for pending in &mempool.pending_offer_transactions {
-        let pending_receipt = execute_offer_transaction(
+        let pending_receipt = execute_offer_transaction_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -1089,7 +1122,13 @@ fn admit_signed_nft_transaction_to_mempool(
         asset_execution_compatibility,
         &orchard_balances,
     )?;
-    let dry_run_receipt = execute_nft_transaction(&genesis, &mut dry_run_ledger, &signed);
+    let dry_run_receipt = execute_nft_transaction_with_compatibility(
+        &genesis,
+        &mut dry_run_ledger,
+        &signed,
+        block_height,
+        asset_execution_compatibility,
+    );
     if !dry_run_receipt.accepted {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -1152,8 +1191,13 @@ fn admit_signed_offer_transaction_to_mempool(
         asset_execution_compatibility,
         &orchard_balances,
     )?;
-    let dry_run_receipt =
-        execute_offer_transaction(&genesis, &mut dry_run_ledger, &signed, block_height);
+    let dry_run_receipt = execute_offer_transaction_with_compatibility(
+        &genesis,
+        &mut dry_run_ledger,
+        &signed,
+        block_height,
+        asset_execution_compatibility,
+    );
     if !dry_run_receipt.accepted {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -1508,8 +1552,13 @@ pub(super) fn ledger_after_executable_mempool(
         }
     }
     for pending in &mempool.pending_escrow_transactions {
-        let receipt =
-            execute_escrow_transaction(genesis, &mut ledger, &pending.transaction, block_height);
+        let receipt = execute_escrow_transaction_with_compatibility(
+            genesis,
+            &mut ledger,
+            &pending.transaction,
+            block_height,
+            asset_execution_compatibility,
+        );
         if !receipt.accepted {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -1521,7 +1570,13 @@ pub(super) fn ledger_after_executable_mempool(
         }
     }
     for pending in &mempool.pending_nft_transactions {
-        let receipt = execute_nft_transaction(genesis, &mut ledger, &pending.transaction);
+        let receipt = execute_nft_transaction_with_compatibility(
+            genesis,
+            &mut ledger,
+            &pending.transaction,
+            block_height,
+            asset_execution_compatibility,
+        );
         if !receipt.accepted {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -1533,8 +1588,13 @@ pub(super) fn ledger_after_executable_mempool(
         }
     }
     for pending in &mempool.pending_offer_transactions {
-        let receipt =
-            execute_offer_transaction(genesis, &mut ledger, &pending.transaction, block_height);
+        let receipt = execute_offer_transaction_with_compatibility(
+            genesis,
+            &mut ledger,
+            &pending.transaction,
+            block_height,
+            asset_execution_compatibility,
+        );
         if !receipt.accepted {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -2163,11 +2223,12 @@ pub(super) fn verify_mempool_state(
                 ),
             ));
         }
-        let receipt = execute_escrow_transaction(
+        let receipt = execute_escrow_transaction_with_compatibility(
             genesis,
             &mut dry_run_ledger,
             &entry.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !receipt.accepted {
             return Err(io::Error::new(
@@ -2226,7 +2287,13 @@ pub(super) fn verify_mempool_state(
                 ),
             ));
         }
-        let receipt = execute_nft_transaction(genesis, &mut dry_run_ledger, &entry.transaction);
+        let receipt = execute_nft_transaction_with_compatibility(
+            genesis,
+            &mut dry_run_ledger,
+            &entry.transaction,
+            block_height,
+            asset_execution_compatibility,
+        );
         if !receipt.accepted {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -2279,11 +2346,12 @@ pub(super) fn verify_mempool_state(
                 ),
             ));
         }
-        let receipt = execute_offer_transaction(
+        let receipt = execute_offer_transaction_with_compatibility(
             genesis,
             &mut dry_run_ledger,
             &entry.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !receipt.accepted {
             return Err(io::Error::new(
@@ -2793,11 +2861,12 @@ pub fn create_mempool_batch(options: MempoolBatchOptions) -> io::Result<Transact
             remaining_escrow_transactions.push(entry);
             continue;
         }
-        let receipt = execute_escrow_transaction(
+        let receipt = execute_escrow_transaction_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &entry.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if receipt.accepted {
             escrow_transactions.push(entry.transaction);
@@ -2818,7 +2887,13 @@ pub fn create_mempool_batch(options: MempoolBatchOptions) -> io::Result<Transact
             remaining_nft_transactions.push(entry);
             continue;
         }
-        let receipt = execute_nft_transaction(&genesis, &mut dry_run_ledger, &entry.transaction);
+        let receipt = execute_nft_transaction_with_compatibility(
+            &genesis,
+            &mut dry_run_ledger,
+            &entry.transaction,
+            block_height,
+            asset_execution_compatibility,
+        );
         if receipt.accepted {
             nft_transactions.push(entry.transaction);
         }
@@ -2839,11 +2914,12 @@ pub fn create_mempool_batch(options: MempoolBatchOptions) -> io::Result<Transact
             remaining_offer_transactions.push(entry);
             continue;
         }
-        let receipt = execute_offer_transaction(
+        let receipt = execute_offer_transaction_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &entry.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if receipt.accepted {
             offer_transactions.push(entry.transaction);

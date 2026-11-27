@@ -5,12 +5,19 @@ use postfiat_crypto_provider::{
     address_from_public_key, bytes_to_hex, ml_dsa_65_keygen_from_seed, ml_dsa_65_sign,
     ML_DSA_65_ALGORITHM,
 };
-use postfiat_execution::{execute_offer_transaction_with_compatibility, AssetExecutionCompatibility};
+use postfiat_execution::{
+    execute_nft_transaction_with_compatibility, execute_offer_transaction_with_compatibility,
+    AssetExecutionCompatibility,
+};
 use postfiat_types::{
-    Account, OfferPruneIneligibleOperation, OfferTransactionOperation, SignedOfferTransaction,
+    nft_id, Account, GovernanceAmendment, NftBurnOperation, NftMintOperation,
+    NftTransactionOperation, OfferPruneIneligibleOperation, OfferTransactionOperation,
+    SignedNftTransaction, SignedOfferTransaction, UnsignedNftTransaction,
     UnsignedOfferTransaction, ADDRESS_NAMESPACE, GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT,
-    GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT, OFFER_PRUNE_INELIGIBLE_TRANSACTION_KIND,
+    GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT, NFT_BURN_TRANSACTION_KIND,
+    NFT_COLLECTION_FLAG_BURN_LOCKED, NFT_FLAG_ISSUER_BURNABLE, NFT_FLAG_TRANSFERABLE,
+    NFT_MINT_TRANSACTION_KIND, OFFER_PRUNE_INELIGIBLE_TRANSACTION_KIND,
 };
 
 fn review_test_dir(label: &str) -> PathBuf {
@@ -176,5 +183,246 @@ fn train_a_activation_kinds_ratify_certify_apply_and_switch_at_the_height() {
             );
         }
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+struct ReviewKey {
+    address: String,
+    public_key_hex: String,
+    keypair: postfiat_crypto_provider::MlDsa65KeyPair,
+}
+
+fn review_key(seed: u8) -> ReviewKey {
+    let keypair = ml_dsa_65_keygen_from_seed(&[seed; 32]);
+    ReviewKey {
+        address: address_from_public_key(&keypair.public_key),
+        public_key_hex: bytes_to_hex(&keypair.public_key),
+        keypair,
+    }
+}
+
+fn review_account(key: &ReviewKey) -> Account {
+    Account {
+        address: key.address.clone(),
+        balance: 10_000_000,
+        sequence: 0,
+        public_key_hex: Some(key.public_key_hex.clone()),
+        flags: 0,
+    }
+}
+
+fn review_nft_tx(
+    genesis: &Genesis,
+    key: &ReviewKey,
+    sequence: u64,
+    kind: &str,
+    operation: NftTransactionOperation,
+) -> SignedNftTransaction {
+    let unsigned = UnsignedNftTransaction {
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(genesis),
+        protocol_version: genesis.protocol_version,
+        address_namespace: ADDRESS_NAMESPACE.to_string(),
+        transaction_kind: kind.to_string(),
+        signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        source: key.address.clone(),
+        fee: 50_000,
+        sequence,
+        operation,
+    };
+    let signature = ml_dsa_65_sign(&key.keypair.private_key, &unsigned.signing_bytes())
+        .expect("sign nft tx");
+    SignedNftTransaction {
+        unsigned,
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        public_key_hex: key.public_key_hex.clone(),
+        signature_hex: bytes_to_hex(&signature),
+    }
+}
+
+fn review_mint(issuer: &ReviewKey, owner: &str, serial: u64, flags: u32, collection_flags: u32) -> NftTransactionOperation {
+    NftTransactionOperation::NftMint(NftMintOperation {
+        issuer: issuer.address.clone(),
+        collection_id: "COL".to_string(),
+        serial,
+        owner: owner.to_string(),
+        metadata_hash: "11".repeat(48),
+        metadata_uri: "ipfs://review".to_string(),
+        flags,
+        collection_flags,
+        issuer_transfer_fee: 0,
+    })
+}
+
+/// A fresh store whose governance activates NFT scaling and the asset gate
+/// at height 1, with its tip moved to height 5 (admission judges height 6).
+fn store_with_train_a_active(label: &str) -> (PathBuf, NodeStore, Genesis) {
+    let dir = review_test_dir(label);
+    let genesis = Genesis::new_with_validator_count("postfiat-train-a-review", 1);
+    let store = NodeStore::new(&dir);
+    store
+        .init(&genesis, &NodeState::initialized("val-0"))
+        .expect("init store");
+    let mut governance = store.read_governance().expect("read governance");
+    for kind in [
+        GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT,
+    ] {
+        governance.amendments.push(GovernanceAmendment {
+            amendment_id: format!("amd-{kind}"),
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&genesis),
+            protocol_version: genesis.protocol_version,
+            instance_id: "i".to_string(),
+            proposal_id: "p".to_string(),
+            certificate_id: "c".to_string(),
+            proposer: "val-0".to_string(),
+            validators: vec!["val-0".to_string()],
+            quorum: 1,
+            support: vec!["val-0".to_string()],
+            votes: Vec::new(),
+            signed_authorizations: Vec::new(),
+            kind: kind.to_string(),
+            value: 1,
+            activation_height: 1,
+            veto_until_height: 0,
+            paused: false,
+        });
+    }
+    store.write_governance(&governance).expect("write governance");
+    let mut tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis).expect("read tip");
+    tip.height = 5;
+    store.write_chain_tip(&tip).expect("write tip");
+    (dir, store, genesis)
+}
+
+/// Point 3 (A3): mempool admission judges NFT, offer and escrow transactions
+/// by the rules the next block applies.
+#[test]
+fn mempool_admission_uses_the_block_rules_after_train_a_activation() {
+    let (dir, store, genesis) = store_with_train_a_active("mempool-rules");
+    let governance = store.read_governance().expect("read governance");
+    let compatibility =
+        asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance);
+    assert!(compatibility.asset_gate_v1_active(6) && compatibility.nft_scaling_v1_active(6));
+
+    let issuer = review_key(81);
+    let owner = review_key(82);
+    let spammer = review_key(83);
+    let (pruner, mut prune) = signed_offer_prune(&genesis, 84, 1);
+    let mut ledger = store.read_ledger().expect("read ledger");
+    ledger.accounts.extend([
+        review_account(&issuer),
+        review_account(&owner),
+        review_account(&spammer),
+        pruner,
+    ]);
+    // An open native-PFT offer of `owner` that has expired: prunable once the
+    // gate is active.
+    let quote_asset = postfiat_types::AssetDefinition::new(&genesis.chain_id, &issuer.address, "RVW", 1, 6)
+        .expect("quote asset");
+    let offer = postfiat_types::Offer::new(
+        &genesis.chain_id,
+        owner.address.clone(),
+        7,
+        postfiat_execution::NATIVE_PFT_ESCROW_ASSET_ID,
+        1_000,
+        quote_asset.asset_id.clone(),
+        1_000,
+        1,
+        2,
+    )
+    .expect("expired offer");
+    ledger.asset_definitions.push(quote_asset);
+    let owner_account = ledger
+        .accounts
+        .iter_mut()
+        .find(|account| account.address == owner.address)
+        .expect("owner account");
+    owner_account.balance -= 1_000 + offer.reserve_paid;
+    let offer_id = offer.offer_id.clone();
+    ledger.offers.push(offer);
+    let prune_key = ml_dsa_65_keygen_from_seed(&[84; 32]);
+    if let OfferTransactionOperation::OfferPruneIneligible(operation) = &mut prune.unsigned.operation {
+        operation.offer_ids = vec![offer_id];
+    }
+    prune.signature_hex = bytes_to_hex(
+        &ml_dsa_65_sign(&prune_key.private_key, &prune.unsigned.signing_bytes()).expect("re-sign prune"),
+    );
+    // An issuer-burnable NFT minted under the new rules.
+    let mint = review_nft_tx(
+        &genesis,
+        &issuer,
+        1,
+        NFT_MINT_TRANSACTION_KIND,
+        review_mint(&issuer, &owner.address, 1, NFT_FLAG_TRANSFERABLE | NFT_FLAG_ISSUER_BURNABLE, 0),
+    );
+    let minted =
+        execute_nft_transaction_with_compatibility(&genesis, &mut ledger, &mint, 6, compatibility);
+    assert!(minted.accepted, "{minted:?}");
+    store.write_ledger(&ledger).expect("write ledger");
+
+    // offer_prune_ineligible is admitted once the gate is active.
+    submit_signed_offer_transaction_json_to_mempool(SignedOfferTransactionJsonSubmitOptions {
+        data_dir: dir.clone(),
+        signed_offer_transaction_json: serde_json::to_string(&prune).expect("encode prune"),
+    })
+    .expect("offer_prune_ineligible is admitted after activation");
+
+    // An issuer burn is admitted once NFT scaling is active.
+    let burn = review_nft_tx(
+        &genesis,
+        &issuer,
+        2,
+        NFT_BURN_TRANSACTION_KIND,
+        NftTransactionOperation::NftBurn(NftBurnOperation {
+            nft_id: nft_id(&genesis.chain_id, &issuer.address, "COL", 1).expect("nft id"),
+            owner: owner.address.clone(),
+            issuer: issuer.address.clone(),
+        }),
+    );
+    submit_signed_nft_transaction_json_to_mempool(SignedNftTransactionJsonSubmitOptions {
+        data_dir: dir.clone(),
+        signed_nft_transaction_json: serde_json::to_string(&burn).expect("encode burn"),
+    })
+    .expect("issuer nft_burn is admitted after activation");
+
+    // An unsolicited permanently locked mint is refused at admission, as the
+    // block refuses it.
+    let spam = review_nft_tx(
+        &genesis,
+        &spammer,
+        1,
+        NFT_MINT_TRANSACTION_KIND,
+        NftTransactionOperation::NftMint(NftMintOperation {
+            issuer: spammer.address.clone(),
+            collection_id: "SPAM".to_string(),
+            serial: 1,
+            owner: owner.address.clone(),
+            metadata_hash: "22".repeat(48),
+            metadata_uri: "ipfs://spam".to_string(),
+            flags: 0,
+            collection_flags: NFT_COLLECTION_FLAG_BURN_LOCKED,
+            issuer_transfer_fee: 0,
+        }),
+    );
+    let block = execute_nft_transaction_with_compatibility(
+        &genesis,
+        &mut ledger.clone(),
+        &spam,
+        6,
+        compatibility,
+    );
+    assert_eq!(block.code, "nft_unsolicited_permanent_lock_forbidden");
+    let error = submit_signed_nft_transaction_json_to_mempool(SignedNftTransactionJsonSubmitOptions {
+        data_dir: dir.clone(),
+        signed_nft_transaction_json: serde_json::to_string(&spam).expect("encode spam"),
+    })
+    .expect_err("the block's refusal is an admission refusal");
+    assert!(
+        error.to_string().contains("nft_unsolicited_permanent_lock_forbidden")
+            || error.to_string().contains("burn-locked and non-transferable"),
+        "{error}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
