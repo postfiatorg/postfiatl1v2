@@ -1,22 +1,22 @@
 # Pillar 3 — Validator Rewards Program
 
-> **Status:** Guide live, code not merged. The "Run a Validator" guide ([site#56](https://github.com/postfiatorg/postfiatorg.github.io/pull/56)) is live. The contract ([postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286)) and the CLI/RPC/uptime code ([#290](https://github.com/postfiatorg/postfiatl1v2/pull/290)) are open, and both got a "not ready" second read. Join/ratification CLI, release pipeline, observers, Task Node enforcement and the 2 public RPCs are not started. Full step list under [Build milestones](#build-milestones).
+> **Status:** Guide live; code fixed in PR, not merged. The contract ([postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286)) and the code ([#290](https://github.com/postfiatorg/postfiatl1v2/pull/290)) now answer every point of the second read and wait for CI and merge. Not started: join/ratification commands, the release build pipeline, standing up observers and the 2 public RPCs, Task Node enforcement. Full step list under [Build milestones](#build-milestones).
 >
 > **Outcome:** [B · A production-ready new chain](../README.md#three-outcomes) — moving `postfiatl1v2` from 6 Foundation-run nodes to a real outside validator network.
 
-## Current Status Report (2026-11-27 19:00 UTC)
+## Current Status Report (2026-11-27 21:30 UTC)
 
 | Gate 1 · Code / Executed | Gate 2 · Founder UAT | Gate 3 · Docs | Gate 4 · Blog Post |
 | --- | --- | --- | --- |
-| **PRs Open, changes needed** (`l1#286`, `l1#290`: 5 + 7 blocking review points); M2, release pipeline, observers, Task Node enforcement, 2 Foundation RPCs & G0 cohort Not Started | Not Started | **Guide live** (`site#56` merged) but ahead of the code; `site#59`, `site#61` open; MkDocs copy missing | **Draft merged** (`draft: true`, `site#57`) |
+| **PRs fixed, waiting for CI and merge** (`l1#286`, `l1#290`). M2, release pipeline, deployment of observers and RPCs, Task Node enforcement, G0 cohort Not Started | Not Started | **Guide live** (`site#56`) but ahead of the code; `site#59`, `site#61` open; MkDocs copy missing | **Draft merged** (`draft: true`, `site#57`) |
 
-- **Merged on `main`:** Validator doctor fixes ([postfiatl1v2#281](https://github.com/postfiatorg/postfiatl1v2/pull/281)) and spec ([postfiatl1v2#285](https://github.com/postfiatorg/postfiatl1v2/pull/285)).
-- **Built & open in PRs (Waves 0–2):**
-  - [postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286) *(Phase 0 C2)* — Signed `postfiat-validator-uptime-v1` feed schema + `upgrade`/`top`/RPC profile spec. *(9 CI pass; `test` failed on pre-`#296` stale assertion + expected ELF drift.)*
-  - [postfiatl1v2#290](https://github.com/postfiatorg/postfiatl1v2/pull/290) *(Wave 1 Lane 2)* — `postfiat-node top` SSH dashboard, `upgrade` command, read-replica RPC profiles & read-path cache, and multi-observer uptime feed. *(15 local Rust suites passed; 9 CI pass; `test` cancelled at 2h CI limit — `#298` splits the CI job.)*
-  - [postfiatorg.github.io#56](https://github.com/postfiatorg/postfiatorg.github.io/pull/56) & [#57](https://github.com/postfiatorg/postfiatorg.github.io/pull/57) *(**1/1 CI GREEN**)* — Unified "Run a Validator" technical guide (Gate #3) and blog draft (`draft: true`, Gate #4). *(Independent validator-guide enhancements also open: [#59](https://github.com/postfiatorg/postfiatorg.github.io/pull/59) persistent DOCKER-USER limits, [#61](https://github.com/postfiatorg/postfiatorg.github.io/pull/61) 5-minute healthcheck systemd timer.)*
-- **Wave 3 work on disk:** No Wave 3 code lane required for Pillar 3 (only CI sweep / rebase onto `#296` + `#298`).
-- **Not done yet:** Merge `#286`/`#290`/`#56`/`#59`/`#61`, publish signed release channel, stand up 2 Foundation public RPC endpoints, onboard outside `G0` validator cohort, turn on rewards + active-liveness enforcement, Founder UAT, and publish blog post.
+- **Merged on `main`:** Validator doctor fixes ([postfiatl1v2#281](https://github.com/postfiatorg/postfiatl1v2/pull/281)) and the pillar spec ([postfiatl1v2#285](https://github.com/postfiatorg/postfiatl1v2/pull/285)).
+- **Fixed in open PRs on 27 November (all 12 blocking review points and the smaller ones):**
+  - [postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286): the contract. UTC days, every acted-on field signed, real ML-DSA-65 checks against a pinned keyset, ordered releases, a rollback that never restores a vote record. Conformance test runs in CI.
+  - [postfiatl1v2#290](https://github.com/postfiatorg/postfiatl1v2/pull/290): the code. Validators keep today's read path; replicas refuse writes and enforce their lag; `upgrade` passes its own health check, keeps owner and mode, carries the vote record forward, refuses an older release and finishes an interrupted run; the observer is rewritten and tested over three simulated weeks; new HTTP edge, `block_vote_records` RPC, keyset rotation, release signing commands.
+- **Measured on devnet-2 (27 November):** counting only certificate votes puts a healthy validator at 90.2%, below the 95% rule. Counting every accepted vote (certificates plus the proposers' vote records) puts it at 97.3%. The metric was changed accordingly (decision 2 below).
+- **Found while fixing:** the packaged TLS proxy could not have worked (the node's RPC is not HTTP); a key-less replica cannot serve private-payment admission, so the 2 Foundation endpoints for Pillar 5 are an HTTP edge in front of a validator; the Mac client in `tasknode-apple#40` only accepts `http://` URLs while its defaults are `https://`; an old signed snapshot (height 600) no longer imports under the current binary, so a new node needs a fresh signed snapshot.
+- **Not done yet:** merge the two PRs, then every step below that is not marked as fixed in PR.
 
 ---
 
@@ -119,23 +119,23 @@ flowchart TB
 
 ### Build milestones
 
-Each milestone is broken into numbered steps. `[x]` means merged on `main` or live. "Built" means the code sits in an open PR and is not merged. Review points are from the second read of [`#286`](https://github.com/postfiatorg/postfiatl1v2/pull/286) and [`#290`](https://github.com/postfiatorg/postfiatl1v2/pull/290) (both answered "not ready"; none of the points are fixed yet).
+Each milestone is broken into numbered steps. `[x]` means merged on `main` or live. **PR** after a step means it is done in an open PR and not merged.
 
 #### M0 · Freeze the contract (`postfiatl1v2#286`)
-- [ ] **0.1** Write the UTC-day definition (decision 1) into the contract, and make `#286` and `#287` use the same definition.
-- [ ] **0.2** Put every field Task Node acts on inside the observer signature: operator identity, public RPC URL, grace and recovery fields, consecutive passing days, removal flag.
-- [ ] **0.3** Make the signature check real: verify ML-DSA-65 signatures against pinned observer keys, replace the fixture's invalid signatures, add tests that reject swapped, zeroed and invented signers.
-- [ ] **0.4** Give releases an order so `upgrade` refuses an older release than the one installed.
-- [ ] **0.5** Fix the smaller contract points: `liveness_met` rule vs schema constant, one rule for observer disagreement, recovery floor same in text and test, an older feed cannot replace a newer one, list of served and never-served RPC methods, the three schemas that are only named, interrupted-upgrade and key-rotation cases.
-- [ ] **0.6** Wire `scripts/test-validator-uptime-schema.py` into CI, then merge `#286`.
+- [ ] **0.1** **PR `#286`.** Write the UTC-day definition (decision 1) into the contract, and make `#286` and `#287` use the same definition.
+- [ ] **0.2** **PR `#286`.** Put every field Task Node acts on inside the observer signature: operator identity, public RPC URL, grace and recovery fields, consecutive passing days, removal flag.
+- [ ] **0.3** **PR `#286`.** Make the signature check real: verify ML-DSA-65 signatures against pinned observer keys, replace the fixture's invalid signatures, add tests that reject swapped, zeroed and invented signers.
+- [ ] **0.4** **PR `#286`.** Give releases an order so `upgrade` refuses an older release than the one installed.
+- [ ] **0.5** **PR `#286`.** Fix the smaller contract points: `liveness_met` rule vs schema constant, one rule for observer disagreement, recovery floor same in text and test, an older feed cannot replace a newer one, list of served and never-served RPC methods, the three schemas that are only named, interrupted-upgrade and key-rotation cases.
+- [ ] **0.6** **PR `#286`** wires `scripts/test-validator-uptime-schema.py` into CI (passed there). Merge `#286`.
 
 #### M1 · Signed release channel & `postfiat-node upgrade`
-- [ ] **1.1** `upgrade [--check]` command — built in `#290` (`crates/node/src/release_upgrade.rs`), not merged.
-- [ ] **1.2** Fix the health check: the node reports an 8-character revision, the manifest requires 40, so every real upgrade rolls back today.
-- [ ] **1.3** Backup and rollback keep file owner and permissions; the backup never holds a readable copy of a signing key.
-- [ ] **1.4** Rollback never restores the validator's own vote record (today it does, which allows a second vote at the same height). Requires the separate signer and guard directory to be the default (step 1.9).
-- [ ] **1.5** `upgrade` cannot leave services stopped; chain, clock and older-release checks cannot be skipped.
-- [ ] **1.6** Generate the three offline ML-DSA-65 release keys, publish the pinned keyset, write the rotation procedure.
+- [ ] **1.1** **PR `#290`.** `upgrade [--check]` command — built in `#290` (`crates/node/src/release_upgrade.rs`), not merged.
+- [ ] **1.2** **PR `#290`.** Fix the health check: the node reports an 8-character revision, the manifest requires 40, so every real upgrade rolls back today.
+- [ ] **1.3** **PR `#290`.** Backup and rollback keep file owner and permissions; the backup never holds a readable copy of a signing key.
+- [ ] **1.4** **PR `#290`.** Rollback never restores the validator's own vote record (today it does, which allows a second vote at the same height). Requires the separate signer and guard directory to be the default (step 1.9).
+- [ ] **1.5** **PR `#290`.** `upgrade` cannot leave services stopped; chain, clock and older-release checks cannot be skipped.
+- [ ] **1.6** Generate the three offline ML-DSA-65 release keys and publish the pinned keyset. The commands (`release-key-create`, `release-manifest-sign`, `upgrade --rotate-keyset`) are in PR `#290`.
 - [ ] **1.7** Release build workflow: reproducible `linux-x86_64` + `aarch64` binaries, systemd units, SBOM, checksums, pinned catch-up checkpoint, manifest co-signed 2-of-3 with an independent second builder. No such workflow exists yet (`scripts/generate-cargo-sbom` is the only piece).
 - [ ] **1.8** Publish the first signed release at a public URL.
 - [ ] **1.9** Make the separate `validator-signer-serve` process and `/var/lib/postfiat/signer-guard/` the default deployment on the 6 Foundation validators.
@@ -151,27 +151,29 @@ Each milestone is broken into numbered steps. `[x]` means merged on `main` or li
 - [ ] **2.6** Enforce at most 2 seats per correlated group in admission.
 
 #### M3 · Packaged RPC profiles & read-latency fix
-- [ ] **3.1** In-process read path and cache — built in `#290` (`rpc_read_cache.rs`), not merged.
-- [ ] **3.2** Keep the standard profile on today's worker path so merging changes nothing for the 6 validators; switch the cache on for replica profiles only.
-- [ ] **3.3** Cache correctness: answers that change between blocks (`account`, `account_assets`, `metrics`) are not served stale; every cached answer names its height; add an age limit.
-- [ ] **3.4** Restore the limits the worker path had (8 at once, 4 per caller, time limit) and measure the effect on the validator's database access under load on a copy.
-- [ ] **3.5** Replica profiles: a served-method list (today 100 methods, 12 state-changing), a real non-voting check, and an enforced lag limit (today only printed).
-- [ ] **3.6** Fix the packaged Caddy and systemd files so they run as written; test the Docker Compose profiles.
-- [ ] **3.7** An equivalence test that compares the new read path with the old one (today it compares the new path with itself), and a `test` CI run that passes rather than times out.
+- [ ] **3.1** **PR `#290`.** In-process read path and cache — built in `#290` (`rpc_read_cache.rs`), not merged.
+- [ ] **3.2** **PR `#290`.** Keep the standard profile on today's worker path so merging changes nothing for the 6 validators; switch the cache on for replica profiles only.
+- [ ] **3.3** **PR `#290`.** Cache correctness: answers that change between blocks (`account`, `account_assets`, `metrics`) are not served stale; every cached answer names its height; add an age limit.
+- [ ] **3.4** **PR `#290`** restores the limits. Still open: Restore the limits the worker path had (8 at once, 4 per caller, time limit) and measure the effect on the validator's database access under load on a copy.
+- [ ] **3.5** **PR `#290`.** Replica profiles: a served-method list (today 100 methods, 12 state-changing), a real non-voting check, and an enforced lag limit (today only printed).
+- [ ] **3.6** **PR `#290`, units rewritten; not yet run on a host.** Fix the packaged Caddy and systemd files so they run as written; test the Docker Compose profiles.
+- [ ] **3.7** **PR `#290`.** An equivalence test that compares the new read path with the old one (today it compares the new path with itself), and a `test` CI run that passes rather than times out.
 - [ ] **3.8** Consensus isolation: public RPC edge in its own rate-limited process and cgroup.
 - [ ] **3.9** Measure and publish the `< 250ms` p95 read number on devnet-2.
-- [ ] **3.10** Stand up the first 2 Foundation public RPC + private-admission endpoints (TLS, DNS). Pillar 5's direct-RPC default depends on this.
+- [ ] **3.10** Stand up the first 2 Foundation public RPC + private-admission endpoints (TLS, DNS): TLS proxy, then the new `rpc-http-edge`, then the validator's own RPC, because admission needs the validator's key. Pillar 5's direct-RPC default depends on this.
+- [ ] **3.11** A fresh signed snapshot per release, so a new replica or validator can start. The height-600 snapshot no longer imports.
+- [ ] **3.12** Docker image and compose profile, published by the release pipeline (removed from `#290` because no image exists).
 
 #### M4 · `postfiat-node top` SSH dashboard
-- [ ] **4.1** Dashboard with 7 panels, `--once`, `--json` — built in `#290` (`validator_top.rs`), not merged.
-- [ ] **4.2** Eligibility panel reads the real signed feed (after M5.4).
+- [ ] **4.1** **PR `#290`.** Dashboard with 7 panels, `--once`, `--json` — built in `#290` (`validator_top.rs`), not merged.
+- [ ] **4.2** **PR `#290`.** Eligibility panel reads the real signed feed (after M5.4).
 - [ ] **4.3** Run it over SSH on all 6 Foundation validators.
 
 #### M5 · Signed uptime feed, access lifecycle & Task Node connect
-- [ ] **5.1** Observer key, sign and verify commands — built in `#290` (`validator_uptime.rs`), not merged.
-- [ ] **5.2** Collector bug: per-day counters are lost between runs (JSON keys come back as text), so every validator would end up revoked.
-- [ ] **5.3** Collector counts certificate votes only but signs the result as "latency-fair". Implement the rule the contract names; `consensus_heartbeat` does not exist on `main`. Label the metric as finalized precommit votes (decision 2).
-- [ ] **5.4** One wrong observer must not stop the feed. Deploy 3 observers in 3 regions and publish the 2-of-3 feed at a stable URL.
+- [ ] **5.1** **PR `#290`.** Observer key, sign and verify commands — built in `#290` (`validator_uptime.rs`), not merged.
+- [ ] **5.2** **PR `#290`.** Collector bug: per-day counters are lost between runs (JSON keys come back as text), so every validator would end up revoked.
+- [ ] **5.3** **PR `#290`.** Collector counts certificate votes only but signs the result as "latency-fair". Implement the rule the contract names; `consensus_heartbeat` does not exist on `main`. The metric now credits every accepted vote: either certificate or the proposer's vote record.
+- [ ] **5.4** One wrong observer no longer stops the feed (**PR `#290`**). Still open: release a node with `block_vote_records` to the 6 validators, deploy 3 observers in 3 regions, publish the feed at a stable URL.
 - [ ] **5.5** Task Node reads the new feed. Today `server/l1-validator-uptime.js` reads a single-host probe feed (96 probes per UTC day) behind `TASKNODE_L1_UPTIME_REWARDS_ENABLED`, which is off.
 - [ ] **5.6** Task Node access states `pending → active → lapsed (14d grace) → revoked`, with Day-0 ramp-in and 3-day recovery. Not on `main`.
 - [ ] **5.7** On `revoked`: Finance Hub off, research API keys invalidated, `$20/mo` credit paused. A stale feed blocks new grants but revokes nobody.
@@ -200,7 +202,7 @@ Each milestone is broken into numbered steps. `[x]` means merged on `main` or li
 
 #### Decisions taken (2026-11-27, where this doc said two things)
 1. **A day is a UTC day.** The chain makes a block only when there is activity, so block-height days do not work. Same basis as Task Node's current feed.
-2. **Uptime counts finalized `precommit_qc.votes`**, and the feed says so (it is not called "latency-fair"). A UTC day with no blocks is not an observed day. A heartbeat-based rule can replace it later as a new feed version.
+2. **Uptime counts every accepted vote** in a block's precommit or prepare certificate, or in the proposer's vote record. First taken as "certificate votes only"; changed the same day after measuring devnet-2, where that rule put a healthy validator at 90.2%. A UTC day with no blocks is not an observed day. Too few observed days holds the credit and keeps the access.
 3. **Releases are signed 2-of-3** from the first release.
 4. **Three observers, 2-of-3 agreement.**
 
