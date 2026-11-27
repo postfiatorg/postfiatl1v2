@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -34,6 +35,12 @@ ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 RUNNING_RE = re.compile(r"^\s*Running (?:unittests )?(\S+) \((\S+)\)$")
 DOC_RE = re.compile(r"^\s*Doc-tests (\S+)$")
 TEST_RE = re.compile(r"^(.+): (?:test|bench)$")
+
+
+def cargo(*args: str) -> str:
+    """Return cargo's stdout without colour codes, whatever CARGO_TERM_COLOR the caller set."""
+    return subprocess.run(["cargo", "--color", "never", *args], capture_output=True, text=True, check=True,
+                          env={**os.environ, "CARGO_TERM_COLOR": "never"}).stdout
 
 
 def read_listing(path: Path) -> dict[tuple[str, str], list[str]]:
@@ -55,9 +62,7 @@ def read_listing(path: Path) -> dict[tuple[str, str], list[str]]:
 
 def workspace_targets() -> tuple[dict[tuple[str, str], list[tuple[str, tuple[str, ...]]]], dict[str, bool]]:
     """Map (source path, crate name) of every member target to (package, target selector)."""
-    metadata = json.loads(subprocess.run(
-        ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"],
-        capture_output=True, text=True, check=True).stdout)
+    metadata = json.loads(cargo("metadata", "--locked", "--no-deps", "--format-version", "1"))
     targets: dict[tuple[str, str], list[tuple[str, tuple[str, ...]]]] = {}
     tested: dict[str, bool] = {}
     for package in metadata["packages"]:
@@ -151,15 +156,14 @@ def packages_and_targets(cargo_args: list[str], members: set[str]) -> tuple[list
 
 
 def member_features(select_args: list[str], members: set[str]) -> dict[str, set[str]]:
-    out = subprocess.run(
-        ["cargo", "tree", "--locked", "-e", "normal,build,dev", "--prefix", "none", "-f", "{p}|{f}", *select_args],
-        capture_output=True, text=True, check=True).stdout
+    out = cargo("tree", "--locked", "-e", "normal,build,dev", "--prefix", "none", "-f", "{p}|{f}", *select_args)
     features: dict[str, set[str]] = {}
     for line in out.splitlines():
-        package, _, enabled = line.partition("|")
+        # "(*)" marks a dependency already printed above, not a feature.
+        package, _, enabled = ANSI_RE.sub("", line).replace("(*)", "").partition("|")
         name = package.split(" ", 1)[0]
         if name in members and "(/" in package:
-            features.setdefault(name, set()).update(f for f in enabled.replace(" (*)", "").split(",") if f)
+            features.setdefault(name, set()).update(f.strip() for f in enabled.split(",") if f.strip())
     return features
 
 
