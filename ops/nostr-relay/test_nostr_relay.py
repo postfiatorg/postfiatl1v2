@@ -28,6 +28,11 @@ vr = _load_module("postfiat_relay_verify", "verify_relay.py")
 
 
 class NostrRelayPackagingTests(unittest.TestCase):
+    def test_non_object_input_keeps_policy_reader_running(self) -> None:
+        result = subprocess.run([sys.executable, str(RELAY_DIR / "write-policy.py")],
+                                input="null\n[]\n", text=True, capture_output=True, check=True)
+        self.assertEqual([json.loads(line)["action"] for line in result.stdout.splitlines()], ["reject", "reject"])
+
     def test_deployment_configs_and_invariants(self) -> None:
         compose = (RELAY_DIR / "docker-compose.yml").read_text(encoding="utf-8")
         caddy = (RELAY_DIR / "Caddyfile").read_text(encoding="utf-8")
