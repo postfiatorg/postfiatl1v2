@@ -4,14 +4,19 @@
 // Every case builds its own facilitator, so the cases do not share state.
 
 const assert = require('node:assert/strict');
+const { spawn, spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const http = require('node:http');
+const os = require('node:os');
+const path = require('node:path');
 
 const mp = require('../../wallet-proxy/message-protocol');
 const {
   HEADER_PAYMENT_REQUIRED,
   HEADER_PAYMENT_SIGNATURE,
   CommitteeRegistry,
+  FileSpentStore,
   MemorySpentStore,
   X402Error,
   buildX402InlineMemo,
@@ -34,6 +39,27 @@ const START_CLOCK_MS = 1764202000000;
 const FASTPAY_FEE_ATOMS = 2_000;
 const CONSENSUS_FEE_ATOMS = 25;
 const SLOW_SETTLEMENT_MS = 150;
+const FACILITATOR_PATH = path.join(__dirname, 'facilitator.js');
+const DAEMON_PATH = path.join(__dirname, 'server.js');
+const DAEMON_START_TIMEOUT_MS = 5_000;
+const RACING_PROCESSES = 6;
+const KEYS_EVERY_PROCESS_WANTS = 40;
+const RACE_START_DELAY_MS = 500;
+
+// Run with `node -e`: opens the shared file, waits for the common start time, then tries to mark
+// the same keys as the other processes and one key of its own. Prints the shared keys it won.
+const RACING_PROCESS_SCRIPT = `
+  const [facilitatorPath, file, startAtMs, sharedKeys, name] = process.argv.slice(1);
+  const { FileSpentStore } = require(facilitatorPath);
+  const store = new FileSpentStore(file);
+  while (Date.now() < Number(startAtMs)) {}
+  const won = [];
+  for (let i = 0; i < Number(sharedKeys); i += 1) {
+    if (store.markSpent('fastpay:shared-' + i, { by: name })) won.push(i);
+  }
+  store.markSpent('fastpay:own-' + name, { by: name });
+  process.stdout.write(JSON.stringify(won));
+`;
 
 const CHEAP_TERMS = Object.freeze({
   payTo: PAYEE,
@@ -102,8 +128,32 @@ function requestHashFor(urlPath, body) {
   return computeHttpRequestHash({ method: 'POST', urlPath, contentType: JSON_CONTENT_TYPE, body });
 }
 
+function withTempDir(run) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'postfiat-x402-refusals-'));
+  const cleanUp = () => fs.rmSync(dir, { recursive: true, force: true });
+  return Promise.resolve()
+    .then(() => run(dir))
+    .finally(cleanUp);
+}
+
+function runNode(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`node exited with ${code}: ${stderr}`));
+    });
+  });
+}
+
 // One facilitator core, its public HTTP server, and a resource server with one gate per path.
-async function startStack({ settlementAdapter = null, coreOptions = {} } = {}) {
+// `beforeServe` runs with the settlement result right before the resource is sent.
+async function startStack({ settlementAdapter = null, coreOptions = {}, beforeServe = () => {} } = {}) {
   const clock = { nowMs: START_CLOCK_MS };
   const backendCalls = { fastpay: 0, consensus: 0 };
   const adapter = settlementAdapter || {
@@ -136,6 +186,7 @@ async function startStack({ settlementAdapter = null, coreOptions = {} } = {}) {
     const rawBody = await readRawBody(req);
     const settled = await gates[req.url](req, res, rawBody);
     if (!settled) return;
+    beforeServe(settled);
     servedBodies.push(rawBody.toString('utf8'));
     res.writeHead(200, { 'content-type': JSON_CONTENT_TYPE });
     res.end(JSON.stringify({ ok: true, served: req.url }));
@@ -463,6 +514,209 @@ async function gateComparesTheSettledRequestHashWithItsOwn() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Used payments: across a restart, across processes, on disk before serving
+// ---------------------------------------------------------------------------
+
+// A second store on the same file must see the first one's entry and must not mark the same
+// payment again, and no entry of either store may be lost.
+function usedPaymentIsSeenByEveryStoreOnTheFile() {
+  return withTempDir((dir) => {
+    const file = path.join(dir, 'spent.jsonl');
+    const first = new FileSpentStore(file);
+    const second = new FileSpentStore(file);
+
+    assert.equal(first.markSpent('fastpay:X', { n: 1 }), true);
+    assert.equal(second.has('fastpay:X'), true);
+    assert.equal(second.markSpent('fastpay:X', { n: 2 }), false);
+    assert.deepEqual(second.get('fastpay:X'), { n: 1 });
+
+    assert.equal(first.markSpent('fastpay:Y', { n: 3 }), true);
+    assert.equal(second.markSpent('fastpay:Z', { n: 4 }), true);
+    const afterRestart = new FileSpentStore(file);
+    assert.equal(afterRestart.size(), 3);
+    for (const key of ['fastpay:X', 'fastpay:Y', 'fastpay:Z']) {
+      assert.equal(afterRestart.has(key), true, key);
+    }
+  });
+}
+
+function usedPaymentIsMarkedByOneProcessOnly() {
+  return withTempDir(async (dir) => {
+    const file = path.join(dir, 'spent.jsonl');
+    const openedBeforeTheRace = new FileSpentStore(file);
+    const names = Array.from({ length: RACING_PROCESSES }, (_, i) => `p${i}`);
+    const startAtMs = String(Date.now() + RACE_START_DELAY_MS);
+    const outputs = await Promise.all(
+      names.map((name) =>
+        runNode(['-e', RACING_PROCESS_SCRIPT, FACILITATOR_PATH, file, startAtMs, String(KEYS_EVERY_PROCESS_WANTS), name])
+      )
+    );
+    const wonByProcess = outputs.map((stdout) => JSON.parse(stdout));
+
+    for (let key = 0; key < KEYS_EVERY_PROCESS_WANTS; key += 1) {
+      const winners = wonByProcess.filter((won) => won.includes(key)).length;
+      assert.equal(winners, 1, `fastpay:shared-${key} was marked by ${winners} processes`);
+      assert.equal(openedBeforeTheRace.markSpent(`fastpay:shared-${key}`, {}), false);
+    }
+    for (const name of names) {
+      assert.equal(openedBeforeTheRace.has(`fastpay:own-${name}`), true, `the entry of ${name} is lost`);
+    }
+    assert.equal(openedBeforeTheRace.size(), KEYS_EVERY_PROCESS_WANTS + RACING_PROCESSES);
+  });
+}
+
+function fileStoreSkipsACutOffLineAndStopsOnAnUnreadableOne() {
+  return withTempDir((dir) => {
+    const file = path.join(dir, 'spent.jsonl');
+    const store = new FileSpentStore(file);
+    assert.equal(store.markSpent('fastpay:X', {}), true);
+
+    // What a write leaves behind when the disk fills up half way: its writer refused the payment.
+    fs.appendFileSync(file, '\n{"dedup_key":"fastpay:cut-off","wri');
+    const afterCutOff = new FileSpentStore(file);
+    assert.equal(afterCutOff.markSpent('fastpay:Y', {}), true);
+    assert.equal(store.has('fastpay:Y'), true);
+    assert.equal(store.has('fastpay:cut-off'), false);
+    assert.equal(store.size(), 2);
+
+    fs.appendFileSync(file, '\n{"dedup_key":7}\n');
+    assert.throws(() => store.has('fastpay:X'), /not a used-payment record/);
+    assert.throws(() => store.markSpent('fastpay:W', {}), /not a used-payment record/);
+    assert.throws(() => new FileSpentStore(file), /not a used-payment record/);
+  });
+}
+
+function usedPaymentIsOnDiskBeforeTheResourceIsServed({ payerKeys }) {
+  return withTempDir(async (dir) => {
+    const file = path.join(dir, 'spent.jsonl');
+    const realFsyncSync = fs.fsyncSync;
+    let syncs = 0;
+    fs.fsyncSync = (fd) => {
+      syncs += 1;
+      return realFsyncSync(fd);
+    };
+    const seenWhenServed = {};
+    const spentStore = new FileSpentStore(file);
+    const syncsBeforeThePayment = syncs;
+    const stack = await startStack({
+      coreOptions: { spentStore },
+      beforeServe: (settled) => {
+        seenWhenServed.syncs = syncs;
+        seenWhenServed.recordOnDisk = fs.readFileSync(file, 'utf8').includes(settled.dedupKey);
+      },
+    });
+    try {
+      const body = '{"prompt":"durable"}';
+      const required = await challengeAt(stack, '/cheap', body);
+      const payment = await payFor(required, requestHashFor('/cheap', body), payerKeys);
+      const res = await presentAt(stack, '/cheap', body, payment);
+      assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+      assert.equal(seenWhenServed.recordOnDisk, true, 'the record must be in the file before the resource is served');
+      assert.ok(seenWhenServed.syncs > syncsBeforeThePayment, 'the record must be synced to disk before the resource is served');
+    } finally {
+      fs.fsyncSync = realFsyncSync;
+      await stack.close();
+    }
+  });
+}
+
+async function gateRefusesWhenTheUsedPaymentRecordCannotBeWritten({ payerKeys }) {
+  const internalDetail = '/var/lib/x402/spent.jsonl';
+  const spentStore = {
+    failing: true,
+    has: () => false,
+    size: () => 0,
+    markSpent() {
+      if (this.failing) throw new Error(`ENOSPC: no space left on device, write ${internalDetail}`);
+      return true;
+    },
+  };
+  const stack = await startStack({ coreOptions: { spentStore } });
+  try {
+    const body = '{"prompt":"disk full"}';
+    const required = await challengeAt(stack, '/cheap', body);
+    const payment = await payFor(required, requestHashFor('/cheap', body), payerKeys);
+
+    const refused = await presentAt(stack, '/cheap', body, payment);
+    assertRefused(refused, 503, 'spent_store_unavailable');
+    assert.equal(JSON.stringify(refused.body).includes(internalDetail), false);
+    assert.equal(stack.servedBodies.length, 0);
+
+    spentStore.failing = false;
+    const served = await presentAt(stack, '/cheap', body, payment);
+    assert.equal(served.statusCode, 200, JSON.stringify(served.body));
+  } finally {
+    await stack.close();
+  }
+}
+
+// The same signed order under the same challenge terms after a restart, at the facilitator.
+// A gate refuses it earlier already: its challenges do not outlive the process.
+function usedPaymentStaysUsedAfterARestart({ payerKeys }) {
+  return withTempDir(async (dir) => {
+    const file = path.join(dir, 'spent.jsonl');
+    const requestHash = requestHashFor('/cheap', '{"prompt":"restart"}');
+    const beforeRestart = await startStack({ coreOptions: { spentStore: new FileSpentStore(file) } });
+    let required;
+    let payment;
+    try {
+      ({ required } = beforeRestart.core.issueChallenge({ ...CHEAP_TERMS, maxAmountAtoms: CHEAP_TERMS.priceAtoms, requestHash }));
+      payment = await payFor(required, requestHash, payerKeys);
+      const settled = await beforeRestart.core.settlePayment(payment, { expectedRequired: required });
+      assert.equal(settled.response.settled, true);
+    } finally {
+      await beforeRestart.close();
+    }
+
+    const afterRestart = await startStack({ coreOptions: { spentStore: new FileSpentStore(file) } });
+    try {
+      await assert.rejects(
+        () => afterRestart.core.settlePayment(payment, { expectedRequired: required }),
+        (err) => err instanceof X402Error && err.statusCode === 409 && err.code === 'payment_already_spent'
+      );
+      assert.equal(afterRestart.backendCalls.fastpay, 0);
+    } finally {
+      await afterRestart.close();
+    }
+  });
+}
+
+function daemonEnv(extra) {
+  return { PATH: process.env.PATH, X402_LISTEN_PORT: '0', ...extra };
+}
+
+// The daemon must not run on a store that forgets every used payment on restart.
+function daemonRefusesToStartWithoutADurableStore() {
+  return withTempDir(async (dir) => {
+    const refused = spawnSync(process.execPath, [DAEMON_PATH], {
+      env: daemonEnv({}),
+      encoding: 'utf8',
+      timeout: DAEMON_START_TIMEOUT_MS,
+    });
+    assert.equal(refused.status, 1, 'the daemon must exit instead of running on an in-memory store');
+    assert.match(refused.stderr, /X402_SPENT_STORE_PATH/);
+
+    const started = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [DAEMON_PATH], {
+        env: daemonEnv({ X402_SPENT_STORE_PATH: path.join(dir, 'spent.jsonl') }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const giveUp = setTimeout(() => {
+        child.kill();
+        reject(new Error('the daemon did not start with a durable store'));
+      }, DAEMON_START_TIMEOUT_MS);
+      child.stdout.on('data', (chunk) => {
+        clearTimeout(giveUp);
+        child.kill();
+        resolve(String(chunk));
+      });
+      child.on('error', reject);
+    });
+    assert.match(started, /x402_facilitator_started/);
+  });
+}
+
 const CASES = [
   ['a gate serves a payment for its own challenge once', gateServesItsOwnChallengeOnce],
   ['a gate refuses a payment made for another gate', gateRefusesPaymentMadeForAnotherGate],
@@ -474,6 +728,13 @@ const CASES = [
   ['a gate checks consensus-lane payments the same way', gateChecksConsensusLanePaymentsTheSameWay],
   ['a gate settles one payment per challenge', gateSettlesOnePaymentPerChallenge],
   ['a gate compares the settled request hash with its own', gateComparesTheSettledRequestHashWithItsOwn],
+  ['a used payment is seen by every store on the file', usedPaymentIsSeenByEveryStoreOnTheFile],
+  ['a used payment is marked by one process only', usedPaymentIsMarkedByOneProcessOnly],
+  ['the file store skips a cut-off line and stops on an unreadable one', fileStoreSkipsACutOffLineAndStopsOnAnUnreadableOne],
+  ['a used payment is on disk before the resource is served', usedPaymentIsOnDiskBeforeTheResourceIsServed],
+  ['a gate refuses when the used-payment record cannot be written', gateRefusesWhenTheUsedPaymentRecordCannotBeWritten],
+  ['a used payment stays used after a restart', usedPaymentStaysUsedAfterARestart],
+  ['the daemon refuses to start without a durable store', daemonRefusesToStartWithoutADurableStore],
 ];
 
 async function main() {

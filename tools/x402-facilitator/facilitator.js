@@ -30,6 +30,10 @@ const DOMAIN_CONSENSUS_TX_HASH = Buffer.from('postfiat-l1-v2/consensus-tx-hash/v
 const MAX_BODY_BYTES = 256 * 1024;
 const DEFAULT_CHALLENGE_TTL_MS = 5 * 60_000;
 
+const SPENT_FILE_MODE = 0o600;
+const SPENT_WRITER_TOKEN_BYTES = 16;
+const LINE_FEED = 0x0a;
+
 class X402Error extends Error {
   constructor(statusCode, code, message) {
     super(message || code);
@@ -166,6 +170,7 @@ function computeCertificateDigest(cert) {
 // Spent-payment deduplication stores (immutable order_hash / tx_hash ONLY)
 // ---------------------------------------------------------------------------
 
+// Forgets every used payment when the process ends: for tests and short local trials only.
 class MemorySpentStore {
   constructor() {
     this._entries = new Map();
@@ -190,42 +195,108 @@ class MemorySpentStore {
   }
 }
 
+// Used payments in an append-only file that several processes may share, one JSON line each.
+//
+// A payment is marked by appending its line with one write() and syncing it to disk, then reading
+// the file back: the first line for a payment is the one that marked it. The kernel puts all
+// appends to one file in a single order, so two processes cannot both be first, and there is no
+// lock file that a killed process could leave behind. The file has to be on a local filesystem
+// of Linux or macOS; appends are not atomic on a network filesystem.
+//
+// Every record starts with a line feed of its own, so what is left of a write that was cut off
+// (a full disk) stays on a line by itself. Such a line is skipped: its writer never reported the
+// payment as marked. Any other line that is not a record, or a file that got shorter, makes every
+// call throw, and the caller then refuses the payment.
 class FileSpentStore {
   constructor(filePath) {
     this._filePath = path.resolve(filePath);
-    this._entries = new Map();
-    if (fs.existsSync(this._filePath)) {
-      const raw = fs.readFileSync(this._filePath, 'utf8').trim();
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        for (const [k, v] of Object.entries(parsed)) {
-          this._entries.set(k, v);
-        }
-      }
-    }
+    this._entries = new Map(); // dedupKey -> { dedup_key, writer_token, record }, first line wins
+    this._loadedBytes = 0;
+    const dir = path.dirname(this._filePath);
+    fs.mkdirSync(dir, { recursive: true });
+    this._fd = fs.openSync(this._filePath, 'a+', SPENT_FILE_MODE);
+    syncDirectory(dir);
+    this._loadNewLines();
   }
 
   has(dedupKey) {
+    this._loadNewLines();
     return this._entries.has(dedupKey);
   }
 
   get(dedupKey) {
-    return this._entries.get(dedupKey) || null;
+    this._loadNewLines();
+    const entry = this._entries.get(dedupKey);
+    return entry ? entry.record : null;
   }
 
   markSpent(dedupKey, record) {
+    this._loadNewLines();
     if (this._entries.has(dedupKey)) return false;
-    this._entries.set(dedupKey, record);
-    const dir = path.dirname(this._filePath);
-    fs.mkdirSync(dir, { recursive: true });
-    const tmp = `${this._filePath}.tmp.${process.pid}.${Date.now()}`;
-    fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(this._entries), null, 2), 'utf8');
-    fs.renameSync(tmp, this._filePath);
-    return true;
+    const writerToken = crypto.randomBytes(SPENT_WRITER_TOKEN_BYTES).toString('hex');
+    const entry = { dedup_key: dedupKey, writer_token: writerToken, record };
+    const line = Buffer.from(`\n${JSON.stringify(entry)}\n`, 'utf8');
+    const written = fs.writeSync(this._fd, line);
+    if (written !== line.length) {
+      throw new Error(`used-payment file ${this._filePath} took only a part of the record`);
+    }
+    fs.fsyncSync(this._fd);
+    this._loadNewLines();
+    const first = this._entries.get(dedupKey);
+    if (!first) {
+      throw new Error(`used-payment file ${this._filePath} does not hold the record just written`);
+    }
+    return first.writer_token === writerToken;
   }
 
   size() {
+    this._loadNewLines();
     return this._entries.size;
+  }
+
+  _loadNewLines() {
+    const { size } = fs.fstatSync(this._fd);
+    if (size < this._loadedBytes) {
+      throw new Error(`used-payment file ${this._filePath} got shorter`);
+    }
+    const unread = Buffer.alloc(size - this._loadedBytes);
+    let filled = 0;
+    while (filled < unread.length) {
+      const bytesRead = fs.readSync(this._fd, unread, filled, unread.length - filled, this._loadedBytes + filled);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    // A record that another process is still writing has no closing line feed yet: next time.
+    const completeBytes = unread.subarray(0, filled).lastIndexOf(LINE_FEED) + 1;
+    for (const line of unread.subarray(0, completeBytes).toString('utf8').split('\n')) {
+      if (!line.endsWith('}')) continue;
+      const entry = this._parseRecordLine(line);
+      if (!this._entries.has(entry.dedup_key)) this._entries.set(entry.dedup_key, entry);
+    }
+    this._loadedBytes += completeBytes;
+  }
+
+  _parseRecordLine(line) {
+    let entry = null;
+    try {
+      entry = JSON.parse(line);
+    } catch (_) {
+      // Reported below together with a line that parses but is not a record.
+    }
+    if (typeof entry?.dedup_key !== 'string' || typeof entry?.writer_token !== 'string') {
+      throw new Error(`used-payment file ${this._filePath} holds a line that is not a used-payment record`);
+    }
+    return entry;
+  }
+}
+
+// Makes a newly created file survive a power cut: its name lives in the directory.
+function syncDirectory(dir) {
+  const dirFd = fs.openSync(dir, 'r');
+  try {
+    fs.fsyncSync(dirFd);
+  } finally {
+    fs.closeSync(dirFd);
   }
 }
 
@@ -745,9 +816,20 @@ function createFacilitatorCore({
     }
   }
 
+  // A store that cannot be read or written means the payment is refused, never served unrecorded.
+  function withSpentStore(use) {
+    try {
+      return use();
+    } catch (cause) {
+      const err = new X402Error(503, 'spent_store_unavailable', 'the used-payment record is not available; nothing was served');
+      err.cause = cause;
+      throw err;
+    }
+  }
+
   async function settleVerifiedPayment(verified) {
     // 2. Reject replays keyed strictly on immutable order_hash or tx_hash (NEVER certificate_digest).
-    if (spentStore.has(verified.dedupKey)) {
+    if (withSpentStore(() => spentStore.has(verified.dedupKey))) {
       throw new X402Error(
         409,
         'payment_already_spent',
@@ -793,14 +875,17 @@ function createFacilitatorCore({
       finalizedHeight = receipt.finalizedHeight;
     }
 
+    // The record is on disk (for a file store) before this function returns, so before a gate serves.
     const settledAtMs = now();
-    const inserted = spentStore.markSpent(verified.dedupKey, {
-      dedup_key: verified.dedupKey,
-      lane: verified.lane,
-      amount_atoms: verified.amountAtoms,
-      asset_id: verified.assetId,
-      settled_at_unix_ms: settledAtMs,
-    });
+    const inserted = withSpentStore(() =>
+      spentStore.markSpent(verified.dedupKey, {
+        dedup_key: verified.dedupKey,
+        lane: verified.lane,
+        amount_atoms: verified.amountAtoms,
+        asset_id: verified.assetId,
+        settled_at_unix_ms: settledAtMs,
+      })
+    );
     if (!inserted) {
       throw new X402Error(409, 'payment_already_spent', `concurrent replay rejected for ${verified.dedupKey}`);
     }

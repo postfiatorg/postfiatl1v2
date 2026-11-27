@@ -45,6 +45,13 @@ gave out before is unknown, and a payer who already settled a
    immutable `order_hash` (`PAYMENT_LANE_FASTPAY`) or `tx_hash`
    (`PAYMENT_LANE_CONSENSUS_PFT` / `PAYMENT_LANE_CONSENSUS_ISSUED`), never on
    `certificate_digest` (eliminating validator-signature malleability replays).
+   `FileSpentStore` keeps the used payments in an append-only file, one JSON
+   line each, that several processes on one machine may share. A payment is
+   marked by appending its line and syncing it to disk before anything is
+   served; when two processes append the same payment, the first line in the
+   file wins. If the file cannot be read or written, the payment is refused
+   with `503 spent_store_unavailable`. The file must be on a local filesystem.
+   `MemorySpentStore` forgets everything on restart and is for tests only.
 2. **Local verification before validator calls:** Rate limits (per-IP and
    per-key), challenge expiry, `network`/`lane`/`asset_id`/`pay_to`/amount,
    `pf.ptr` v5 `INLINE` `request_hash` memo binding, Sui-inspired FastPay fee
@@ -67,6 +74,10 @@ gave out before is unknown, and a payer who already settled a
 # Run automated end-to-end smoke + replay + committee-rotation + MCP tests:
 node tools/x402-facilitator/test_x402_e2e.js
 
-# Run standalone facilitator daemon (binds 127.0.0.1:4020 by default):
-node tools/x402-facilitator/server.js
+# Run the refusal tests (gate terms, used payments, daemon start):
+node tools/x402-facilitator/test_x402_refusals.js
+
+# Run standalone facilitator daemon (binds 127.0.0.1:4020 by default).
+# X402_SPENT_STORE_PATH is required: the file that keeps used payments across restarts.
+X402_SPENT_STORE_PATH=/var/lib/postfiat-x402/spent.jsonl node tools/x402-facilitator/server.js
 ```
