@@ -15,6 +15,7 @@ Validates:
   3. Cryptographic & protocol invariants:
        - IPFS CIDv1 raw (0x01 0x55 0x12 0x20 || SHA-256) binary & base32lower multibase
        - PaymentMemo L1 constraints (lowercase hex, <= 64/64/256 bytes, total <= 512)
+       - FastPay order_hash / certificate_digest and consensus tx_hash are 48-byte SHA3-384 chain hashes
        - Pointer v5 visibility flag mutual exclusion (exact one of PUBLIC/PRIVATE/SEALED)
        - Envelope raw-byte signing preimage (zero re-serialization rule)
        - X-Wing AAD commitment, HKDF-SHA256 CEK wrap key, wallet KEM derivation, key-binding preimage
@@ -60,6 +61,10 @@ MAX_PAYMENT_MEMO_DATA_BYTES = 256
 MAX_PAYMENT_MEMO_TOTAL_BYTES = 512
 MAX_NFT_METADATA_HASH_BYTES = 64
 MAX_NFT_METADATA_URI_BYTES = 256
+
+# L1 chain hash size: SHA3-384 (hash_bytes in crates/crypto_provider/src/lib.rs) behind FastPay order and
+# certificate digests and consensus tx ids, which the RPC returns as 96 lowercase hex characters.
+CHAIN_HASH_BYTES = 48
 
 # Envelope / Manifest caps (Pillar 2)
 MAX_SINGLE_ENVELOPE_BYTES = 1_048_576  # 1 MiB
@@ -349,6 +354,12 @@ def validate_l1_payment_memo(memo_type_hex: str, memo_format_hex: str, memo_data
         raise ValueError(f"total memo byte length {total} outside 1..{MAX_PAYMENT_MEMO_TOTAL_BYTES}")
 
 
+def validate_chain_hashes(message: str, **hashes: bytes) -> None:
+    for name, value in hashes.items():
+        if value and len(value) != CHAIN_HASH_BYTES:
+            raise ValueError(f"{message}.{name} must be {CHAIN_HASH_BYTES} bytes (SHA3-384), got {len(value)}")
+
+
 # ---------------------------------------------------------------------------
 # Message encoders matching the frozen .proto field numbers
 # ---------------------------------------------------------------------------
@@ -439,6 +450,12 @@ def enc_fastpay_payment_ref(
     fee_atoms: int = 0,
     finalized_height: int = 0,
 ) -> bytes:
+    validate_chain_hashes(
+        "FastPayPaymentRef",
+        order_hash=order_hash,
+        certificate_digest=certificate_digest,
+        tx_hash=tx_hash,
+    )
     return b"".join(
         [
             pb_varint(1, lane),
@@ -639,6 +656,7 @@ def enc_x402_signature(
     signed_payload: bytes = b"",
     certificate_payload: bytes = b"",
 ) -> bytes:
+    validate_chain_hashes("X402PaymentSignature", order_hash=order_hash, tx_hash=tx_hash)
     return b"".join(
         [
             pb_varint(1, x402_version),
@@ -849,8 +867,10 @@ def build_canonical_vectors() -> dict[str, dict[str, Any]]:
     )
 
     # --- V5: Private X-Wing Envelope (Task Node FastPay reward payout) ---
-    v5_order_hash = sha256(b"postfiat.fastpay.order.v3:test-reward-0001")
-    v5_cert_digest = sha256(b"postfiat.fastpay.cert.v3:test-reward-0001")
+    # FastPay order and certificate digests here and in V7 are SHA3-384 stand-ins over fixed labels:
+    # the chain's 48-byte size, not digests of real orders.
+    v5_order_hash = sha3_384(b"postfiat.fastpay.order.v3:test-reward-0001")
+    v5_cert_digest = sha3_384(b"postfiat.fastpay.cert.v3:test-reward-0001")
     v5_payment_ref = enc_fastpay_payment_ref(
         lane=1,  # PAYMENT_LANE_FASTPAY
         chain_id=chain_id,
@@ -963,7 +983,7 @@ def build_canonical_vectors() -> dict[str, dict[str, Any]]:
         resource_uri="https://api.postfiat.org/v1/inference",
         facilitator_url="https://x402.postfiat.org",
     )
-    v7_order_hash = sha256(b"postfiat.fastpay.order.v3:x402-0001")
+    v7_order_hash = sha3_384(b"postfiat.fastpay.order.v3:x402-0001")
     v7_signature = enc_x402_signature(
         x402_version=2,
         scheme=1,
@@ -978,7 +998,7 @@ def build_canonical_vectors() -> dict[str, dict[str, Any]]:
         lane=1,
         chain_id=chain_id,
         order_hash=v7_order_hash,
-        certificate_digest=sha256(b"postfiat.fastpay.cert.v3:x402-0001"),
+        certificate_digest=sha3_384(b"postfiat.fastpay.cert.v3:x402-0001"),
         asset_id="PFT",
         payer_account=sender_acct,
         payee_account=recipient_acct,
@@ -1635,7 +1655,20 @@ def run_negative_and_size_invariant_tests() -> None:
     else:
         raise AssertionError("expected >256-byte PaymentMemo memo_data to be rejected")
 
-    # 4. Production PQ sizes: X-Wing pk=1216B, ct=1120B; ML-DSA-65 pk=1952B, sig=3309B
+    # 4. 32-byte payment reference hash rejection (chain hashes are 48-byte SHA3-384)
+    for bad_ref in (
+        {"order_hash": sha256(b"32-byte-order-hash")},
+        {"certificate_digest": sha256(b"32-byte-certificate-digest")},
+        {"tx_hash": sha256(b"32-byte-tx-hash")},
+    ):
+        try:
+            enc_fastpay_payment_ref(lane=1, chain_id="postfiat-devnet-2", **bad_ref)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"expected 32-byte FastPayPaymentRef {next(iter(bad_ref))} to be rejected")
+
+    # 5. Production PQ sizes: X-Wing pk=1216B, ct=1120B; ML-DSA-65 pk=1952B, sig=3309B
     prod_xwing_pk = bytes([0x1A]) * 1216
     prod_xwing_ct = bytes([0x2B]) * 1120
     prod_mldsa_pk = bytes([0x3C]) * 1952
