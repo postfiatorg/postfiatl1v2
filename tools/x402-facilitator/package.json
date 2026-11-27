@@ -7,7 +7,7 @@
   "main": "facilitator.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test_x402_e2e.js"
+    "test": "node test_x402_e2e.js && node test_x402_refusals.js"
   },
   "license": "MIT OR Apache-2.0"
 }

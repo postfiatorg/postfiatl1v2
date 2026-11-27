@@ -17,6 +17,28 @@ to Post Fiat Pillar 2 and Contract C1 (`postfiat.message.v1.X402PaymentRequired`
   `postfiat.message.v1.X402PaymentResponse` carrying `settled = true` and the
   verified `FastPayPaymentRef`.
 
+## Resource Gate
+
+`createX402Gate` answers an unpaid request with a challenge and serves a paid
+one. It serves only when all of this holds:
+
+- The challenge is one this gate issued. Every gate keeps its own challenges;
+  a challenge from another gate or from `POST /v1/challenge` is unknown to it.
+- The challenge and the signed transfer are for exactly the gate's own scheme,
+  lane, asset, recipient and price (not less, not more), and for the hash the
+  gate computes of the request in front of it (method, path, content type,
+  body).
+- The signed transfer names this challenge (`nonce_hex`). The
+  `PAYMENT-SIGNATURE` wrapper itself is not signed, so without this a transfer
+  could be moved to another challenge.
+- The challenge has not been used. It is held while its payment settles,
+  removed when the payment has settled, and given back when settlement fails
+  so the payer can present the same payment again.
+
+Open challenges live in memory. After a restart of the gate, a challenge it
+gave out before is unknown, and a payer who already settled a
+`pf-fastpay-settled` payment for it cannot present that payment any more.
+
 ## Security Invariants
 
 1. **Immutable deduplication key:** Spent-payment deduplication keys strictly on
