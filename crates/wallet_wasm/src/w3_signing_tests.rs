@@ -648,6 +648,7 @@ fn nft_onchain_mint_transfer_burn_round_trip_executes_and_enforces_lock_guard() 
     let burn_op = build_nft_burn_operation(NftBurnOperation {
         nft_id: expected_nft_id.clone(),
         owner: buyer_id.address.clone(),
+        issuer: String::new(),
     })
     .unwrap();
     let signed_burn = sign_nft_transaction_fields(

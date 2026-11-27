@@ -989,12 +989,13 @@ pub fn build_train_a_nft_burn_payload(
     owner: &str,
     issuer: Option<&str>,
 ) -> Result<TrainANftBurnPayload, String> {
+    let issuer_str = issuer.unwrap_or_default().to_string();
     let base = NftBurnOperation {
         nft_id: nft_id_hex.to_string(),
         owner: owner.to_string(),
+        issuer: issuer_str.clone(),
     };
     base.validate()?;
-    let issuer_str = issuer.unwrap_or_default().to_string();
     if !issuer_str.is_empty() && issuer_str.trim() != issuer_str {
         return Err("nft_burn.issuer must not contain leading/trailing whitespace".to_string());
     }

@@ -402,7 +402,11 @@ impl FastSwapValidatorServiceV1 {
         signed: &SignedFastSwapIntentV1,
         height: u64,
     ) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
-        postfiat_execution::fastswap::validate_fastswap_certified_effects(&self.state, signed, height)
+        postfiat_execution::fastswap::validate_fastswap_certified_effects(
+            &self.state,
+            signed,
+            height,
+        )
     }
 
     pub(crate) fn capabilities(&self) -> FastSwapCapabilitiesV1 {
