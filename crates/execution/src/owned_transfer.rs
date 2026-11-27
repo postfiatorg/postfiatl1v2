@@ -121,29 +121,44 @@ fn ensure_owned_object_capacity_v2(
     for target_pk in output_owners {
         *created_by_owner.entry(*target_pk).or_insert(0) += 1;
     }
-    for (target_pk, created_for_owner) in created_by_owner {
+    // Count existing objects for growing owners in one ledger traversal. Keep owner
+    // checks in sorted order so orders with multiple cap failures report the same error.
+    let mut existing_by_owner = std::collections::BTreeMap::new();
+    for (&target_pk, &created) in &created_by_owner {
+        let consumed = if target_pk == owner_pubkey_hex {
+            inputs_consumed
+        } else {
+            0
+        };
+        if created > consumed {
+            existing_by_owner.insert(target_pk, 0usize);
+        }
+    }
+    if existing_by_owner.is_empty() {
+        return Ok(());
+    }
+    for object in &ledger.owned_objects {
+        if let Some(count) = existing_by_owner.get_mut(object.owner_pubkey_hex.as_str()) {
+            *count += 1;
+        }
+    }
+    for (target_pk, current_for_owner) in existing_by_owner {
+        let created_for_owner = created_by_owner[target_pk];
         let consumed_for_owner = if target_pk == owner_pubkey_hex {
             inputs_consumed
         } else {
             0
         };
-        if created_for_owner > consumed_for_owner {
-            let current_for_owner = ledger
-                .owned_objects
-                .iter()
-                .filter(|obj| obj.owner_pubkey_hex == target_pk)
-                .count();
-            let next_for_owner = current_for_owner
-                .saturating_sub(consumed_for_owner)
-                .checked_add(created_for_owner)
-                .ok_or(OwnedTransferError::Overflow)?;
-            if next_for_owner > postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP {
-                return Err(OwnedTransferError::AccountOwnedObjectCapExceeded {
-                    owner_pubkey_hex: target_pk.to_string(),
-                    current: current_for_owner,
-                    limit: postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP,
-                });
-            }
+        let next_for_owner = current_for_owner
+            .saturating_sub(consumed_for_owner)
+            .checked_add(created_for_owner)
+            .ok_or(OwnedTransferError::Overflow)?;
+        if next_for_owner > postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP {
+            return Err(OwnedTransferError::AccountOwnedObjectCapExceeded {
+                owner_pubkey_hex: target_pk.to_string(),
+                current: current_for_owner,
+                limit: postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP,
+            });
         }
     }
     Ok(())
