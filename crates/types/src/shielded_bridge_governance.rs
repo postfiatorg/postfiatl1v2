@@ -1857,19 +1857,30 @@ impl GovernanceState {
         self.latest_amendment_value(GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT)
     }
 
-    /// Execution gate for Train A FastPay fee & owned-object spam guard; latest amendment wins.
+    /// Execution gate for Train A FastPay fee & owned-object spam guard; one-way.
     pub fn fastpay_fee_v1_activation_height(&self) -> Option<u64> {
-        self.latest_amendment_value(GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT)
+        self.earliest_amendment_value(GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT)
     }
 
-    /// Execution gate for Train A keyed NFT storage & serial tombstones; latest amendment wins.
+    /// Execution gate for Train A keyed NFT storage & serial tombstones; one-way.
     pub fn nft_scaling_v1_activation_height(&self) -> Option<u64> {
-        self.latest_amendment_value(GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT)
+        self.earliest_amendment_value(GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT)
     }
 
-    /// Execution gate for Train A unified `asset_gate(...)` & bridge holds; latest amendment wins.
+    /// Execution gate for Train A unified `asset_gate(...)` & bridge holds; one-way.
     pub fn asset_gate_v1_activation_height(&self) -> Option<u64> {
-        self.latest_amendment_value(GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT)
+        self.earliest_amendment_value(GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT)
+    }
+
+    /// The earliest committed height, as `replicated_state_v2` does: a later
+    /// amendment is scheduled strictly after its own block, so once a height
+    /// is reached no later amendment can move or unset it.
+    fn earliest_amendment_value(&self, kind: &str) -> Option<u64> {
+        self.amendments
+            .iter()
+            .filter(|amendment| amendment.kind == kind && amendment.value > 0)
+            .map(|amendment| u64::from(amendment.value))
+            .min()
     }
 
     fn latest_amendment_value(&self, kind: &str) -> Option<u64> {
