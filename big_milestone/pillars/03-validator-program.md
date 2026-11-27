@@ -1,22 +1,33 @@
 # Pillar 3 — Validator Rewards Program
 
-> **Status:** Guide live; code fixed in PR, not merged. The contract ([postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286)) and the code ([#290](https://github.com/postfiatorg/postfiatl1v2/pull/290)) now answer every point of the second read and wait for CI and merge. Not started: join/ratification commands, the release build pipeline, standing up observers and the 2 public RPCs, Task Node enforcement. Full step list under [Build milestones](#build-milestones).
+> **Status:** Code in review, proven on live data, nothing released. Four PRs are open: the contract ([postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286)), the node code ([#290](https://github.com/postfiatorg/postfiatl1v2/pull/290)), Task Node enforcement ([tasknode#459](https://github.com/postfiatorg/tasknode/pull/459), off by default) and a status notice for the live guide ([site#66](https://github.com/postfiatorg/postfiatorg.github.io/pull/66)). A soak run of the uptime feed has been reading devnet-2 every five minutes since 27 November. Blocked: a new node cannot be seeded on devnet-2 ([postfiatl1v2#320](https://github.com/postfiatorg/postfiatl1v2/issues/320)). Not started: the release build pipeline and key ceremony, the rollout to the six validators, the join and ratification client. Full step list under [Build milestones](#build-milestones).
 >
 > **Outcome:** [B · A production-ready new chain](../README.md#three-outcomes) — moving `postfiatl1v2` from 6 Foundation-run nodes to a real outside validator network.
 
-## Current Status Report (2026-11-27 21:30 UTC)
+## Current Status Report (2026-11-27 22:00 UTC)
 
 | Gate 1 · Code / Executed | Gate 2 · Founder UAT | Gate 3 · Docs | Gate 4 · Blog Post |
 | --- | --- | --- | --- |
-| **PRs fixed, waiting for CI and merge** (`l1#286`, `l1#290`). M2, release pipeline, deployment of observers and RPCs, Task Node enforcement, G0 cohort Not Started | Not Started | **Guide live** (`site#56`) but ahead of the code; `site#59`, `site#61` open; MkDocs copy missing | **Draft merged** (`draft: true`, `site#57`) |
+| **4 PRs open, CI running** (`l1#286`, `l1#290`, `tasknode#459`, `site#66`). Soak feed running on devnet-2. Seeding a new node blocked (`l1#320`). Release pipeline, rollout, join client Not Started | Not Started | **Guide live** (`site#56`); a notice of what is not released yet waits in `site#66`; MkDocs copy missing | **Draft merged** (`draft: true`, `site#57`) |
 
 - **Merged on `main`:** Validator doctor fixes ([postfiatl1v2#281](https://github.com/postfiatorg/postfiatl1v2/pull/281)) and the pillar spec ([postfiatl1v2#285](https://github.com/postfiatorg/postfiatl1v2/pull/285)).
-- **Fixed in open PRs on 27 November (all 12 blocking review points and the smaller ones):**
-  - [postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286): the contract. UTC days, every acted-on field signed, real ML-DSA-65 checks against a pinned keyset, ordered releases, a rollback that never restores a vote record. Conformance test runs in CI.
-  - [postfiatl1v2#290](https://github.com/postfiatorg/postfiatl1v2/pull/290): the code. Validators keep today's read path; replicas refuse writes and enforce their lag; `upgrade` passes its own health check, keeps owner and mode, carries the vote record forward, refuses an older release and finishes an interrupted run; the observer is rewritten and tested over three simulated weeks; new HTTP edge, `block_vote_records` RPC, keyset rotation, release signing commands.
-- **Measured on devnet-2 (27 November):** counting only certificate votes puts a healthy validator at 90.2%, below the 95% rule. Counting every accepted vote (certificates plus the proposers' vote records) puts it at 97.3%. The metric was changed accordingly (decision 2 below).
-- **Found while fixing:** the packaged TLS proxy could not have worked (the node's RPC is not HTTP); a key-less replica cannot serve private-payment admission, so the 2 Foundation endpoints for Pillar 5 are an HTTP edge in front of a validator; the Mac client in `tasknode-apple#40` only accepts `http://` URLs while its defaults are `https://`; an old signed snapshot (height 600) no longer imports under the current binary, so a new node needs a fresh signed snapshot.
-- **Not done yet:** merge the two PRs, then every step below that is not marked as fixed in PR.
+- **In open PRs (all 12 blocking review points and the smaller ones answered):**
+  - [postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286): the contract and its conformance test (runs in CI).
+  - [postfiatl1v2#290](https://github.com/postfiatorg/postfiatl1v2/pull/290): `upgrade`, `top`, replicas, the HTTP edge, the observer, `block_vote_records`, `rpc-catch-up --follow`, `tasknode-bind`, release signing commands.
+  - [tasknode#459](https://github.com/postfiatorg/tasknode/pull/459): Task Node reads the feed and can suspend, restore and credit from it. Nothing is switched on.
+  - [postfiatorg.github.io#66](https://github.com/postfiatorg/postfiatorg.github.io/pull/66): the live guide says at the top what is released and what is not. Merging publishes it.
+- **Proven on `postfiat-wan-devnet-2`:**
+  - The feed, end to end: three soak observers on one host read the six validators every five minutes, sign, bundle and verify. Three implementations (Python reference, the node in Rust, Task Node in JavaScript) accept and reject the same feeds, including one signed on the live network.
+  - A replica on a copy of a validator's store: warm reads p95 15 ms over TCP and 16 ms through the HTTP edge. The first `fee`, `ledger` and `account_tx` after each block take 5 to 6 seconds.
+  - A `tasknode-bind` proof verifies with Task Node's own verifier.
+- **Measured:** counting only certificate votes puts a healthy validator at 90.2%, below the 95% rule; counting every accepted vote puts it at 97.3%. The metric was changed (decision 2).
+- **Found by running it for real:**
+  - A new node cannot be seeded on devnet-2: a snapshot's block history is 369 MB and the import accepts 256 MB ([#320](https://github.com/postfiatorg/postfiatl1v2/issues/320)). This blocks outside validators and replicas.
+  - `rpc-catch-up` re-verified the whole state on every run (5 minutes). `--follow` (in `#290`) takes 1.5 seconds; applying a live block with it has not been observed yet.
+  - The packaged TLS proxy could not have worked: the node's RPC is not HTTP. `#290` adds `rpc-http-edge`.
+  - A replica holds no key, so it cannot serve private-payment admission. The two Foundation endpoints Pillar 5 needs are the HTTP edge in front of a validator.
+  - The Mac client in `tasknode-apple#40` accepts only `http://` URLs while its defaults are `https://`.
+- **The soak feed counts certificate votes only** until the six validators run a release with `block_vote_records`. Its attestations will therefore show validator-5 below 95%. Reset the soak state at that rollout.
 
 ---
 
@@ -143,6 +154,9 @@ Each milestone is broken into numbered steps. `[x]` means merged on `main` or li
 - [ ] **1.11** Run a real signed upgrade and a forced-failure rollback on one Foundation validator, then on all 6.
 
 #### M2 · Join & ratification CLI + set-size benchmark
+
+This milestone and step 6.3 are the open items of the existing [public testnet path](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/testnet-path.md) (C1, C4, B2, B3, Z1 to Z3, D4). The design is done there ([genesis registry proposal path](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/architecture/genesis-registry-proposal-path.md)); the ratification client is an extension of the validator sidecar and is not started. The registry update commands (`validator-registry-update`, `-authorization-sign`, `-update-assemble`, `-update-verify`, `-update-apply`) and the operator manifest and attestation commands exist on `main`.
+
 - [ ] **2.1** `identity-receipt` command (old-chain key signs the new ML-DSA-65 key, `IdentityReceiptV1`). Not started.
 - [ ] **2.2** Admission evidence submit, verdict and status commands (Admission Policy V1). Not started.
 - [ ] **2.3** Ratification client for the current validators (closes gate C4). Not started.
@@ -159,9 +173,9 @@ Each milestone is broken into numbered steps. `[x]` means merged on `main` or li
 - [ ] **3.6** **PR `#290`, units rewritten; not yet run on a host.** Fix the packaged Caddy and systemd files so they run as written; test the Docker Compose profiles.
 - [ ] **3.7** **PR `#290`.** An equivalence test that compares the new read path with the old one (today it compares the new path with itself), and a `test` CI run that passes rather than times out.
 - [ ] **3.8** Consensus isolation: public RPC edge in its own rate-limited process and cgroup.
-- [ ] **3.9** Measure and publish the `< 250ms` p95 read number on devnet-2.
+- [ ] **3.9** **Measured on a replica, see the status report; not yet under block production or on validator hardware.** Measure and publish the `< 250ms` p95 read number on devnet-2.
 - [ ] **3.10** Stand up the first 2 Foundation public RPC + private-admission endpoints (TLS, DNS): TLS proxy, then the new `rpc-http-edge`, then the validator's own RPC, because admission needs the validator's key. Pillar 5's direct-RPC default depends on this.
-- [ ] **3.11** A fresh signed snapshot per release, so a new replica or validator can start. The height-600 snapshot no longer imports.
+- [ ] **3.11** A signed snapshot that imports, per release, so a new replica or validator can start. **Blocked: [`#320`](https://github.com/postfiatorg/postfiatl1v2/issues/320).** Export works; import refuses the 369 MB block history, and the height-600 snapshot no longer verifies.
 - [ ] **3.12** Docker image and compose profile, published by the release pipeline (removed from `#290` because no image exists).
 
 #### M4 · `postfiat-node top` SSH dashboard
@@ -173,11 +187,11 @@ Each milestone is broken into numbered steps. `[x]` means merged on `main` or li
 - [ ] **5.1** **PR `#290`.** Observer key, sign and verify commands — built in `#290` (`validator_uptime.rs`), not merged.
 - [ ] **5.2** **PR `#290`.** Collector bug: per-day counters are lost between runs (JSON keys come back as text), so every validator would end up revoked.
 - [ ] **5.3** **PR `#290`.** Collector counts certificate votes only but signs the result as "latency-fair". Implement the rule the contract names; `consensus_heartbeat` does not exist on `main`. The metric now credits every accepted vote: either certificate or the proposer's vote record.
-- [ ] **5.4** One wrong observer no longer stops the feed (**PR `#290`**). Still open: release a node with `block_vote_records` to the 6 validators, deploy 3 observers in 3 regions, publish the feed at a stable URL.
-- [ ] **5.5** Task Node reads the new feed. Today `server/l1-validator-uptime.js` reads a single-host probe feed (96 probes per UTC day) behind `TASKNODE_L1_UPTIME_REWARDS_ENABLED`, which is off.
-- [ ] **5.6** Task Node access states `pending → active → lapsed (14d grace) → revoked`, with Day-0 ramp-in and 3-day recovery. Not on `main`.
-- [ ] **5.7** On `revoked`: Finance Hub off, research API keys invalidated, `$20/mo` credit paused. A stale feed blocks new grants but revokes nobody.
-- [ ] **5.8** `postfiat-node tasknode-bind` inside the signed release, replacing `public/l1-validator.sh` (which hardcodes `l1-devnet`). Not started.
+- [ ] **5.4** One wrong observer no longer stops the feed (**PR `#290`**). A soak feed runs on one host. Still open: release a node with `block_vote_records` to the 6 validators, give observers the RPC of every validator (the HTTP edge, step 3.10), deploy 3 observers in 3 regions under 3 operators, publish the feed at a stable URL.
+- [ ] **5.5** **PR `tasknode#459`.** Task Node reads the new feed. Today `server/l1-validator-uptime.js` reads a single-host probe feed (96 probes per UTC day) behind `TASKNODE_L1_UPTIME_REWARDS_ENABLED`, which is off.
+- [ ] **5.6** **PR `tasknode#459`.** Task Node access states `pending → active → lapsed (14d grace) → revoked`, with Day-0 ramp-in and 3-day recovery. Not on `main`.
+- [ ] **5.7** **PR `tasknode#459`.** On `revoked`: Finance Hub off, research API keys invalidated, `$20/mo` credit paused. A stale feed blocks new grants but revokes nobody.
+- [ ] **5.8** **PR `#290` (the signing command; the wrapper script still calls the old helper).** `postfiat-node tasknode-bind` inside the signed release, replacing `public/l1-validator.sh` (which hardcodes `l1-devnet`). Not started.
 - [ ] **5.9** One grant per operator across old and new chains.
 - [ ] **5.10** Emit the Pillar 6 validator link co-signature (after Train B).
 - [ ] **5.11** Turn on the `$20/mo` credit.
@@ -194,7 +208,7 @@ Each milestone is broken into numbered steps. `[x]` means merged on `main` or li
 
 #### Docs and blog
 - [x] **7.1** "Run a Validator" guide live on `postfiat.org` (`content/run-a-validator.md`, `site#56`).
-- [ ] **7.2** The live guide describes `upgrade`, `tasknode-bind`, the signed release channel and the 3-observer feed, none of which an operator can use yet. Mark those sections as not yet available, or hold the link until M1 and M5 land.
+- [ ] **7.2** **PR `site#66`.** The live guide describes `upgrade`, `tasknode-bind`, the signed release channel and the 3-observer feed, none of which an operator can use yet. Mark those sections as not yet available, or hold the link until M1 and M5 land.
 - [ ] **7.3** Canonical copy at `docs/validators/run-a-validator.md` in `postfiatl1v2` (MkDocs). Missing.
 - [ ] **7.4** Replace the guide's hardware numbers with measured ones (from 2.5 and 3.9).
 - [ ] **7.5** Merge community guide PRs `site#59` and `site#61`.
