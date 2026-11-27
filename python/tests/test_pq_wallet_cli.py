@@ -235,9 +235,10 @@ class PqWalletMerge(unittest.TestCase):
         cargo = ["cargo", "build", "--offline", "--locked", "--release", "-p", "postfiat-node",
                  "--features", "pq-wallet", "--bin", "pftl-pq-walletd"]
         subprocess.run(cargo, cwd=ROOT, check=True)
+        env = {**os.environ, "PQ_PYTHON": sys.executable}
         subprocess.run(["cargo", "test", "--offline", "--locked", "--release", "-p", "postfiat-node",
                         "--lib", "--features", "pq-wallet", "tests::pq_payment_accounting::wallet_cli::",
-                        "--", "--nocapture"], cwd=ROOT, check=True)
+                        "--", "--nocapture"], cwd=ROOT, env=env, check=True)
 
 
 def exercise(root, stack):
@@ -320,12 +321,20 @@ def exercise(root, stack):
             time.sleep(.02)
         return p
 
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    def decrypt_wallet(wrapping, enc, aad):
+        try:
+            from Crypto.Cipher import AES
+            cipher = AES.new(wrapping, AES.MODE_GCM, nonce=enc[:12])
+            cipher.update(aad)
+            return cipher.decrypt_and_verify(enc[12:-16], enc[-16:])
+        except ModuleNotFoundError:
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+            return AESGCM(wrapping).decrypt(enc[:12], enc[12:], aad)
 
     def inspect(w, key):
         enc = (root/w/"wallet.enc").read_bytes()
         wrapping = key.read_bytes()
-        state = json.loads(AESGCM(wrapping).decrypt(enc[:12], enc[12:], b"postfiat/pq-wallet/v1/state"))
+        state = json.loads(decrypt_wallet(wrapping, enc, b"postfiat/pq-wallet/v1/state"))
         rec = state["recovery"]
         seed = bytes.fromhex(rec["seed"])
         net = rec["birthday"]["network"]

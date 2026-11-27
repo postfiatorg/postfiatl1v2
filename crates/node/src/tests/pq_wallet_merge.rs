@@ -91,7 +91,8 @@ fn recover_both_assets_and_spend_across_rollover_from_python() {
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
-    let mut command = Command::new("python3");
+    let python = std::env::var("PQ_PYTHON").unwrap_or_else(|_| "python3".to_owned());
+    let mut command = Command::new(python);
     command
         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../python/tests/test_pq_wallet_cli.py"))
         .arg("--exercise");
