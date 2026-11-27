@@ -1,0 +1,695 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-uptime-v1.schema.json",
+  "title": "Post Fiat Signed Multi-Observer Validator Uptime Feed v1",
+  "description": "Frozen Phase 0 Contract C2 schema for the signed 3-observer (2-of-3 quorum) latency-fair validator uptime feed, 95% liveness threshold, and 14-day grace/revocation access lifecycle.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "generated_at",
+    "chain",
+    "quorum_policy",
+    "window_spec",
+    "validators",
+    "observer_attestations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-uptime-v1"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "generated_at": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "chain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network",
+        "chain_id",
+        "genesis_hash",
+        "committee_epoch",
+        "registry_root",
+        "finalized_height",
+        "finalized_block_hash"
+      ],
+      "properties": {
+        "network": {
+          "type": "string",
+          "enum": [
+            "l1-devnet",
+            "l1-testnet",
+            "l1-mainnet"
+          ]
+        },
+        "chain_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
+        },
+        "genesis_hash": {
+          "$ref": "#/$defs/sha3_384_hex"
+        },
+        "committee_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "registry_root": {
+          "$ref": "#/$defs/sha3_384_hex"
+        },
+        "finalized_height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "finalized_block_hash": {
+          "$ref": "#/$defs/sha3_384_hex"
+        }
+      }
+    },
+    "quorum_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observer_count",
+        "quorum_threshold",
+        "algorithm_id",
+        "signing_context",
+        "stale_after_seconds",
+        "max_future_skew_seconds",
+        "stale_behavior"
+      ],
+      "properties": {
+        "observer_count": {
+          "const": 3
+        },
+        "quorum_threshold": {
+          "const": 2
+        },
+        "algorithm_id": {
+          "const": "ML-DSA-65"
+        },
+        "signing_context": {
+          "const": "postfiat-l1-v2/validator-uptime-feed/v1"
+        },
+        "stale_after_seconds": {
+          "const": 3600
+        },
+        "max_future_skew_seconds": {
+          "const": 60
+        },
+        "stale_behavior": {
+          "const": "block_new_bindings_and_credits_preserve_existing_access"
+        }
+      }
+    },
+    "window_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric_version",
+        "credit_sources",
+        "blocks_per_height_day",
+        "evaluation_horizon_days",
+        "min_observed_days",
+        "liveness_threshold_bps",
+        "grace_period_days",
+        "recovery_consecutive_days",
+        "window_start_height",
+        "window_end_height"
+      ],
+      "properties": {
+        "metric_version": {
+          "const": "latency-fair-round-window-v1"
+        },
+        "credit_sources": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "prepare_vote",
+              "precommit_vote",
+              "timeout_vote",
+              "consensus_heartbeat"
+            ]
+          }
+        },
+        "blocks_per_height_day": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "evaluation_horizon_days": {
+          "const": 30
+        },
+        "min_observed_days": {
+          "const": 25
+        },
+        "liveness_threshold_bps": {
+          "const": 9500
+        },
+        "grace_period_days": {
+          "const": 14
+        },
+        "recovery_consecutive_days": {
+          "const": 3
+        },
+        "window_start_height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "window_end_height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "validators": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/validatorQuorumStatus"
+      }
+    },
+    "observer_attestations": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/observerAttestation"
+      }
+    }
+  },
+  "$defs": {
+    "utcTimestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+    },
+    "sha256_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha3_384_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "mldsa65_public_key_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{3904}$"
+    },
+    "mldsa65_signature_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{6618}$"
+    },
+    "validatorId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
+    "observerId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
+    },
+    "accessState": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "active",
+        "lapsed",
+        "revoked"
+      ]
+    },
+    "accessStateReason": {
+      "type": "string",
+      "enum": [
+        "awaiting_ratification",
+        "day0_ramp_in",
+        "healthy_liveness",
+        "recovered_3day_streak",
+        "below_liveness_threshold",
+        "insufficient_observed_days",
+        "removed_from_registry",
+        "grace_expired"
+      ]
+    },
+    "bpsNullable": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "heightNullable": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "utcTimestampNullable": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "heightDayObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "day_index",
+        "from_height",
+        "to_height",
+        "complete",
+        "eligible_heights",
+        "credited_heights",
+        "precommit_qc_heights",
+        "participation_bps"
+      ],
+      "properties": {
+        "day_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "eligible_heights": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "credited_heights": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "precommit_qc_heights": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "participation_bps": {
+          "$ref": "#/$defs/bpsNullable"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "participation_bps": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "validatorQuorumStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validator_id",
+        "ml_dsa_public_key",
+        "operator_identity_id",
+        "public_rpc_url",
+        "registry_active",
+        "first_active_height",
+        "ramp_in_active",
+        "observed_height_days",
+        "mean_daily_participation_bps",
+        "consecutive_passing_days",
+        "liveness_met",
+        "access_state",
+        "access_state_reason",
+        "grace_started_at",
+        "grace_expires_at",
+        "grace_started_height",
+        "grace_expires_height",
+        "recovery_floor_height",
+        "removal_proposal_eligible",
+        "reward_eligible",
+        "finance_hub_access",
+        "research_api_keys_active",
+        "agreeing_observer_ids",
+        "height_days"
+      ],
+      "properties": {
+        "validator_id": {
+          "$ref": "#/$defs/validatorId"
+        },
+        "ml_dsa_public_key": {
+          "$ref": "#/$defs/mldsa65_public_key_hex"
+        },
+        "operator_identity_id": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "public_rpc_url": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^https://[A-Za-z0-9._:-]+(?:/[^\\s]*)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "registry_active": {
+          "type": "boolean"
+        },
+        "first_active_height": {
+          "$ref": "#/$defs/heightNullable"
+        },
+        "ramp_in_active": {
+          "type": "boolean"
+        },
+        "observed_height_days": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "mean_daily_participation_bps": {
+          "$ref": "#/$defs/bpsNullable"
+        },
+        "consecutive_passing_days": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "liveness_met": {
+          "type": "boolean"
+        },
+        "access_state": {
+          "$ref": "#/$defs/accessState"
+        },
+        "access_state_reason": {
+          "$ref": "#/$defs/accessStateReason"
+        },
+        "grace_started_at": {
+          "$ref": "#/$defs/utcTimestampNullable"
+        },
+        "grace_expires_at": {
+          "$ref": "#/$defs/utcTimestampNullable"
+        },
+        "grace_started_height": {
+          "$ref": "#/$defs/heightNullable"
+        },
+        "grace_expires_height": {
+          "$ref": "#/$defs/heightNullable"
+        },
+        "recovery_floor_height": {
+          "$ref": "#/$defs/heightNullable"
+        },
+        "removal_proposal_eligible": {
+          "type": "boolean"
+        },
+        "reward_eligible": {
+          "type": "boolean"
+        },
+        "finance_hub_access": {
+          "type": "boolean"
+        },
+        "research_api_keys_active": {
+          "type": "boolean"
+        },
+        "agreeing_observer_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/observerId"
+          }
+        },
+        "height_days": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "$ref": "#/$defs/heightDayObservation"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "access_state": {
+                "const": "pending"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "registry_active": { "const": false },
+              "first_active_height": { "type": "null" },
+              "ramp_in_active": { "const": false },
+              "liveness_met": { "const": false },
+              "access_state_reason": { "const": "awaiting_ratification" },
+              "grace_started_at": { "type": "null" },
+              "grace_expires_at": { "type": "null" },
+              "grace_started_height": { "type": "null" },
+              "grace_expires_height": { "type": "null" },
+              "recovery_floor_height": { "type": "null" },
+              "removal_proposal_eligible": { "const": false },
+              "reward_eligible": { "const": false },
+              "finance_hub_access": { "const": false },
+              "research_api_keys_active": { "const": false }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "access_state": {
+                "const": "active"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "registry_active": { "const": true },
+              "first_active_height": { "type": "integer", "minimum": 1 },
+              "liveness_met": { "const": true },
+              "access_state_reason": {
+                "enum": [
+                  "day0_ramp_in",
+                  "healthy_liveness",
+                  "recovered_3day_streak"
+                ]
+              },
+              "grace_started_at": { "type": "null" },
+              "grace_expires_at": { "type": "null" },
+              "grace_started_height": { "type": "null" },
+              "grace_expires_height": { "type": "null" },
+              "removal_proposal_eligible": { "const": false },
+              "reward_eligible": { "const": true },
+              "finance_hub_access": { "const": true },
+              "research_api_keys_active": { "const": true }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "access_state": {
+                "const": "lapsed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "first_active_height": { "type": "integer", "minimum": 1 },
+              "liveness_met": { "const": false },
+              "access_state_reason": {
+                "enum": [
+                  "below_liveness_threshold",
+                  "insufficient_observed_days",
+                  "removed_from_registry"
+                ]
+              },
+              "grace_started_at": { "$ref": "#/$defs/utcTimestamp" },
+              "grace_expires_at": { "$ref": "#/$defs/utcTimestamp" },
+              "grace_started_height": { "type": "integer", "minimum": 1 },
+              "grace_expires_height": { "type": "integer", "minimum": 1 },
+              "removal_proposal_eligible": { "const": false },
+              "reward_eligible": { "const": false },
+              "finance_hub_access": { "const": true },
+              "research_api_keys_active": { "const": true }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "access_state": {
+                "const": "revoked"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "first_active_height": { "type": "integer", "minimum": 1 },
+              "liveness_met": { "const": false },
+              "access_state_reason": {
+                "enum": [
+                  "grace_expired",
+                  "removed_from_registry"
+                ]
+              },
+              "grace_started_at": { "type": "null" },
+              "grace_expires_at": { "type": "null" },
+              "grace_started_height": { "type": "null" },
+              "grace_expires_height": { "type": "null" },
+              "reward_eligible": { "const": false },
+              "finance_hub_access": { "const": false },
+              "research_api_keys_active": { "const": false }
+            }
+          }
+        }
+      ]
+    },
+    "observerValidatorClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validator_id",
+        "ml_dsa_public_key",
+        "registry_active",
+        "observed_height_days",
+        "mean_daily_participation_bps",
+        "consecutive_passing_days",
+        "liveness_met",
+        "access_state"
+      ],
+      "properties": {
+        "validator_id": {
+          "$ref": "#/$defs/validatorId"
+        },
+        "ml_dsa_public_key": {
+          "$ref": "#/$defs/mldsa65_public_key_hex"
+        },
+        "registry_active": {
+          "type": "boolean"
+        },
+        "observed_height_days": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "mean_daily_participation_bps": {
+          "$ref": "#/$defs/bpsNullable"
+        },
+        "consecutive_passing_days": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "liveness_met": {
+          "type": "boolean"
+        },
+        "access_state": {
+          "$ref": "#/$defs/accessState"
+        }
+      }
+    },
+    "observerAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observer_id",
+        "region",
+        "operator_group",
+        "observed_at",
+        "finalized_height",
+        "finalized_block_hash",
+        "registry_root",
+        "validator_claims",
+        "claim_digest_sha256",
+        "algorithm_id",
+        "public_key_hex",
+        "signature_hex"
+      ],
+      "properties": {
+        "observer_id": {
+          "$ref": "#/$defs/observerId"
+        },
+        "region": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,31}$"
+        },
+        "operator_group": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "finalized_height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "finalized_block_hash": {
+          "$ref": "#/$defs/sha3_384_hex"
+        },
+        "registry_root": {
+          "$ref": "#/$defs/sha3_384_hex"
+        },
+        "validator_claims": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/observerValidatorClaim"
+          }
+        },
+        "claim_digest_sha256": {
+          "$ref": "#/$defs/sha256_hex"
+        },
+        "algorithm_id": {
+          "const": "ML-DSA-65"
+        },
+        "public_key_hex": {
+          "$ref": "#/$defs/mldsa65_public_key_hex"
+        },
+        "signature_hex": {
+          "$ref": "#/$defs/mldsa65_signature_hex"
+        }
+      }
+    }
+  }
+}
