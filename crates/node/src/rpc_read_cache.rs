@@ -600,9 +600,27 @@ fn run_rpc_serve_in_process_read(
         .unwrap_or_else(|| request.params.to_string());
 
     // Step 1: Read current committed height cheaply via the health cache.
-    let height_before = rpc_serve_cached_status(&context.data_dir, &context.health_cache)
-        .ok()
-        .map(|(report, _)| report.block_height);
+    // For `receipts`, never block waiting on the transactional store lease when
+    // the health cache is cold: `validator_receipt_reader::read` performs its own
+    // 100ms direct-read probe and falls back to the validator's held-snapshot
+    // abstract socket when a sibling validator holds the store lease.
+    let is_receipts = request.method == "receipts";
+    let height_before = if is_receipts {
+        context.health_cache.lock().ok().and_then(|cache| {
+            if cache
+                .status_checked_at
+                .is_some_and(|checked_at| checked_at.elapsed() <= RPC_SERVE_HEALTH_STAMP_MAX_AGE)
+            {
+                cache.status.as_ref().map(|report| report.block_height)
+            } else {
+                None
+            }
+        })
+    } else {
+        rpc_serve_cached_status(&context.data_dir, &context.health_cache)
+            .ok()
+            .map(|(report, _)| report.block_height)
+    };
 
     // Step 2: Check height-stamped response cache (zero redb open / zero flock).
     if let Some(h) = height_before {
@@ -617,6 +635,8 @@ fn run_rpc_serve_in_process_read(
     }
 
     // Step 3: Cache miss -> execute in-process under ONE shared transactional store lease.
+    // For `receipts`, delegate lease acquisition to `validator_receipt_reader::read`
+    // so the held-snapshot protocol runs before waiting on a writer lease.
     let has_fallback = context.read_cache.lock().ok().is_some_and(|cache| {
         cache.has_recent_fallback(
             &request.method,
@@ -626,6 +646,21 @@ fn run_rpc_serve_in_process_read(
     });
 
     let run_read = || -> Result<(RpcResponse, Option<u64>), String> {
+        if is_receipts {
+            let response = execute_in_process_standard_read(request, &context.data_dir)?;
+            let height_after = if height_before.is_some() {
+                let store = postfiat_storage::NodeStore::new(&context.data_dir);
+                postfiat_storage::transactional::with_writer_lease_deadline(
+                    Duration::from_millis(50),
+                    || store.read_chain_tip(),
+                )
+                .ok()
+                .map(|tip| tip.height)
+            } else {
+                None
+            };
+            return Ok((response, height_after));
+        }
         let store = postfiat_storage::NodeStore::new(&context.data_dir);
         let _lease = store
             .transactional_store_lease()
