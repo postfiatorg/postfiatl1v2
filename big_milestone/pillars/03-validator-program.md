@@ -122,7 +122,7 @@ flowchart TB
 Each milestone is broken into numbered steps. `[x]` means merged on `main` or live. "Built" means the code sits in an open PR and is not merged. Review points are from the second read of [`#286`](https://github.com/postfiatorg/postfiatl1v2/pull/286) and [`#290`](https://github.com/postfiatorg/postfiatl1v2/pull/290) (both answered "not ready"; none of the points are fixed yet).
 
 #### M0 · Freeze the contract (`postfiatl1v2#286`)
-- [ ] **0.1** Settle what a "day" is (see open decision 1), and make `#286` and `#287` use the same definition.
+- [ ] **0.1** Write the UTC-day definition (decision 1) into the contract, and make `#286` and `#287` use the same definition.
 - [ ] **0.2** Put every field Task Node acts on inside the observer signature: operator identity, public RPC URL, grace and recovery fields, consecutive passing days, removal flag.
 - [ ] **0.3** Make the signature check real: verify ML-DSA-65 signatures against pinned observer keys, replace the fixture's invalid signatures, add tests that reject swapped, zeroed and invented signers.
 - [ ] **0.4** Give releases an order so `upgrade` refuses an older release than the one installed.
@@ -170,7 +170,7 @@ Each milestone is broken into numbered steps. `[x]` means merged on `main` or li
 #### M5 · Signed uptime feed, access lifecycle & Task Node connect
 - [ ] **5.1** Observer key, sign and verify commands — built in `#290` (`validator_uptime.rs`), not merged.
 - [ ] **5.2** Collector bug: per-day counters are lost between runs (JSON keys come back as text), so every validator would end up revoked.
-- [ ] **5.3** Collector counts certificate votes only but signs the result as "latency-fair". Implement the rule the contract names; `consensus_heartbeat` does not exist on `main` (see open decision 2).
+- [ ] **5.3** Collector counts certificate votes only but signs the result as "latency-fair". Implement the rule the contract names; `consensus_heartbeat` does not exist on `main`. Label the metric as finalized precommit votes (decision 2).
 - [ ] **5.4** One wrong observer must not stop the feed. Deploy 3 observers in 3 regions and publish the 2-of-3 feed at a stable URL.
 - [ ] **5.5** Task Node reads the new feed. Today `server/l1-validator-uptime.js` reads a single-host probe feed (96 probes per UTC day) behind `TASKNODE_L1_UPTIME_REWARDS_ENABLED`, which is off.
 - [ ] **5.6** Task Node access states `pending → active → lapsed (14d grace) → revoked`, with Day-0 ramp-in and 3-day recovery. Not on `main`.
@@ -198,11 +198,11 @@ Each milestone is broken into numbered steps. `[x]` means merged on `main` or li
 - [ ] **7.5** Merge community guide PRs `site#59` and `site#61`.
 - [ ] **7.6** Blog post `content/blog/l1v2-validator-program.md` is merged as `draft: true`; publish after founder testing.
 
-#### Open decisions (this doc says two things)
-1. **What a day is.** Section 5 says block-height windows. The chain only makes a block when there is activity (about 26 a day last month), so a height-day of 14,400 blocks takes over a year, and a burst can run through 14 "days" of grace in an hour. Either the chain makes blocks on a fixed rhythm when idle, or the windows are UTC days.
-2. **Which votes count.** "Locked-in decisions" says finalized `precommit_qc.votes`; section 5 rejects that and credits every vote or heartbeat in the round window. The second needs a heartbeat that does not exist yet.
-3. **Release signing at launch.** "Locked-in decisions" says one pinned publisher key; section 2 says 2-of-3.
-4. **Observers.** M5 said "2+"; section 5 says three with 2-of-3 agreement. Steps above assume three.
+#### Decisions taken (2026-11-27, where this doc said two things)
+1. **A day is a UTC day.** The chain makes a block only when there is activity, so block-height days do not work. Same basis as Task Node's current feed.
+2. **Uptime counts finalized `precommit_qc.votes`**, and the feed says so (it is not called "latency-fair"). A UTC day with no blocks is not an observed day. A heartbeat-based rule can replace it later as a new feed version.
+3. **Releases are signed 2-of-3** from the first release.
+4. **Three observers, 2-of-3 agreement.**
 
 ### Required ship gates
 - [ ] **1. Executed:** All M1–M6 code, release tooling, observers, and Task Node reward/access enforcement merged and live.
