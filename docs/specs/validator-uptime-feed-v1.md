@@ -30,17 +30,33 @@ Block headers carry no time, and the chain makes a block only when there is some
 
 This is `time_basis = "observer_brackets"`. Two honest observers can therefore differ by an incomplete day. Section 4 says how that is settled.
 
-### 2.2 The score counts finalized precommit votes
+### 2.2 The score counts every accepted vote
 
-`metric_version = "precommit-qc-observer-brackets-v1"`. For one validator and one UTC day:
+`metric_version = "accepted-votes-observer-brackets-v1"`. For one validator and one UTC day:
 
 - `committed_blocks`: blocks finalized that day while the validator was in the on-chain registry.
-- `signed_blocks`: those blocks whose `consensus_v2_commit.precommit_qc.votes` holds the validator's vote. Real votes are counted, never committee membership.
+- `signed_blocks`: those blocks for which the validator cast an accepted vote. A vote counts when any one of the three `credit_sources` shows it:
+  1. `precommit_certificate`: the validator's vote is in the block's `consensus_v2_commit.precommit_qc.votes`;
+  2. `prepare_certificate`: it is in `consensus_v2_commit.prepare_qc.votes`;
+  3. `proposer_vote_record`: the proposer's vote record for the block (`block_vote_records` RPC, schema `postfiat.block_vote_record.v1`) lists the validator with outcome `accepted` or `late_after_deadline`, for the same height and block hash.
 - `participation_bps = floor(signed_blocks * 10000 / committed_blocks)` when the day is complete and `committed_blocks > 0`. Otherwise it is `null`.
 
-A day counts as observed only when it is complete and had at least one block. A day on which the chain made no block says nothing about a validator and is not counted for or against it.
+Real votes are counted, never committee membership. A day counts as observed only when it is complete and had at least one block. A day on which the chain made no block says nothing about a validator and is not counted for or against it.
 
-Known limit: a certificate closes once a quorum of votes is in, so a validator that is healthy but far away can be left out of some certificates. A score that credits every vote in the round would need a signed heartbeat, which the chain does not have. If it is added, it ships as a new `metric_version`; consumers refuse a `metric_version` they do not know.
+**Why the certificates alone are not enough.** A certificate closes as soon as a quorum of votes is in, so a healthy validator that answers a moment later is left out. Measured on `postfiat-wan-devnet-2` over its last 400 blocks on 27 November 2026, with all six validators healthy:
+
+| Validator | In the precommit certificate | In either certificate | Accepted vote, proposer records (73 blocks with a record) |
+| --- | ---: | ---: | ---: |
+| validator-1 | 100.0% | 100.0% | 100.0% |
+| validator-4 | 99.8% | 99.8% | 100.0% |
+| validator-3 | 98.8% | 99.5% | 100.0% |
+| validator-0 | 96.2% | 97.0% | 100.0% |
+| validator-2 | 96.0% | 97.0% | 100.0% |
+| validator-5 | 90.2% | 95.2% | 97.3% |
+
+Counting certificates only would put a healthy validator below the 95% rule. The proposer's vote record lists every validator it asked and what came back, including a vote that arrived after the quorum had closed, so it shows the votes the certificates leave out.
+
+**What a vote record is worth.** It is the proposer's own statement, kept beside the block and never read by consensus. A proposer can only speak for the blocks it proposed, a share of 1/n. It could wrongly deny a vote there, which is the same power it already has over which votes enter its certificate; it could wrongly grant one, which lifts a dead validator's score by at most 1/n. An observer reads the record from the proposer's RPC. For a block whose proposer the observer cannot reach, only the two certificates count. Consumers refuse a `metric_version` they do not know.
 
 ### 2.3 The window
 

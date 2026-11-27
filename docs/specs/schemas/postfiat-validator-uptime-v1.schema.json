@@ -75,6 +75,7 @@
       "additionalProperties": false,
       "required": [
         "metric_version",
+        "credit_sources",
         "time_basis",
         "max_observation_gap_seconds",
         "evaluation_horizon_days",
@@ -87,7 +88,14 @@
       ],
       "properties": {
         "metric_version": {
-          "const": "precommit-qc-observer-brackets-v1"
+          "const": "accepted-votes-observer-brackets-v1"
+        },
+        "credit_sources": {
+          "const": [
+            "precommit_certificate",
+            "prepare_certificate",
+            "proposer_vote_record"
+          ]
         },
         "time_basis": {
           "const": "observer_brackets"
