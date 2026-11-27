@@ -372,7 +372,9 @@ Before prompting any irreversible old-chain `NFTokenBurn`:
 ## 8. Deterministic Worked Hex Test Vectors
 
 The JSON block below is the machine-verified single source of truth checked in
-CI by `python3 scripts/test-message-protocol-vectors.py` (including `protoc`
+CI by `python3 scripts/test-message-protocol-vectors.py` (including a
+pure-Python check that every message the vectors use matches the `.proto` files
+field by field and that every vector decodes against them, plus `protoc`
 decode/re-encode byte-identity round-trip checks when `protoc` is present).
 
 Fixture note: To keep the published wire vectors concise and human-inspectable,

@@ -8,7 +8,10 @@ Validates:
        - proto/postfiat/governance/v1/packet.proto
      Uses `protoc` compilation + wire decode cross-checking whenever `protoc` is
      available on PATH (mandatory when `--require-protoc` is passed), and always
-     runs pure-Python stdlib schema + wire-format checks so CI needs zero pip installs.
+     runs pure-Python stdlib schema + wire-format checks so CI needs zero pip installs:
+     the .proto files are parsed, every message the vectors use must match the
+     script's field table (number, label, type, name), and every vector byte string
+     is decoded strictly against the parsed declarations.
   2. Exact deterministic worked hex vectors published in
      docs/specs/message-protocol-v1.md (single source of truth; detects any drift
      between the specification document and canonical wire encoding).
@@ -1498,6 +1501,423 @@ def build_canonical_vectors() -> dict[str, dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# .proto field tables: the schema the vectors are encoded against (pure stdlib, no protoc)
+# ---------------------------------------------------------------------------
+
+PROTO_VARINT_SCALARS = {"bool", "uint32", "uint64"}
+PROTO_LENGTH_SCALARS = {"bytes", "string"}
+PROTO_MAP_STRING_STRING = "map<string,string>"
+PROTO_REPEATED = "repeated "
+PROTO_UNSUPPORTED_STATEMENTS = {"message", "enum", "oneof", "option", "optional", "extend", "extensions", "service"}
+PROTO_TOKEN_RE = re.compile(r'\s*(?:([A-Za-z_][A-Za-z0-9_.]*)|(\d+)|("[^"\n]*")|([{};=<>,]))')
+
+# Every message the vectors encode, field by field as "<number> <type> <name>" in the spelling of the .proto
+# files. verify_proto_field_tables() fails when a .proto file declares a different number, label, type or name
+# for any of them, and decodes every vector byte string against the parsed .proto files.
+VECTOR_PROTO_FIELDS: dict[str, tuple[str, ...]] = {
+    "postfiat.message.v1.IpfsCidRef": ("1 bytes cid_bin", "2 uint64 byte_length", "3 string multibase_cid"),
+    "postfiat.message.v1.Pointer": (
+        "1 bytes cid_bin", "2 PointerTarget target", "3 ContentKind kind", "4 uint32 schema", "5 string task_id",
+        "6 string thread_id", "7 string context_id", "8 uint32 flags", "9 bytes inline_payload",
+        "10 string schema_name",
+    ),
+    "postfiat.message.v1.LegacyPointerV4": (
+        "1 string cid", "2 uint32 target", "3 ContentKind kind", "4 uint32 schema", "5 string task_id",
+        "6 string thread_id", "7 string context_id", "8 uint32 flags",
+    ),
+    "postfiat.message.v1.RecipientWrap": (
+        "1 bytes recipient_key_id", "2 string recipient_account", "3 bytes xwing_ciphertext", "4 bytes wrap_nonce",
+        "5 bytes wrapped_cek",
+    ),
+    "postfiat.message.v1.XWingEncryptionHeader": (
+        "1 CipherSuite cipher_suite", "2 bytes aead_nonce", "3 bytes aad_context", "4 uint32 chunk_index",
+        "5 string kdf_info", "6 repeated RecipientWrap recipients",
+    ),
+    "postfiat.message.v1.FastPayPaymentRef": (
+        "1 PaymentLane lane", "2 string chain_id", "3 bytes order_hash", "4 bytes certificate_digest",
+        "5 bytes tx_hash", "6 string asset_id", "7 string payer_account", "8 string payee_account",
+        "9 uint64 amount_atoms", "10 uint64 fee_atoms", "11 uint64 finalized_height",
+    ),
+    "postfiat.message.v1.X402PaymentRequired": (
+        "1 uint32 x402_version", "2 X402Scheme scheme", "3 string network", "4 PaymentLane lane", "5 string asset_id",
+        "6 uint64 max_amount_atoms", "7 string pay_to", "8 bytes request_hash", "9 bytes nonce",
+        "10 uint64 expires_at_unix_ms", "11 string resource_uri", "12 string facilitator_url",
+    ),
+    "postfiat.message.v1.X402PaymentSignature": (
+        "1 uint32 x402_version", "2 X402Scheme scheme", "3 string network", "4 PaymentLane lane",
+        "5 bytes request_hash", "6 bytes nonce", "7 bytes order_hash", "8 bytes tx_hash", "9 bytes signed_payload",
+        "10 bytes certificate_payload",
+    ),
+    "postfiat.message.v1.X402PaymentResponse": (
+        "1 uint32 x402_version", "2 bool settled", "3 FastPayPaymentRef payment_ref", "4 uint64 settled_at_unix_ms",
+        "5 string facilitator_id",
+    ),
+    "postfiat.message.v1.MessageHeader": (
+        "1 uint32 protocol_version", "2 string chain_id", "3 string schema_name", "4 uint32 schema_id",
+        "5 ContentKind kind", "6 Visibility visibility", "7 BodyEncoding body_encoding", "8 CipherSuite cipher_suite",
+        "9 string sender_account", "10 uint64 created_at_unix_ms", "11 string task_id", "12 string thread_id",
+        "13 string context_id", "14 IpfsCidRef reply_to_cid", "15 FastPayPaymentRef payment_ref",
+        "16 X402PaymentResponse x402_receipt",
+    ),
+    "postfiat.message.v1.Envelope": (
+        "1 uint32 version", "2 bytes header_bytes", "3 bytes encryption_header_bytes", "4 bytes body_bytes",
+        "5 SignatureAlgorithm signature_algorithm", "6 bytes sender_pubkey", "7 bytes signature",
+    ),
+    "postfiat.message.v1.ManifestChunk": ("1 uint32 chunk_index", "2 IpfsCidRef cid", "3 bytes aead_nonce"),
+    "postfiat.message.v1.Manifest": (
+        "1 uint32 version", "2 uint64 total_plaintext_bytes", "3 uint32 chunk_size_bytes", "4 string media_type",
+        "5 string inner_schema_name", "6 BodyEncoding inner_body_encoding", "7 CipherSuite cipher_suite",
+        "8 repeated ManifestChunk chunks",
+    ),
+    "postfiat.message.v1.TextMessage": ("1 string text", "2 string format", "3 repeated IpfsCidRef attachments"),
+    "postfiat.nft.v1.ContentHash": (
+        "1 string uri", "2 HashAlgorithm algorithm", "3 bytes digest", "4 uint64 byte_length",
+    ),
+    "postfiat.nft.v1.MediaAttachment": (
+        "1 string uri", "2 postfiat.message.v1.IpfsCidRef cid", "3 string mime_type", "4 MediaRole role",
+        "5 uint32 width", "6 uint32 height", "7 uint64 byte_length", "8 bytes sha3_384_digest", "9 bool encrypted",
+    ),
+    "postfiat.nft.v1.Attribute": ("1 string trait_type", "2 string value", "3 string display_type"),
+    "postfiat.nft.v1.CollectionRef": (
+        "1 string collection_id", "2 string issuer_account", "3 string name", "4 string description",
+        "5 string external_url",
+    ),
+    "postfiat.nft.v1.OriginProvenance": (
+        "1 string source_chain", "2 string nftoken_id", "3 string original_issuer", "4 string original_owner",
+        "5 string original_uri", "6 string mint_tx", "7 uint64 mint_ledger_index", "8 RetirementMode retirement_mode",
+        "9 string burn_tx", "10 uint64 burn_ledger_index", "11 postfiat.message.v1.IpfsCidRef claim_cid",
+        "12 bytes claim_hash", "13 postfiat.message.v1.IpfsCidRef burn_proof_bundle_cid", "14 uint64 migrated_serial",
+    ),
+    "postfiat.nft.v1.NftMetadata": (
+        "1 uint32 schema_version", "2 string name", "3 string description", "4 string image",
+        "5 postfiat.message.v1.IpfsCidRef image_cid", "6 repeated MediaAttachment media",
+        "7 repeated Attribute attributes", "8 CollectionRef collection", "9 repeated ContentHash content_hashes",
+        "10 bytes prompt_digest", "11 string license", "12 string external_url", "13 OriginProvenance origin",
+        "14 map<string,string> extensions",
+    ),
+    "postfiat.nft.v1.MigrationClaim": (
+        "1 uint32 schema_version", "2 string target_chain_id", "3 string source_chain", "4 string nftoken_id",
+        "5 string old_owner", "6 string new_owner_account", "7 string target_collection_id",
+        "8 string migration_issuer_account", "9 uint64 migrated_serial", "10 RetirementMode retirement_mode",
+        "11 uint64 cutoff_ledger_index", "12 uint64 claimed_at_unix_ms",
+        "13 postfiat.message.v1.IpfsCidRef allowlist_cid",
+    ),
+    "postfiat.governance.v1.AuthorityBinding": (
+        "1 string signer_set_id", "2 uint32 threshold", "3 uint32 total_signers",
+        "4 repeated string authorized_accounts", "5 string founder_nostr_pubkey", "6 string identity_handle",
+    ),
+    "postfiat.governance.v1.DeliverableItem": (
+        "1 string deliverable_id", "2 string origin_session_id", "3 string title", "4 string description",
+        "5 string owner", "6 string target_date", "7 repeated string cited_event_ids",
+    ),
+    "postfiat.governance.v1.DeliverableCarryOver": (
+        "1 string deliverable_id", "2 string origin_session_id", "3 string title", "4 DeliverableStatus status",
+        "5 string evidence_note", "6 repeated string evidence_refs",
+    ),
+    "postfiat.governance.v1.ProposedDecision": (
+        "1 string decision_id", "2 string title", "3 string summary", "4 bool run_deterministic_ruling",
+    ),
+    "postfiat.governance.v1.SessionConfig": (
+        "1 string channel_id", "2 PostingPolicy posting_policy", "3 FacilitatorMode facilitator_mode",
+        "4 uint32 duration_minutes", "5 uint32 rate_limit_seconds", "6 uint32 max_non_founder_messages",
+        "7 uint32 max_facilitator_turns", "8 uint32 reserved_founder_turns",
+        "9 postfiat.message.v1.IpfsCidRef eligible_pubkeys_cid", "10 bytes eligible_pubkeys_sha256",
+    ),
+    "postfiat.governance.v1.GovernancePacket": (
+        "1 uint32 schema_version", "2 string session_id", "3 string chain_id", "4 uint64 session_number",
+        "5 string title", "6 string summary", "7 AuthorityBinding authority",
+        "8 postfiat.message.v1.IpfsCidRef snapshot_cid", "9 bytes snapshot_sha256",
+        "10 repeated DeliverableCarryOver previous_deliverables_status", "11 repeated string open_questions",
+        "12 repeated ProposedDecision proposed_decisions", "13 repeated postfiat.message.v1.IpfsCidRef attachments",
+        "14 SessionConfig session_config", "15 uint64 created_at_unix_ms",
+    ),
+    "postfiat.governance.v1.TranscriptEntry": (
+        "1 uint64 receipt_seq", "2 string nostr_event_id", "3 string author_pubkey", "4 string author_role",
+        "5 uint64 event_created_at_unix_s", "6 uint64 server_received_at_unix_ms", "7 bytes raw_event_sha256",
+        "8 postfiat.message.v1.IpfsCidRef raw_event_cid",
+    ),
+    "postfiat.governance.v1.ExcludedEvent": (
+        "1 string nostr_event_id", "2 string author_pubkey", "3 ExclusionReason reason", "4 string detail",
+    ),
+    "postfiat.governance.v1.SessionTranscript": (
+        "1 uint32 schema_version", "2 string session_id", "3 string channel_id",
+        "4 postfiat.message.v1.IpfsCidRef opening_packet_cid", "5 postfiat.message.v1.IpfsCidRef eligible_pubkeys_cid",
+        "6 uint64 opened_at_unix_ms", "7 uint64 frozen_at_unix_ms", "8 repeated TranscriptEntry included_entries",
+        "9 repeated ExcludedEvent excluded_events", "10 postfiat.message.v1.IpfsCidRef markdown_transcript_cid",
+        "11 bytes transcript_root_sha256",
+    ),
+    "postfiat.governance.v1.DecisionRecord": (
+        "1 string decision_id", "2 string title", "3 string resolution", "4 repeated string cited_event_ids",
+        "5 bool run_deterministic_ruling",
+    ),
+    "postfiat.governance.v1.CommunityInputSummary": (
+        "1 string topic", "2 string summary", "3 repeated string cited_event_ids",
+    ),
+    "postfiat.governance.v1.ApprovalSignature": (
+        "1 string signer_account", "2 postfiat.message.v1.SignatureAlgorithm signature_algorithm",
+        "3 bytes signer_pubkey", "4 bytes signature", "5 uint64 signed_at_unix_ms",
+    ),
+    "postfiat.governance.v1.GovernanceMinutes": (
+        "1 uint32 schema_version", "2 string session_id", "3 uint32 revision", "4 SessionState state",
+        "5 AuthorityBinding authority", "6 postfiat.message.v1.IpfsCidRef opening_packet_cid",
+        "7 postfiat.message.v1.IpfsCidRef transcript_cid", "8 bytes transcript_root_sha256", "9 string summary",
+        "10 repeated DeliverableCarryOver previous_deliverables_review", "11 repeated DecisionRecord decisions",
+        "12 repeated DeliverableItem next_deliverables", "13 repeated CommunityInputSummary community_input",
+        "14 repeated ApprovalSignature approvals", "15 uint64 finalized_at_unix_ms",
+    ),
+    "postfiat.governance.v1.RulingAnchor": (
+        "1 uint32 schema_version", "2 string session_id", "3 string decision_id", "4 string ruling_id",
+        "5 RulingComputeBackend compute_backend", "6 postfiat.message.v1.IpfsCidRef snapshot_cid",
+        "7 postfiat.message.v1.IpfsCidRef opening_packet_cid", "8 postfiat.message.v1.IpfsCidRef minutes_cid",
+        "9 postfiat.message.v1.IpfsCidRef ruling_artifact_cid", "10 bytes input_bundle_sha256",
+        "11 bytes output_ruling_sha256", "12 bytes replay_trace_sha256", "13 string model_digest",
+        "14 string constitution_version", "15 string verdict", "16 AuthorityBinding authority",
+        "17 repeated ApprovalSignature approvals", "18 uint64 anchored_at_unix_ms",
+    ),
+}
+
+
+class ProtoTokens:
+    def __init__(self, rel: str, src: str) -> None:
+        self.rel = rel
+        self.tokens: list[str] = []
+        src = re.sub(r"//[^\n]*", "", src)
+        pos = 0
+        while src[pos:].strip():
+            match = PROTO_TOKEN_RE.match(src, pos)
+            if not match:
+                raise AssertionError(f"{rel}: cannot parse near {src[pos:pos + 40].strip()!r}")
+            self.tokens.append(match.group(match.lastindex))
+            pos = match.end()
+        self.pos = 0
+
+    def more(self) -> bool:
+        return self.pos < len(self.tokens)
+
+    def take(self, expected: str | None = None) -> str:
+        if not self.more():
+            raise AssertionError(f"{self.rel}: unexpected end of file")
+        token = self.tokens[self.pos]
+        self.pos += 1
+        if expected is not None and token != expected:
+            raise AssertionError(f"{self.rel}: expected {expected!r}, found {token!r}")
+        return token
+
+    def take_number(self) -> int:
+        token = self.take()
+        if not token.isdigit():
+            raise AssertionError(f"{self.rel}: expected a number, found {token!r}")
+        return int(token)
+
+    def skip_statement(self) -> None:
+        while self.take() != ";":
+            pass
+
+
+def parse_proto_message(tok: ProtoTokens, full_name: str) -> dict[int, tuple[str, str]]:
+    fields: dict[int, tuple[str, str]] = {}
+    tok.take("{")
+    while (token := tok.take()) != "}":
+        if token == "reserved":
+            tok.skip_statement()
+            continue
+        if token in PROTO_UNSUPPORTED_STATEMENTS:
+            raise AssertionError(f"{tok.rel}: `{token}` inside {full_name} is not supported by this check")
+        if token == "map":
+            tok.take("<")
+            key_type = tok.take()
+            tok.take(",")
+            value_type = tok.take()
+            tok.take(">")
+            field_type = f"map<{key_type},{value_type}>"
+        elif token == "repeated":
+            field_type = PROTO_REPEATED + tok.take()
+        else:
+            field_type = token
+        name = tok.take()
+        tok.take("=")
+        number = tok.take_number()
+        tok.take(";")
+        if number < 1 or number in fields or name in {n for _, n in fields.values()}:
+            raise AssertionError(f"{tok.rel}: {full_name} reuses or misnumbers field {number} `{name}`")
+        fields[number] = (field_type, name)
+    return fields
+
+
+def parse_proto_enum(tok: ProtoTokens, full_name: str) -> dict[str, int]:
+    values: dict[str, int] = {}
+    tok.take("{")
+    while (token := tok.take()) != "}":
+        if token == "reserved":
+            tok.skip_statement()
+            continue
+        tok.take("=")
+        number = tok.take_number()
+        tok.take(";")
+        if token in values or number in values.values():
+            raise AssertionError(f"{tok.rel}: {full_name} reuses enum value {number} `{token}`")
+        values[token] = number
+    return values
+
+
+def resolve_proto_type(field_type: str, package: str, known_types: set[str], where: str) -> str:
+    label = PROTO_REPEATED if field_type.startswith(PROTO_REPEATED) else ""
+    base = field_type.removeprefix(PROTO_REPEATED)
+    if base in PROTO_VARINT_SCALARS or base in PROTO_LENGTH_SCALARS or base == PROTO_MAP_STRING_STRING:
+        return label + base
+    full = base if "." in base else f"{package}.{base}"
+    if full not in known_types:
+        raise AssertionError(f"{where}: unknown or unsupported field type `{base}`")
+    return label + full
+
+
+def parse_proto_sources() -> tuple[dict[str, dict[int, tuple[str, str]]], dict[str, dict[str, int]]]:
+    """Parse the three .proto files into {message: {number: (resolved type, name)}} and {enum: {name: value}}."""
+    messages: dict[str, dict[int, tuple[str, str]]] = {}
+    enums: dict[str, dict[str, int]] = {}
+    packages: dict[str, str] = {}
+    for rel in PROTO_FILES:
+        tok = ProtoTokens(rel, (PROTO_ROOT / rel).read_text(encoding="utf-8"))
+        package = ""
+        while tok.more():
+            token = tok.take()
+            if token == "syntax":
+                tok.take("=")
+                tok.take('"proto3"')
+                tok.take(";")
+            elif token == "package":
+                package = tok.take()
+                tok.take(";")
+            elif token == "import":
+                tok.skip_statement()
+            elif token in ("message", "enum"):
+                if not package:
+                    raise AssertionError(f"{rel}: `{token}` declared before the package statement")
+                full_name = f"{package}.{tok.take()}"
+                if full_name in messages or full_name in enums:
+                    raise AssertionError(f"{rel}: {full_name} is declared twice")
+                if token == "message":
+                    messages[full_name] = parse_proto_message(tok, full_name)
+                    packages[full_name] = package
+                else:
+                    enums[full_name] = parse_proto_enum(tok, full_name)
+            else:
+                raise AssertionError(f"{rel}: unexpected top-level token {token!r}")
+    known_types = set(messages) | set(enums)
+    for full_name, fields in messages.items():
+        for number, (field_type, name) in fields.items():
+            where = f"{full_name}.{name}"
+            fields[number] = (resolve_proto_type(field_type, packages[full_name], known_types, where), name)
+    return messages, enums
+
+
+def require_utf8(value: bytes, where: str) -> None:
+    try:
+        value.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise AssertionError(f"{where} is not valid UTF-8") from exc
+
+
+def decode_against_proto(
+    buf: bytes,
+    message: str,
+    messages: dict[str, dict[int, tuple[str, str]]],
+    enums: dict[str, dict[str, int]],
+    visited: set[str],
+    label: str,
+) -> None:
+    """Strictly decode one vector byte string against the parsed .proto declaration of `message`."""
+    visited.add(message)
+    fields = messages[message]
+    seen: set[int] = set()
+    for number, wire_type, value in decode_wire_fields(buf):
+        if number not in fields:
+            raise AssertionError(f"{label}: field {number} is not declared in {message}")
+        field_type, name = fields[number]
+        where = f"{label}: {message}.{name} (field {number})"
+        base = field_type.removeprefix(PROTO_REPEATED)
+        repeated = base != field_type or base == PROTO_MAP_STRING_STRING
+        if number in seen and not repeated:
+            raise AssertionError(f"{where} appears twice but is not repeated")
+        seen.add(number)
+        expected_wire_type = 0 if base in PROTO_VARINT_SCALARS or base in enums else 2
+        if wire_type != expected_wire_type:
+            raise AssertionError(f"{where} has wire type {wire_type}, but the .proto type `{base}` needs {expected_wire_type}")
+        if base in enums and value not in enums[base].values():
+            raise AssertionError(f"{where} holds {value}, which {base} does not define")
+        if base in messages:
+            decode_against_proto(value, base, messages, enums, visited, label)
+        elif base == "string":
+            require_utf8(value, where)
+        elif base == PROTO_MAP_STRING_STRING:
+            for entry_number, entry_wire_type, entry_value in decode_wire_fields(value):
+                if entry_number not in (1, 2) or entry_wire_type != 2:
+                    raise AssertionError(f"{where} has a malformed map entry")
+                require_utf8(entry_value, where)
+
+
+def vector_proto_payloads(vectors: dict[str, dict[str, Any]]) -> list[tuple[str, str, bytes]]:
+    """Every protobuf byte string published in the vectors, with the message type it encodes."""
+    return [
+        ("V1", "postfiat.message.v1.Pointer", bytes.fromhex(vectors["V1_POINTER_V5_PUBLIC_TEXT"]["memo_data_hex"])),
+        ("V2A", "postfiat.message.v1.Pointer", bytes.fromhex(vectors["V2A_POINTER_V5_WORST_CASE_BUDGET"]["memo_data_hex"])),
+        ("V2B", "postfiat.message.v1.Pointer", bytes.fromhex(vectors["V2B_POINTER_V5_INLINE_X402"]["memo_data_hex"])),
+        ("V3", "postfiat.message.v1.LegacyPointerV4", bytes.fromhex(vectors["V3_LEGACY_POINTER_V4_DECODE"]["memo_data_hex_upper"])),
+        ("V4.env", "postfiat.message.v1.Envelope", bytes.fromhex(vectors["V4_ENVELOPE_PUBLIC_TEXT"]["envelope_hex"])),
+        ("V4.hdr", "postfiat.message.v1.MessageHeader", bytes.fromhex(vectors["V4_ENVELOPE_PUBLIC_TEXT"]["header_hex"])),
+        ("V4.body", "postfiat.message.v1.TextMessage", bytes.fromhex(vectors["V4_ENVELOPE_PUBLIC_TEXT"]["body_hex"])),
+        ("V5.env", "postfiat.message.v1.Envelope", bytes.fromhex(vectors["V5_ENVELOPE_PRIVATE_XWING_REWARD"]["envelope_hex"])),
+        ("V5.hdr", "postfiat.message.v1.MessageHeader", bytes.fromhex(vectors["V5_ENVELOPE_PRIVATE_XWING_REWARD"]["header_hex"])),
+        ("V5.xwing", "postfiat.message.v1.XWingEncryptionHeader", bytes.fromhex(vectors["V5_ENVELOPE_PRIVATE_XWING_REWARD"]["encryption_header_hex"])),
+        ("V6", "postfiat.message.v1.Manifest", bytes.fromhex(vectors["V6_MANIFEST_MULTICHUNK"]["manifest_hex"])),
+        ("V7.req", "postfiat.message.v1.X402PaymentRequired", bytes.fromhex(vectors["V7_X402_HEADERS"]["required_hex"])),
+        ("V7.sig", "postfiat.message.v1.X402PaymentSignature", bytes.fromhex(vectors["V7_X402_HEADERS"]["signature_hex"])),
+        ("V7.resp", "postfiat.message.v1.X402PaymentResponse", bytes.fromhex(vectors["V7_X402_HEADERS"]["response_hex"])),
+        ("V8.claim", "postfiat.nft.v1.MigrationClaim", bytes.fromhex(vectors["V8_NFT_METADATA_AND_MIGRATION"]["claim_hex"])),
+        ("V8.meta", "postfiat.nft.v1.NftMetadata", bytes.fromhex(vectors["V8_NFT_METADATA_AND_MIGRATION"]["metadata_hex"])),
+        ("V8.env", "postfiat.message.v1.Envelope", bytes.fromhex(vectors["V8_NFT_METADATA_AND_MIGRATION"]["metadata_envelope_hex"])),
+        ("V9.pkt", "postfiat.governance.v1.GovernancePacket", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["packet_proto_hex"])),
+        ("V9.env", "postfiat.message.v1.Envelope", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["packet_envelope_hex"])),
+        ("V9.ptr", "postfiat.message.v1.Pointer", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["anchor_pointer_v5_hex"])),
+        ("V9.tr", "postfiat.governance.v1.SessionTranscript", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["transcript_hex"])),
+        ("V9.min", "postfiat.governance.v1.GovernanceMinutes", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["minutes_hex"])),
+        ("V9.rul", "postfiat.governance.v1.RulingAnchor", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["ruling_hex"])),
+    ]
+
+
+def verify_proto_field_tables(vectors: dict[str, dict[str, Any]]) -> int:
+    """Fail when the .proto files disagree with the field tables and byte strings the vectors are built from."""
+    messages, enums = parse_proto_sources()
+    known_types = set(messages) | set(enums)
+    for message, entries in VECTOR_PROTO_FIELDS.items():
+        if message not in messages:
+            raise AssertionError(f"{message}: used by the vectors but not declared in the .proto files")
+        package = message.rsplit(".", 1)[0]
+        expected: dict[int, tuple[str, str]] = {}
+        for entry in entries:
+            number, *field_type, name = entry.split()
+            expected[int(number)] = (resolve_proto_type(" ".join(field_type), package, known_types, message), name)
+        declared = messages[message]
+        if declared != expected:
+            differences = [
+                f"field {number}: .proto {declared.get(number)} vs script {expected.get(number)}"
+                for number in sorted(set(declared) | set(expected))
+                if declared.get(number) != expected.get(number)
+            ]
+            raise AssertionError(f"{message} disagrees with the script's field table: " + "; ".join(differences))
+
+    visited: set[str] = set()
+    for label, message, raw_bytes in vector_proto_payloads(vectors):
+        decode_against_proto(raw_bytes, message, messages, enums, visited, label)
+    if visited != set(VECTOR_PROTO_FIELDS):
+        raise AssertionError(
+            "script field tables do not match the messages the vectors use: "
+            f"missing {sorted(visited - set(VECTOR_PROTO_FIELDS))}, unused {sorted(set(VECTOR_PROTO_FIELDS) - visited)}"
+        )
+    return len(VECTOR_PROTO_FIELDS)
+
+
+# ---------------------------------------------------------------------------
 # Spec-doc extraction & verification
 # ---------------------------------------------------------------------------
 
@@ -1573,33 +1993,7 @@ def verify_with_protoc(vectors: dict[str, dict[str, Any]], require_protoc: bool)
         subprocess.run(cmd, check=True, capture_output=True, text=True)
 
         # Cross-decode every protobuf hex vector via `protoc --decode`
-        decode_checks: list[tuple[str, str, bytes]] = [
-            ("V1", "postfiat.message.v1.Pointer", bytes.fromhex(vectors["V1_POINTER_V5_PUBLIC_TEXT"]["memo_data_hex"])),
-            ("V2A", "postfiat.message.v1.Pointer", bytes.fromhex(vectors["V2A_POINTER_V5_WORST_CASE_BUDGET"]["memo_data_hex"])),
-            ("V2B", "postfiat.message.v1.Pointer", bytes.fromhex(vectors["V2B_POINTER_V5_INLINE_X402"]["memo_data_hex"])),
-            ("V3", "postfiat.message.v1.LegacyPointerV4", bytes.fromhex(vectors["V3_LEGACY_POINTER_V4_DECODE"]["memo_data_hex_upper"])),
-            ("V4.env", "postfiat.message.v1.Envelope", bytes.fromhex(vectors["V4_ENVELOPE_PUBLIC_TEXT"]["envelope_hex"])),
-            ("V4.hdr", "postfiat.message.v1.MessageHeader", bytes.fromhex(vectors["V4_ENVELOPE_PUBLIC_TEXT"]["header_hex"])),
-            ("V4.body", "postfiat.message.v1.TextMessage", bytes.fromhex(vectors["V4_ENVELOPE_PUBLIC_TEXT"]["body_hex"])),
-            ("V5.env", "postfiat.message.v1.Envelope", bytes.fromhex(vectors["V5_ENVELOPE_PRIVATE_XWING_REWARD"]["envelope_hex"])),
-            ("V5.hdr", "postfiat.message.v1.MessageHeader", bytes.fromhex(vectors["V5_ENVELOPE_PRIVATE_XWING_REWARD"]["header_hex"])),
-            ("V5.xwing", "postfiat.message.v1.XWingEncryptionHeader", bytes.fromhex(vectors["V5_ENVELOPE_PRIVATE_XWING_REWARD"]["encryption_header_hex"])),
-            ("V6", "postfiat.message.v1.Manifest", bytes.fromhex(vectors["V6_MANIFEST_MULTICHUNK"]["manifest_hex"])),
-            ("V7.req", "postfiat.message.v1.X402PaymentRequired", bytes.fromhex(vectors["V7_X402_HEADERS"]["required_hex"])),
-            ("V7.sig", "postfiat.message.v1.X402PaymentSignature", bytes.fromhex(vectors["V7_X402_HEADERS"]["signature_hex"])),
-            ("V7.resp", "postfiat.message.v1.X402PaymentResponse", bytes.fromhex(vectors["V7_X402_HEADERS"]["response_hex"])),
-            ("V8.claim", "postfiat.nft.v1.MigrationClaim", bytes.fromhex(vectors["V8_NFT_METADATA_AND_MIGRATION"]["claim_hex"])),
-            ("V8.meta", "postfiat.nft.v1.NftMetadata", bytes.fromhex(vectors["V8_NFT_METADATA_AND_MIGRATION"]["metadata_hex"])),
-            ("V8.env", "postfiat.message.v1.Envelope", bytes.fromhex(vectors["V8_NFT_METADATA_AND_MIGRATION"]["metadata_envelope_hex"])),
-            ("V9.pkt", "postfiat.governance.v1.GovernancePacket", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["packet_proto_hex"])),
-            ("V9.env", "postfiat.message.v1.Envelope", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["packet_envelope_hex"])),
-            ("V9.ptr", "postfiat.message.v1.Pointer", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["anchor_pointer_v5_hex"])),
-            ("V9.tr", "postfiat.governance.v1.SessionTranscript", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["transcript_hex"])),
-            ("V9.min", "postfiat.governance.v1.GovernanceMinutes", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["minutes_hex"])),
-            ("V9.rul", "postfiat.governance.v1.RulingAnchor", bytes.fromhex(vectors["V9_GOVERNANCE_PACKET_AND_LIFECYCLE"]["ruling_hex"])),
-        ]
-
-        for label, message_type, raw_bytes in decode_checks:
+        for label, message_type, raw_bytes in vector_proto_payloads(vectors):
             dec = subprocess.run(
                 [protoc, f"--descriptor_set_in={desc_path}", f"--decode={message_type}"],
                 input=raw_bytes,
@@ -1734,6 +2128,7 @@ def main() -> int:
         return 0
 
     verify_proto_sources_pure_python()
+    proto_messages_checked = verify_proto_field_tables(expected)
 
     # Check canonical field ordering on every hex protobuf payload
     for vec_name, fields in expected.items():
@@ -1779,7 +2174,8 @@ def main() -> int:
 
     print(
         f"message-protocol-v1 vectors PASSED "
-        f"(vectors={len(expected)}, protoc_roundtrip={'yes' if protoc_used else 'skipped-no-protoc'})"
+        f"(vectors={len(expected)}, proto_messages_checked={proto_messages_checked}, "
+        f"protoc_roundtrip={'yes' if protoc_used else 'skipped-no-protoc'})"
     )
     return 0
 
