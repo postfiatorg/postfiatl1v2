@@ -120,9 +120,11 @@ caps.
   second release's height is the `SECOND_RELEASES` entry in
   `crates/types/src/solana_exit.rs`; it was set by the release branch
   `release/sol-exit-r2` (build `04600868`, live from 24 November) and is on
-  `main` since #234. Since 25 November the validators run `sol-exit-r3`
+  `main` since #234. From 25 November the validators ran `sol-exit-r3`
   (`2356caf1`), in which a Solana exit payout or refund settles with five of
-  six validators ([Network Status](../status/network-status.md)).
+  six validators; since the evening of 26 November they run `pq-r3`
+  (`9dcb689e`), whose source descends from `2356caf1`
+  ([Network Status](../status/network-status.md)).
 - **When the route is open.** Since 26 November proofs are made only during a
   daily proving session, planned for 17:00 to 19:00 UTC; outside it Solana
   deposits and withdrawals are closed on purpose
