@@ -2325,52 +2325,21 @@ fn rpc_serve_cached_status_and_registry_count(
         }
     }
     let checked_at = Instant::now();
-    let before_commit = health_cache.lock().ok().and_then(|cache| {
-        match (
-            cache.status_checked_at,
-            cache.status.as_ref(),
-            cache.registry_update_count.as_ref(),
-        ) {
-            (Some(read_at), Some(report), Some((count_at, count)))
-                if *count_at == read_at
-                    && read_at.elapsed() <= RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE =>
-            {
-                Some((read_at, report.clone(), count.clone()))
-            }
-            _ => None,
-        }
-    });
-    let read_pair = || -> Result<(StatusReport, Result<u64, String>), std::io::Error> {
-        let store = postfiat_storage::NodeStore::new(data_dir);
-        let store_lease = store.transactional_store_lease()?;
-        let report = status(NodeOptions {
-            data_dir: data_dir.to_path_buf(),
-        })?;
-        let registry_update_count = store
-            .read_governance()
-            .map(|governance| governance.validator_registry_updates.len() as u64)
-            .map_err(|error| format!("rpc server_info metrics failed: {error}"));
-        drop(store_lease);
-        Ok((report, registry_update_count))
-    };
-    let refreshed = if before_commit.is_some() {
-        postfiat_storage::transactional::with_writer_lease_deadline(
-            RPC_SERVE_STATUS_REFRESH_WAIT,
-            read_pair,
-        )
-    } else {
-        read_pair()
-    };
-    let (report, registry_update_count) = match (refreshed, before_commit) {
-        (Ok(pair), _) => pair,
-        (Err(error), Some((read_at, report, count)))
-            if rpc_serve_storage_writer_busy(&error)
-                && read_at.elapsed() <= RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE =>
-        {
-            return Ok((report, count, true));
-        }
-        (Err(error), _) => return Err(format!("rpc status read failed: {error}")),
-    };
+    let store = postfiat_storage::NodeStore::new(data_dir);
+    // One lease for the status and the count: `status()` reuses this
+    // process's open handle instead of opening the database again.
+    let store_lease = store
+        .transactional_store_lease()
+        .map_err(|error| format!("rpc status read failed: {error}"))?;
+    let report = status(NodeOptions {
+        data_dir: data_dir.to_path_buf(),
+    })
+    .map_err(|error| format!("rpc status read failed: {error}"))?;
+    let registry_update_count = store
+        .read_governance()
+        .map(|governance| governance.validator_registry_updates.len() as u64)
+        .map_err(|error| format!("rpc server_info metrics failed: {error}"));
+    drop(store_lease);
     if let Ok(mut cache) = health_cache.lock() {
         cache.status = Some(report.clone());
         cache.registry_update_count = Some((checked_at, registry_update_count.clone()));
