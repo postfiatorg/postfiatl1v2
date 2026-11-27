@@ -1748,6 +1748,12 @@ fn pillar4_keyed_nft_migration_tombstones_issuer_burn_and_spam_guard() {
 #[test]
 fn pillar2_fastpay_fee_v1_formula_admission_and_account_soft_cap() {
     // Contract §2.2 worked examples:
+    for (bytes, expected) in [(0, 25), (511, 26), (512, 26), (513, 27)] {
+        assert_eq!(fastpay_minimum_fee_atoms(bytes, 0, 0).unwrap(), expected);
+    }
+    assert_eq!(fastpay_minimum_fee_atoms(4 * 256, 2_048, 0).unwrap(), 2_075);
+    #[cfg(target_pointer_width = "64")]
+    assert!(fastpay_minimum_fee_atoms(0, 0, usize::MAX).is_err());
     assert_eq!(fastpay_minimum_fee_atoms(500, 1, 1).unwrap(), 27);
     assert_eq!(fastpay_minimum_fee_atoms(700, 1, 2).unwrap(), 1_028);
     assert_eq!(fastpay_minimum_fee_atoms(1_200, 5, 1).unwrap(), 33);
