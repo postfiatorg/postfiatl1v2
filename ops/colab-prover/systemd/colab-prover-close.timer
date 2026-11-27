@@ -1,0 +1,9 @@
+[Unit]
+Description=Close the Colab proving window at 19:00 UTC
+
+[Timer]
+OnCalendar=*-*-* 19:00:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target

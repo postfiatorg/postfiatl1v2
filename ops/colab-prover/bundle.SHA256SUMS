@@ -1,0 +1,16 @@
+3b83ab395c848eb13b703ad3b5b944046e46a71d0af2a927a1bb87c893247eb8  ./dep/circuits.sha256
+5fd57ea8b9432c14f94da218e96eb20b600fea94c5e1adeef073f547edecad83  ./dep/elf/pfusdc-sol-delta-shard
+84127cfa76de2854e1bea408a8e7910092515d24647f4a8683e7935ca585d6cb  ./dep/elf/pfusdc-sol-deposit-aggregate
+665fe185b830602a8f3fb9906d43f45ad0f9dda4deae7990ca2da69ca44253ce  ./dep/elf/pfusdc-sol-handoff-proof
+78619aeae5aa823940cf3c194ea7ce256f405fa814bc2c81fd2bb2cf425a6217  ./dep/elf/pfusdc-sol-ingress-program
+bc4105e3d3995f96a85fd7e342128cc8e60039360ca161b23c2bd43758cc3cbd  ./dep/elf/pfusdc-sol-key-table-proof
+20ee4b96fa6e5a2ce8a9da523ee42b75c698658ae1d4366e57b52bdd642f1bdb  ./dep/gpu-server.tar.gz
+7d058afaa48134368134cf04a1d227ba472354f141c2d9412469cee65eb2d6e5  ./dep/host-live
+bf0384e52dc55f3019d5139f83656068d0fe52edf1d226542462f281ce8b8d18  ./dep/prime.bin
+5c357514caeb73c69e5f94f4b473e67d5047bcc2a9526c2f2a62c3dcb30fa682  ./dep/prover-inputs.sha256
+20b768fef27c9c1129c8e0c31a7fe39405d4739b12197b9b50edb22600c47fcb  ./dep/prover-start.sh
+b22749685a3771cba503a9527c7bd8eb4d1ead6293d606971012d079ebe669e7  ./dep/serve.py
+7e9c5be8030a5ccf0285eee40a2f54ea6906a32d5bdb5b06c069e64da0cd08fe  ./sp1-6.3.1/sp1-gpu-server
+b56039ae311835070a817cc9cd89e1251c742975d213af81f3e7691d270efb7a  ./warm-witness.json
+4d5f84493c9b02b0d2a082c446229e30ce6645210a00c271dfb125b2761c67e0  ./wd/egress.elf
+1fa81b51967ccf72e91ce2edde135968abd519395047fd1f304b9d5aec25a600  ./wd/proof-host
