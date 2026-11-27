@@ -3506,6 +3506,52 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("signed by `{signer_id}`: {} signature(s)", rotation.signatures.len());
             Ok(())
         }
+        "tasknode-bind" => {
+            // Signs the one-time challenge that binds this validator to a Task
+            // Node account. The challenge is read from stdin, exactly as Task
+            // Node issued it. It opens no network connection: getting the
+            // challenge and handing in the proof is the caller's part.
+            unsafe {
+                // No core dump of a process that may hold a key.
+                let limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+                libc::setrlimit(libc::RLIMIT_CORE, &limit);
+                libc::prctl(libc::PR_SET_DUMPABLE, 0);
+            }
+            let validator_id = flag_value(flags, "--validator-id").ok_or("missing --validator-id")?;
+            let mut challenge = String::new();
+            std::io::Read::read_to_string(&mut std::io::Read::take(std::io::stdin(), 514), &mut challenge)
+                .map_err(|_| "the challenge on stdin is not UTF-8".to_string())?;
+            // One trailing newline is what a shell adds; nothing else is changed.
+            let challenge = challenge.strip_suffix('\n').unwrap_or(&challenge);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_secs());
+            let proof = match (flag_value(flags, "--signer-socket"), flag_value(flags, "--key-file")) {
+                (Some(socket), None) => {
+                    postfiat_node::validate_tasknode_challenge(challenge, now)
+                        .map_err(|reason| format!("tasknode-bind refused: {reason}"))?;
+                    postfiat_node::tasknode_binding_proof_via_socket(
+                        Path::new(socket),
+                        Duration::from_secs(10),
+                        validator_id,
+                        challenge,
+                    )
+                }
+                (None, Some(key_file)) => postfiat_node::tasknode_binding_proof_from_key_file(
+                    Path::new(key_file),
+                    validator_id,
+                    challenge,
+                    now,
+                ),
+                _ => return Err("tasknode-bind needs exactly one of --signer-socket and --key-file".to_string()),
+            }
+            .map_err(|error| format!("tasknode-bind failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string(&proof).map_err(|error| format!("proof serialization failed: {error}"))?
+            );
+            Ok(())
+        }
         "rpc-http-edge" => {
             use postfiat_node::rpc_http_edge::{run_rpc_http_edge, RpcHttpEdgeOptions};
             let parse_port = |flag: &str, default: u16| -> Result<u16, String> {

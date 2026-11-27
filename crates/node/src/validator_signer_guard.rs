@@ -313,7 +313,9 @@ impl SignerGuard {
         }
         // Transport authentication has no consensus slot and cannot be used as
         // a vote/proposal signature under another ML-DSA context.
-        if context == TRANSPORT_AUTH_CONTEXT {
+        // A Task Node binding proof has no consensus slot either; the signer
+        // has already checked that the message is a current challenge.
+        if context == TRANSPORT_AUTH_CONTEXT || context == TASKNODE_VALIDATOR_BINDING_CONTEXT {
             return Ok(());
         }
         let slot = decode_slot(public, context, message)?;

@@ -804,6 +804,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "deployment-validator-units-stage"
         | "top"
         | "rpc-http-edge"
+        | "tasknode-bind"
         | "release-manifest-verify"
         | "release-key-create"
         | "release-manifest-sign"
