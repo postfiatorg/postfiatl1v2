@@ -1,5 +1,5 @@
 use crate::apply_owned_deposit;
-use crate::fastswap_bridge::{execute_fastlane_deposit, execute_fastlane_redeem};
+use crate::fastswap_bridge::execute_fastlane_redeem;
 use crate::fastswap_checkpoint::anchor_fastlane_checkpoint;
 
 use postfiat_crypto_provider::bytes_to_hex;
@@ -134,12 +134,13 @@ pub fn execute_fastlane_primary_transaction_with_compatibility(
             }
             let expected_domain = signed.deposit.domain.clone();
             let rule = rule.clone();
-            match execute_fastlane_deposit(
+            match crate::fastswap_bridge::execute_fastlane_deposit_with_compatibility(
                 ledger,
                 signed,
                 &expected_domain,
                 &rule,
                 finalized_height,
+                compatibility,
             ) {
                 Ok(receipt) if receipt.accepted && receipt.code == FASTLANE_DEPOSIT_APPLIED => {
                     Receipt::accepted(tx_id, "FastLane deposit applied")

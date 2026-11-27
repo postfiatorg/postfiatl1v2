@@ -1423,6 +1423,128 @@ fn fastlane_deposit_honours_the_recorded_revocation_height() {
     assert_eq!(at.unwrap_err(), FastLaneBridgeError::HolderPermitInvalid);
 }
 
+/// Point 8 (B10): with the asset gate active, a FastLane deposit to a
+/// destination whose line the issuer has since unauthorized is refused before
+/// anything is written, even with a still-valid permit and an eligible source.
+#[test]
+fn fastlane_deposit_checks_the_destination_through_the_asset_gate() {
+    let genesis = test_genesis();
+    let issuer = test_key(30);
+    let holder = test_key(31);
+    let source = test_key(36);
+    let FastLanePermitFixture {
+        mut ledger,
+        compat,
+        permit,
+        chain_domain,
+        rule,
+        ..
+    } = fastlane_permit_fixture(5);
+    let gated_id = bytes_to_hex(&rule.asset_id.0);
+    ledger.accounts.push(funded_account(&source, 50_000_000));
+    set_trustline(
+        &genesis,
+        &mut ledger,
+        &source,
+        &issuer.address,
+        &source.address,
+        &gated_id,
+        10_000,
+        false,
+        false,
+        compat,
+        1,
+    );
+    set_trustline(
+        &genesis,
+        &mut ledger,
+        &issuer,
+        &issuer.address,
+        &source.address,
+        &gated_id,
+        10_000,
+        true,
+        false,
+        compat,
+        1,
+    );
+    let seq = ledger.account(&issuer.address).unwrap().sequence + 1;
+    let fund = sign_asset_tx(
+        &genesis,
+        &issuer,
+        seq,
+        50_000,
+        ISSUED_PAYMENT_TRANSACTION_KIND,
+        AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
+            from: issuer.address.clone(),
+            to: source.address.clone(),
+            asset_id: gated_id.clone(),
+            issuer: issuer.address.clone(),
+            amount: 500,
+        }),
+    );
+    assert!(
+        execute_asset_transaction_with_compatibility(&genesis, &mut ledger, &fund, 1, compat)
+            .accepted
+    );
+    // The issuer withdraws the destination's authorization.
+    set_trustline(
+        &genesis,
+        &mut ledger,
+        &issuer,
+        &issuer.address,
+        &holder.address,
+        &gated_id,
+        10_000,
+        false,
+        false,
+        compat,
+        1,
+    );
+    let deposit = postfiat_types::FastLaneDepositV1 {
+        domain: chain_domain.clone(),
+        source_address: source.address.clone(),
+        source_pubkey: source.keypair.public_key.clone(),
+        sequence: ledger.account(&source.address).unwrap().sequence + 1,
+        nonce: [2; 32],
+        asset_id: rule.asset_id,
+        asset_rule_hash: rule.rule_hash().unwrap(),
+        amount_atoms: 100,
+        fee_pft: 100,
+        destination_owner_pubkey: holder.keypair.public_key.clone(),
+        destination_holder_permit_id: Some(permit.permit_id),
+    };
+    let signature = ml_dsa_65_sign_with_context(
+        &source.keypair.private_key,
+        &deposit.signing_bytes().unwrap(),
+        FASTLANE_DEPOSIT_CONTEXT_V1,
+    )
+    .unwrap();
+    let signed = SignedFastLaneDepositV1 {
+        deposit,
+        algorithm_id: FASTSWAP_ML_DSA_65.to_string(),
+        signature,
+    };
+    // Before the gate the old rules apply: the permit alone decides.
+    assert!(
+        execute_fastlane_deposit(&mut ledger.clone(), &signed, &chain_domain, &rule, 6).is_ok()
+    );
+    let before = ledger.clone();
+    let refused = crate::fastswap_bridge::execute_fastlane_deposit_with_compatibility(
+        &mut ledger,
+        &signed,
+        &chain_domain,
+        &rule,
+        6,
+        compat,
+    );
+    assert_eq!(
+        refused.unwrap_err(),
+        FastLaneBridgeError::TrustlineUnauthorized
+    );
+    assert_eq!(ledger, before);
+}
+
 #[test]
 fn pillar4_keyed_nft_migration_tombstones_issuer_burn_and_spam_guard() {
     let genesis = test_genesis();
