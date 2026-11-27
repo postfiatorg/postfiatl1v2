@@ -1,6 +1,6 @@
+use crate::classical_crypto::{bip340_verify, secp256k1_ecdsa_verify_low_s_der};
 use postfiat_crypto_provider::{
-    address_from_public_key, bip340_verify, hex_to_bytes, ml_dsa_65_verify_with_context,
-    secp256k1_ecdsa_verify_low_s_der,
+    address_from_public_key, hex_to_bytes, ml_dsa_65_verify_with_context,
 };
 use postfiat_types::{
     identity_controller_link_message, identity_handle_attestation_message, identity_handle_key,

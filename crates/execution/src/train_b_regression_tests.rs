@@ -1,8 +1,10 @@
+use crate::classical_crypto::{
+    bip340_sign_deterministic, bip340_xonly_pubkey_from_secret,
+    secp256k1_compressed_pubkey_from_secret, secp256k1_ecdsa_sign_low_s_der,
+};
 use postfiat_crypto_provider::{
-    address_from_public_key, bip340_sign_deterministic, bip340_xonly_pubkey_from_secret,
-    bytes_to_hex, hex_to_bytes, ml_dsa_65_keygen_from_seed, ml_dsa_65_sign,
-    ml_dsa_65_sign_with_context, secp256k1_compressed_pubkey_from_secret,
-    secp256k1_ecdsa_sign_low_s_der, MlDsa65KeyPair, ML_DSA_65_ALGORITHM,
+    address_from_public_key, bytes_to_hex, hex_to_bytes, ml_dsa_65_keygen_from_seed,
+    ml_dsa_65_sign, ml_dsa_65_sign_with_context, MlDsa65KeyPair, ML_DSA_65_ALGORITHM,
 };
 use postfiat_types::{
     credential_delegated_accept_preimage, credential_id, credential_issuer_id, escrow_id,

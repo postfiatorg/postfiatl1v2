@@ -26,6 +26,7 @@ include!("owned_transfer.rs");
 include!("owned_transfer_recovery.rs");
 mod external_lane_release;
 pub use external_lane_release::dry_run_external_lane_export;
+pub mod classical_crypto;
 mod credential_did_execution;
 pub mod fastlane_primary;
 pub mod fastswap;

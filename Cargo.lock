@@ -3169,7 +3169,6 @@ version = "0.1.0"
 dependencies = [
  "fips204 0.4.6",
  "fips204 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "k256",
  "serde_json",
  "sha3 0.11.0",
  "sp1-zkvm",
@@ -3181,6 +3180,7 @@ name = "postfiat-execution"
 version = "0.1.0"
 dependencies = [
  "curve25519-dalek",
+ "k256",
  "pfusdc-sol-ingress-program",
  "postfiat-bridge",
  "postfiat-crypto-provider",

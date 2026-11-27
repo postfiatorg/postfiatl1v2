@@ -7,8 +7,6 @@ use k256::schnorr::{
     VerifyingKey as Bip340VerifyingKey,
 };
 
-use crate::CryptoError;
-
 /// Verify a BIP-340 Schnorr signature over `SHA-256(message)` for a 32-byte x-only
 /// secp256k1 public key (used exclusively for Pillar 6 Nostr identity-binding proofs).
 pub fn bip340_verify(xonly_pubkey: &[u8], message: &[u8], signature: &[u8]) -> bool {
@@ -25,22 +23,19 @@ pub fn bip340_verify(xonly_pubkey: &[u8], message: &[u8], signature: &[u8]) -> b
 }
 
 /// Deterministically sign `SHA-256(message)` with BIP-340 Schnorr using zero auxiliary randomness.
-pub fn bip340_sign_deterministic(
-    secret_key: &[u8; 32],
-    message: &[u8],
-) -> Result<Vec<u8>, CryptoError> {
+pub fn bip340_sign_deterministic(secret_key: &[u8; 32], message: &[u8]) -> Result<Vec<u8>, String> {
     let sk = Bip340SigningKey::from_bytes(secret_key)
-        .map_err(|err| CryptoError::new(format!("invalid secp256k1 secret key: {err}")))?;
+        .map_err(|err| format!("invalid secp256k1 secret key: {err}"))?;
     let sig = sk
         .try_sign_with_rng(&mut ZeroRng, message)
-        .map_err(|err| CryptoError::new(format!("bip340 signing failed: {err}")))?;
+        .map_err(|err| format!("bip340 signing failed: {err}"))?;
     Ok(sig.to_bytes().to_vec())
 }
 
 /// Derive the 32-byte x-only BIP-340 public key from a 32-byte secp256k1 secret key.
-pub fn bip340_xonly_pubkey_from_secret(secret_key: &[u8; 32]) -> Result<Vec<u8>, CryptoError> {
+pub fn bip340_xonly_pubkey_from_secret(secret_key: &[u8; 32]) -> Result<Vec<u8>, String> {
     let sk = Bip340SigningKey::from_bytes(secret_key)
-        .map_err(|err| CryptoError::new(format!("invalid secp256k1 secret key: {err}")))?;
+        .map_err(|err| format!("invalid secp256k1 secret key: {err}"))?;
     Ok(sk.verifying_key().to_bytes().to_vec())
 }
 
@@ -72,20 +67,18 @@ pub fn secp256k1_ecdsa_verify_low_s_der(
 pub fn secp256k1_ecdsa_sign_low_s_der(
     secret_key: &[u8; 32],
     message: &[u8],
-) -> Result<Vec<u8>, CryptoError> {
+) -> Result<Vec<u8>, String> {
     let sk = EcdsaSigningKey::from_slice(secret_key)
-        .map_err(|err| CryptoError::new(format!("invalid secp256k1 secret key: {err}")))?;
+        .map_err(|err| format!("invalid secp256k1 secret key: {err}"))?;
     let sig: EcdsaSignature = sk.sign(message);
     let low_s = sig.normalize_s().unwrap_or(sig);
     Ok(low_s.to_der().as_bytes().to_vec())
 }
 
 /// Derive the 33-byte compressed SEC1 secp256k1 public key from a 32-byte secret key.
-pub fn secp256k1_compressed_pubkey_from_secret(
-    secret_key: &[u8; 32],
-) -> Result<Vec<u8>, CryptoError> {
+pub fn secp256k1_compressed_pubkey_from_secret(secret_key: &[u8; 32]) -> Result<Vec<u8>, String> {
     let sk = EcdsaSigningKey::from_slice(secret_key)
-        .map_err(|err| CryptoError::new(format!("invalid secp256k1 secret key: {err}")))?;
+        .map_err(|err| format!("invalid secp256k1 secret key: {err}"))?;
     Ok(sk
         .verifying_key()
         .to_encoded_point(true)

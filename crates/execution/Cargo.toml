@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 curve25519-dalek = { version = "4.1.3", default-features = false }
+k256 = { version = "0.13.4", default-features = false, features = ["arithmetic", "ecdsa", "schnorr", "sha256"] }
 postfiat-bridge = { path = "../bridge" }
 postfiat-crypto-provider = { path = "../crypto_provider" }
 postfiat-nav-reserve-protocol = { path = "../nav_reserve_protocol" }
