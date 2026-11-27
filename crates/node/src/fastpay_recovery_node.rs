@@ -32,12 +32,218 @@ struct FastPaySpeculativeTipV1 {
     application_sequence: u64,
 }
 
+/// Process-local FastPay ledger cache for transactional stores.
+///
+/// Keyed by `(canonical_data_dir, chain_tip, redb_file_fingerprint,
+/// journal_bytes_hash)`. Never retains a `redb` handle across RPCs so sibling
+/// services (`transport-validator-serve`) are never starved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FastPayDbFingerprint {
+    len: u64,
+    mtime_nanos: u128,
+    #[cfg(unix)]
+    ino: u64,
+    #[cfg(unix)]
+    ctime_nanos: u128,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FastPayLedgerCacheKey {
+    data_dir: std::path::PathBuf,
+    height: u64,
+    block_hash: String,
+    state_root: String,
+    db_fingerprint: FastPayDbFingerprint,
+    journal_bytes_hash: [u8; 32],
+}
+
+#[derive(Clone)]
+struct CachedFastPayState {
+    key: FastPayLedgerCacheKey,
+    ledger: std::sync::Arc<LedgerState>,
+    genesis: Genesis,
+    pending_unanchored_count: usize,
+    fee_v1_active: bool,
+}
+
+struct LoadedFastPayState {
+    cache_key: Option<FastPayLedgerCacheKey>,
+    height: u64,
+    ledger: std::sync::Arc<LedgerState>,
+    genesis: Genesis,
+    pending_unanchored_count: usize,
+    fee_v1_active: bool,
+}
+
+const MAX_FASTPAY_LEDGER_CACHE_ENTRIES: usize = 8;
+
+fn fastpay_ledger_cache() -> &'static std::sync::Mutex<Vec<CachedFastPayState>> {
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<Vec<CachedFastPayState>>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+fn canonical_fastpay_cache_dir(data_dir: &std::path::Path) -> std::path::PathBuf {
+    std::fs::canonicalize(data_dir).unwrap_or_else(|_| data_dir.to_path_buf())
+}
+
+pub(super) fn invalidate_fastpay_ledger_cache(data_dir: &std::path::Path) {
+    let dir = canonical_fastpay_cache_dir(data_dir);
+    let mut cache = fastpay_ledger_cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache.retain(|entry| entry.key.data_dir != dir);
+}
+
+fn fastpay_db_fingerprint(db_path: &std::path::Path) -> io::Result<FastPayDbFingerprint> {
+    let meta = std::fs::metadata(db_path)?;
+    let mtime_nanos = meta
+        .modified()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    #[cfg(unix)]
+    let (ino, ctime_nanos) = {
+        use std::os::unix::fs::MetadataExt;
+        let sec = u128::try_from(meta.ctime()).unwrap_or(0);
+        let nsec = u128::try_from(meta.ctime_nsec()).unwrap_or(0);
+        (
+            meta.ino(),
+            sec.saturating_mul(1_000_000_000).saturating_add(nsec),
+        )
+    };
+    Ok(FastPayDbFingerprint {
+        len: meta.len(),
+        mtime_nanos,
+        #[cfg(unix)]
+        ino,
+        #[cfg(unix)]
+        ctime_nanos,
+    })
+}
+
+fn sha256_bytes(bytes: &[u8]) -> [u8; 32] {
+    use sha2::Digest;
+    sha2::Sha256::digest(bytes).into()
+}
+
+fn fastpay_speculative_journal_hash(data_dir: &std::path::Path) -> io::Result<[u8; 32]> {
+    let path = data_dir.join(FASTPAY_SPECULATIVE_JOURNAL_FILE);
+    if !path.exists() {
+        return Ok([0u8; 32]);
+    }
+    let raw = read_bounded_json_text_file(&path, "FastPay speculative-effect journal")?;
+    Ok(sha256_bytes(raw.as_bytes()))
+}
+
+fn take_cached_fastpay_state(key: &FastPayLedgerCacheKey) -> Option<CachedFastPayState> {
+    let mut cache = fastpay_ledger_cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let pos = cache.iter().position(|entry| &entry.key == key)?;
+    Some(cache.remove(pos))
+}
+
+fn peek_cached_fastpay_state(key: &FastPayLedgerCacheKey) -> Option<CachedFastPayState> {
+    let cache = fastpay_ledger_cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache.iter().find(|entry| &entry.key == key).cloned()
+}
+
+fn store_cached_fastpay_state(state: CachedFastPayState) {
+    let mut cache = fastpay_ledger_cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache.retain(|entry| entry.key.data_dir != state.key.data_dir);
+    if cache.len() >= MAX_FASTPAY_LEDGER_CACHE_ENTRIES {
+        cache.remove(0);
+    }
+    cache.push(state);
+}
+
+fn load_fastpay_state(store: &NodeStore, take_ownership: bool) -> io::Result<LoadedFastPayState> {
+    if store.transactional_storage_active()? {
+        let transactional = store.transactional_store()?;
+        let tip = store.read_chain_tip()?;
+        let db_fingerprint = fastpay_db_fingerprint(transactional.database_path())?;
+        let journal_bytes_hash = fastpay_speculative_journal_hash(store.data_dir())?;
+        let key = FastPayLedgerCacheKey {
+            data_dir: canonical_fastpay_cache_dir(store.data_dir()),
+            height: tip.height,
+            block_hash: tip.block_hash,
+            state_root: tip.state_root,
+            db_fingerprint,
+            journal_bytes_hash,
+        };
+        let hit = if take_ownership {
+            take_cached_fastpay_state(&key)
+        } else {
+            peek_cached_fastpay_state(&key)
+        };
+        if let Some(cached) = hit {
+            return Ok(LoadedFastPayState {
+                height: cached.key.height,
+                cache_key: Some(cached.key),
+                ledger: cached.ledger,
+                genesis: cached.genesis,
+                pending_unanchored_count: cached.pending_unanchored_count,
+                fee_v1_active: cached.fee_v1_active,
+            });
+        }
+
+        let ledger = std::sync::Arc::new(read_fastpay_ledger(store)?);
+        let pending_unanchored_count =
+            fastpay_pre_state_effects_for_next_block(store, &ledger)?.len();
+        let genesis = store.read_genesis()?;
+        let fee_v1_active = store
+            .read_governance()?
+            .fastpay_fee_v1_activation_height()
+            .is_some_and(|activation| activation > 0 && key.height >= activation);
+        if !take_ownership {
+            store_cached_fastpay_state(CachedFastPayState {
+                key: key.clone(),
+                ledger: std::sync::Arc::clone(&ledger),
+                genesis: genesis.clone(),
+                pending_unanchored_count,
+                fee_v1_active,
+            });
+        }
+        return Ok(LoadedFastPayState {
+            height: key.height,
+            cache_key: Some(key),
+            ledger,
+            genesis,
+            pending_unanchored_count,
+            fee_v1_active,
+        });
+    }
+
+    let ledger = std::sync::Arc::new(read_fastpay_ledger(store)?);
+    let height = fastpay_height(store)?;
+    let pending_unanchored_count = fastpay_pre_state_effects_for_next_block(store, &ledger)?.len();
+    let genesis = store.read_genesis()?;
+    let fee_v1_active = store
+        .read_governance()?
+        .fastpay_fee_v1_activation_height()
+        .is_some_and(|activation| activation > 0 && height >= activation);
+    Ok(LoadedFastPayState {
+        cache_key: None,
+        height,
+        ledger,
+        genesis,
+        pending_unanchored_count,
+        fee_v1_active,
+    })
+}
+
 /// Business-state view. The transactional database remains the finalized base;
 /// pending, certified FastPay effects live in the existing durable journal.
 pub(super) fn read_fastpay_ledger(store: &NodeStore) -> io::Result<LedgerState> {
     if !store.transactional_storage_active()? {
         return store.read_ledger();
     }
+    let _db_lease = store.transactional_store_lease()?;
     for _ in 0..3 {
         let tip = store.read_chain_tip()?;
         let mut ledger = store.read_ledger()?;
@@ -99,14 +305,23 @@ pub(super) fn read_fastpay_ledger(store: &NodeStore) -> io::Result<LedgerState> 
             .into_iter()
             .map(|(_, fence)| fence)
             .collect::<Vec<_>>();
-        let shielded = store.read_shielded()?;
+        if effects.is_empty() {
+            if store.read_chain_tip()? == tip {
+                return Ok(ledger);
+            }
+            continue;
+        }
         let fastpay_fee_v1_activation = store.read_governance()?.fastpay_fee_v1_activation_height();
         if store.read_chain_tip()? != tip {
             continue;
         }
+        // FastPay transfers and unwraps do not mutate ShieldedState, so native
+        // supply conservation (`supply_after + fee == supply_before`) is
+        // invariant to the constant shielded reserve and needs no shielded read.
+        let empty_shielded = ShieldedState::empty();
         replay_confirmed_fastpay_fences_dependency_ordered(
             &mut ledger,
-            &shielded,
+            &empty_shielded,
             &effects,
             fastpay_fee_v1_activation,
         )?;
@@ -199,7 +414,7 @@ fn read_fastpay_speculative_journal(
 fn write_fastpay_speculative_journal(
     data_dir: &std::path::Path,
     journal: &FastPaySpeculativeJournalV1,
-) -> io::Result<()> {
+) -> io::Result<[u8; 32]> {
     let bytes = format!(
         "{}\n",
         serde_json::to_string_pretty(journal).map_err(invalid_data)?
@@ -210,7 +425,9 @@ fn write_fastpay_speculative_journal(
             "FastPay speculative-effect journal is full; settle existing recovery windows",
         ));
     }
-    atomic_write(data_dir.join(FASTPAY_SPECULATIVE_JOURNAL_FILE), bytes)
+    let hash = sha256_bytes(bytes.as_bytes());
+    atomic_write(data_dir.join(FASTPAY_SPECULATIVE_JOURNAL_FILE), bytes)?;
+    Ok(hash)
 }
 
 pub(super) fn fastpay_speculative_journal_snapshot_bytes(
@@ -254,16 +471,20 @@ fn retain_fastpay_speculative_effect(
     store: &NodeStore,
     ledger: &LedgerState,
     mut effect: FastPaySpeculativeEffectV1,
-) -> io::Result<()> {
-    if store.transactional_storage_active()? {
+) -> io::Result<[u8; 32]> {
+    let transactional_active = store.transactional_storage_active()?;
+    let tip = if transactional_active {
         let tip = store.read_chain_tip()?;
         effect.retained_tip = Some(FastPaySpeculativeTipV1 {
             height: tip.height,
-            block_hash: tip.block_hash,
-            state_root: tip.state_root,
+            block_hash: tip.block_hash.clone(),
+            state_root: tip.state_root.clone(),
             application_sequence: ledger.fastpay_version_fences.len() as u64,
         });
-    }
+        Some(tip)
+    } else {
+        None
+    };
     let mut journal = read_fastpay_speculative_journal(store.data_dir())?;
     if let Some(existing) = journal
         .effects
@@ -271,7 +492,7 @@ fn retain_fastpay_speculative_effect(
         .find(|existing| existing.fence.lock_id == effect.fence.lock_id)
     {
         return if existing == &effect {
-            Ok(())
+            fastpay_speculative_journal_hash(store.data_dir())
         } else {
             Err(fastpay_invalid_data(
                 "FastPay speculative journal contains a conflicting lock",
@@ -279,14 +500,31 @@ fn retain_fastpay_speculative_effect(
         };
     }
 
-    let anchored = store
-        .read_blocks()?
-        .blocks
-        .into_iter()
-        .flat_map(|block| block.fastpay_pre_state_effects)
-        .map(|fence| fence.lock_id)
-        .collect::<BTreeSet<_>>();
-    let height = fastpay_height(store)?;
+    let anchored = if transactional_active {
+        let transactional = store.transactional_store()?;
+        let mut anchored = BTreeSet::new();
+        for record in &journal.effects {
+            if transactional
+                .anchored_fastpay_effect(&record.fence.lock_id)?
+                .is_some()
+            {
+                anchored.insert(record.fence.lock_id.clone());
+            }
+        }
+        anchored
+    } else {
+        store
+            .read_blocks()?
+            .blocks
+            .into_iter()
+            .flat_map(|block| block.fastpay_pre_state_effects)
+            .map(|fence| fence.lock_id)
+            .collect::<BTreeSet<_>>()
+    };
+    let height = match tip {
+        Some(tip) => tip.height,
+        None => fastpay_height(store)?,
+    };
     journal.effects.retain(|record| {
         let recovery = record
             .fence
@@ -556,6 +794,32 @@ pub(super) fn owned_recovery_capabilities_v3_locked(
     Ok(report)
 }
 
+fn fastpay_domain_for_committee_with_genesis(
+    genesis: &Genesis,
+    committee: &postfiat_types::FastPayRecoveryCommitteeV1,
+) -> io::Result<postfiat_types::OwnedCertificateDomain> {
+    let domain = committee.certificate_domain();
+    if domain.chain_id != genesis.chain_id
+        || domain.genesis_hash != postfiat_execution::genesis_hash(genesis)
+        || domain.protocol_version != genesis.protocol_version
+    {
+        return Err(fastpay_invalid_data(
+            "replicated FastPay committee does not match local genesis",
+        ));
+    }
+    Ok(domain)
+}
+
+fn ensure_fastpay_unanchored_count(pending: usize) -> io::Result<()> {
+    if pending >= postfiat_types::MAX_FASTPAY_PRE_STATE_EFFECTS_PER_BLOCK {
+        return Err(io::Error::new(
+            io::ErrorKind::WouldBlock,
+            "FastPay unanchored-effect window is full; wait for the next certified block",
+        ));
+    }
+    Ok(())
+}
+
 pub fn owned_sign_v3(
     options: NodeOptions,
     signed_order_json: &str,
@@ -570,11 +834,12 @@ pub fn owned_sign_v3(
         })?;
     let store = NodeStore::new(&options.data_dir);
     let _mutation_lock = store.lock_ordered_commit()?;
-    let ledger = read_fastpay_ledger(&store)?;
-    ensure_fastpay_unanchored_capacity(&store, &ledger)?;
-    let height = fastpay_height(&store)?;
+    let _db_lease = store.transactional_store_lease()?;
+    let state = load_fastpay_state(&store, false)?;
+    ensure_fastpay_unanchored_count(state.pending_unanchored_count)?;
+    let height = state.height;
     let committee = fastpay_recovery_committee(
-        &ledger,
+        &state.ledger,
         signed.order.recovery.committee_epoch,
         &signed.order.domain.registry_id,
     )?;
@@ -588,20 +853,16 @@ pub fn owned_sign_v3(
         ));
     }
     let committee_epoch = committee.committee_epoch;
-    let domain = fastpay_domain_for_committee(&options.data_dir, &committee)?;
-    let policy = fastpay_recovery_policy(&ledger)?;
-    let fee_v1_active = store
-        .read_governance()?
-        .fastpay_fee_v1_activation_height()
-        .is_some_and(|activation| activation > 0 && height >= activation);
+    let domain = fastpay_domain_for_committee_with_genesis(&state.genesis, &committee)?;
+    let policy = fastpay_recovery_policy(&state.ledger)?;
     postfiat_execution::validate_owned_transfer_v3_admission_with_fee_v1(
-        &ledger,
+        &state.ledger,
         &signed,
         &domain,
         committee_epoch,
         &policy,
         height,
-        fee_v1_active,
+        state.fee_v1_active,
     )
     .map_err(|error| {
         io::Error::new(
@@ -655,10 +916,11 @@ pub fn owned_unwrap_sign_v3(
         })?;
     let store = NodeStore::new(&options.data_dir);
     let _mutation_lock = store.lock_ordered_commit()?;
-    let ledger = read_fastpay_ledger(&store)?;
-    let height = fastpay_height(&store)?;
+    let _db_lease = store.transactional_store_lease()?;
+    let state = load_fastpay_state(&store, false)?;
+    let height = state.height;
     let committee = fastpay_recovery_committee(
-        &ledger,
+        &state.ledger,
         signed.order.recovery.committee_epoch,
         &signed.order.domain.registry_id,
     )?;
@@ -672,20 +934,16 @@ pub fn owned_unwrap_sign_v3(
         ));
     }
     let committee_epoch = committee.committee_epoch;
-    let domain = fastpay_domain_for_committee(&options.data_dir, &committee)?;
-    let policy = fastpay_recovery_policy(&ledger)?;
-    let fee_v1_active = store
-        .read_governance()?
-        .fastpay_fee_v1_activation_height()
-        .is_some_and(|activation| activation > 0 && height >= activation);
+    let domain = fastpay_domain_for_committee_with_genesis(&state.genesis, &committee)?;
+    let policy = fastpay_recovery_policy(&state.ledger)?;
     postfiat_execution::validate_owned_unwrap_v3_admission_with_fee_v1(
-        &ledger,
+        &state.ledger,
         &signed,
         &domain,
         committee_epoch,
         &policy,
         height,
-        fee_v1_active,
+        state.fee_v1_active,
     )
     .map_err(|error| {
         io::Error::new(
@@ -998,6 +1256,7 @@ pub(super) fn rollback_unanchored_fastpay_effects_for_certified_block(
     for record in records.drain(..) {
         rollback_fastpay_speculative_effect(ledger, &record)?;
     }
+    invalidate_fastpay_ledger_cache(store.data_dir());
     Ok(())
 }
 
@@ -1019,10 +1278,11 @@ pub fn owned_apply_v3(
     .map_err(|error| fastpay_invalid_data(format!("FastPay v3 certificate digest: {error:?}")))?;
     let store = NodeStore::new(&options.data_dir);
     let _mutation_lock = store.lock_ordered_commit()?;
-    let ledger = read_fastpay_ledger(&store)?;
-    let height = fastpay_height(&store)?;
+    let _db_lease = store.transactional_store_lease()?;
+    let state = load_fastpay_state(&store, true)?;
+    let height = state.height;
     let committee = fastpay_recovery_committee(
-        &ledger,
+        &state.ledger,
         certificate.order.recovery.committee_epoch,
         &certificate.order.domain.registry_id,
     )?;
@@ -1030,16 +1290,27 @@ pub fn owned_apply_v3(
     if signer {
         local_fastpay_signer_public_key(&options.data_dir, &committee, validator_id)?;
     }
-    let domain = fastpay_domain_for_committee(&options.data_dir, &committee)?;
-    let policy = fastpay_recovery_policy(&ledger)?;
+    let domain = fastpay_domain_for_committee_with_genesis(&state.genesis, &committee)?;
+    let policy = fastpay_recovery_policy(&state.ledger)?;
     let response = if let Some(existing) = matching_confirmed_fence(
-        &ledger,
+        &state.ledger,
         &certificate.order.recovery.lock_id,
         &certificate_digest,
     ) {
-        fastpay_apply_response(&options, &committee, validator_id, signer, domain, existing)?
+        let response =
+            fastpay_apply_response(&options, &committee, validator_id, signer, domain, existing)?;
+        if let Some(cache_key) = state.cache_key {
+            store_cached_fastpay_state(CachedFastPayState {
+                key: cache_key,
+                ledger: state.ledger,
+                genesis: state.genesis,
+                pending_unanchored_count: state.pending_unanchored_count,
+                fee_v1_active: state.fee_v1_active,
+            });
+        }
+        response
     } else {
-        ensure_fastpay_unanchored_capacity(&store, &ledger)?;
+        ensure_fastpay_unanchored_count(state.pending_unanchored_count)?;
         let validator_pks = committee.validator_public_keys();
         let context = postfiat_execution::FastPayRecoveryVerificationContext {
             validator_public_keys: &validator_pks,
@@ -1048,17 +1319,15 @@ pub fn owned_apply_v3(
             policy: &policy,
             quorum: committee.quorum,
         };
-        let mut next_ledger = ledger.clone();
-        let fee_v1_active = store
-            .read_governance()?
-            .fastpay_fee_v1_activation_height()
-            .is_some_and(|activation| activation > 0 && height >= activation);
+        let mut next_ledger = std::sync::Arc::unwrap_or_clone(state.ledger);
+        let prior_objects_opt =
+            prior_objects_for_fastpay_inputs(&next_ledger, &certificate.order.inputs).ok();
         postfiat_execution::apply_owned_transfer_certificate_v3_with_fee_v1(
             &mut next_ledger,
             &certificate,
             context,
             height,
-            fee_v1_active,
+            state.fee_v1_active,
         )
         .map_err(|error| {
             io::Error::other(format_fastpay_owned_transfer_error(
@@ -1066,7 +1335,8 @@ pub fn owned_apply_v3(
                 error,
             ))
         })?;
-        let prior_objects = prior_objects_for_fastpay_inputs(&ledger, &certificate.order.inputs)?;
+        let prior_objects = prior_objects_opt
+            .ok_or_else(|| fastpay_invalid_data("FastPay speculative input is absent"))?;
         let fence = next_ledger
             .fastpay_version_fences
             .last()
@@ -1075,7 +1345,7 @@ pub fn owned_apply_v3(
         // Construct and verify the response before any durable writes.
         let response =
             fastpay_apply_response(&options, &committee, validator_id, signer, domain, &fence)?;
-        retain_fastpay_speculative_effect(
+        let new_journal_hash = retain_fastpay_speculative_effect(
             &store,
             &next_ledger,
             FastPaySpeculativeEffectV1 {
@@ -1087,6 +1357,15 @@ pub fn owned_apply_v3(
         )?;
         if !store.transactional_storage_active()? {
             store.write_ledger(&next_ledger)?;
+        } else if let Some(mut cache_key) = state.cache_key {
+            cache_key.journal_bytes_hash = new_journal_hash;
+            store_cached_fastpay_state(CachedFastPayState {
+                key: cache_key,
+                ledger: std::sync::Arc::new(next_ledger),
+                genesis: state.genesis,
+                pending_unanchored_count: state.pending_unanchored_count.saturating_add(1),
+                fee_v1_active: state.fee_v1_active,
+            });
         }
         response
     };
@@ -1111,10 +1390,11 @@ pub fn owned_unwrap_apply_v3(
         })?;
     let store = NodeStore::new(&options.data_dir);
     let _mutation_lock = store.lock_ordered_commit()?;
-    let ledger = read_fastpay_ledger(&store)?;
-    let height = fastpay_height(&store)?;
+    let _db_lease = store.transactional_store_lease()?;
+    let state = load_fastpay_state(&store, true)?;
+    let height = state.height;
     let committee = fastpay_recovery_committee(
-        &ledger,
+        &state.ledger,
         certificate.order.recovery.committee_epoch,
         &certificate.order.domain.registry_id,
     )?;
@@ -1122,16 +1402,27 @@ pub fn owned_unwrap_apply_v3(
     if signer {
         local_fastpay_signer_public_key(&options.data_dir, &committee, validator_id)?;
     }
-    let domain = fastpay_domain_for_committee(&options.data_dir, &committee)?;
-    let policy = fastpay_recovery_policy(&ledger)?;
+    let domain = fastpay_domain_for_committee_with_genesis(&state.genesis, &committee)?;
+    let policy = fastpay_recovery_policy(&state.ledger)?;
     let response = if let Some(existing) = matching_confirmed_fence(
-        &ledger,
+        &state.ledger,
         &certificate.order.recovery.lock_id,
         &certificate_digest,
     ) {
-        fastpay_apply_response(&options, &committee, validator_id, signer, domain, existing)?
+        let response =
+            fastpay_apply_response(&options, &committee, validator_id, signer, domain, existing)?;
+        if let Some(cache_key) = state.cache_key {
+            store_cached_fastpay_state(CachedFastPayState {
+                key: cache_key,
+                ledger: state.ledger,
+                genesis: state.genesis,
+                pending_unanchored_count: state.pending_unanchored_count,
+                fee_v1_active: state.fee_v1_active,
+            });
+        }
+        response
     } else {
-        ensure_fastpay_unanchored_capacity(&store, &ledger)?;
+        ensure_fastpay_unanchored_count(state.pending_unanchored_count)?;
         let validator_pks = committee.validator_public_keys();
         let context = postfiat_execution::FastPayRecoveryVerificationContext {
             validator_public_keys: &validator_pks,
@@ -1140,17 +1431,16 @@ pub fn owned_unwrap_apply_v3(
             policy: &policy,
             quorum: committee.quorum,
         };
-        let mut next_ledger = ledger.clone();
-        let fee_v1_active = store
-            .read_governance()?
-            .fastpay_fee_v1_activation_height()
-            .is_some_and(|activation| activation > 0 && height >= activation);
+        let mut next_ledger = std::sync::Arc::unwrap_or_clone(state.ledger);
+        let prior_objects_opt =
+            prior_objects_for_fastpay_inputs(&next_ledger, &certificate.order.inputs).ok();
+        let prior_unwrap_account = next_ledger.account(&certificate.order.to_address).cloned();
         postfiat_execution::apply_owned_unwrap_certificate_v3_with_fee_v1(
             &mut next_ledger,
             &certificate,
             context,
             height,
-            fee_v1_active,
+            state.fee_v1_active,
         )
         .map_err(|error| {
             io::Error::other(format_fastpay_owned_transfer_error(
@@ -1158,8 +1448,8 @@ pub fn owned_unwrap_apply_v3(
                 error,
             ))
         })?;
-        let prior_objects = prior_objects_for_fastpay_inputs(&ledger, &certificate.order.inputs)?;
-        let prior_unwrap_account = ledger.account(&certificate.order.to_address).cloned();
+        let prior_objects = prior_objects_opt
+            .ok_or_else(|| fastpay_invalid_data("FastPay speculative input is absent"))?;
         let fence = next_ledger
             .fastpay_version_fences
             .last()
@@ -1168,7 +1458,7 @@ pub fn owned_unwrap_apply_v3(
         // Construct and verify the response before any durable writes.
         let response =
             fastpay_apply_response(&options, &committee, validator_id, signer, domain, &fence)?;
-        retain_fastpay_speculative_effect(
+        let new_journal_hash = retain_fastpay_speculative_effect(
             &store,
             &next_ledger,
             FastPaySpeculativeEffectV1 {
@@ -1180,6 +1470,15 @@ pub fn owned_unwrap_apply_v3(
         )?;
         if !store.transactional_storage_active()? {
             store.write_ledger(&next_ledger)?;
+        } else if let Some(mut cache_key) = state.cache_key {
+            cache_key.journal_bytes_hash = new_journal_hash;
+            store_cached_fastpay_state(CachedFastPayState {
+                key: cache_key,
+                ledger: std::sync::Arc::new(next_ledger),
+                genesis: state.genesis,
+                pending_unanchored_count: state.pending_unanchored_count.saturating_add(1),
+                fee_v1_active: state.fee_v1_active,
+            });
         }
         response
     };

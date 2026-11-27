@@ -2825,6 +2825,7 @@ pub(super) fn apply_ordered_commit_journal_timed(
     if let Some(ledger) = journal.ledger.as_ref() {
         let stage_start = std::time::Instant::now();
         store.write_ledger(ledger)?;
+        crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(store.data_dir());
         timings.write_ledger_ms = apply_batch_elapsed_ms(stage_start);
     }
     if let Some(governance) = journal.governance.as_ref() {
@@ -2981,6 +2982,7 @@ pub(super) fn apply_ordered_commit_delta_journal_timed(
     if let Some(ledger) = journal.ledger.as_ref() {
         let stage_start = std::time::Instant::now();
         store.write_ledger(ledger)?;
+        crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(store.data_dir());
         timings.write_ledger_ms = apply_batch_elapsed_ms(stage_start);
     }
     if let Some(governance) = journal.governance.as_ref() {

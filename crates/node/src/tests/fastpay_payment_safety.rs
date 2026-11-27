@@ -3505,4 +3505,138 @@ fn assert_same_fastpay_ack_effect(left: &str, right: &str) {
     assert_eq!(left, right);
 }
 
+#[test]
+fn fastpay_v3_transactional_apply_avoids_full_block_scan_and_invalidates_cache() {
+    let (root, dirs, owner) = active_fastpay_fixture();
+    let cert1 = active_fastpay_transfer(&dirs, &owner);
+    let cert1_json = serde_json::to_string(&cert1).unwrap();
+    for (index, dir) in dirs.iter().take(5).enumerate() {
+        let store = NodeStore::new(dir);
+        let tx_store = store.transactional_store().unwrap();
+        let scans_before = tx_store.work_counters().full_history_scans;
+        owned_apply_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &cert1_json,
+            &format!("validator-{index}"),
+        )
+        .unwrap();
+        let scans_after = tx_store.work_counters().full_history_scans;
+        assert_eq!(
+            scans_after, scans_before,
+            "transactional owned_apply_v3 must not scan full block history"
+        );
+    }
+
+    // Chain a second transfer spending the output created by cert1 (hits in-process cache).
+    let recip1 = ml_dsa_65_keygen_from_seed(&[81; 32]);
+    let recip2 = ml_dsa_65_keygen_from_seed(&[82; 32]);
+    let out1 = postfiat_execution::owned_transfer_output_objects(
+        &cert1.owner_pubkey_hex,
+        cert1.order.nonce,
+        &cert1.order.outputs,
+    );
+    let mut order2 = postfiat_types::OwnedTransferOrderV3 {
+        domain: cert1.order.domain.clone(),
+        recovery: postfiat_types::FastPayOrderRecoveryV1 {
+            schema: postfiat_types::FASTPAY_ORDER_RECOVERY_SCHEMA_V1.into(),
+            committee_epoch: cert1.order.recovery.committee_epoch,
+            valid_from_height: cert1.order.recovery.valid_from_height,
+            expires_at_height: cert1.order.recovery.expires_at_height,
+            recovery_closes_at_height: cert1.order.recovery.recovery_closes_at_height,
+            lock_id: String::new(),
+        },
+        inputs: vec![postfiat_types::OwnedObjectRef {
+            id: out1[0].id.clone(),
+            version: out1[0].version,
+        }],
+        outputs: vec![postfiat_types::OwnedOutputSpec {
+            owner_pubkey_hex: bytes_to_hex(&recip2.public_key),
+            value: 98,
+            asset: "PFT".into(),
+        }],
+        fee: 1,
+        nonce: 43,
+        memos: Vec::new(),
+    };
+    order2.recovery.lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&order2);
+    let signed2 = postfiat_types::SignedOwnedTransferOrderV3 {
+        owner_pubkey_hex: bytes_to_hex(&recip1.public_key),
+        owner_signature_hex: bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &recip1.private_key,
+                &postfiat_execution::owned_transfer_v3_signing_bytes(&order2),
+                postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
+            )
+            .unwrap(),
+        ),
+        order: order2.clone(),
+    };
+    let signed2_json = serde_json::to_string(&signed2).unwrap();
+    let votes2: Vec<postfiat_types::OwnedTransferVote> = dirs
+        .iter()
+        .take(5)
+        .enumerate()
+        .map(|(i, dir)| {
+            serde_json::from_str(
+                &owned_sign_v3(
+                    NodeOptions {
+                        data_dir: dir.clone(),
+                    },
+                    &signed2_json,
+                    &format!("validator-{i}"),
+                )
+                .unwrap(),
+            )
+            .unwrap()
+        })
+        .collect();
+    let cert2 = postfiat_types::OwnedTransferCertificateV3 {
+        order: order2,
+        owner_pubkey_hex: signed2.owner_pubkey_hex,
+        owner_signature_hex: signed2.owner_signature_hex,
+        votes: votes2,
+    };
+    let cert2_json = serde_json::to_string(&cert2).unwrap();
+    for (index, dir) in dirs.iter().take(5).enumerate() {
+        owned_apply_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &cert2_json,
+            &format!("validator-{index}"),
+        )
+        .unwrap();
+    }
+    let out2 = postfiat_execution::owned_transfer_output_objects(
+        &cert2.owner_pubkey_hex,
+        cert2.order.nonce,
+        &cert2.order.outputs,
+    );
+    let final_objects = read_fastpay_ledger(&NodeStore::new(&dirs[0]))
+        .unwrap()
+        .owned_objects;
+    assert_eq!(final_objects, out2);
+
+    // Corrupting the speculative journal externally must immediately bust the cache.
+    std::fs::write(
+        dirs[0].join(FASTPAY_SPECULATIVE_JOURNAL_FILE),
+        b"{\"schema\":\"corrupted\"}\n",
+    )
+    .unwrap();
+    assert!(
+        owned_sign_v3(
+            NodeOptions {
+                data_dir: dirs[0].clone(),
+            },
+            &signed2_json,
+            "validator-0",
+        )
+        .is_err(),
+        "corrupted journal must invalidate the in-process FastPay cache"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 include!("fastpay_fence_status_tests.rs");

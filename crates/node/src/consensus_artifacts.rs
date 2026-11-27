@@ -4691,6 +4691,7 @@ pub fn owned_apply_report(options: NodeOptions, cert_json: &str) -> io::Result<O
         )
     })?;
     store.write_ledger(&ledger)?;
+    crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(store.data_dir());
     let cert_hash = postfiat_crypto_provider::bytes_to_hex(&postfiat_crypto_provider::hash_bytes(
         "postfiat.owned-cert-hash.v2",
         cert_json.as_bytes(),
@@ -4761,6 +4762,7 @@ pub fn owned_unwrap_apply_report(
         )
     })?;
     store.write_ledger(&ledger)?;
+    crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(store.data_dir());
     let cert_hash = postfiat_crypto_provider::bytes_to_hex(&postfiat_crypto_provider::hash_bytes(
         "postfiat.owned-unwrap-cert-hash.v2",
         cert_json.as_bytes(),
