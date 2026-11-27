@@ -136,6 +136,8 @@ message ProtocolSnapshot {
   string chain_id = 3;
   // Single finalized L1 block height to which all chain/validator/bridge/NAVCoin reads are pinned.
   uint64 finalized_block_height = 4;
+  // 48-byte SHA3-384 hash of the block at finalized_block_height: the raw bytes of its 96-lowercase-hex
+  // BlockHeader.block_hash.
   bytes finalized_block_hash = 5;
   uint64 captured_at_unix_ms = 6;
   uint32 active_validator_count = 7;
