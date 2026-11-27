@@ -556,6 +556,12 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
         .with_fastpay_fee_v1_activation_height(governance.fastpay_fee_v1_activation_height())
         .with_nft_scaling_v1_activation_height(governance.nft_scaling_v1_activation_height())
         .with_asset_gate_v1_activation_height(governance.asset_gate_v1_activation_height())
+        .with_hive_identity_v1_activation_height(governance.hive_identity_v1_activation_height())
+        .with_hive_identity_classical_proof_kill_switch(
+            governance.hive_identity_classical_proof_kill_switch(),
+        )
+        .with_nav_fee_v1_activation_height(governance.nav_fee_v1_activation_height())
+        .with_credential_did_v1_activation_height(governance.credential_did_v1_activation_height())
 }
 
 pub(super) fn asset_execution_compatibility_with_chain_activation(
@@ -593,6 +599,12 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
         .with_fastpay_fee_v1_activation_height(governance.fastpay_fee_v1_activation_height())
         .with_nft_scaling_v1_activation_height(governance.nft_scaling_v1_activation_height())
         .with_asset_gate_v1_activation_height(governance.asset_gate_v1_activation_height())
+        .with_hive_identity_v1_activation_height(governance.hive_identity_v1_activation_height())
+        .with_hive_identity_classical_proof_kill_switch(
+            governance.hive_identity_classical_proof_kill_switch(),
+        )
+        .with_nav_fee_v1_activation_height(governance.nav_fee_v1_activation_height())
+        .with_credential_did_v1_activation_height(governance.credential_did_v1_activation_height())
 }
 
 pub(super) fn ensure_atomic_swap_batch_allowed(
@@ -2606,6 +2618,21 @@ pub(super) fn governance_amendment_lifecycle_rejection(
             "invalid_asset_gate_v1_activation_height",
             "asset-gate-v1",
         ),
+        (
+            postfiat_types::GOVERNANCE_KIND_HIVE_IDENTITY_V1_ACTIVATION_HEIGHT,
+            "invalid_hive_identity_v1_activation_height",
+            "hive-identity-v1",
+        ),
+        (
+            postfiat_types::GOVERNANCE_KIND_NAV_FEE_V1_ACTIVATION_HEIGHT,
+            "invalid_nav_fee_v1_activation_height",
+            "nav-fee-v1",
+        ),
+        (
+            postfiat_types::GOVERNANCE_KIND_CREDENTIAL_DID_V1_ACTIVATION_HEIGHT,
+            "invalid_credential_did_v1_activation_height",
+            "credential-did-v1",
+        ),
     ] {
         if amendment.kind == kind && u64::from(amendment.value) <= block_height {
             return Some((
@@ -2615,6 +2642,16 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 ),
             ));
         }
+    }
+    if amendment.kind == postfiat_types::GOVERNANCE_KIND_HIVE_IDENTITY_CLASSICAL_PROOF_KILL_SWITCH
+        && amendment.value > 0
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_hive_identity_classical_proof_kill_switch",
+            "hive-identity classical-proof kill-switch activation height must be 0 or strictly after the amendment block"
+                .to_string(),
+        ));
     }
     if amendment.kind == GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT
         && u64::from(amendment.value) <= block_height
@@ -2810,6 +2847,22 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .unwrap_or(0),
         postfiat_types::GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT => governance
             .asset_gate_v1_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        postfiat_types::GOVERNANCE_KIND_HIVE_IDENTITY_V1_ACTIVATION_HEIGHT => governance
+            .hive_identity_v1_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        postfiat_types::GOVERNANCE_KIND_HIVE_IDENTITY_CLASSICAL_PROOF_KILL_SWITCH => governance
+            .hive_identity_classical_proof_kill_switch()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        postfiat_types::GOVERNANCE_KIND_NAV_FEE_V1_ACTIVATION_HEIGHT => governance
+            .nav_fee_v1_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        postfiat_types::GOVERNANCE_KIND_CREDENTIAL_DID_V1_ACTIVATION_HEIGHT => governance
+            .credential_did_v1_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
         kind if postfiat_types::is_pq_rehearsal_kind(kind) => governance

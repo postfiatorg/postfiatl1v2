@@ -399,6 +399,7 @@
                 requires_authorization: false,
                 freeze_enabled: false,
                 clawback_enabled: false,
+                access_policy: None,
             },
             AssetDefinition {
                 asset_id: legacy_ledger.settlement_asset_id.clone(),
@@ -414,6 +415,7 @@
                 requires_authorization: false,
                 freeze_enabled: false,
                 clawback_enabled: false,
+                access_policy: None,
             },
         ]);
         ledger

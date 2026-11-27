@@ -66,6 +66,18 @@ pub const GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT: &str =
     "nft_scaling_v1_activation_height";
 pub const GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT: &str =
     "asset_gate_v1_activation_height";
+/// Train B governance activation gates (latest committed amendment wins).
+pub const GOVERNANCE_KIND_HIVE_IDENTITY_V1_ACTIVATION_HEIGHT: &str =
+    "hive_identity_v1_activation_height";
+/// Classical proof kill-switch for Pillar 6 (BIP-340 Nostr & old-chain secp256k1 ECDSA).
+/// Unset or 0 = classical proofs enabled. Positive height H = classical proofs disabled at >= H,
+/// while pure ML-DSA-65 `update`, `rotate_account`, PQ `link`/`unlink`, and `revoke` keep working.
+pub const GOVERNANCE_KIND_HIVE_IDENTITY_CLASSICAL_PROOF_KILL_SWITCH: &str =
+    "hive_identity_classical_proof_kill_switch";
+pub const GOVERNANCE_KIND_NAV_FEE_V1_ACTIVATION_HEIGHT: &str =
+    "nav_fee_v1_activation_height";
+pub const GOVERNANCE_KIND_CREDENTIAL_DID_V1_ACTIVATION_HEIGHT: &str =
+    "credential_did_v1_activation_height";
 pub const GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT: &str =
     "replicated_state_v2_activation_height";
 pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
@@ -1870,6 +1882,27 @@ impl GovernanceState {
     /// Execution gate for Train A unified `asset_gate(...)` & bridge holds; latest amendment wins.
     pub fn asset_gate_v1_activation_height(&self) -> Option<u64> {
         self.latest_amendment_value(GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT)
+    }
+
+    /// Execution gate for Train B Pillar 6 native `identity_set` & 2-of-3 registrar; latest amendment wins.
+    pub fn hive_identity_v1_activation_height(&self) -> Option<u64> {
+        self.latest_amendment_value(GOVERNANCE_KIND_HIVE_IDENTITY_V1_ACTIVATION_HEIGHT)
+    }
+
+    /// Classical proof kill-switch for Pillar 6 (BIP-340 / old-chain ECDSA); 0 or unset = enabled.
+    pub fn hive_identity_classical_proof_kill_switch(&self) -> Option<u64> {
+        self.latest_amendment_value(GOVERNANCE_KIND_HIVE_IDENTITY_CLASSICAL_PROOF_KILL_SWITCH)
+            .filter(|height| *height > 0)
+    }
+
+    /// Execution gate for Train B Pillar 7 optional `NavFeeScheduleV1` & universal NAV floor; latest amendment wins.
+    pub fn nav_fee_v1_activation_height(&self) -> Option<u64> {
+        self.latest_amendment_value(GOVERNANCE_KIND_NAV_FEE_V1_ACTIVATION_HEIGHT)
+    }
+
+    /// Execution gate for Train B Pillar 8 M2+M3 permissionless DEX/escrow, Issuer Registry, Credentials & `did:pftl`.
+    pub fn credential_did_v1_activation_height(&self) -> Option<u64> {
+        self.latest_amendment_value(GOVERNANCE_KIND_CREDENTIAL_DID_V1_ACTIVATION_HEIGHT)
     }
 
     fn latest_amendment_value(&self, kind: &str) -> Option<u64> {

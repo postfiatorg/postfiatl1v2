@@ -614,6 +614,7 @@ mod external_lane_export_cli;
 mod fastpay_committee_prepare;
 mod fastpay_recovery_node;
 mod fastswap_control_signing;
+mod train_b_queries;
 #[cfg(test)]
 use consensus_artifacts::write_signed_transfer_file;
 pub use consensus_artifacts::*;
@@ -676,6 +677,7 @@ pub use external_lane_export_cli::*;
 pub use fastpay_committee_prepare::*;
 pub use fastpay_recovery_node::*;
 pub use fastswap_control_signing::*;
+pub use train_b_queries::*;
 
 #[cfg(test)]
 include!("lib_tests.rs");

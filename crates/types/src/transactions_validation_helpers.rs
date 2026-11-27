@@ -9,6 +9,21 @@ fn validate_chain_id(chain_id: &str) -> Result<(), String> {
     validate_text_field("genesis chain_id", chain_id)
 }
 
+fn validate_hex_field(field: &str, value: &str) -> Result<(), String> {
+    if value.is_empty() || !value.len().is_multiple_of(2) || value.len() > 16_384 {
+        return Err(format!(
+            "{field} must be nonempty even-length lowercase hex (<= 16384 chars)"
+        ));
+    }
+    if !value
+        .bytes()
+        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err(format!("{field} must contain only lowercase hex characters"));
+    }
+    Ok(())
+}
+
 fn validate_text_field(field: &str, value: &str) -> Result<(), String> {
     if value.trim().is_empty() {
         return Err(format!("{field} must be nonempty"));

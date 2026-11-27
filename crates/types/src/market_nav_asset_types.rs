@@ -3884,6 +3884,37 @@ pub struct LedgerState {
     /// Revoked fast-lane holder permits keyed by `permit_id_hex` -> `revoked_at_height`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub revoked_fast_lane_holder_permits: BTreeMap<String, u64>,
+    // --- Train B Pillar 6: Native Hive Identity & 2-of-3 Handle Registrar ---
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub identities_by_account: BTreeMap<String, IdentityRecordV1>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub identity_history_by_account: BTreeMap<String, Vec<IdentityHistoryEventV1>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub identity_account_by_nostr: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub compromised_nostr_pubkeys: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub identity_account_by_handle: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub retired_handle_holdback: BTreeMap<String, u64>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub identity_validator_bindings: BTreeMap<String, ValidatorIdentityBindingV1>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub identity_account_by_old_chain: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub handle_namespace_registrars: BTreeMap<String, HandleNamespaceRegistrarV1>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub handle_reservations: BTreeMap<String, HandleReservationV1>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pending_handle_reassignments: BTreeMap<String, PendingHandleReassignmentV1>,
+    // --- Train B Pillar 7: Deterministic NAV Fee Accruals ---
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub nav_fee_accruals: BTreeMap<String, NavFeeAccrualV1>,
+    // --- Train B Pillar 8: Issuer Registry & Zero-PII Credentials ---
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub credential_issuers: BTreeMap<String, CredentialIssuerV1>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub credentials: BTreeMap<String, CredentialRecordV1>,
 }
 
 impl LedgerState {
@@ -4061,6 +4092,20 @@ impl LedgerState {
             nft_collection_policies: BTreeMap::new(),
             asset_bridge_holds: BTreeMap::new(),
             revoked_fast_lane_holder_permits: BTreeMap::new(),
+            identities_by_account: BTreeMap::new(),
+            identity_history_by_account: BTreeMap::new(),
+            identity_account_by_nostr: BTreeMap::new(),
+            compromised_nostr_pubkeys: BTreeSet::new(),
+            identity_account_by_handle: BTreeMap::new(),
+            retired_handle_holdback: BTreeMap::new(),
+            identity_validator_bindings: BTreeMap::new(),
+            identity_account_by_old_chain: BTreeMap::new(),
+            handle_namespace_registrars: BTreeMap::new(),
+            handle_reservations: BTreeMap::new(),
+            pending_handle_reassignments: BTreeMap::new(),
+            nav_fee_accruals: BTreeMap::new(),
+            credential_issuers: BTreeMap::new(),
+            credentials: BTreeMap::new(),
         }
     }
 
@@ -4123,6 +4168,20 @@ impl LedgerState {
             nft_collection_policies: BTreeMap::new(),
             asset_bridge_holds: BTreeMap::new(),
             revoked_fast_lane_holder_permits: BTreeMap::new(),
+            identities_by_account: BTreeMap::new(),
+            identity_history_by_account: BTreeMap::new(),
+            identity_account_by_nostr: BTreeMap::new(),
+            compromised_nostr_pubkeys: BTreeSet::new(),
+            identity_account_by_handle: BTreeMap::new(),
+            retired_handle_holdback: BTreeMap::new(),
+            identity_validator_bindings: BTreeMap::new(),
+            identity_account_by_old_chain: BTreeMap::new(),
+            handle_namespace_registrars: BTreeMap::new(),
+            handle_reservations: BTreeMap::new(),
+            pending_handle_reassignments: BTreeMap::new(),
+            nav_fee_accruals: BTreeMap::new(),
+            credential_issuers: BTreeMap::new(),
+            credentials: BTreeMap::new(),
         }
     }
 
@@ -4186,6 +4245,20 @@ impl LedgerState {
             nft_collection_policies: BTreeMap::new(),
             asset_bridge_holds: BTreeMap::new(),
             revoked_fast_lane_holder_permits: BTreeMap::new(),
+            identities_by_account: BTreeMap::new(),
+            identity_history_by_account: BTreeMap::new(),
+            identity_account_by_nostr: BTreeMap::new(),
+            compromised_nostr_pubkeys: BTreeSet::new(),
+            identity_account_by_handle: BTreeMap::new(),
+            retired_handle_holdback: BTreeMap::new(),
+            identity_validator_bindings: BTreeMap::new(),
+            identity_account_by_old_chain: BTreeMap::new(),
+            handle_namespace_registrars: BTreeMap::new(),
+            handle_reservations: BTreeMap::new(),
+            pending_handle_reassignments: BTreeMap::new(),
+            nav_fee_accruals: BTreeMap::new(),
+            credential_issuers: BTreeMap::new(),
+            credentials: BTreeMap::new(),
         }
     }
 
@@ -4244,6 +4317,20 @@ impl LedgerState {
             nft_collection_policies: BTreeMap::new(),
             asset_bridge_holds: BTreeMap::new(),
             revoked_fast_lane_holder_permits: BTreeMap::new(),
+            identities_by_account: BTreeMap::new(),
+            identity_history_by_account: BTreeMap::new(),
+            identity_account_by_nostr: BTreeMap::new(),
+            compromised_nostr_pubkeys: BTreeSet::new(),
+            identity_account_by_handle: BTreeMap::new(),
+            retired_handle_holdback: BTreeMap::new(),
+            identity_validator_bindings: BTreeMap::new(),
+            identity_account_by_old_chain: BTreeMap::new(),
+            handle_namespace_registrars: BTreeMap::new(),
+            handle_reservations: BTreeMap::new(),
+            pending_handle_reassignments: BTreeMap::new(),
+            nav_fee_accruals: BTreeMap::new(),
+            credential_issuers: BTreeMap::new(),
+            credentials: BTreeMap::new(),
         }
     }
 
@@ -4307,6 +4394,20 @@ impl LedgerState {
             nft_collection_policies: BTreeMap::new(),
             asset_bridge_holds: BTreeMap::new(),
             revoked_fast_lane_holder_permits: BTreeMap::new(),
+            identities_by_account: BTreeMap::new(),
+            identity_history_by_account: BTreeMap::new(),
+            identity_account_by_nostr: BTreeMap::new(),
+            compromised_nostr_pubkeys: BTreeSet::new(),
+            identity_account_by_handle: BTreeMap::new(),
+            retired_handle_holdback: BTreeMap::new(),
+            identity_validator_bindings: BTreeMap::new(),
+            identity_account_by_old_chain: BTreeMap::new(),
+            handle_namespace_registrars: BTreeMap::new(),
+            handle_reservations: BTreeMap::new(),
+            pending_handle_reassignments: BTreeMap::new(),
+            nav_fee_accruals: BTreeMap::new(),
+            credential_issuers: BTreeMap::new(),
+            credentials: BTreeMap::new(),
         }
     }
 
@@ -4365,6 +4466,20 @@ impl LedgerState {
             nft_collection_policies: BTreeMap::new(),
             asset_bridge_holds: BTreeMap::new(),
             revoked_fast_lane_holder_permits: BTreeMap::new(),
+            identities_by_account: BTreeMap::new(),
+            identity_history_by_account: BTreeMap::new(),
+            identity_account_by_nostr: BTreeMap::new(),
+            compromised_nostr_pubkeys: BTreeSet::new(),
+            identity_account_by_handle: BTreeMap::new(),
+            retired_handle_holdback: BTreeMap::new(),
+            identity_validator_bindings: BTreeMap::new(),
+            identity_account_by_old_chain: BTreeMap::new(),
+            handle_namespace_registrars: BTreeMap::new(),
+            handle_reservations: BTreeMap::new(),
+            pending_handle_reassignments: BTreeMap::new(),
+            nav_fee_accruals: BTreeMap::new(),
+            credential_issuers: BTreeMap::new(),
+            credentials: BTreeMap::new(),
         }
     }
 

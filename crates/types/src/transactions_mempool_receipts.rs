@@ -3989,6 +3989,49 @@ pub enum AssetTransactionOperation {
     BridgeHoldClaim(BridgeHoldClaimOperation),
     #[serde(rename = "bridge_hold_return")]
     BridgeHoldReturn(BridgeHoldReturnOperation),
+    // --- Train B Pillar 6: Native Hive Identity & 2-of-3 Handle Registrar ---
+    #[serde(rename = "identity_set")]
+    IdentitySet(IdentitySetOperation),
+    #[serde(rename = "identity_registrar_register")]
+    IdentityRegistrarRegister(IdentityRegistrarRegisterOperation),
+    #[serde(rename = "identity_handle_reserve")]
+    IdentityHandleReserve(IdentityHandleReserveOperation),
+    #[serde(rename = "identity_handle_reassign_propose")]
+    IdentityHandleReassignPropose(IdentityHandleReassignProposeOperation),
+    #[serde(rename = "identity_handle_reassign_execute")]
+    IdentityHandleReassignExecute(IdentityHandleReassignExecuteOperation),
+    #[serde(rename = "identity_handle_reassign_cancel")]
+    IdentityHandleReassignCancel(IdentityHandleReassignCancelOperation),
+    // --- Train B Pillar 7: Optional Deterministic NAVCoin Fee Schedule ---
+    #[serde(rename = "nav_fee_schedule_attach")]
+    NavFeeScheduleAttach(NavFeeScheduleAttachOperation),
+    #[serde(rename = "nav_fee_schedule_set")]
+    NavFeeScheduleSet(NavFeeScheduleSetOperation),
+    #[serde(rename = "nav_fee_schedule_cancel")]
+    NavFeeScheduleCancel(NavFeeScheduleCancelOperation),
+    #[serde(rename = "nav_fee_claim")]
+    NavFeeClaim(NavFeeClaimOperation),
+    // --- Train B Pillar 8: Issuer Registry, Credentials & Asset Access Policy ---
+    #[serde(rename = "issuer_register")]
+    IssuerRegister(IssuerRegisterOperation),
+    #[serde(rename = "issuer_update")]
+    IssuerUpdate(IssuerUpdateOperation),
+    #[serde(rename = "issuer_admin_transfer")]
+    IssuerAdminTransfer(IssuerAdminTransferOperation),
+    #[serde(rename = "issuer_deregister")]
+    IssuerDeregister(IssuerDeregisterOperation),
+    #[serde(rename = "credential_create")]
+    CredentialCreate(CredentialCreateOperation),
+    #[serde(rename = "credential_accept")]
+    CredentialAccept(CredentialAcceptOperation),
+    #[serde(rename = "credential_create_and_accept")]
+    CredentialCreateAndAccept(CredentialCreateAndAcceptOperation),
+    #[serde(rename = "credential_revoke")]
+    CredentialRevoke(CredentialRevokeOperation),
+    #[serde(rename = "credential_delete")]
+    CredentialDelete(CredentialDeleteOperation),
+    #[serde(rename = "asset_access_set")]
+    AssetAccessSet(AssetAccessSetOperation),
 }
 
 impl<'de> Deserialize<'de> for AssetTransactionOperation {
@@ -4178,6 +4221,50 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
             "bridge_hold_return" => {
                 decode_operation!(BridgeHoldReturnOperation, BridgeHoldReturn)
             }
+            "identity_set" => decode_operation!(IdentitySetOperation, IdentitySet),
+            "identity_registrar_register" => {
+                decode_operation!(IdentityRegistrarRegisterOperation, IdentityRegistrarRegister)
+            }
+            "identity_handle_reserve" => {
+                decode_operation!(IdentityHandleReserveOperation, IdentityHandleReserve)
+            }
+            "identity_handle_reassign_propose" => decode_operation!(
+                IdentityHandleReassignProposeOperation,
+                IdentityHandleReassignPropose
+            ),
+            "identity_handle_reassign_execute" => decode_operation!(
+                IdentityHandleReassignExecuteOperation,
+                IdentityHandleReassignExecute
+            ),
+            "identity_handle_reassign_cancel" => decode_operation!(
+                IdentityHandleReassignCancelOperation,
+                IdentityHandleReassignCancel
+            ),
+            "nav_fee_schedule_attach" => {
+                decode_operation!(NavFeeScheduleAttachOperation, NavFeeScheduleAttach)
+            }
+            "nav_fee_schedule_set" => {
+                decode_operation!(NavFeeScheduleSetOperation, NavFeeScheduleSet)
+            }
+            "nav_fee_schedule_cancel" => {
+                decode_operation!(NavFeeScheduleCancelOperation, NavFeeScheduleCancel)
+            }
+            "nav_fee_claim" => decode_operation!(NavFeeClaimOperation, NavFeeClaim),
+            "issuer_register" => decode_operation!(IssuerRegisterOperation, IssuerRegister),
+            "issuer_update" => decode_operation!(IssuerUpdateOperation, IssuerUpdate),
+            "issuer_admin_transfer" => {
+                decode_operation!(IssuerAdminTransferOperation, IssuerAdminTransfer)
+            }
+            "issuer_deregister" => decode_operation!(IssuerDeregisterOperation, IssuerDeregister),
+            "credential_create" => decode_operation!(CredentialCreateOperation, CredentialCreate),
+            "credential_accept" => decode_operation!(CredentialAcceptOperation, CredentialAccept),
+            "credential_create_and_accept" => decode_operation!(
+                CredentialCreateAndAcceptOperation,
+                CredentialCreateAndAccept
+            ),
+            "credential_revoke" => decode_operation!(CredentialRevokeOperation, CredentialRevoke),
+            "credential_delete" => decode_operation!(CredentialDeleteOperation, CredentialDelete),
+            "asset_access_set" => decode_operation!(AssetAccessSetOperation, AssetAccessSet),
             other => Err(serde::de::Error::custom(format!(
                 "unknown asset operation `{other}`"
             ))),
@@ -4267,6 +4354,32 @@ impl AssetTransactionOperation {
             Self::ExternalLaneExportV1(_) => EXTERNAL_LANE_EXPORT_TRANSACTION_KIND_V1,
             Self::BridgeHoldClaim(_) => BRIDGE_HOLD_CLAIM_TRANSACTION_KIND,
             Self::BridgeHoldReturn(_) => BRIDGE_HOLD_RETURN_TRANSACTION_KIND,
+            Self::IdentitySet(_) => IDENTITY_SET_TRANSACTION_KIND,
+            Self::IdentityRegistrarRegister(_) => IDENTITY_REGISTRAR_REGISTER_TRANSACTION_KIND,
+            Self::IdentityHandleReserve(_) => IDENTITY_HANDLE_RESERVE_TRANSACTION_KIND,
+            Self::IdentityHandleReassignPropose(_) => {
+                IDENTITY_HANDLE_REASSIGN_PROPOSE_TRANSACTION_KIND
+            }
+            Self::IdentityHandleReassignExecute(_) => {
+                IDENTITY_HANDLE_REASSIGN_EXECUTE_TRANSACTION_KIND
+            }
+            Self::IdentityHandleReassignCancel(_) => {
+                IDENTITY_HANDLE_REASSIGN_CANCEL_TRANSACTION_KIND
+            }
+            Self::NavFeeScheduleAttach(_) => NAV_FEE_SCHEDULE_ATTACH_TRANSACTION_KIND,
+            Self::NavFeeScheduleSet(_) => NAV_FEE_SCHEDULE_SET_TRANSACTION_KIND,
+            Self::NavFeeScheduleCancel(_) => NAV_FEE_SCHEDULE_CANCEL_TRANSACTION_KIND,
+            Self::NavFeeClaim(_) => NAV_FEE_CLAIM_TRANSACTION_KIND,
+            Self::IssuerRegister(_) => ISSUER_REGISTER_TRANSACTION_KIND,
+            Self::IssuerUpdate(_) => ISSUER_UPDATE_TRANSACTION_KIND,
+            Self::IssuerAdminTransfer(_) => ISSUER_ADMIN_TRANSFER_TRANSACTION_KIND,
+            Self::IssuerDeregister(_) => ISSUER_DEREGISTER_TRANSACTION_KIND,
+            Self::CredentialCreate(_) => CREDENTIAL_CREATE_TRANSACTION_KIND,
+            Self::CredentialAccept(_) => CREDENTIAL_ACCEPT_TRANSACTION_KIND,
+            Self::CredentialCreateAndAccept(_) => CREDENTIAL_CREATE_AND_ACCEPT_TRANSACTION_KIND,
+            Self::CredentialRevoke(_) => CREDENTIAL_REVOKE_TRANSACTION_KIND,
+            Self::CredentialDelete(_) => CREDENTIAL_DELETE_TRANSACTION_KIND,
+            Self::AssetAccessSet(_) => ASSET_ACCESS_SET_TRANSACTION_KIND,
         }
     }
 
@@ -4331,6 +4444,26 @@ impl AssetTransactionOperation {
             Self::ExternalLaneExportV1(operation) => operation.validate(),
             Self::BridgeHoldClaim(operation) => operation.validate(),
             Self::BridgeHoldReturn(operation) => operation.validate(),
+            Self::IdentitySet(operation) => operation.validate(),
+            Self::IdentityRegistrarRegister(operation) => operation.validate(),
+            Self::IdentityHandleReserve(operation) => operation.validate(),
+            Self::IdentityHandleReassignPropose(operation) => operation.validate(),
+            Self::IdentityHandleReassignExecute(operation) => operation.validate(),
+            Self::IdentityHandleReassignCancel(operation) => operation.validate(),
+            Self::NavFeeScheduleAttach(operation) => operation.validate(),
+            Self::NavFeeScheduleSet(operation) => operation.validate(),
+            Self::NavFeeScheduleCancel(operation) => operation.validate(),
+            Self::NavFeeClaim(operation) => operation.validate(),
+            Self::IssuerRegister(operation) => operation.validate(),
+            Self::IssuerUpdate(operation) => operation.validate(),
+            Self::IssuerAdminTransfer(operation) => operation.validate(),
+            Self::IssuerDeregister(operation) => operation.validate(),
+            Self::CredentialCreate(operation) => operation.validate(),
+            Self::CredentialAccept(operation) => operation.validate(),
+            Self::CredentialCreateAndAccept(operation) => operation.validate(),
+            Self::CredentialRevoke(operation) => operation.validate(),
+            Self::CredentialDelete(operation) => operation.validate(),
+            Self::AssetAccessSet(operation) => operation.validate(),
         }
     }
 
@@ -4417,6 +4550,33 @@ impl AssetTransactionOperation {
             Self::ExternalLaneExportV1(operation) => operation.sender == source,
             Self::BridgeHoldClaim(operation) => operation.recipient == source,
             Self::BridgeHoldReturn(operation) => operation.recipient == source,
+            Self::IdentitySet(operation) => match &operation.payload {
+                IdentitySetActionV1::Unlink {
+                    self_unlink_pubkey_hex: Some(_),
+                    self_unlink_sig_hex: Some(_),
+                    ..
+                } => true,
+                _ => operation.account == source,
+            },
+            Self::IdentityRegistrarRegister(operation) => operation.caller == source,
+            Self::IdentityHandleReserve(operation) => operation.registrar_account == source,
+            Self::IdentityHandleReassignPropose(operation) => operation.proposer == source,
+            Self::IdentityHandleReassignExecute(operation) => operation.executor == source,
+            Self::IdentityHandleReassignCancel(operation) => operation.caller == source,
+            Self::NavFeeScheduleAttach(operation) => operation.issuer == source,
+            Self::NavFeeScheduleSet(operation) => operation.issuer == source,
+            Self::NavFeeScheduleCancel(operation) => operation.issuer == source,
+            Self::NavFeeClaim(operation) => operation.recipient == source,
+            Self::IssuerRegister(operation) => operation.admin_account == source,
+            Self::IssuerUpdate(operation) => operation.admin_account == source,
+            Self::IssuerAdminTransfer(operation) => operation.caller == source,
+            Self::IssuerDeregister(operation) => operation.admin_account == source,
+            Self::CredentialCreate(operation) => operation.signing_account == source,
+            Self::CredentialAccept(operation) => operation.subject == source,
+            Self::CredentialCreateAndAccept(operation) => operation.signing_account == source,
+            Self::CredentialRevoke(operation) => operation.caller == source,
+            Self::CredentialDelete(operation) => operation.caller == source,
+            Self::AssetAccessSet(operation) => operation.issuer == source,
         }
     }
 
@@ -4574,6 +4734,56 @@ impl AssetTransactionOperation {
             Self::BridgeHoldReturn(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
+            Self::IdentitySet(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
+            Self::IdentityRegistrarRegister(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::IdentityHandleReserve(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::IdentityHandleReassignPropose(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::IdentityHandleReassignExecute(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::IdentityHandleReassignCancel(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::NavFeeScheduleAttach(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::NavFeeScheduleSet(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::NavFeeScheduleCancel(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::NavFeeClaim(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
+            Self::IssuerRegister(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
+            Self::IssuerUpdate(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
+            Self::IssuerAdminTransfer(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::IssuerDeregister(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::CredentialCreate(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::CredentialAccept(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::CredentialCreateAndAccept(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::CredentialRevoke(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::CredentialDelete(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::AssetAccessSet(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
         }
         bytes
     }

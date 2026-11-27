@@ -590,7 +590,8 @@ fn account_set_sets_and_clears_require_memo_only_after_activation() {
     assert!(!serde_json::to_string(sender).unwrap().contains("flags"));
 
     // Malformed masks are envelope errors (never charged).
-    for (set_flags, clear_flags) in [(0, 0), (0x2, 0), (0, 0x8000_0000), (flag, flag)] {
+    // Bit 0x1 is ACCOUNT_FLAG_REQUIRE_MEMO; bit 0x2 is ACCOUNT_FLAG_REFUSE_UNSOLICITED_ASSETS (Train B).
+    for (set_flags, clear_flags) in [(0, 0), (0x4, 0), (0, 0x8000_0000), (flag, flag)] {
         let operation = postfiat_types::AccountSetOperation {
             account: fixture.sender.clone(),
             set_flags,

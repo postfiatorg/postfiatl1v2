@@ -1724,6 +1724,322 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "identity_info" => {
+            let account = flag_value(flags, "--account").ok_or("missing --account")?;
+            let report = identity_info(IdentityInfoOptions {
+                data_dir,
+                account: account.to_string(),
+            })
+            .map_err(|error| format!("rpc identity_info failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "identity_info",
+                    account.to_string(),
+                    "identity queried",
+                )],
+            )
+        }
+        "identity_by_nostr" => {
+            let nostr_pubkey =
+                flag_value(flags, "--nostr-pubkey").ok_or("missing --nostr-pubkey")?;
+            let report = identity_by_nostr(IdentityByNostrOptions {
+                data_dir,
+                nostr_pubkey: nostr_pubkey.to_string(),
+            })
+            .map_err(|error| format!("rpc identity_by_nostr failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "identity_by_nostr",
+                    nostr_pubkey.to_string(),
+                    "identity queried",
+                )],
+            )
+        }
+        "identity_by_handle" => {
+            let handle = flag_value(flags, "--handle").ok_or("missing --handle")?;
+            let namespace = flag_value(flags, "--namespace").map(ToString::to_string);
+            let target = match &namespace {
+                Some(ns) => format!("{handle}@{ns}"),
+                None => handle.to_string(),
+            };
+            let report = identity_by_handle(IdentityByHandleOptions {
+                data_dir,
+                handle: handle.to_string(),
+                namespace,
+            })
+            .map_err(|error| format!("rpc identity_by_handle failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "identity_by_handle",
+                    target,
+                    "identity queried",
+                )],
+            )
+        }
+        "identity_by_link" => {
+            let link_kind = flag_value(flags, "--link-kind").ok_or("missing --link-kind")?;
+            let target = flag_value(flags, "--target").ok_or("missing --target")?;
+            let report = identity_by_link(IdentityByLinkOptions {
+                data_dir,
+                link_kind: link_kind.to_string(),
+                target: target.to_string(),
+            })
+            .map_err(|error| format!("rpc identity_by_link failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "identity_by_link",
+                    format!("{link_kind}:{target}"),
+                    "identity queried",
+                )],
+            )
+        }
+        "identity_resolve" => {
+            let account = flag_value(flags, "--account").map(ToString::to_string);
+            let nostr_pubkey = flag_value(flags, "--nostr-pubkey").map(ToString::to_string);
+            let handle = flag_value(flags, "--handle").map(ToString::to_string);
+            let namespace = flag_value(flags, "--namespace").map(ToString::to_string);
+            let link_kind = flag_value(flags, "--link-kind").map(ToString::to_string);
+            let target = flag_value(flags, "--target").map(ToString::to_string);
+            let event_target = account
+                .clone()
+                .or_else(|| nostr_pubkey.clone())
+                .or_else(|| handle.clone())
+                .or_else(|| target.clone())
+                .unwrap_or_else(|| "unknown".to_string());
+            let report = identity_resolve(IdentityResolveOptions {
+                data_dir,
+                account,
+                nostr_pubkey,
+                handle,
+                namespace,
+                link_kind,
+                target,
+            })
+            .map_err(|error| format!("rpc identity_resolve failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "identity_resolve",
+                    event_target,
+                    "identity resolved",
+                )],
+            )
+        }
+        "identity_history" => {
+            let account = flag_value(flags, "--account").ok_or("missing --account")?;
+            let limit = flag_value(flags, "--limit")
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "--limit must be a usize".to_string())
+                })
+                .transpose()?;
+            let report = identity_history(IdentityHistoryOptions {
+                data_dir,
+                account: account.to_string(),
+                limit,
+            })
+            .map_err(|error| format!("rpc identity_history failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "identity_history",
+                    report.account.clone(),
+                    "identity history queried",
+                )],
+            )
+        }
+        "nav_fee_schedule" => {
+            let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
+            let report = nav_fee_schedule(NavFeeScheduleOptions {
+                data_dir,
+                asset_id: asset_id.to_string(),
+            })
+            .map_err(|error| format!("rpc nav_fee_schedule failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "nav_fee_schedule",
+                    report.asset_id.clone(),
+                    "nav fee schedule queried",
+                )],
+            )
+        }
+        "nav_fee_history" => {
+            let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
+            let from_epoch = flag_value(flags, "--from-epoch")
+                .map(|value| {
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| "--from-epoch must be a u64".to_string())
+                })
+                .transpose()?;
+            let limit = flag_value(flags, "--limit")
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "--limit must be a usize".to_string())
+                })
+                .transpose()?;
+            let report = nav_fee_history(NavFeeHistoryOptions {
+                data_dir,
+                asset_id: asset_id.to_string(),
+                from_epoch,
+                cursor: flag_value(flags, "--cursor").map(ToString::to_string),
+                limit,
+            })
+            .map_err(|error| format!("rpc nav_fee_history failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "nav_fee_history",
+                    report.asset_id.clone(),
+                    "nav fee history queried",
+                )],
+            )
+        }
+        "did_resolve" => {
+            let report = did_resolve(DidResolveOptions {
+                data_dir,
+                did: flag_value(flags, "--did").map(ToString::to_string),
+                account: flag_value(flags, "--account").map(ToString::to_string),
+            })
+            .map_err(|error| format!("rpc did_resolve failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "did_resolve",
+                    report.did_document.id.clone(),
+                    "DID resolved",
+                )],
+            )
+        }
+        "issuer_info" => {
+            let issuer_id = flag_value(flags, "--issuer-id").ok_or("missing --issuer-id")?;
+            let report = issuer_info(IssuerInfoOptions {
+                data_dir,
+                issuer_id: issuer_id.to_string(),
+            })
+            .map_err(|error| format!("rpc issuer_info failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "issuer_info",
+                    report.issuer_id.clone(),
+                    "issuer queried",
+                )],
+            )
+        }
+        "issuer_list" => {
+            let limit = flag_value(flags, "--limit")
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "--limit must be a usize".to_string())
+                })
+                .transpose()?;
+            let report = issuer_list(IssuerListOptions {
+                data_dir,
+                domain: flag_value(flags, "--domain").map(ToString::to_string),
+                cursor: flag_value(flags, "--cursor").map(ToString::to_string),
+                limit,
+            })
+            .map_err(|error| format!("rpc issuer_list failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "issuer_list",
+                    report.chain_id.clone(),
+                    "issuers queried",
+                )],
+            )
+        }
+        "credential_info" => {
+            let report = credential_info(CredentialInfoOptions {
+                data_dir,
+                credential_id: flag_value(flags, "--credential-id").map(ToString::to_string),
+                subject: flag_value(flags, "--subject").map(ToString::to_string),
+                issuer_id: flag_value(flags, "--issuer-id").map(ToString::to_string),
+                credential_type: flag_value(flags, "--credential-type").map(ToString::to_string),
+            })
+            .map_err(|error| format!("rpc credential_info failed: {error}"))?;
+            let target = report
+                .credential
+                .as_ref()
+                .map(|c| c.credential_id.clone())
+                .unwrap_or_else(|| "not_found".to_string());
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "credential_info",
+                    target,
+                    "credential queried",
+                )],
+            )
+        }
+        "account_credentials" => {
+            let account = flag_value(flags, "--account").ok_or("missing --account")?;
+            let limit = flag_value(flags, "--limit")
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "--limit must be a usize".to_string())
+                })
+                .transpose()?;
+            let include_expired = flags.iter().any(|f| f == "--include-expired")
+                && flag_value(flags, "--include-expired").is_none_or(|v| v != "false");
+            let report = account_credentials(AccountCredentialsOptions {
+                data_dir,
+                account: account.to_string(),
+                issuer_id: flag_value(flags, "--issuer-id").map(ToString::to_string),
+                include_expired,
+                cursor: flag_value(flags, "--cursor").map(ToString::to_string),
+                limit,
+            })
+            .map_err(|error| format!("rpc account_credentials failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "account_credentials",
+                    report.account.clone(),
+                    "account credentials queried",
+                )],
+            )
+        }
+        "asset_access_info" => {
+            let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
+            let report = asset_access_info(AssetAccessInfoOptions {
+                data_dir,
+                asset_id: asset_id.to_string(),
+            })
+            .map_err(|error| format!("rpc asset_access_info failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "asset_access_info",
+                    report.asset_id.clone(),
+                    "asset access info queried",
+                )],
+            )
+        }
         "receipts" => {
             let tx_id = flag_value(flags, "--tx-id").map(str::to_string);
             let limit = flag_value(flags, "--limit")

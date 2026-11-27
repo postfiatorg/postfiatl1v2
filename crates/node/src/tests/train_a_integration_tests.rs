@@ -687,6 +687,7 @@ fn train_a_state_commitment_commits_new_maps_only_when_non_empty() {
         requires_authorization: true,
         freeze_enabled: true,
         clawback_enabled: true,
+        access_policy: None,
     });
 
     let base_root = replicated_state_root(

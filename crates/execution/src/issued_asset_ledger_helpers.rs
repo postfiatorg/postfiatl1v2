@@ -273,14 +273,35 @@ fn asset_gate_holder_is_eligible(
     ledger: &LedgerState,
     asset: &AssetDefinition,
     account: &str,
-    _block_height: u64,
+    block_height: u64,
 ) -> bool {
     if account == asset.issuer {
         return true;
     }
-    ledger
+    let manual_authorized = ledger
         .trustline_for_account_asset(account, &asset.asset_id)
-        .is_some_and(|line| line.authorized)
+        .is_some_and(|line| line.authorized);
+    let Some(policy) = &asset.access_policy else {
+        return manual_authorized;
+    };
+    let (approval_mode, _exit_rule, _wrapper_mode, cred_policy) = policy.effective_at(block_height);
+    let cred_ok =
+        crate::credential_did_execution::credential_policy_satisfied_at(ledger, account, cred_policy, block_height);
+    match approval_mode {
+        postfiat_types::AssetApprovalMode::Either => manual_authorized || cred_ok,
+        postfiat_types::AssetApprovalMode::Both => manual_authorized && cred_ok,
+    }
+}
+
+fn asset_gate_lapsed_exit_rule(
+    asset: &AssetDefinition,
+    block_height: u64,
+) -> postfiat_types::AssetLapsedExitRule {
+    asset
+        .access_policy
+        .as_ref()
+        .map(|policy| policy.effective_at(block_height).1)
+        .unwrap_or(postfiat_types::AssetLapsedExitRule::ReturnOnly)
 }
 
 fn account_refuses_unsolicited_assets(ledger: &LedgerState, account: &str) -> bool {
@@ -402,6 +423,17 @@ pub fn asset_gate(
             if sender != asset.issuer
                 && !asset_gate_holder_is_eligible(ledger, asset, sender, block_height)
             {
+                if asset_gate_lapsed_exit_rule(asset, block_height)
+                    == postfiat_types::AssetLapsedExitRule::StrictFreezeClawback
+                {
+                    return AssetGateOutcome::Reject {
+                        code: "asset_gate_sender_ineligible",
+                        message: format!(
+                            "sender `{sender}` is ineligible and asset `{}` enforces strict_freeze_clawback",
+                            asset.asset_id
+                        ),
+                    };
+                }
                 return AssetGateOutcome::AllowReturnOnly;
             }
         }
@@ -540,7 +572,12 @@ fn auto_prune_empty_implicit_trustline(
         return Ok(());
     };
     let line = &ledger.trustlines[index];
-    if line.balance != 0 || line.frozen || line.authorized || line.reserve_paid != 0 {
+    if line.balance != 0
+        || line.frozen
+        || line.authorized
+        || line.reserve_paid != 0
+        || line.holder_limit.is_some()
+    {
         return Ok(());
     }
     let reserved = issued_asset_reserved_total_for_account(ledger, account, asset_id, None, None)?;
@@ -1001,6 +1038,14 @@ fn prepare_issued_asset_credit_gated(
                 format!("{context} recipient balance and reservations would overflow"),
             )
         })?;
+    if let Some(cap) = ledger.trustlines[line_index].holder_limit {
+        if required_limit > cap {
+            return Err((
+                "trustline_limit_exceeded",
+                format!("{context} exceeds recipient binding holder_limit ({cap})"),
+            ));
+        }
+    }
     Ok((recipient_after, required_limit))
 }
 
@@ -1032,6 +1077,14 @@ fn prepare_issued_asset_credit(
                 format!("{context} recipient balance and reservations would overflow"),
             )
         })?;
+    if let Some(cap) = ledger.trustlines[line_index].holder_limit {
+        if required_limit > cap {
+            return Err((
+                "trustline_limit_exceeded",
+                format!("{context} exceeds recipient binding holder_limit ({cap})"),
+            ));
+        }
+    }
     Ok((recipient_after, required_limit))
 }
 
@@ -1110,6 +1163,16 @@ fn lock_offer_sell_side(
     asset_id: &str,
     amount: u64,
 ) -> Result<(), (&'static str, String)> {
+    lock_offer_sell_side_with_mode(ledger, owner, asset_id, amount, false)
+}
+
+fn lock_offer_sell_side_with_mode(
+    ledger: &mut LedgerState,
+    owner: &str,
+    asset_id: &str,
+    amount: u64,
+    cred_active: bool,
+) -> Result<(), (&'static str, String)> {
     if asset_id == NATIVE_PFT_ESCROW_ASSET_ID {
         let account = ledger.account_mut(owner).ok_or_else(|| {
             (
@@ -1148,7 +1211,13 @@ fn lock_offer_sell_side(
                 "offer owner has no trustline for sell-side issued asset".to_string(),
             )
         })?;
-        ensure_line_can_move(&asset, &ledger.trustlines[owner_index])?;
+        if cred_active {
+            if ledger.trustlines[owner_index].frozen {
+                return Err(("frozen_trustline", "trustline is frozen".to_string()));
+            }
+        } else {
+            ensure_line_can_move(&asset, &ledger.trustlines[owner_index])?;
+        }
         if ledger.trustlines[owner_index].balance < amount {
             return Err((
                 "insufficient_issued_balance",
@@ -1221,11 +1290,12 @@ fn refund_offer_sell_side(
     }
 }
 
-fn credit_offer_received_asset(
+fn credit_offer_received_asset_with_mode(
     ledger: &mut LedgerState,
     account: &str,
     asset_id: &str,
     amount: u64,
+    cred_active: bool,
 ) -> Result<(), (&'static str, String)> {
     if amount == 0 {
         return Ok(());
@@ -1251,6 +1321,30 @@ fn credit_offer_received_asset(
                 "unsupported_issuer_offer",
                 "issued-asset offer fills require holder trustlines".to_string(),
             ));
+        }
+        if cred_active {
+            let line_index = issued_asset_credit_recipient_line_index_gated(
+                ledger,
+                &asset,
+                account,
+                amount,
+                "offer fill",
+            )?;
+            if ledger.trustlines[line_index].reserve_paid == 0
+                && ledger.trustlines[line_index].holder_limit.is_none()
+            {
+                ledger.trustlines[line_index].implicit = true;
+            }
+            let (recipient_after, required_limit) = prepare_issued_asset_credit_gated(
+                ledger,
+                &asset,
+                account,
+                line_index,
+                amount,
+                "offer fill",
+            )?;
+            apply_prepared_issued_asset_credit(ledger, line_index, recipient_after, required_limit);
+            return Ok(());
         }
         let line_index = trustline_index(ledger, account, asset_id).ok_or_else(|| {
             (
@@ -1595,6 +1689,22 @@ fn issued_asset_supply_with_non_nav_spread(
                 )
             })
         })?;
+    let unclaimed_nav_fee_supply = ledger
+        .nav_assets
+        .iter()
+        .filter(|nav| nav.asset_id == asset_id)
+        .try_fold(0_u64, |total, nav| {
+            let unclaimed = nav
+                .fee_state
+                .as_ref()
+                .map_or(0, |state| state.unclaimed_fee_units);
+            total.checked_add(unclaimed).ok_or_else(|| {
+                (
+                    "issued_supply_overflow",
+                    "issued asset unclaimed NAV fee supply total overflowed".to_string(),
+                )
+            })
+        })?;
     trustline_supply
         .checked_add(ledger.collected_private_fees.get(asset_id).copied().unwrap_or(0))
         .and_then(|supply| supply.checked_add(source_custody))
@@ -1603,6 +1713,7 @@ fn issued_asset_supply_with_non_nav_spread(
         .and_then(|supply| supply.checked_add(fast_lane_reserve_supply))
         .and_then(|supply| supply.checked_add(pftl_uniswap_route_custody_supply))
         .and_then(|supply| supply.checked_add(bridge_hold_supply))
+        .and_then(|supply| supply.checked_add(unclaimed_nav_fee_supply))
         .ok_or_else(|| {
             (
                 "issued_supply_overflow",
@@ -1723,6 +1834,23 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         nft_collection_policies: _,
         asset_bridge_holds: _, // counted in `bridge_hold_supply` above
         revoked_fast_lane_holder_permits: _,
+        // Train B Pillar 6 identity & registrar state (no issued-asset balances):
+        identities_by_account: _,
+        identity_history_by_account: _,
+        identity_account_by_nostr: _,
+        compromised_nostr_pubkeys: _,
+        identity_account_by_handle: _,
+        retired_handle_holdback: _,
+        identity_validator_bindings: _,
+        identity_account_by_old_chain: _,
+        handle_namespace_registrars: _,
+        handle_reservations: _,
+        pending_handle_reassignments: _,
+        // Train B Pillar 7 historical fee accrual records (unclaimed_fee_units on nav_assets counted above):
+        nav_fee_accruals: _,
+        // Train B Pillar 8 issuer registry & credentials (deposits are native PFT, never issued-asset custody):
+        credential_issuers: _,
+        credentials: _,
     } = ledger;
 }
 

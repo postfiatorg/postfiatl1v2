@@ -115,11 +115,11 @@
     "programs/pfusdc-eth-mainnet-ingress/Cargo.lock": "06d5e683afcf1f0b708dacab9e43ce5a8ffac1b46dcc1ce82c933a65053c0082",
     "crates/types/src/b23_ingress_anchor.rs": "d4a5c7626fb04f8bcdd39941753b9d4279e311277eb8739eb24d27599899aac4",
     "crates/types/src/b23_ingress_legacy.rs": "e81b9b41cd905b55f19de6b19bd241925ddb75553ba2d889104bfc05dc06aec3",
-    "crates/types/src/account_owned_asset_types.rs": "404d7cdc2bae170f9cdc4bda17b392ef46ede0cf43a4415fde81f3dd2f7ac834",
-    "crates/types/src/market_nav_asset_types.rs": "c7ad8d745bce6a2ed67a10162f4675cbaf0543304ddea5cb2602892a24cf59fc",
+    "crates/types/src/account_owned_asset_types.rs": "f86f7b3a752e60debe3690280cb17925213fb646b78909cd9237327670b8586a",
+    "crates/types/src/market_nav_asset_types.rs": "b1c32da7b521615bb20a69bbe607bef70127001247e206fffc2a02c4cc6ca654",
     "crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol": "0ccced8deed6a10d1ec631c7b78cfa14dcf5b5490cf50a9ca4bfcd1cdc6aa08a",
     "crates/execution/src/vault_bridge_profile_resolution.rs": "8ffdb016183c6afce588c08625b00071bab0c231506d1065787a963c9962ae16",
-    "crates/node/src/execution_actions.rs": "6b70e8dbe57f4d691bcd6c8b10f2d13b232dad45afd8fdf0d00ca44153b8104f"
+    "crates/node/src/execution_actions.rs": "e68d81cfd04030f32b48ce92110ff9f4863d734d0b99a0c5de68029fa0804836"
   },
   "systems": [
     {

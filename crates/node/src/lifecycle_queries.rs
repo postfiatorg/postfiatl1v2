@@ -4144,6 +4144,7 @@ pub(super) fn issued_asset_report(
         requires_authorization: asset.requires_authorization,
         freeze_enabled: asset.freeze_enabled,
         clawback_enabled: asset.clawback_enabled,
+        access_policy: asset.access_policy.clone(),
         collected_private_fees: ledger.collected_private_fees.get(&asset.asset_id).copied(),
         outstanding_supply,
         trustline_count,
@@ -4206,6 +4207,8 @@ pub(super) fn asset_line_report(line: &TrustLine, asset: &AssetDefinition) -> As
         authorized: line.authorized,
         frozen: line.frozen,
         reserve_paid: line.reserve_paid,
+        holder_limit: line.holder_limit,
+        implicit: line.implicit,
     }
 }
 

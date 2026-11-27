@@ -107,6 +107,20 @@ path; its redemption rows are in `vault_bridge_status`.
 | `fastpay_fee_quote` | FastPay v3 fee quote and owned-object capacity read. |
 | `account_bridge_holds` | Aggregated bridge holds for a recipient account. |
 | `asset_bridge_holds` | Cursor-paginated aggregated bridge holds for an issued asset. |
+| `identity_info` | Hive identity lookup by ML-DSA account. |
+| `identity_by_nostr` | Hive identity lookup by BIP-340 Nostr public key. |
+| `identity_by_handle` | Hive identity lookup by registered NIP-05 handle. |
+| `identity_by_link` | Hive identity lookup by linked validator, old-chain, or external target. |
+| `identity_resolve` | Unified Hive identity resolver across account, nostr_pubkey, handle, or link. |
+| `identity_history` | Chronological Hive identity lifecycle history for an account. |
+| `nav_fee_schedule` | Optional NAVCoin fee schedule and unclaimed accrual state. |
+| `nav_fee_history` | Cursor-paginated NAVCoin epoch fee accrual history. |
+| `did_resolve` | W3C `did:pftl` DID document resolution (zero PII). |
+| `issuer_info` | Credential issuer registry entry lookup. |
+| `issuer_list` | Cursor-paginated credential issuer registry list. |
+| `credential_info` | Zero-PII credential record and live validity lookup. |
+| `account_credentials` | Cursor-paginated zero-PII credentials for an account. |
+| `asset_access_info` | Issued-asset gating and credential access policy lookup. |
 | `offer_info` | DEX offer lookup. |
 | `account_offers` | Offers by owner. |
 | `book_offers` | Offers in a deterministic book pair. |
