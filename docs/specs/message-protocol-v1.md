@@ -110,6 +110,11 @@ message is carried:
 4. **Size or meaning changes take a new field:** a change to a field's size,
    type, unit, or meaning NEVER reuses the field; it adds a new field with a new
    number and name, and the old field is kept or reserved.
+   The one exception: the FastPay `order_hash` and `certificate_digest`
+   (`FastPayPaymentRef` fields 3 and 4, `X402PaymentSignature` field 7) were
+   corrected from 32 to 48 bytes in place, before any release, and this is the
+   only in-place size change. The SDKs on the `bm/w1-p2-sdk-x402` branch still
+   use 32 bytes and must follow 48 before either branch reaches `main`.
 5. **New fields are additive only:** a new field in a message whose unknown
    fields are preserved may only add information that a reader which ignores it
    still handles correctly. Anything an older reader must not ignore takes a new
