@@ -33,7 +33,8 @@ MAX_FUTURE_SKEW_SECONDS = 60
 QUORUM_THRESHOLD = 2
 
 # The fields two observers must share before their claims count as agreement.
-AGREEMENT_FIELDS = ("ml_dsa_public_key", "registry_active", "liveness_met", "access_state")
+AGREEMENT_FIELDS = ("ml_dsa_public_key", "registry_active", "liveness_met", "access_state",
+                    "reward_eligible", "finance_hub_access", "research_api_keys_active", "removal_proposal_eligible", "first_active_date", "grace_started_at", "grace_expires_at", "recovery_floor_date")
 
 
 class FeedRejected(ValueError):
@@ -138,7 +139,7 @@ def derive_row(
         recovery_floor_date is not None
         and window_end < parse_date(recovery_floor_date) + EVALUATION_HORIZON_DAYS * DAY
     )
-    liveness_met = registry_active and (observed == 0 or mean >= LIVENESS_THRESHOLD_BPS)
+    liveness_met = registry_active and (observed == 0 or (observed < MIN_OBSERVED_DAYS and not ramp_in and not in_recovery) or mean >= LIVENESS_THRESHOLD_BPS)
 
     if access_state == "pending":
         reason, hub, reward, removal = "awaiting_ratification", False, False, False
@@ -189,7 +190,7 @@ def check_row(row: dict[str, Any], window_start: dt.date, window_end: dt.date) -
     vid = row["validator_id"]
     state = row["access_state"]
     first = row["first_active_date"]
-    if (state == "pending") != (first is None):
+    if state == "pending" and first is not None:
         raise ValueError(f"{vid}: first_active_date is null exactly while pending")
     if state == "pending" and row["registry_active"]:
         raise ValueError(f"{vid}: a pending validator is not in the registry")
@@ -207,8 +208,8 @@ def check_row(row: dict[str, Any], window_start: dt.date, window_end: dt.date) -
             raise ValueError(f"{vid}: recovery_floor_date outlived its 30 days or its active state")
 
     expected_dates: list[dt.date] = []
-    if first is not None:
-        day = max(parse_date(first), window_start)
+    if state != "pending":
+        day = max(parse_date(first), window_start) if first else window_start
         while day < window_end:
             expected_dates.append(day)
             day += DAY
@@ -349,6 +350,8 @@ def verify_feed(
     if errors:
         path = ".".join(str(p) for p in errors[0].absolute_path) or "<root>"
         raise FeedRejected(f"schema: {path}: {errors[0].message}")
+    if feed["quorum_policy"]["observer_keyset_id"] != keyset["keyset_id"]:
+        raise FeedRejected("feed is for another keyset generation")
     if feed["chain"] != keyset["chain"]:
         raise FeedRejected("feed is for another chain than the pinned keyset")
     window_start = parse_utc(feed["window_spec"]["window_start"])

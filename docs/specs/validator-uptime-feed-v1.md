@@ -30,33 +30,11 @@ Block headers carry no time, and the chain makes a block only when there is some
 
 This is `time_basis = "observer_brackets"`. Two honest observers can therefore differ by an incomplete day. Section 4 says how that is settled.
 
-### 2.2 The score counts every accepted vote
+### 2.2 Certificate evidence and uncertain votes
 
-`metric_version = "accepted-votes-observer-brackets-v1"`. For one validator and one UTC day:
+The metric is `certificate-votes-observer-brackets-v2`. Count a validator once per committed block when either the prepare or precommit certificate contains its vote. A proposer RPC record is diagnostic evidence and never increases the count. The daily score is the integer floor of 10000 times the signed count divided by the committed count. An incomplete or idle day has a null score.
 
-- `committed_blocks`: blocks finalized that day while the validator was in the on-chain registry.
-- `signed_blocks`: those blocks for which the validator cast an accepted vote. A vote counts when any one of the three `credit_sources` shows it:
-  1. `precommit_certificate`: the validator's vote is in the block's `consensus_v2_commit.precommit_qc.votes`;
-  2. `prepare_certificate`: it is in `consensus_v2_commit.prepare_qc.votes`;
-  3. `proposer_vote_record`: the proposer's vote record for the block (`block_vote_records` RPC, schema `postfiat.block_vote_record.v1`) lists the validator with outcome `accepted` or `late_after_deadline`, for the same height and block hash.
-- `participation_bps = floor(signed_blocks * 10000 / committed_blocks)` when the day is complete and `committed_blocks > 0`. Otherwise it is `null`.
-
-Real votes are counted, never committee membership. A day counts as observed only when it is complete and had at least one block. A day on which the chain made no block says nothing about a validator and is not counted for or against it.
-
-**Why the certificates alone are not enough.** A certificate closes as soon as a quorum of votes is in, so a healthy validator that answers a moment later is left out. Measured on `postfiat-wan-devnet-2` over its last 400 blocks on 27 November 2026, with all six validators healthy:
-
-| Validator | In the precommit certificate | In either certificate | Accepted vote, proposer records (73 blocks with a record) |
-| --- | ---: | ---: | ---: |
-| validator-1 | 100.0% | 100.0% | 100.0% |
-| validator-4 | 99.8% | 99.8% | 100.0% |
-| validator-3 | 98.8% | 99.5% | 100.0% |
-| validator-0 | 96.2% | 97.0% | 100.0% |
-| validator-2 | 96.0% | 97.0% | 100.0% |
-| validator-5 | 90.2% | 95.2% | 97.3% |
-
-Counting certificates only would put a healthy validator below the 95% rule. The proposer's vote record lists every validator it asked and what came back, including a vote that arrived after the quorum had closed, so it shows the votes the certificates leave out.
-
-**What a vote record is worth.** It is the proposer's own statement, kept beside the block and never read by consensus. A proposer can only speak for the blocks it proposed, a share of 1/n. It could wrongly deny a vote there, which is the same power it already has over which votes enter its certificate; it could wrongly grant one, which lifts a dead validator's score by at most 1/n. An observer reads the record from the proposer's RPC. For a block whose proposer the observer cannot reach, only the two certificates count. Consumers refuse a `metric_version` they do not know.
+A certificate can close before a healthy validator answers. If a complete day in the current window falls below 9500 on certificate evidence, the observer withholds that registered validator's row. A consumer preserves existing access and holds new grants for a missing row. At present this limits automatic liveness enforcement to what the certificates establish. Registry removal is independently observable. A bracket whose endpoints have different registry roots or membership is incomplete. Removed, revoked identities age out after 30 days of continuous absence.
 
 ### 2.3 The window
 
@@ -65,7 +43,7 @@ Counting certificates only would put a healthy validator below the 95% rule. The
 - `observed_days`: how many there are.
 - `mean_daily_participation_bps`: `floor(sum of participation_bps / observed_days)`, or `null` when there are none. Every day weighs the same.
 - `consecutive_passing_days`: the length of the run of days at or above 9500 that ends at the most recent one.
-- `liveness_met`: the validator is in the registry, and either `observed_days` is 0 or the mean is at least `liveness_threshold_bps = 9500`.
+- `liveness_met`: the validator is in the registry, and evidence is insufficient (zero days, or fewer than 25 days outside ramp and recovery) or the mean is at least `liveness_threshold_bps = 9500`.
 
 All arithmetic is in whole basis points. 95% is exactly 9500.
 
@@ -112,7 +90,7 @@ A consumer installs a `postfiat.observer_keyset.v1` file out of band. It names t
 
 A consumer does these steps in order. The top-level `validators` array is a convenience; step 5 is what makes it safe to read.
 
-1. Validate the feed against the JSON Schema. Refuse a feed for another chain than the pinned keyset, a window that is not 30 whole UTC days, or one observer listed twice.
+1. Validate the feed against the JSON Schema. Refuse a feed for another chain or keyset generation than the pinned keyset, a window that is not 30 whole UTC days, or one observer listed twice.
 2. Check each attestation on its own. It counts only if all of these hold:
    - the observer is pinned and its key, region and operator group match (3.1);
    - the digest matches and the ML-DSA-65 signature verifies over the claim body;
@@ -123,7 +101,7 @@ A consumer does these steps in order. The top-level `validators` array is a conv
 
    An attestation that fails any check is dropped. **One wrong observer does not stop the feed.**
 3. If fewer than two attestations count, the feed is **indeterminate**: the consumer blocks new validator bindings and new credit grants, and changes nothing else. It never revokes access on an indeterminate feed. An observer outage or a partition cannot mass-revoke healthy operators.
-4. For each validator, group the counted claims by `(ml_dsa_public_key, registry_active, liveness_met, access_state)`. A group of two or three is agreement. Without one, that validator has no quorum and is treated as in step 3; other validators are unaffected.
+4. For each validator, group the counted claims by `(ml_dsa_public_key, registry_active, liveness_met, access_state, reward_eligible, finance_hub_access, research_api_keys_active, removal_proposal_eligible, first_active_date, grace_started_at, grace_expires_at, recovery_floor_date)`. A group of two or three is agreement. Without one, that validator has no quorum and is treated as in step 3; other validators are unaffected.
 5. The validator's row is one observer's signed claim, copied whole. With three agreeing observers it is the one with the middle `mean_daily_participation_bps`; with two, the lower one. Ties go to the lower `observer_id`; an unknown score sorts lowest. The top-level row adds `source_observer_id` and `agreeing_observer_ids`. The consumer rebuilds the rows this way and refuses the feed if the served `validators` array differs in any byte.
 
 This is the only rule for disagreement. Copying one observer's row whole means a single odd observer can move neither the score nor any date.
@@ -152,6 +130,8 @@ stateDiagram-v2
 A removal proposal is only made possible here. The validators still ratify it explicitly.
 
 ### 5.2 Active
+
+An observer without verified activation history uses a null activation date and all 30 window days. Cold start gives no ramp-in. Insufficient observations preserve current access and hold new admissions, restorations and credits.
 
 A validator becomes `active` the day it is ratified; `first_active_date` is that UTC day. It stays active while `liveness_met` holds. The reason says which case applies, in this order:
 

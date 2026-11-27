@@ -195,8 +195,8 @@ def build_fixture() -> tuple[dict[str, Any], dict[str, Any]]:
             "indeterminate_behavior": "block_new_bindings_and_credits_preserve_existing_access",
         },
         "window_spec": {
-            "metric_version": "accepted-votes-observer-brackets-v1",
-            "credit_sources": ["precommit_certificate", "prepare_certificate", "proposer_vote_record"],
+            "metric_version": "certificate-votes-observer-brackets-v2",
+            "credit_sources": ["precommit_certificate", "prepare_certificate"],
             "time_basis": "observer_brackets",
             "max_observation_gap_seconds": 900,
             "evaluation_horizon_days": EVALUATION_HORIZON_DAYS,
@@ -292,6 +292,13 @@ def run_feed_tests(schema: Draft202012Validator, feed: dict[str, Any], keyset: d
     check = lambda f, **kw: verify_feed(f, schema=schema, keyset=keyset, now_utc=kw.pop("now", now), **kw)  # noqa: E731
     cases = 0
 
+    rotated = dict(keyset, keyset_id="rotated-test-generation")
+    try:
+        verify_feed(feed, schema=schema, keyset=rotated, now_utc=now)
+    except FeedRejected:
+        cases += 1
+    else:
+        raise AssertionError("an earlier generation passed with unchanged observer keys")
     ok = check(feed)
     assert ok["verified_observers"] == sorted(o[0] for o in FIXTURE_OBSERVERS) and not ok["indeterminate"]
     assert ok["allow_new_bindings"] and ok["allow_credit_grants"] and not ok["validators_without_quorum"]
