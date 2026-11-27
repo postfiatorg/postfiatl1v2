@@ -5572,6 +5572,36 @@ mod tests {
         store.verify_logical_integrity().expect("scan after prune");
     }
 
+    #[test]
+    fn fastpay_order_backfill_recovers_after_an_older_writer_advances_the_tip() {
+        let (dir, store, _, digest) = main_layout_fastpay_store("fastpay-backfill-stale-height");
+        let TransactionalDatabase::ReadWrite(database) = &store.database else {
+            panic!("fixture store is writable");
+        };
+        // Simulate a height-one migration followed by a height-two append by an older writer.
+        let tx = database.begin_write().unwrap();
+        tx.open_table(LOCAL_MIGRATIONS)
+            .unwrap()
+            .insert(FASTPAY_ORDER_BACKFILL_MARKER, 1u64.to_be_bytes().as_slice())
+            .unwrap();
+        tx.commit().unwrap();
+        drop(store);
+
+        let reopened = TransactionalStore::open(&dir.0).unwrap();
+        assert_eq!(fastpay_backfill_work(&reopened).2, 1);
+        assert_eq!(
+            reopened
+                .fastpay_order_index_entry(&digest)
+                .unwrap()
+                .unwrap()
+                .block_height,
+            2
+        );
+        drop(reopened);
+        let reopened = TransactionalStore::open(&dir.0).unwrap();
+        assert_eq!(fastpay_backfill_work(&reopened), (0, 0, 0));
+    }
+
     /// The FastPay order backfill runs once: a fresh store gets the marker
     /// at once, a main-layout store is completed and marked in one commit, a
     /// crash before that commit leaves neither rows nor marker, and a later
