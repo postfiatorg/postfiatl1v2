@@ -153,6 +153,7 @@ impl PqPayment {
         &self.0
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn parts(&self) -> Result<(Terms, Option<&[u8; SIGNATURE_BYTES]>, &[u8]), &'static str> {
         let b = &self.0;
         if b.len() > ARCHIVE_LIMIT || b.len() < PREFIX || &b[..5] != b"PFPQ\x01" {

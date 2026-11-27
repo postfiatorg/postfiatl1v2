@@ -27,6 +27,8 @@ EXPECTED = {
     "ml_dsa_65_sign": {
         "crates/node/src/block_replay_wallet.rs": 4,
         "crates/node/src/storage_commit.rs": 1,
+        # Signs PQ shield deposit account-transaction authorization with the sender's account key.
+        "crates/privacy_binius/src/lib.rs": 1,
         "crates/rpc_sdk/src/atomic_swap_wallet.rs": 2,
         "crates/rpc_sdk/src/wallet_sdk.rs": 6,
     },
@@ -37,6 +39,8 @@ EXPECTED = {
         # the same signing bytes as the executor before a rejected-fee claim.
         "crates/execution/src/rejected_fee_claim.rs": 1,
         "crates/node/src/block_replay_wallet.rs": 6,
+        # Verifies PQ shield deposit account-transaction authorization against the sender's account key.
+        "crates/privacy_binius/src/lib.rs": 1,
         "crates/rpc_sdk/src/atomic_swap_wallet.rs": 2,
         "crates/rpc_sdk/src/wallet_sdk.rs": 6,
     },

@@ -158,9 +158,9 @@ mod tests {
                 terminal: None,
             };
             let tree = history.tree(reference.root());
-            for index in cut..leaves.len() {
+            for (index, leaf) in leaves.iter().enumerate().skip(cut) {
                 assert_eq!(
-                    tree.opening(index, &leaves[index]).unwrap(),
+                    tree.opening(index, leaf).unwrap(),
                     reference.auth_path(index)
                 );
             }
