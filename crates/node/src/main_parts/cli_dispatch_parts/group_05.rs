@@ -3333,6 +3333,40 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "rpc-http-edge" => {
+            use postfiat_node::rpc_http_edge::{run_rpc_http_edge, RpcHttpEdgeOptions};
+            let parse_port = |flag: &str, default: u16| -> Result<u16, String> {
+                match flag_value(flags, flag) {
+                    Some(raw) => raw.parse::<u16>().map_err(|_| format!("{flag} must be a u16")),
+                    None => Ok(default),
+                }
+            };
+            let options = RpcHttpEdgeOptions {
+                listen_host: flag_value(flags, "--listen-host").unwrap_or("127.0.0.1").to_string(),
+                listen_port: parse_port("--listen-port", 8650)?,
+                upstream_host: flag_value(flags, "--upstream-host").unwrap_or("127.0.0.1").to_string(),
+                upstream_port: parse_port("--upstream-port", 27651)?,
+                allow_private_action_admission: flag_present(flags, "--allow-private-action-admission"),
+                max_connections: flag_value(flags, "--max-connections")
+                    .unwrap_or("64")
+                    .parse::<usize>()
+                    .map_err(|_| "--max-connections must be a usize".to_string())?,
+                timeout_ms: flag_value(flags, "--timeout-ms")
+                    .unwrap_or("15000")
+                    .parse::<u64>()
+                    .map_err(|_| "--timeout-ms must be a u64".to_string())?,
+                rate_per_second: flag_value(flags, "--rate-per-second")
+                    .unwrap_or("20")
+                    .parse::<u32>()
+                    .map_err(|_| "--rate-per-second must be a u32".to_string())?,
+                burst: flag_value(flags, "--burst")
+                    .unwrap_or("40")
+                    .parse::<u32>()
+                    .map_err(|_| "--burst must be a u32".to_string())?,
+                max_requests: None,
+            };
+            run_rpc_http_edge(options)
+        }
         "top" => {
             use postfiat_node::validator_top::{
                 run_validator_top, ValidatorTopOptions, DEFAULT_OBSERVER_KEYSET_FILE,

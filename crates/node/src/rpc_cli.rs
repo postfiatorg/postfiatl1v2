@@ -988,6 +988,21 @@ fn handle_rpc_serve_connection(
             "rpc_protocol_error",
             "remote rpc request contains key material fields",
         )
+    } else if !rpc_replica_profile_serves(
+        context.rpc_profile,
+        &method,
+        context.allow_private_action_admission,
+    ) {
+        rpc_serve_error_response(
+            &id,
+            "method_not_served_by_profile",
+            &format!(
+                "rpc method `{method}` is not served by the `{}` profile",
+                context.rpc_profile.as_str()
+            ),
+        )
+    } else if let Some(refusal) = rpc_replica_lag_refusal_for(&method, &id, context) {
+        refusal
     } else if is_private_action_method(&method) {
         if rpc_serve_private_action_allowed(&method, context.allow_private_action_admission) {
             run_rpc_serve_private_action(&request, context)
@@ -1028,6 +1043,7 @@ fn handle_rpc_serve_connection(
                             &mut value,
                             context.rpc_profile,
                             context.max_replica_lag_blocks,
+                            &context.data_dir,
                         );
                         success_response(
                             &id,
@@ -1937,6 +1953,7 @@ fn handle_rpc_serve_connection(
                     &mut result,
                     context.rpc_profile,
                     context.max_replica_lag_blocks,
+                    &context.data_dir,
                 );
                 let node_id = result
                     .get("node_id")
@@ -1958,7 +1975,7 @@ fn handle_rpc_serve_connection(
             }
             Err(error) => rpc_serve_error_response(&id, "rpc_status_failed", &error),
         }
-    } else if is_in_process_standard_read_method(&request) {
+    } else if rpc_serve_reads_in_process(context.rpc_profile, &request) {
         let (reply, cache_hit) = run_rpc_serve_in_process_read(&request, context);
         in_process_read_used = true;
         in_process_read_cache_hit = cache_hit;

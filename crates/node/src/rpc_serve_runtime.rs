@@ -56,6 +56,11 @@ fn rpc_serve_drain(
     if options.rpc_profile.is_replica() && options.finality_signer_socket.is_some() {
         return Err("rpc_replica_signer_forbidden: read-replica profile forbids --finality-signer-socket".to_string());
     }
+    if options.rpc_profile.is_replica() && options.data_dir.join(VALIDATOR_KEYS_FILE).exists() {
+        return Err(format!(
+            "rpc_replica_key_material_present: read-replica profiles refuse a data directory that holds `{VALIDATOR_KEYS_FILE}`"
+        ));
+    }
     prepare_rpc_serve_spool_root(&options.spool_dir)?;
     probe_rpc_serve_spool_root(&options.spool_dir)?;
     let bind_address = socket_address(&options.bind_host, options.port);

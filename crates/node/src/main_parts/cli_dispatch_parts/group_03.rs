@@ -369,6 +369,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 allow_mempool_submit_finality,
                 allow_orchard_batch_create,
                 allow_private_action_admission,
+                Path::new(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR)),
             )?;
             // FastPay is a normal signed payment capability. Operators may
             // disable it explicitly during an incident, but ordinary startup

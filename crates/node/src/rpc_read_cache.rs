@@ -43,7 +43,154 @@ impl RpcServeProfile {
 const DEFAULT_MAX_REPLICA_LAG_BLOCKS: u64 = 5;
 const RPC_READ_CACHE_MAX_ENTRIES: usize = 256;
 const RPC_READ_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
-const RPC_READ_CACHE_BUSY_WAIT: Duration = Duration::from_millis(250);
+/// A cached answer is dropped after this long even when the height has not moved.
+const RPC_READ_CACHE_MAX_AGE: Duration = Duration::from_secs(2);
+/// How old the source-tip record of the catch-up job may be before the replica
+/// no longer knows how far behind it is.
+const RPC_REPLICA_SOURCE_TIP_MAX_AGE_SECS: u64 = 120;
+const RPC_REPLICA_SOURCE_TIP_FILE: &str = "readiness/replica-source-tip.json";
+
+/// Methods a replica profile serves: exactly the `read_only_public` posture of
+/// docs/runbooks/rpc-method-inventory.json. A test keeps the two equal.
+const RPC_REPLICA_READ_METHODS: &[&str] = postfiat_node::rpc_http_edge::READ_ONLY_PUBLIC_METHODS;
+
+fn rpc_replica_profile_serves(
+    profile: RpcServeProfile,
+    method: &str,
+    allow_private_action_admission: bool,
+) -> bool {
+    if !profile.is_replica() {
+        return true;
+    }
+    if is_private_action_method(method) {
+        return profile == RpcServeProfile::PublicReplica && allow_private_action_admission;
+    }
+    RPC_REPLICA_READ_METHODS.binary_search(&method).is_ok()
+}
+
+/// Written by `rpc-catch-up --source-tip-file` after every run.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct RpcReplicaSourceTip {
+    schema: String,
+    source_height: u64,
+    local_height: u64,
+    checked_at_unix: u64,
+}
+
+const RPC_REPLICA_SOURCE_TIP_SCHEMA: &str = "postfiat-rpc-replica-source-tip-v1";
+
+fn write_rpc_replica_source_tip(
+    path: &Path,
+    source_height: u64,
+    local_height: u64,
+) -> Result<(), String> {
+    let record = RpcReplicaSourceTip {
+        schema: RPC_REPLICA_SOURCE_TIP_SCHEMA.to_string(),
+        source_height,
+        local_height,
+        checked_at_unix: unix_now_secs(),
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("replica source tip directory failed: {error}"))?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let bytes = serde_json::to_vec(&record)
+        .map_err(|error| format!("replica source tip serialization failed: {error}"))?;
+    fs::write(&tmp, bytes).map_err(|error| format!("replica source tip write failed: {error}"))?;
+    fs::rename(&tmp, path).map_err(|error| format!("replica source tip rename failed: {error}"))
+}
+
+fn unix_now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs())
+}
+
+/// How far the replica is behind its source, or why that is not known.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RpcReplicaLag {
+    Within { lag_blocks: u64 },
+    Lagging { lag_blocks: u64, local_height: u64 },
+    Unknown { reason: String },
+}
+
+fn rpc_replica_lag(
+    data_dir: &Path,
+    local_height: u64,
+    max_replica_lag_blocks: u64,
+    now_unix: u64,
+) -> RpcReplicaLag {
+    let path = data_dir.join(RPC_REPLICA_SOURCE_TIP_FILE);
+    let record = match fs::read(&path) {
+        Ok(bytes) => match serde_json::from_slice::<RpcReplicaSourceTip>(&bytes) {
+            Ok(record) if record.schema == RPC_REPLICA_SOURCE_TIP_SCHEMA => record,
+            _ => {
+                return RpcReplicaLag::Unknown {
+                    reason: "the source tip record is not readable".to_string(),
+                }
+            }
+        },
+        Err(_) => {
+            return RpcReplicaLag::Unknown {
+                reason: "no source tip record yet; the catch-up job has not run".to_string(),
+            }
+        }
+    };
+    let age = now_unix.saturating_sub(record.checked_at_unix);
+    if age > RPC_REPLICA_SOURCE_TIP_MAX_AGE_SECS {
+        return RpcReplicaLag::Unknown {
+            reason: format!("the source tip record is {age}s old; the catch-up job is not running"),
+        };
+    }
+    let lag_blocks = record.source_height.saturating_sub(local_height);
+    if lag_blocks > max_replica_lag_blocks {
+        RpcReplicaLag::Lagging {
+            lag_blocks,
+            local_height,
+        }
+    } else {
+        RpcReplicaLag::Within { lag_blocks }
+    }
+}
+
+/// `Some(error response)` when a replica must not answer a read because it is
+/// behind its source or cannot tell.
+fn rpc_replica_lag_refusal(
+    request_id: &str,
+    context: &RpcServeConnectionContext,
+) -> Option<RpcResponse> {
+    if !context.rpc_profile.is_replica() {
+        return None;
+    }
+    let local_height = rpc_serve_cached_status(&context.data_dir, &context.health_cache)
+        .ok()
+        .map(|(report, _)| report.block_height)?;
+    match rpc_replica_lag(
+        &context.data_dir,
+        local_height,
+        context.max_replica_lag_blocks,
+        unix_now_secs(),
+    ) {
+        RpcReplicaLag::Within { .. } => None,
+        RpcReplicaLag::Lagging {
+            lag_blocks,
+            local_height,
+        } => Some(rpc_serve_error_response(
+            request_id,
+            "replica_lagging",
+            &format!(
+                "replica is {lag_blocks} blocks behind its source at height {local_height}; limit {}",
+                context.max_replica_lag_blocks
+            ),
+        )),
+        RpcReplicaLag::Unknown { reason } => Some(rpc_serve_error_response(
+            request_id,
+            "replica_lagging",
+            &format!("replica lag is unknown: {reason}"),
+        )),
+    }
+}
 
 #[derive(Debug, Clone)]
 struct RpcCachedReadEntry {
@@ -60,10 +207,11 @@ struct RpcServeReadCache {
     total_bytes: usize,
     hits: u64,
     misses: u64,
-    writer_busy_fallbacks: u64,
 }
 
 impl RpcServeReadCache {
+    /// A stored answer is served only for the same committed height and only
+    /// while it is younger than `RPC_READ_CACHE_MAX_AGE`.
     fn get_at_height(
         &mut self,
         height: u64,
@@ -73,40 +221,20 @@ impl RpcServeReadCache {
     ) -> Option<RpcResponse> {
         let key = (method.to_string(), canonical_params.to_string());
         if let Some(entry) = self.entries.get(&key) {
-            if entry.height == height {
+            if entry.height == height && entry.inserted_at.elapsed() <= RPC_READ_CACHE_MAX_AGE {
                 self.hits = self.hits.saturating_add(1);
                 let mut response = entry.response.clone();
                 response.id = request_id.to_string();
+                // Every cached answer names the committed height it was read at.
+                response.events.push(RpcEvent::new(
+                    "read_cache",
+                    height.to_string(),
+                    "served from the read cache at this committed height",
+                ));
                 return Some(response);
             }
         }
         None
-    }
-
-    fn get_recent_fallback(
-        &mut self,
-        method: &str,
-        canonical_params: &str,
-        request_id: &str,
-        max_age: Duration,
-    ) -> Option<RpcResponse> {
-        let key = (method.to_string(), canonical_params.to_string());
-        if let Some(entry) = self.entries.get(&key) {
-            if entry.inserted_at.elapsed() <= max_age {
-                self.writer_busy_fallbacks = self.writer_busy_fallbacks.saturating_add(1);
-                let mut response = entry.response.clone();
-                response.id = request_id.to_string();
-                return Some(response);
-            }
-        }
-        None
-    }
-
-    fn has_recent_fallback(&self, method: &str, canonical_params: &str, max_age: Duration) -> bool {
-        let key = (method.to_string(), canonical_params.to_string());
-        self.entries
-            .get(&key)
-            .is_some_and(|entry| entry.inserted_at.elapsed() <= max_age)
     }
 
     fn insert(&mut self, height: u64, method: &str, canonical_params: &str, response: RpcResponse) {
@@ -155,9 +283,17 @@ fn validate_rpc_replica_profile_flags(
     allow_mempool_submit_finality: bool,
     allow_orchard_batch_create: bool,
     allow_private_action_admission: bool,
+    data_dir: &Path,
 ) -> Result<(), String> {
     if !profile.is_replica() {
         return Ok(());
+    }
+    // Non-voting is a fact about the process, not about its flags: without a
+    // flag the server would load the default key file of the data directory.
+    if data_dir.join(VALIDATOR_KEYS_FILE).exists() {
+        return Err(format!(
+            "rpc_replica_key_material_present: read-replica profiles refuse a data directory that holds `{VALIDATOR_KEYS_FILE}`"
+        ));
     }
     if flag_present(flags, "--finality-key-file")
         || flag_present(flags, "--finality-proposal-key-file")
@@ -174,9 +310,13 @@ fn validate_rpc_replica_profile_flags(
                 .to_string(),
         );
     }
-    if profile == RpcServeProfile::PrivateReplica
-        && (allow_mempool_submit || allow_private_action_admission)
-    {
+    if allow_mempool_submit {
+        return Err(
+            "rpc_replica_write_forbidden: read-replica profiles order nothing and forbid --allow-mempool-submit"
+                .to_string(),
+        );
+    }
+    if profile == RpcServeProfile::PrivateReplica && allow_private_action_admission {
         return Err(
             "rpc_replica_write_forbidden: private-replica profile is strictly read-only"
                 .to_string(),
@@ -194,11 +334,27 @@ fn merge_rpc_replica_status_fields(
     value: &mut serde_json::Value,
     profile: RpcServeProfile,
     max_replica_lag_blocks: u64,
+    data_dir: &Path,
 ) {
     if !profile.is_replica() {
         return;
     }
+    let local_height = value
+        .get("block_height")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    let lag = rpc_replica_lag(data_dir, local_height, max_replica_lag_blocks, unix_now_secs());
     if let Some(obj) = value.as_object_mut() {
+        let (ready, lag_blocks, reason) = match lag {
+            RpcReplicaLag::Within { lag_blocks } => (true, Some(lag_blocks), None),
+            RpcReplicaLag::Lagging { lag_blocks, .. } => {
+                (false, Some(lag_blocks), Some("replica_lagging".to_string()))
+            }
+            RpcReplicaLag::Unknown { reason } => (false, None, Some(reason)),
+        };
+        obj.insert("replica_ready".to_string(), serde_json::json!(ready));
+        obj.insert("replica_lag_blocks".to_string(), serde_json::json!(lag_blocks));
+        obj.insert("replica_unready_reason".to_string(), serde_json::json!(reason));
         obj.insert("node_role".to_string(), serde_json::json!("rpc_follower"));
         obj.insert("voting_enabled".to_string(), serde_json::json!(false));
         obj.insert(
@@ -210,6 +366,12 @@ fn merge_rpc_replica_status_fields(
             serde_json::json!(max_replica_lag_blocks),
         );
     }
+}
+
+/// A validator (the standard profile) keeps every read on the worker path, so
+/// shipping the in-process path changes nothing for it.
+fn rpc_serve_reads_in_process(profile: RpcServeProfile, request: &RpcRequest) -> bool {
+    profile.is_replica() && is_in_process_standard_read_method(request)
 }
 
 fn is_in_process_standard_read_method(request: &RpcRequest) -> bool {
@@ -236,6 +398,31 @@ fn is_in_process_standard_read_method(request: &RpcRequest) -> bool {
             .get("audit_block_log")
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false),
+        _ => false,
+    }
+}
+
+/// Health methods answer even when the replica is behind, so the edge and the
+/// operator can see why it is unready. Every other read is refused.
+fn rpc_replica_lag_refusal_for(
+    method: &str,
+    request_id: &str,
+    context: &RpcServeConnectionContext,
+) -> Option<RpcResponse> {
+    if matches!(method, "status" | "server_info" | "private_readiness") {
+        return None;
+    }
+    rpc_replica_lag_refusal(request_id, context)
+}
+
+/// Cached only when the answer is a pure function of committed state at a
+/// height. Balances, pending counts and anything an owned-lane effect can
+/// change between two blocks are read fresh every time.
+fn is_height_pure_read(request: &RpcRequest) -> bool {
+    match request.method.as_str() {
+        "validators" | "manifests" | "vault_bridge_route" => true,
+        // A block window that names its start is immutable once committed.
+        "blocks" => request.params.get("from_height").is_some_and(|v| !v.is_null()),
         _ => false,
     }
 }
@@ -587,46 +774,40 @@ fn execute_in_process_standard_read(
     }
 }
 
-/// Serve a standard read-only RPC method in-process using the bounded
-/// height-stamped response cache and a single shared `Arc<TransactionalStore>`
-/// lease, returning `(response, cache_hit)`.
+/// Serve a read-only RPC method inside a replica's `rpc-serve`, returning
+/// `(response, cache_hit)`. Only replica profiles come here; a validator keeps
+/// the worker path. The same limits as the worker path apply: the global and
+/// per-caller concurrency caps, and the request time limit on the store lease.
 fn run_rpc_serve_in_process_read(
     request: &RpcRequest,
     context: &RpcServeConnectionContext,
 ) -> (RpcResponse, bool) {
+    let _dispatch_guard = match try_acquire_rpc_serve_child_dispatch(context) {
+        Ok(guard) => guard,
+        Err(error) => {
+            return (
+                rpc_serve_error_response(&request.id, "rpc_rate_limited", &error),
+                false,
+            )
+        }
+    };
+    let cacheable = is_height_pure_read(request);
     let canonical_params = postfiat_node::validator_uptime::canonical_json_bytes(&request.params)
         .ok()
         .and_then(|bytes| String::from_utf8(bytes).ok())
         .unwrap_or_else(|| request.params.to_string());
 
-    // Step 1: Read current committed height cheaply via the health cache.
-    // For `receipts`, never block waiting on the transactional store lease when
-    // the health cache is cold: `validator_receipt_reader::read` performs its own
-    // 100ms direct-read probe and falls back to the validator's held-snapshot
-    // abstract socket when a sibling validator holds the store lease.
-    let is_receipts = request.method == "receipts";
-    let height_before = if is_receipts {
-        context.health_cache.lock().ok().and_then(|cache| {
-            if cache
-                .status_checked_at
-                .is_some_and(|checked_at| checked_at.elapsed() <= RPC_SERVE_HEALTH_STAMP_MAX_AGE)
-            {
-                cache.status.as_ref().map(|report| report.block_height)
-            } else {
-                None
-            }
-        })
-    } else {
+    let height_before = if cacheable {
         rpc_serve_cached_status(&context.data_dir, &context.health_cache)
             .ok()
             .map(|(report, _)| report.block_height)
+    } else {
+        None
     };
-
-    // Step 2: Check height-stamped response cache (zero redb open / zero flock).
-    if let Some(h) = height_before {
+    if let Some(height) = height_before {
         if let Ok(mut cache) = context.read_cache.lock() {
             if let Some(hit) =
-                cache.get_at_height(h, &request.method, &canonical_params, &request.id)
+                cache.get_at_height(height, &request.method, &canonical_params, &request.id)
             {
                 return (hit, true);
             }
@@ -634,86 +815,36 @@ fn run_rpc_serve_in_process_read(
         }
     }
 
-    // Step 3: Cache miss -> execute in-process under ONE shared transactional store lease.
-    // For `receipts`, delegate lease acquisition to `validator_receipt_reader::read`
-    // so the held-snapshot protocol runs before waiting on a writer lease.
-    let has_fallback = context.read_cache.lock().ok().is_some_and(|cache| {
-        cache.has_recent_fallback(
-            &request.method,
-            &canonical_params,
-            RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE,
-        )
-    });
-
+    let is_receipts = request.method == "receipts";
     let run_read = || -> Result<(RpcResponse, Option<u64>), String> {
         if is_receipts {
+            // `validator_receipt_reader::read` takes its own lease.
             let response = execute_in_process_standard_read(request, &context.data_dir)?;
-            let height_after = if height_before.is_some() {
-                let store = postfiat_storage::NodeStore::new(&context.data_dir);
-                postfiat_storage::transactional::with_writer_lease_deadline(
-                    Duration::from_millis(50),
-                    || store.read_chain_tip(),
-                )
-                .ok()
-                .map(|tip| tip.height)
-            } else {
-                None
-            };
-            return Ok((response, height_after));
+            return Ok((response, None));
         }
         let store = postfiat_storage::NodeStore::new(&context.data_dir);
         let _lease = store
             .transactional_store_lease()
             .map_err(|error| format!("rpc {} store lease failed: {error}", request.method))?;
         let response = execute_in_process_standard_read(request, &context.data_dir)?;
-        let height_after = store
-            .read_chain_tip()
-            .ok()
-            .map(|tip| tip.height)
-            .or(height_before);
+        let height_after = store.read_chain_tip().ok().map(|tip| tip.height);
         Ok((response, height_after))
     };
-
-    let outcome = if has_fallback {
-        postfiat_storage::transactional::with_writer_lease_deadline(
-            RPC_READ_CACHE_BUSY_WAIT,
-            run_read,
-        )
-    } else {
-        run_read()
-    };
+    let outcome = postfiat_storage::transactional::with_writer_lease_deadline(
+        Duration::from_millis(context.child_timeout_ms),
+        run_read,
+    );
 
     match outcome {
         Ok((response, height_after)) => {
-            if response.ok {
-                if let (Some(h_before), Some(h_after)) = (height_before, height_after) {
-                    if h_before == h_after {
-                        if let Ok(mut cache) = context.read_cache.lock() {
-                            cache.insert(
-                                h_after,
-                                &request.method,
-                                &canonical_params,
-                                response.clone(),
-                            );
-                        }
-                    }
+            if cacheable && response.ok && height_before.is_some() && height_before == height_after {
+                if let (Some(height), Ok(mut cache)) = (height_after, context.read_cache.lock()) {
+                    cache.insert(height, &request.method, &canonical_params, response.clone());
                 }
             }
             (response, false)
         }
         Err(error) => {
-            if error.contains("storage_writer_busy") {
-                if let Ok(mut cache) = context.read_cache.lock() {
-                    if let Some(fallback) = cache.get_recent_fallback(
-                        &request.method,
-                        &canonical_params,
-                        &request.id,
-                        RPC_SERVE_STATUS_COMMIT_WINDOW_MAX_AGE,
-                    ) {
-                        return (fallback, true);
-                    }
-                }
-            }
             let (code, message) = rpc_dispatch::rpc_dispatch_error_response_parts(&error);
             (rpc_serve_error_response(&request.id, code, message), false)
         }
@@ -724,255 +855,203 @@ fn run_rpc_serve_in_process_read(
 mod rpc_read_cache_tests {
     use super::*;
 
-    fn replica_serve_options(
-        root: &Path,
-        port: u16,
-        max_requests: usize,
+    fn check(
         profile: RpcServeProfile,
-    ) -> RpcServeOptions {
-        RpcServeOptions {
-            data_dir: root.to_path_buf(),
-            spool_dir: root.join("runtime/rpc-spool"),
-            ready_file: root.join(format!("readiness/rpc-replica-{port}.json")),
-            bind_host: "127.0.0.1".to_string(),
-            port,
-            max_requests,
-            timeout_ms: 5_000,
-            child_timeout_ms: 5_000,
-            event_log: None,
-            allow_mempool_submit: false,
-            allow_mempool_submit_finality: false,
-            allow_orchard_batch_create: false,
-            owned_lane_enabled: false,
-            allow_private_action_admission: false,
-            finality_topology_file: root.join("topology.json"),
-            finality_key_file: root.join(VALIDATOR_KEYS_FILE),
-            finality_proposal_key_file: None,
-            finality_signer_socket: None,
-            finality_artifact_root: root.join("finality-artifacts"),
-            finality_timeout_ms: 2_000,
-            finality_send_retries: 0,
-            finality_retry_backoff_ms: 0,
-            finality_vote_phase_deadline_ms: PEER_VOTE_PHASE_DEADLINE_MS,
-            finality_quorum_early_full_propagation: false,
-            max_mempool_submit_per_peer: 8,
-            max_mempool_submit_total: 32,
-            max_orchard_batch_create_per_peer: 2,
-            max_orchard_batch_create_total: 8,
-            max_orchard_batch_create_concurrent: 1,
-            max_child_dispatch_concurrent: 8,
-            max_child_dispatch_per_peer: 4,
-            keep_alive: true,
-            rpc_profile: profile,
-            max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
-        }
-    }
-
-    #[test]
-    fn replica_profile_forbids_signer_and_public_bind() {
-        let flags = vec![
-            "--finality-key-file".to_string(),
-            "/tmp/key.json".to_string(),
-        ];
-        let err = validate_rpc_replica_profile_flags(
-            RpcServeProfile::PublicReplica,
-            &flags,
-            "127.0.0.1",
-            false,
-            false,
-            false,
-            false,
-        )
-        .expect_err("signer key file must be refused in replica profile");
-        assert!(err.contains("rpc_replica_signer_forbidden"), "{err}");
-
-        let socket_flags = vec![
-            "--finality-signer-socket".to_string(),
-            "/run/signer.sock".to_string(),
-        ];
-        let err = validate_rpc_replica_profile_flags(
-            RpcServeProfile::PrivateReplica,
-            &socket_flags,
-            "127.0.0.1",
-            false,
-            false,
-            false,
-            false,
-        )
-        .expect_err("signer socket must be refused in replica profile");
-        assert!(err.contains("rpc_replica_signer_forbidden"), "{err}");
-
-        let err = validate_rpc_replica_profile_flags(
-            RpcServeProfile::PublicReplica,
-            &[],
-            "0.0.0.0",
-            false,
-            false,
-            false,
-            false,
-        )
-        .expect_err("wildcard bind must be refused in replica profile");
-        assert!(err.contains("rpc_replica_bind_forbidden"), "{err}");
-
+        flags: &[&str],
+        bind_host: &str,
+        allow_mempool_submit: bool,
+        allow_private_action_admission: bool,
+        data_dir: &Path,
+    ) -> Result<(), String> {
+        let flags: Vec<String> = flags.iter().map(|flag| (*flag).to_string()).collect();
         validate_rpc_replica_profile_flags(
-            RpcServeProfile::PublicReplica,
-            &[],
-            "127.0.0.1",
+            profile,
+            &flags,
+            bind_host,
+            allow_mempool_submit,
             false,
             false,
-            false,
-            false,
+            allow_private_action_admission,
+            data_dir,
         )
-        .expect("valid loopback public replica");
     }
 
-    #[test]
-    fn height_stamped_read_cache_serves_concurrent_reads_under_250ms_and_matches_direct() {
-        let root = env::temp_dir().join(format!(
-            "postfiat-replica-read-cache-{}-{}",
+    fn temp_dir(label: &str) -> PathBuf {
+        let dir = env::temp_dir().join(format!(
+            "postfiat-replica-{label}-{}-{}",
             process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("clock")
                 .as_nanos()
         ));
-        init_consensus_v2(InitConsensusV2Options {
-            data_dir: root.clone(),
-            chain_id: "replica-cache-test".to_string(),
-            node_id: "validator-0".to_string(),
-            validator_count: 4,
-            activation_height: 1,
-            storage_activation_height: None,
-        })
-        .expect("init node");
-        let faucet = faucet_key(NodeOptions {
-            data_dir: root.clone(),
-        })
-        .expect("faucet key");
+        fs::create_dir_all(&dir).expect("temp dir");
+        dir
+    }
 
-        // Baseline direct reads for differential equivalence.
-        let direct_fee = rpc_dispatch::rpc_fee_alias(root.clone()).expect("direct fee");
-        let direct_validators =
-            rpc_dispatch::rpc_validators_alias(root.clone()).expect("direct validators");
-        let direct_acct = rpc_dispatch::account_rpc_result(
-            &account(
-                NodeOptions {
-                    data_dir: root.clone(),
-                },
-                &faucet.address,
-            )
-            .expect("direct account"),
-        )
-        .expect("direct account json");
-        let direct_lines = serde_json::to_value(
-            account_lines(AccountLinesOptions {
-                data_dir: root.clone(),
-                account: faucet.address.clone(),
-                issuer: None,
-                asset_id: None,
-                limit: None,
-            })
-            .expect("direct account_lines"),
-        )
-        .expect("direct account_lines json");
+    #[test]
+    fn replica_profile_is_non_voting_by_fact_not_by_flag() {
+        let empty = temp_dir("empty");
+        let public = RpcServeProfile::PublicReplica;
+        let private = RpcServeProfile::PrivateReplica;
 
-        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind port");
-        let port = listener.local_addr().expect("addr").port();
-        let total_conns = 12_usize;
-        let options =
-            replica_serve_options(&root, port, total_conns, RpcServeProfile::PublicReplica);
-        let ready_file = options.ready_file.clone();
-        let server = std::thread::spawn(move || rpc_serve_inner(options, Some(listener)));
-        for _ in 0..200 {
-            if ready_file.is_file() {
-                break;
-            }
-            thread::sleep(Duration::from_millis(10));
+        for flag in [
+            "--finality-key-file",
+            "--finality-proposal-key-file",
+            "--finality-signer-socket",
+        ] {
+            let err = check(public, &[flag, "/tmp/x"], "127.0.0.1", false, false, &empty)
+                .expect_err("signer flag must be refused");
+            assert!(err.contains("rpc_replica_signer_forbidden"), "{err}");
         }
-        assert!(ready_file.is_file(), "replica server ready");
+        let err = check(public, &[], "0.0.0.0", false, false, &empty).expect_err("wildcard bind");
+        assert!(err.contains("rpc_replica_bind_forbidden"), "{err}");
+        // A replica orders nothing: no profile accepts transaction submission.
+        for profile in [public, private] {
+            let err = check(profile, &[], "127.0.0.1", true, false, &empty)
+                .expect_err("mempool submit must be refused");
+            assert!(err.contains("rpc_replica_write_forbidden"), "{err}");
+        }
+        let err = check(private, &[], "127.0.0.1", false, true, &empty)
+            .expect_err("private replica admits nothing");
+        assert!(err.contains("rpc_replica_write_forbidden"), "{err}");
+        check(public, &[], "127.0.0.1", false, true, &empty).expect("public replica with admission");
+        check(private, &[], "127.0.0.1", false, false, &empty).expect("private replica");
 
-        // Fire 12 concurrent keep-alive clients, each issuing 5 mixed standard reads (60 reads total).
-        let addr = faucet.address.clone();
-        let handles: Vec<_> = (0..total_conns)
-            .map(|worker_idx| {
-                let addr = addr.clone();
-                let direct_fee = direct_fee.clone();
-                let direct_validators = direct_validators.clone();
-                let direct_acct = direct_acct.clone();
-                let direct_lines = direct_lines.clone();
-                thread::spawn(move || {
-                    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-                    stream
-                        .set_read_timeout(Some(Duration::from_secs(5)))
-                        .expect("timeout");
-                    let mut reader = BufReader::new(stream.try_clone().expect("clone"));
-                    let requests = vec![
-                        RpcRequest::empty(format!("w{worker_idx}-status"), "status"),
-                        RpcRequest::empty(format!("w{worker_idx}-fee"), "fee"),
-                        RpcRequest::empty(format!("w{worker_idx}-validators"), "validators"),
-                        RpcRequest::new(
-                            format!("w{worker_idx}-account"),
-                            "account",
-                            serde_json::json!({ "address": addr }),
-                        ),
-                        RpcRequest::new(
-                            format!("w{worker_idx}-lines"),
-                            "account_lines",
-                            serde_json::json!({ "account": addr }),
-                        ),
-                    ];
-                    let mut latencies_ms = Vec::new();
-                    for req in requests {
-                        let started = Instant::now();
-                        let mut line = serde_json::to_vec(&req).expect("serialize");
-                        line.push(b'\n');
-                        stream.write_all(&line).expect("write");
-                        let mut reply_line = String::new();
-                        reader.read_line(&mut reply_line).expect("read");
-                        latencies_ms.push(started.elapsed().as_secs_f64() * 1_000.0);
-                        let resp: RpcResponse = serde_json::from_str(&reply_line).expect("parse");
-                        assert!(resp.ok, "{}: {:?}", req.method, resp.error);
-                        let result = resp.result.expect("result");
-                        match req.method.as_str() {
-                            "status" => {
-                                assert_eq!(result["node_role"], "rpc_follower");
-                                assert_eq!(result["voting_enabled"], false);
-                                assert_eq!(result["rpc_profile"], "public-replica");
-                            }
-                            "fee" => assert_eq!(result, direct_fee),
-                            "validators" => assert_eq!(result, direct_validators),
-                            "account" => assert_eq!(result, direct_acct),
-                            "account_lines" => assert_eq!(result, direct_lines),
-                            _ => {}
-                        }
-                    }
-                    let _ = stream.shutdown(std::net::Shutdown::Write);
-                    latencies_ms
-                })
-            })
+        // No flag is given, but the default key file is there: still refused.
+        let with_key = temp_dir("with-key");
+        fs::write(with_key.join(VALIDATOR_KEYS_FILE), b"{}").expect("key file");
+        let err = check(public, &[], "127.0.0.1", false, false, &with_key)
+            .expect_err("key material in the data directory must be refused");
+        assert!(err.contains("rpc_replica_key_material_present"), "{err}");
+        // The standard profile is untouched by all of this.
+        check(RpcServeProfile::Standard, &["--finality-key-file", "/tmp/x"], "0.0.0.0", true, true, &with_key)
+            .expect("standard profile is not a replica");
+        let _ = fs::remove_dir_all(empty);
+        let _ = fs::remove_dir_all(with_key);
+    }
+
+    #[test]
+    fn replica_method_list_is_the_inventory_read_only_posture() {
+        let inventory_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../docs/runbooks/rpc-method-inventory.json");
+        let inventory: serde_json::Value =
+            serde_json::from_slice(&fs::read(&inventory_path).expect("inventory file"))
+                .expect("inventory json");
+        let mut expected: Vec<String> = inventory["methods"]
+            .as_array()
+            .expect("methods")
+            .iter()
+            .filter(|method| method["posture"] == "read_only_public")
+            .map(|method| method["method"].as_str().expect("method name").to_string())
             .collect();
+        expected.sort();
+        let listed: Vec<String> = RPC_REPLICA_READ_METHODS.iter().map(|m| (*m).to_string()).collect();
+        assert_eq!(listed, expected, "RPC_REPLICA_READ_METHODS must equal the inventory, sorted");
 
-        let mut all_latencies = Vec::new();
-        for h in handles {
-            all_latencies.extend(h.join().expect("worker"));
+        let public = RpcServeProfile::PublicReplica;
+        let private = RpcServeProfile::PrivateReplica;
+        for method in inventory["methods"].as_array().expect("methods") {
+            let name = method["method"].as_str().expect("method name");
+            let posture = method["posture"].as_str().expect("posture");
+            let read = posture == "read_only_public";
+            assert_eq!(rpc_replica_profile_serves(private, name, false), read, "{name}");
+            assert_eq!(rpc_replica_profile_serves(public, name, false), read, "{name}");
+            if posture != "read_only_public" && posture != "private_action_gated" {
+                assert!(!rpc_replica_profile_serves(public, name, true), "{name} ({posture})");
+            }
+            assert!(rpc_replica_profile_serves(RpcServeProfile::Standard, name, false));
         }
-        all_latencies.sort_by(|a, b| a.total_cmp(b));
-        let p95 = all_latencies[(all_latencies.len() * 95).saturating_sub(1) / 100];
-        assert!(
-            p95 < 250.0,
-            "concurrent read p95 latency {p95:.2}ms exceeded 250ms SLA"
-        );
+        assert!(rpc_replica_profile_serves(public, "private_action_submit", true));
+        assert!(!rpc_replica_profile_serves(private, "private_action_submit", true));
+        assert!(!rpc_replica_profile_serves(public, "a_method_nobody_listed", true));
+    }
 
-        let report = server.join().expect("server thread").expect("rpc serve");
-        assert!(report.read_only);
-        assert_eq!(report.ok_count, (total_conns * 5) as u64);
-        assert!(
-            report
-                .requests
-                .iter()
-                .any(|ev| ev.handler_mode.as_deref() == Some("in_process_read_cache")),
-            "expected height-stamped read cache hits in event log"
+    #[test]
+    fn replica_lag_is_enforced_and_unknown_is_not_ready() {
+        let dir = temp_dir("lag");
+        let now = 1_800_000_000;
+        let tip = dir.join(RPC_REPLICA_SOURCE_TIP_FILE);
+        let write = |source_height: u64, checked_at_unix: u64| {
+            fs::create_dir_all(tip.parent().expect("parent")).expect("dir");
+            fs::write(
+                &tip,
+                serde_json::to_vec(&RpcReplicaSourceTip {
+                    schema: RPC_REPLICA_SOURCE_TIP_SCHEMA.to_string(),
+                    source_height,
+                    local_height: 100,
+                    checked_at_unix,
+                })
+                .expect("json"),
+            )
+            .expect("write");
+        };
+        assert!(matches!(rpc_replica_lag(&dir, 100, 5, now), RpcReplicaLag::Unknown { .. }));
+        write(105, now);
+        assert_eq!(rpc_replica_lag(&dir, 100, 5, now), RpcReplicaLag::Within { lag_blocks: 5 });
+        write(106, now);
+        assert_eq!(
+            rpc_replica_lag(&dir, 100, 5, now),
+            RpcReplicaLag::Lagging { lag_blocks: 6, local_height: 100 }
         );
-        let _ = fs::remove_dir_all(root);
+        // A replica ahead of the last record is not behind.
+        assert_eq!(rpc_replica_lag(&dir, 200, 5, now), RpcReplicaLag::Within { lag_blocks: 0 });
+        // The catch-up job stopped: the replica no longer knows.
+        write(100, now - RPC_REPLICA_SOURCE_TIP_MAX_AGE_SECS - 1);
+        assert!(matches!(rpc_replica_lag(&dir, 100, 5, now), RpcReplicaLag::Unknown { .. }));
+        fs::write(&tip, b"not json").expect("write");
+        assert!(matches!(rpc_replica_lag(&dir, 100, 5, now), RpcReplicaLag::Unknown { .. }));
+        // The record `rpc-catch-up --source-tip-file` writes is the one read here.
+        write_rpc_replica_source_tip(&tip, 103, 100).expect("write record");
+        assert_eq!(
+            rpc_replica_lag(&dir, 100, 5, unix_now_secs()),
+            RpcReplicaLag::Within { lag_blocks: 3 }
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn cache_serves_only_height_pure_reads_at_the_same_height_and_while_fresh() {
+        let request = |method: &str, params: serde_json::Value| RpcRequest::new("id", method, params);
+        for method in ["validators", "manifests", "vault_bridge_route"] {
+            assert!(is_height_pure_read(&request(method, serde_json::json!({}))), "{method}");
+        }
+        assert!(is_height_pure_read(&request("blocks", serde_json::json!({"from_height": 3}))));
+        assert!(!is_height_pure_read(&request("blocks", serde_json::json!({}))));
+        // Balances, pending counts, clocks and anything an owned-lane effect moves between blocks.
+        for method in [
+            "account", "account_assets", "account_lines", "metrics", "fee", "ledger", "tx",
+            "receipts", "account_tx", "bridge_status", "vault_bridge_status",
+        ] {
+            assert!(!is_height_pure_read(&request(method, serde_json::json!({}))), "{method}");
+        }
+
+        let mut cache = RpcServeReadCache::default();
+        let response = success_response("first", &serde_json::json!({"v": 1}), Vec::new()).expect("response");
+        cache.insert(7, "validators", "{}", response);
+        let hit = cache.get_at_height(7, "validators", "{}", "second").expect("hit at the same height");
+        assert_eq!(hit.id, "second");
+        // The cached answer names the height it was read at.
+        let event = hit.events.last().expect("cache event");
+        assert_eq!((event.event_type.as_str(), event.subject.as_str()), ("read_cache", "7"));
+        assert!(cache.get_at_height(8, "validators", "{}", "x").is_none(), "another height");
+        assert!(cache.get_at_height(7, "validators", "{\"a\":1}", "x").is_none(), "other params");
+        cache
+            .entries
+            .get_mut(&("validators".to_string(), "{}".to_string()))
+            .expect("entry")
+            .inserted_at = Instant::now() - RPC_READ_CACHE_MAX_AGE - Duration::from_millis(1);
+        assert!(cache.get_at_height(7, "validators", "{}", "x").is_none(), "older than the age limit");
+    }
+
+    #[test]
+    fn only_a_replica_profile_reads_in_process() {
+        let request = RpcRequest::new("id", "account", serde_json::json!({"address": "x"}));
+        assert!(is_in_process_standard_read_method(&request));
+        assert!(!rpc_serve_reads_in_process(RpcServeProfile::Standard, &request));
+        assert!(rpc_serve_reads_in_process(RpcServeProfile::PublicReplica, &request));
+        assert!(rpc_serve_reads_in_process(RpcServeProfile::PrivateReplica, &request));
+        let submit = RpcRequest::new("id", "mempool_submit_signed_payment_v2", serde_json::json!({}));
+        assert!(!rpc_serve_reads_in_process(RpcServeProfile::PublicReplica, &submit));
     }
 }

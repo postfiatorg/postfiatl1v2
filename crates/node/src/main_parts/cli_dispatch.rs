@@ -798,6 +798,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         "deployment-publisher-key-create"
         | "deployment-validator-units-stage"
         | "top"
+        | "rpc-http-edge"
         | "observer-key-create"
         | "observer-uptime-sign"
         | "observer-uptime-verify" => run_cli_group_05(command, flags),
