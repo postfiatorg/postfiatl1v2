@@ -124,8 +124,8 @@ def anchor(c):
         "-oBatchMode=yes",
         "-oConnectTimeout=8",
         "-p",
-        "37815",
-        "root@37.63.76.95",
+        "63534",
+        "root@207.216.48.74",
     ]
     epoch = c.call("getEpochInfo", {"commitment": "finalized"})
     first = epoch["absoluteSlot"] - epoch["slotIndex"]
@@ -165,8 +165,8 @@ def anchor(c):
                 "rsync",
                 "-a",
                 "-e",
-                "ssh -oBatchMode=yes -p 37815",
-                f"root@37.63.76.95:/work/g/sol-live/archive/{slot}/",
+                "ssh -oBatchMode=yes -p 63534",
+                f"root@207.216.48.74:/work/g/sol-live/archive/{slot}/",
                 str(stage) + "/",
             ],
             check=True,
@@ -398,7 +398,7 @@ def verify_budget(estimated_lamports):
             ]
         )
     )
-    instances = {61511840, 61487772, 62235343, read(STATE / "gpu.json")["new_contract"]}
+    instances = {61511840, 62617699, 62235343, read(STATE / "gpu.json")["new_contract"]}
     billed = {
         str(instance): sum(
             (

@@ -118,8 +118,15 @@ caps.
 - **Releases.** The first withdrawal rules are active from block 1841 and the
   second from block 1890 (every bucket of the shared custody can exit, refund path). The
   second release's height is the `SECOND_RELEASES` entry in
-  `crates/types/src/solana_exit.rs`; the live build `04600868` is cut from the
-  release branch `release/sol-exit-r2`, which sets it.
+  `crates/types/src/solana_exit.rs`; it was set by the release branch
+  `release/sol-exit-r2` (build `04600868`, live from 24 November) and is on
+  `main` since #234. Since 25 November the validators run `sol-exit-r3`
+  (`2356caf1`), in which a Solana exit payout or refund settles with five of
+  six validators ([Network Status](../status/network-status.md)).
+- **When the route is open.** Since 26 November proofs are made only during a
+  daily proving session, planned for 17:00 to 19:00 UTC; outside it Solana
+  deposits and withdrawals are closed on purpose
+  ([Network Status](../status/network-status.md#usdc-bridges)).
 - **Limits on 24 November** ([handoff of 25 November](../status/handoff-2026-11-25.md)):
   one withdrawal burns from one bucket and its series; withdrawals below 0.30 USDC are
   refused; the vault accepted 25 USDC more; a withdrawal takes about four

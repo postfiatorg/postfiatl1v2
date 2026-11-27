@@ -12,9 +12,11 @@ host's own fresh review, exactly as `exit_review.py sign` does.
 """
 
 import hashlib
+import io
 import json
 import os
 import re
+import select
 import sys
 import time
 from pathlib import Path
@@ -22,6 +24,8 @@ from pathlib import Path
 INBOX = Path("/var/lib/postfiat-exit-review/inbox")
 OUTBOX = Path("/var/lib/postfiat-exit-review/outbox")
 LIMIT = 65536
+# A request must arrive whole within this many seconds; an unfinished one is refused.
+READ_SECONDS = 30
 # The inbox is bounded: at most this many decisions wait at once, and an entry is removed after
 # RETAIN_SECONDS. A settlement's signatures expire after 30 blocks, far inside that.
 MAX_ENTRIES = 64
@@ -83,6 +87,24 @@ def read(path):
         return json.loads(stream.read(LIMIT))
 
 
+def read_request(stdin):
+    """At most LIMIT + 1 bytes of the request, within READ_SECONDS in total."""
+    try:
+        fd = stdin.fileno()
+    except (AttributeError, OSError, io.UnsupportedOperation):
+        return stdin.read(LIMIT + 1)
+    deadline, chunks, size = time.monotonic() + READ_SECONDS, [], 0
+    while size <= LIMIT:
+        remaining = deadline - time.monotonic()
+        require(remaining > 0 and select.select([fd], [], [], remaining)[0], "the request did not arrive in time")
+        chunk = os.read(fd, LIMIT + 1 - size)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        size += len(chunk)
+    return b"".join(chunks)
+
+
 def handle(request, inbox, outbox):
     require(isinstance(request, dict), "not a request")
     if request.get("request") == "review":
@@ -116,7 +138,7 @@ def main(stdin=None, environ=None, inbox=INBOX, outbox=OUTBOX):
     environ = os.environ if environ is None else environ
     try:
         require(not environ.get("SSH_ORIGINAL_COMMAND"), "this key runs no command; send a request on stdin")
-        raw = stdin.read(LIMIT + 1)
+        raw = read_request(stdin)
         require(len(raw) <= LIMIT, "request too large")
         try:
             request = json.loads(raw)

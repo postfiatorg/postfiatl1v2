@@ -199,7 +199,8 @@ with real money on `postfiat-wan-devnet-2` since mid-November
 A PFTL-side receipt for USDC locked in a source-chain vault under a named route,
 used as cash in NAVCoin settlement ([NAVCoins](../navcoins/index.md)). Ethereum
 and Solana deposits mint separate pfUSDC series with separate backing; Solana
-pfUSDC can be withdrawn to Solana since 2026-11-23
+pfUSDC can be withdrawn to Solana since 2026-11-23; since 2026-11-26 deposits
+and withdrawals are open only during a daily proving session
 ([Network Status](../status/network-status.md#usdc-bridges)).
 
 ### pNOK

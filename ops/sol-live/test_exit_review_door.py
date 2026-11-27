@@ -78,6 +78,23 @@ class Door(unittest.TestCase):
         code, out, _ = self.ask(dict(request="result", decision_sha256="ef" * 32))
         self.assertEqual(json.loads(out)["state"], "unknown")
 
+    def test_a_request_that_never_finishes_is_refused_after_its_deadline(self):
+        import os
+        import threading
+
+        reader, writer = os.pipe()
+        os.write(writer, b'{"request": "review", ')  # and the caller never sends the rest
+        stdin = os.fdopen(reader, "rb")
+        codes = []
+        with patch.object(door, "READ_SECONDS", 1, create=True):
+            worker = threading.Thread(target=lambda: codes.append(
+                door.main(stdin, {}, self.inbox, self.outbox)), daemon=True)
+            worker.start()
+            worker.join(5)
+        os.close(writer)
+        self.assertEqual(codes, [door.REFUSED], "the door still waits for an unfinished request")
+        self.assertEqual(list(self.inbox.iterdir()), [])
+
     def test_anything_else_is_refused_and_writes_nothing(self):
         cases = [
             ("a command", dict(request="result", decision_sha256=SHA), "cat /etc/shadow"),

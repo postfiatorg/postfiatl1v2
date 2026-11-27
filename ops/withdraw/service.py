@@ -11,7 +11,7 @@ Listens on 127.0.0.1 only; the Task Node server is the only caller.
 """
 import json,os,re,shlex,subprocess,sys,threading,time,uuid,hashlib
 from web3 import Web3
-from datetime import datetime,timezone
+from datetime import datetime,timedelta,timezone
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
@@ -23,7 +23,7 @@ import archive as arch
 import exit_profile
 from eth_journal import durable_json, ensure_directory, intent_path, read_eth_result, ReconciliationRequired
 from eth_send import RPC, VERIFIER, VAULT, OPERATOR, KEY
-from eth_finality import AwaitingFinality, confirm_action
+from eth_finality import AwaitingFinality, TransactionUnknown, confirm_action
 PY=sys.executable
 COORD=Path('/home/postfiat/repos/b23-coord');E=COORD/'evidence/withdraw';JOBS=E/'jobs'
 HOST_BIN=E/'bin/proof-host';ELF=E/'historical/egress.elf'
@@ -36,25 +36,105 @@ worker_started=threading.Event()
 ACTIVE_STAGES = {'queued', 'reading', 'catching_up', 'proving', 'paying'}
 
 
+# A route failure (prover, SSH, Ethereum send) is retried after 5, 10 and 20 minutes.
+# After the last attempt the job stays failed but no longer gates other burns.
+ROUTE_RETRY_ATTEMPTS = 4
+ROUTE_RETRY_BASE_SECONDS = 300
+# Messages that IneligibleBurn carries, and carried before burn failures were scoped.
+BURN_FAILURE_MESSAGES = ('This burn is not finalized on the network.',
+                         'This burn is not for the Ethereum mainnet USDC vault.')
+
+
 class IneligibleBurn(RuntimeError):
     """This request cannot proceed, independently of payout infrastructure health."""
 
 
 
+def utcnow():return datetime.now(timezone.utc)
 def now():return datetime.now(timezone.utc).isoformat(timespec='seconds')
 def job_path(burn):return JOBS/burn/'job.json'
+def classify_failure(job):
+    """Give a failed row written before scoped retries the scope and retry its error implies."""
+    if job.get('stage') == 'failed':
+        if 'error_scope' not in job:
+            job['error_scope'] = 'burn' if job.get('error') in BURN_FAILURE_MESSAGES else 'route'
+        if job['error_scope'] == 'route' and not job.get('retry_exhausted') and not job.get('retry_at'):
+            job.setdefault('route_attempts', 1)
+            job['retry_at'] = job['updated_at']
+    return job
+def load_job(path):return classify_failure(load(path))
 def read_job(burn):
-    p=job_path(burn);return load(p) if p.exists() else None
+    p=job_path(burn);return load_job(p) if p.exists() else None
+def route_retry_pending(job):
+    return job.get('stage') == 'failed' and job.get('error_scope') == 'route' and not job.get('retry_exhausted')
+def route_retry_due(job):
+    return route_retry_pending(job) and utcnow() >= datetime.fromisoformat(job['retry_at'])
+def record_route_failure(job):
+    attempts = job.get('route_attempts', 0) + 1
+    job['route_attempts'] = attempts
+    if attempts >= ROUTE_RETRY_ATTEMPTS:
+        job.update(retry_exhausted=True, retry_at=None)
+    else:
+        delay = ROUTE_RETRY_BASE_SECONDS * 2 ** (attempts - 1)
+        job.update(retry_exhausted=False, retry_at=(utcnow()+timedelta(seconds=delay)).isoformat(timespec='seconds'))
 def write_job(job):
     with lock:
         p=job_path(job['burn_tx_id']);ensure_directory(p.parent);durable_json(p,job)
 def stage(job,name,detail=''):
     job.update(stage=name,detail=detail,updated_at=now());job.setdefault('history',[]).append([now(),name,detail]);write_job(job);print(now(),job['burn_tx_id'][:12],name,detail,flush=True)
+def restage(job,name,detail=''):
+    # A repeated check of the same state refreshes its clock without growing the history.
+    if job.get('stage')==name and job.get('detail')==detail:
+        job['updated_at']=now();write_job(job)
+    else:stage(job,name,detail)
 
 def run(args,**kw):return subprocess.run([str(a) for a in args],check=True,capture_output=True,text=True,**kw)
 
 def bridge_status():
     return call('vault_bridge_status',{'asset_id':FAMILY})
+# An optional proving window, at the door only. WITHDRAW_PROVING_WINDOW_HOURS (UTC, `17:00-19:00`;
+# a window may cross midnight) is read once at start. Outside it readiness is not ready, so the
+# screens, which ask readiness first, start no new withdrawal; a job already underway, or a request
+# posted anyway, is handled exactly as without the setting. Unset: readiness is as before.
+def parse_window_hours(value):
+    """None when unset; else (start, end) minutes and their text, or an error naming the setting."""
+    if value is None:
+        return None
+    m = re.fullmatch(r'([01][0-9]|2[0-3]):([0-5][0-9])-([01][0-9]|2[0-3]):([0-5][0-9])', value)
+    if m:
+        start, end = int(m[1]) * 60 + int(m[2]), int(m[3]) * 60 + int(m[4])
+        if start != end:
+            return dict(start=start, end=end, text=f'{m[1]}:{m[2]} to {m[3]}:{m[4]} UTC')
+    return dict(error=f'WITHDRAW_PROVING_WINDOW_HOURS={value!r} is invalid: it must be HH:MM-HH:MM in UTC '
+                      'with two different times')
+
+
+WINDOW = parse_window_hours(os.environ.get('WITHDRAW_PROVING_WINDOW_HOURS'))
+
+
+def window_now():
+    """The window's clock, one function a test can replace."""
+    return datetime.now(timezone.utc)
+
+
+def proving_window_answer():
+    """(refusal or None, fields for readiness) for the configured window; (None, {}) when unset."""
+    if WINDOW is None:
+        return None, {}
+    if 'error' in WINDOW:
+        return 'Ethereum withdrawals are closed: ' + WINDOW['error'] + '.', dict(proving_window_open=False)
+    now = window_now()
+    minute, start, end = now.hour * 60 + now.minute, WINDOW['start'], WINDOW['end']
+    if (start <= minute < end) if start < end else (minute >= start or minute < end):
+        return None, dict(proving_window_open=True)
+    opens = now.replace(hour=start // 60, minute=start % 60, second=0, microsecond=0)
+    if opens <= now:
+        opens += timedelta(days=1)
+    opens = opens.strftime('%Y-%m-%dT%H:%M:%SZ')
+    return (f"Ethereum withdrawals are closed: the proving window is {WINDOW['text']}; it next opens at {opens}",
+            dict(proving_window_open=False, next_window_opens_at=opens))
+
+
 def payout_preflight():
     if not worker_started.is_set():
         return 'Withdrawal worker is stopped.'
@@ -83,18 +163,22 @@ def readiness():
     s=bridge_status();route=call('vault_bridge_route',{'asset_id':FAMILY})
     profile_hash=route['beacon_finality_anchor']['route_profile_hash']
     buckets=[b for b in s['buckets'] if b['policy_hash']==profile_hash and b.get('status','active')=='active']
-    jobs = [load(path) for path in JOBS.glob('*/job.json')]
-    blocked = [j['burn_tx_id'] for j in jobs if j['stage'] in ('failed', 'reconciliation_required') and j.get('error_scope') != 'burn']
+    jobs = [load_job(path) for path in JOBS.glob('*/job.json')]
+    blocked = [j['burn_tx_id'] for j in jobs if (j['stage'] == 'reconciliation_required' and j.get('error_scope') != 'burn')
+               or route_retry_pending(j)]
+    exhausted = [j['burn_tx_id'] for j in jobs if j['stage'] == 'failed' and j.get('retry_exhausted')]
     payments = [j['updated_at'] for j in jobs if j['stage'] == 'paid' and proven_paid(j)]
     awaiting = [j['burn_tx_id'] for j in jobs if j['stage'] == 'awaiting_finality' or
                 (j['stage'] == 'paid' and not proven_paid(j))]
     stalled = [j['burn_tx_id'] for j in jobs if j['stage'] in ACTIVE_STAGES and
                (datetime.now(timezone.utc) - datetime.fromisoformat(j['updated_at'])).total_seconds() > 3600]
-    preflight_error = payout_preflight()
+    window_refusal, window_fields = proving_window_answer()
+    preflight_error = window_refusal or payout_preflight()
     payout_ready = not (blocked or stalled or preflight_error)
     health = dict(ok=True, bucket_ready=len(buckets)==1, payout_ready=payout_ready,
                   payout_preflight_error=preflight_error, last_payment_recorded_at=max(payments, default=None),
-                  blocked_jobs=blocked, stalled_jobs=stalled, awaiting_finality_jobs=awaiting)
+                  blocked_jobs=blocked, stalled_jobs=stalled, awaiting_finality_jobs=awaiting, exhausted_jobs=exhausted,
+                  **window_fields)
     if len(buckets)!=1:return dict(**health,ready=False,message='No single active deposit bucket for the current bridge setting.')
     if not payout_ready:
         health['message'] = preflight_error or 'The withdrawal worker has blocked or stalled jobs.'
@@ -154,6 +238,17 @@ def eth_send(mode, proof_dir, out):
             raise ReconciliationRequired(f'Reconcile signed Ethereum {mode} {tx}: {detail}')
         raise RuntimeError('Ethereum transaction failed: ' + detail)
     return read_eth_result(mode, out)
+
+
+def rebroadcast(mode, proof_dir, out):
+    """Ask eth_send.py to resend the journaled bytes of a recorded transaction the chain no longer knows."""
+    result = subprocess.run(
+        [PY, str(HERE / 'eth_send.py'), mode, str(proof_dir), str(out)],
+        capture_output=True, text=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'),
+    )
+    if result.returncode:
+        detail = (result.stderr.strip().splitlines() or ['unknown'])[-1][-300:]
+        raise ReconciliationRequired(f'Reconcile dropped Ethereum {mode}: {detail}')
 
 
 def historical_checkpoint(blocks, height, audit_record):
@@ -289,11 +384,20 @@ def recover_payment(job, directory):
         # A legacy paid row can be recovered with just its original tx id and packet.
         # This is always read-only on Ethereum, even when the old receipt file is absent.
         terms = withdrawal_terms(job, directory)
-        done = finalized_result('withdraw', result, terms, known_tx)
+        try:
+            done = finalized_result('withdraw', result, terms, known_tx)
+        except TransactionUnknown as unknown:
+            if not historical and result.exists() and intent_path(result).exists():
+                # A lagging RPC can also answer "unknown"; a refused resend keeps the job waiting.
+                try:
+                    rebroadcast('withdraw', directory/'proof', result)
+                except ReconciliationRequired as refused:
+                    raise AwaitingFinality(f'{unknown}; resend refused: {refused}'[:400]) from refused
+            raise
     except (ReconciliationRequired, OSError, ValueError, TypeError, KeyError) as error:
         if not isinstance(error, ReconciliationRequired):
             error = ReconciliationRequired('Unusable withdrawal evidence; reconcile '+str(error)[:160])
-        stage(job, 'awaiting_finality' if isinstance(error, AwaitingFinality) else 'reconciliation_required', str(error))
+        restage(job, 'awaiting_finality' if isinstance(error, AwaitingFinality) else 'reconciliation_required', str(error))
         raise error
     job.update(ethereum_tx=done['tx'], ethereum_block=done['block'], ethereum_finality=done['finality'], error=None)
     stage(job, 'paid', 'USDC payout finalized on Ethereum.')
@@ -323,10 +427,15 @@ def process(job):
     for folder in sorted(d.glob('checkpoint-*')):
         result = folder / 'eth-result.json'
         if result.exists() or intent_path(result).exists():
-            stage(job, 'catching_up', 'Checking saved Ethereum checkpoint transaction.')
             if not result.exists():
+                stage(job, 'catching_up', 'Recovering the saved Ethereum checkpoint transaction.')
                 eth_send('checkpoint', folder, result)
-            finalized_checkpoint(folder)
+            # A saved receipt is only checked: an unchanged wait refreshes the job, not its history.
+            try:
+                finalized_checkpoint(folder)
+            except AwaitingFinality as error:
+                restage(job, 'awaiting_finality', str(error)[:400])
+                raise
     stage(job,'reading','Reading the finalized burn from all six validators.')
     bundle,A=export_bundle(d);blocks={b['header']['height']:b for b in A['blocks']['blocks']}
     red=[r for r in A['ledger']['vault_bridge_redemptions'] if r['withdrawal_packet']['burn_tx_id']==burn]
@@ -388,8 +497,11 @@ def reconciliation_due(job, directory, startup):
 def run_jobs(startup=False):
     for path in sorted(JOBS.glob('*/job.json'),key=lambda p:p.stat().st_mtime):
         try:
-            job=load(path)
-            if job.get('stage') not in ACTIVE_STAGES and not reconciliation_due(job, path.parent, startup):
+            stored=load(path);job=classify_failure(dict(stored))
+            if (job.get('stage') not in ACTIVE_STAGES and not reconciliation_due(job, path.parent, startup)
+                    and not route_retry_due(job)):
+                if job != stored:
+                    write_job(job)
                 continue
             try:
                 process(job)
@@ -399,7 +511,9 @@ def run_jobs(startup=False):
                 job['error_scope'] = 'burn' if isinstance(error, IneligibleBurn) else 'route'
                 new_stage = ('awaiting_finality' if isinstance(error, AwaitingFinality) else
                              'reconciliation_required' if isinstance(error, ReconciliationRequired) else 'failed')
-                if job.get('stage') != new_stage or job.get('detail') != detail:
+                if new_stage == 'failed' and job['error_scope'] == 'route':
+                    record_route_failure(job)
+                if job.get('stage') != new_stage or job.get('detail') != detail or new_stage == 'failed':
                     stage(job, new_stage, detail)
         except (ValueError, OSError) as error:
             print(now(), path, error, file=sys.stderr, flush=True)
@@ -445,6 +559,7 @@ class Handler(BaseHTTPRequestHandler):
                 job=read_job(burn)
                 if job is None or job.get('stage') in ('failed','reconciliation_required'):
                     job=dict(job or {},burn_tx_id=burn,created_at=(job or {}).get('created_at',now()),error=None)
+                    for key in ('error_scope','route_attempts','retry_at','retry_exhausted'):job.pop(key,None)
                     stage(job,'queued','Waiting for the withdrawal worker.')
             queue_event.set();self.reply(200,dict(ok=True,**self.public(job)))
         except Exception as error:self.reply(503,dict(ok=False,code='withdrawal_service_error',message=str(error)[:200]))

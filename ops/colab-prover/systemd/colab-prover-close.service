@@ -1,0 +1,11 @@
+[Unit]
+Description=Close the daily Colab proving window and stop the session
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# An open that is still waiting for a machine must not create one after the close.
+ExecStartPre=-/usr/bin/systemctl --user stop colab-prover-open.service
+ExecStart=%h/var/colab-prover/colab-prover.sh down
+ExecStartPost=-%h/var/colab-prover/vast-deposit-fallback.sh stop
+TimeoutStartSec=10min

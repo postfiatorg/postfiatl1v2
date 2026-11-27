@@ -36,8 +36,8 @@ Run the local validator doctor from the repo:
 ```bash
 scripts/testnet-validator-doctor \
   --data-dir /var/lib/postfiat/validator-0 \
-  --validator-service postfiat-validator-0.service \
-  --rpc-service postfiat-rpc-0.service
+  --validator-service validator-0=postfiat-validator-0.service \
+  --rpc-service validator-0=postfiat-validator-0-rpc.service
 ```
 
 For a machine with multiple validator data dirs:
@@ -47,7 +47,7 @@ scripts/testnet-validator-doctor \
   --data-root /var/lib/postfiat \
   --validator-count 5 \
   --validator-service-template 'postfiat-{node_id}.service' \
-  --rpc-service-template 'postfiat-rpc-{index}.service'
+  --rpc-service-template 'postfiat-{node_id}-rpc.service'
 ```
 
 Green means the local node is running, state verification passes, the active

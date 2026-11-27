@@ -6,7 +6,7 @@ The fleet row records the latest operator report. Earlier direct RPC observation
 
 | Component and evidence | Chain / height | Last observed | Result |
 | --- | --- | --- | --- |
-| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/ops/b24-live/known-releases.txt) | postfiat-wan-devnet-2 / 1903 | 2026-11-25 20:15 UTC | Six validators reported on sol-exit-r2 |
+| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/615d3d37e5c3d911454dc6533a880855e02a6ecf/docs/status/handoff-2026-11-26.md) | postfiat-wan-devnet-2 / 1906 | 2026-11-26 10:13 UTC | Six validators on sol-exit-r3, one state root |
 | [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
 | [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45701171620) | Source build / n/a | 2026-11-25T21:22:27Z | Verified (workflow success, comparison success) |
 
@@ -14,14 +14,65 @@ The fleet row records the latest operator report. Earlier direct RPC observation
 
 <!-- /component-observations -->
 
+Updated: `2026-11-26T10:14:35Z` (read-only fleet read of all six validators).
+
 Latest deployment receipt on this
 page: `2026-10-30T11:21:09Z`, release `vote-records-20261030`, tip 1168; none is
-recorded here for the releases of 19 to 24 November. The dated rollout records
+recorded here for the releases of 19 to 25 November. The dated rollout records
 below retain their original observations. Their links into `release/*`
 branches on GitHub no longer resolve: those branches were archived and deleted
 on 21 November ([Master State](master-state.md#the-archive)).
 
 Status: **canonical operational-state reference**
+
+!!! note "2026-11-26: fleet read at height 1906, release `sol-exit-r3`"
+
+    A read-only `status` read of all six validators on 2026-11-26 at
+    10:13:19–10:13:24Z found all six at height 1906 with one state root
+    `c5fcc4bf3b1c7a740a9b4edc0ec11bc9b52d07fd23ac68ec3e02c5a04f7f13d2a2e99fa2a6c6f3313e987b7a385c3db0`,
+    build revision `2356caf1` and node binary
+    `5e3a5e9862fdac81894dc013225d5947ef407f5338e14be8e92ec6a3dc6c83fb`. A
+    second read at 10:14:28–10:14:35Z found one tip
+    `8617c1e2f9c5b52152380755ea6d1ecc730578ab76b06d0133a452b4d398029b60fd83e7876c2114dea6e9d3b62a77b2`,
+    `deployment_manifest_verified` true on all six, one manifest
+    (`cc8b778e24b6…`) and empty mempools. Validators 0 to 4 were read through
+    local forwards; the forward to validator 5 was refused, so validator 5 was
+    read with the same `status` call on its own host.
+
+    The release `sol-exit-r3` is `main` at `2356caf1` (#237), rolled one host
+    at a time from 20:59 to 21:32 UTC on 25 November, with no scheduled height.
+    It contains #236 (one settlement path for Solana exits, restricted host
+    doors, a stricter deposit watcher),
+    #237 (a Solana exit payout or refund settles with five of six validators),
+    #243 (`status` answers during a block commit) and #215 (FastPay inventory
+    revision, opt-in). The roll was interrupted after three validators; from
+    21:03 to 21:32 UTC three validators ran each build and Solana withdrawals
+    were closed, because withdrawal readiness needs five agreeing validators.
+    Before the roll, the exact binary replayed all 1,903 blocks to a report
+    byte-identical with the running release's
+    ([26 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-26.md)).
+
+    `main` is ahead of the validators. On 26 November ten pull requests merged
+    after `2356caf1` (#244 to #248, #252 to #256) were not deployed.
+
+    Proving changed on 26 November: no proving machine runs all day. A proving
+    session runs during a daily window, planned for 17:00 to 19:00 UTC. Outside
+    a session Solana deposits and both withdrawal paths (Solana and Ethereum)
+    are closed, on purpose, to cut cost. On 26 November the daily timers were
+    not enabled yet and the window's launcher (#257) was not merged; a session
+    that stops inside a window is not restarted.
+
+    B24 reading, read-only `nav_reserve_proof_status` on validator 0 at
+    10:14:56Z (height 1906): the newest packet is epoch 10, NAV per unit
+    1.006077, submitted at height 1901 and finalized; the profile's
+    `max_epoch_gap_blocks` is 128. The B24 job selects its release from the
+    fleet (#235).
+
+    Validator 5 holds a FastPay certified payment without signing since its
+    key rotation and answers with an unsigned held-effect receipt. A wallet
+    proxy resent such certificates for weeks. #239, merged on 25 November,
+    makes the proxy end the delivery on that receipt; at the 26 November
+    handoff the proxy that resent them did not yet run it.
 
 !!! note "2026-11-25: fleet read at height 1897, second Solana exit release"
 

@@ -2,7 +2,7 @@
 
 **Rehearsal archive compatibility.** Rehearsal archives containing public-payer issued Internal or Exit actions require their original decoder. This includes rejected and mixed batches, historical commits and snapshot replay. Bare-schedule native payments and issued deposits retain base validation. The integration specification lists the affected relay and wallet records.
 
-**Guidance reviewed 2026-11-25; latest fleet observation 2026-11-25.**
+**Guidance reviewed 2026-11-26; latest fleet observation 2026-11-26.**
 This page summarizes recorded observations and separately labels newer source
 work. It is not a live query. The full, dated operating log is
 [Current State](chain-state-current.md); when the two disagree, the log wins.
@@ -38,7 +38,7 @@ The PFSH02 branch allows activation only on its disposable rehearsal genesis. In
 
 | Component and evidence | Chain / height | Last observed | Result |
 | --- | --- | --- | --- |
-| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/ops/b24-live/known-releases.txt) | postfiat-wan-devnet-2 / 1903 | 2026-11-25 20:15 UTC | Six validators reported on sol-exit-r2 |
+| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/615d3d37e5c3d911454dc6533a880855e02a6ecf/docs/status/handoff-2026-11-26.md) | postfiat-wan-devnet-2 / 1906 | 2026-11-26 10:13 UTC | Six validators on sol-exit-r3, one state root |
 | [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
 | [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45701171620) | Source build / n/a | 2026-11-25T21:22:27Z | Verified (workflow success, comparison success) |
 
@@ -48,8 +48,8 @@ The PFSH02 branch allows activation only on its disposable rehearsal genesis. In
 
 
 
-On 2026-11-25 a read-only `status` read of all six validators found the second
-Solana exit release running, with one tip and one state root
+On 2026-11-26 a read-only `status` read of all six validators found the
+release `sol-exit-r3` running, with one tip and one state root
 ([Current State](chain-state-current.md)). The 2026-10-30 deployment is still
 the last one with a deployment receipt on that page. Since 21 November `main`
 is the only long-lived branch and releases are cut from it
@@ -57,16 +57,17 @@ is the only long-lived branch and releases are cut from it
 
 | Item | Value |
 | --- | --- |
-| Running deployment | Second Solana exit release: build revision `04600868` on all six validators, rolled one host at a time on 2026-11-24, rules active from block 1890. `04600868` is `main` at `e5c4f6ceb` plus the release height and two small fixes, on the branch `release/sol-exit-r2`; it is on `main` since `26acd4639` (#234, 25 November 2026). `deployment_manifest_verified` reads true |
-| Its node binary SHA-256 | `6dd2ee56d350854dc32f6542895fd51508d12901b068ac840be428d32f0f759b` (all six, 2026-11-25 read) |
-| Earlier releases this week | `sol-exit-r1` (`71dbc9b3`, 2026-11-23, rules from block 1841) and `main-r64-20261121` (`674dbb18a`, 2026-11-21); both are on `main` |
+| Running deployment | `sol-exit-r3`: build revision `2356caf1` (`main` at #237) on all six validators, rolled one host at a time from 20:59 to 21:32 UTC on 2026-11-25, no scheduled height. It adds one settlement path for Solana exits, settlement of a Solana exit payout or refund with five of six validators, `status` answers during a block commit, and the opt-in FastPay inventory revision |
+| Its node binary SHA-256 | `5e3a5e9862fdac81894dc013225d5947ef407f5338e14be8e92ec6a3dc6c83fb` (all six, 2026-11-26 read) |
+| Earlier releases this week | the second Solana exit release (`04600868`, 2026-11-24, rules from block 1890), `sol-exit-r1` (`71dbc9b3`, 2026-11-23, rules from block 1841) and `main-r64-20261121` (`674dbb18a`, 2026-11-21); all are on `main` |
 | Last deployment receipt | `vote-records-20261030` (source `ae70d66d`), 2026-10-30, with `scripts/postfiat-safe-rollout apply-next` |
-| Earlier verified height | 1897 on all six validators (state root `53265992…`) |
-| Earlier fleet observation | 2026-11-25 10:16:21–10:16:36 UTC, read-only `status` on all six: one tip, one state root, empty mempools |
+| Latest verified height | 1906 on all six validators (state root `c5fcc4bf…`), 2026-11-26 10:13 UTC |
+| Latest fleet observation | 2026-11-26 10:13:19–10:14:35 UTC, read-only `status` on all six: one tip, one state root, one deployment manifest, empty mempools |
 
-Changes merged to `main` after `e5c4f6ceb` are not evidence of deployment. A
-`main` commit runs on the devnet only once the validators report a build that
-contains it.
+Changes merged to `main` after `2356caf1` are not evidence of deployment: on
+2026-11-26 ten such pull requests (#244 to #248, #252 to #256) were not
+deployed. A `main` commit runs on the devnet only once the validators report a
+build that contains it.
 
 The chain makes blocks only when there are transactions to order, so height
 does not advance with wall-clock time. A height that has not moved for days is
@@ -77,18 +78,34 @@ normal on this devnet.
 Both routes are part of this controlled devnet. The Solana route runs with
 small caps, and its withdrawals have not been announced publicly.
 
+**When you can deposit and withdraw (since 26 November).** Deposits from
+Solana and withdrawals to Solana or Ethereum need a proof, and proofs are now
+made only while a proving session runs. The plan is one session a day, open
+from 17:00 to 19:00 UTC. Outside it, Solana deposits and both withdrawal paths
+are closed on purpose, to cut cost: a deposit is not credited and a
+withdrawal is not paid until the next session. On 26 November the daily
+session was not yet started automatically, so a day can pass without one, and
+a session that stops inside the window is not restarted. The Task Node does not
+yet say why a route is closed or when it reopens
+([26 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-26.md)).
+
 - **Solana USDC, both directions.** Deposits mint pfUSDC through the Task Node;
   withdrawals burn pfUSDC and pay USDC on Solana. Withdrawals have run since the
   first exit release (rules from block 1841, 2026-11-23); since the second
   (block 1890, 2026-11-24) every Solana deposit batch can be withdrawn, a burn
   that cannot be paid has a refund path, and each validator reviews a
-  settlement itself before it signs. Real withdrawals of 0.30, 0.30 and 4.00
-  USDC were paid and settled on 24 November.
+  settlement itself before it signs. Since `sol-exit-r3` (2026-11-25) a
+  payout or refund settles with five of six validators. Real withdrawals of
+  0.30, 0.30 and 4.00 USDC were paid and settled on 24 November. During the roll of
+  `sol-exit-r3`, from 21:03 to 21:32 UTC on 25 November, withdrawals were
+  closed.
   Limits today: one withdrawal spends one deposit batch; withdrawals below 0.30
   USDC are refused; the vault accepts 25 USDC more; a withdrawal takes about
-  four minutes; cancel is refused while the route is paused. Not yet run on the
-  live chain: a cancel and refund, and a settlement with one validator down. The
-  services read Solana through free public endpoints.
+  four minutes once a proving session is running; cancel is refused while the
+  route is paused. Not yet run on the live chain: a cancel and refund, a
+  settlement with one validator down, and a withdrawal proved in the daily
+  session (26 November handoff). The services read Solana through free public
+  endpoints.
 - **Ethereum USDC.** The deposit bridge, wallet proxy and payout service were
   up at the 23 November handoff. Two deposits stuck since 19 November were
   credited at heights 1741–1745 after the 21 November move. No real Ethereum deposit or withdrawal is
@@ -99,9 +116,11 @@ small caps, and its withdrawals have not been announced publicly.
   ran local edits recorded on the branch `ops/relay-host-live-edits-20261125`
   and in #229 (not merged) and #230 (on `main` since #234), and the payout service ran a bundle of
   the second release plus a speed-up (`c033278b`, on `ops/sol-exit-r2-speed`).
-  Moving both back to unmodified `main` is open.
+  Moving both back to unmodified `main` is open. The proving machines that ran
+  all day were stopped on 26 November; proofs come from the daily session above.
 
-Sources: the [25 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-25.md),
+Sources: the [26 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-26.md),
+the [25 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-25.md),
 the [23 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-23.md),
 [Master State](master-state.md) and the [Bridge Audit Map](bridge-audit-map.md).
 
@@ -117,6 +136,10 @@ the [23 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/
   on all six validators from 2026-10-21; it was not re-read for this review.
   These are certificate lanes beside
   block consensus; see [Settlement Lanes](../architecture/settlement-lanes.md).
+  Validator 5 holds a FastPay certified payment without signing since its key
+  rotation and answers with an unsigned held-effect receipt; #239, merged on
+  25 November, makes the wallet proxy end the delivery on that receipt
+  (26 November handoff).
 - **Validator keys.** The recorded fleet uses software key files. Main now
   implements a separate signer process with a Unix socket, peer-UID checks and
   a durable double-sign guard. Unit generation for the signer, RPC and transport

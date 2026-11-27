@@ -1,0 +1,11 @@
+[Unit]
+Description=Open the daily Colab proving window (deposits, withdrawals, B24)
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/var/colab-prover/colab-prover.sh up deposits
+# Stop asking for a machine half an hour before the window closes.
+Environment=COLAB_PROVER_UNTIL=18:30
+TimeoutStartSec=4h

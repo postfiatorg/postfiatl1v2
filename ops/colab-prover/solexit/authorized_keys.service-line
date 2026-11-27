@@ -1,0 +1,1 @@
+restrict,command="/usr/local/bin/pf-sol-exit-prove" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGmX46a4BGf5bZFO+rlJAVD7ISPntuWqehpOLMR8IVcj pf-sol-exit-prover

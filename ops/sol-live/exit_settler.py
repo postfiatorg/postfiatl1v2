@@ -15,6 +15,7 @@ line on stdout, which is the journal.
 import fcntl
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -26,6 +27,8 @@ REVISION = os.environ.get("SETTLER_REVISION", "04600868")
 RELEASE_HEIGHT = os.environ.get("SETTLER_RELEASE_HEIGHT", "1890")
 ATTEMPT_SECONDS = int(os.environ.get("SETTLER_ATTEMPT_SECONDS", "900"))
 FIRST_RETRY, MAX_RETRY, GIVE_UP = 90, 3600, 12
+# A burn one discovery did not list keeps its count this long: one scan is not a settlement.
+ABSENT_KEEP = 7 * 86400
 
 
 def log(message):
@@ -48,7 +51,26 @@ def discover():
                     found.append(r["burn_tx_id"])
             except BurnCancelled:
                 continue  # a refund, not a settlement
+            except Exception as error:  # one unreadable marker must not hide the other burns
+                log(f"ALERT discovery of {r['burn_tx_id']} failed: {type(error).__name__}: {error}")
     return found
+
+
+def run_bounded(command, timeout, **options):
+    """Run `command` in a session of its own; past `timeout` every process it started is killed
+    and reaped, then TimeoutExpired is raised. Returns the completed process otherwise."""
+    child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                             start_new_session=True, **options)
+    try:
+        out, err = child.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        child.communicate()
+        raise
+    return subprocess.CompletedProcess(command, child.returncode, out, err)
 
 
 def settle(burn):
@@ -58,7 +80,7 @@ def settle(burn):
     command = [sys.executable, str(HERE / "exit_govern.py"), "paid", "--burn", burn, "--restricted",
                "--revision", REVISION, "--release-height", RELEASE_HEIGHT, "--output", str(out)]
     try:
-        done = subprocess.run(command, capture_output=True, text=True, timeout=ATTEMPT_SECONDS, cwd=HERE)
+        done = run_bounded(command, ATTEMPT_SECONDS, cwd=HERE)
     except subprocess.TimeoutExpired:
         return False, f"stopped after {ATTEMPT_SECONDS} s"
     text = ((done.stdout or "") + (done.stderr or "")).strip().splitlines()
@@ -69,8 +91,16 @@ def delay(failures):
     return min(FIRST_RETRY * 2 ** (failures - 1), MAX_RETRY)
 
 
+def save_backoff(path, backoff):
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(backoff, sort_keys=True))
+    os.replace(tmp, path)
+
+
 def run_pass(now=None, find=discover, propose=settle, state=None):
-    """One pass; returns 0 when nothing failed, 1 otherwise."""
+    """One pass; returns 0 when nothing failed, 1 otherwise. Each outcome is saved when it is known,
+    so a pass the unit's time limit ends keeps what it finished; the burns whose last attempt ended
+    longest ago (or never ended) go first, and a burn's backoff starts when its attempt ends."""
     state = Path(state or STATE)
     state.mkdir(mode=0o750, parents=True, exist_ok=True)
     with open(state / "lock", "a") as lock:
@@ -80,6 +110,7 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
             log("another settlement pass holds the lock; this one does nothing")
             return 0
         now = time.time() if now is None else now
+        started = time.monotonic()
         path = state / "backoff.json"
         backoff = json.loads(path.read_text()) if path.exists() else {}
         try:
@@ -88,8 +119,10 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
             log(f"ALERT discovery failed: {type(error).__name__}: {error}")
             return 1
         failed = False
-        for burn in burns:
+        for burn in sorted(burns, key=lambda b: backoff.get(b, {}).get("ended", -1)):
             entry = backoff.get(burn, dict(failures=0, next=0, gave_up=False))
+            if burn in backoff:
+                entry["seen"] = now
             if entry["gave_up"]:
                 log(f"not settling {burn}: given up after {entry['failures']} attempts")
                 continue
@@ -97,13 +130,17 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
                 continue
             log(f"settling {burn}")
             ok, last = propose(burn)
+            ended = now + int(time.monotonic() - started)  # whole seconds since the pass began
             if ok:
                 log(f"settled {burn}: {last}")
                 backoff.pop(burn, None)
+                save_backoff(path, backoff)
                 continue
             failed = True
             entry["failures"] += 1
-            entry["next"] = now + delay(entry["failures"])
+            entry["seen"] = now
+            entry["ended"] = ended
+            entry["next"] = ended + delay(entry["failures"])
             if entry["failures"] >= GIVE_UP:
                 entry["gave_up"] = True
                 log(f"ALERT settle {burn} gave up after {entry['failures']} attempts: {last}; "
@@ -114,11 +151,11 @@ def run_pass(now=None, find=discover, propose=settle, state=None):
                 log(f"settle {burn} failed (attempt {entry['failures']}): {last}; "
                     f"next in {delay(entry['failures'])} s")
             backoff[burn] = entry
-        # A burn no longer pending (settled or refunded elsewhere) leaves the backoff.
-        backoff = {b: e for b, e in backoff.items() if b in burns}
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(backoff, sort_keys=True))
-        os.replace(tmp, path)
+            save_backoff(path, backoff)
+        # A burn no longer pending (settled or refunded elsewhere) leaves the backoff, once no
+        # discovery has listed it for ABSENT_KEEP: a scan that missed it keeps its count and give-up.
+        backoff = {b: e for b, e in backoff.items() if b in burns or now - e.get("seen", now) < ABSENT_KEEP}
+        save_backoff(path, backoff)
         return 1 if failed else 0
 
 

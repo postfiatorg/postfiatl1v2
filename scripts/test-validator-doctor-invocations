@@ -1,0 +1,336 @@
+#!/usr/bin/env python3
+"""Check that every published `scripts/testnet-validator-doctor` command works.
+
+`--validator-service` and `--rpc-service` take `node_id=unit`
+(`parse_unit_map` in scripts/testnet-validator-doctor), and the units the
+validator hosts ship are `postfiat-validator-N.service` and
+`postfiat-validator-N-rpc.service` for node id `validator-N`
+(deployments/*/rootfs/etc/systemd/system/). This script:
+
+1. reads every fenced code block in README.md and docs/**/*.md, joins
+   backslash continuations, and checks each doctor command in them: the
+   flags parse with the doctor's own argument parser, each explicit mapping
+   parses with the doctor's own `parse_unit_map` and names a shipped unit for
+   a shipped node id, and each service template expands to the shipped unit
+   for every shipped node id;
+2. runs the same checks over the fixtures in
+   scripts/fixtures/validator-doctor-invocations/: the good fixture must pass
+   and each bad fixture must fail for its stated reason (negative controls);
+3. runs the doctor with a malformed mapping and a stub `cargo` that would
+   take 5 s: it must exit in under a second without starting the stub; and
+   runs it with valid mappings and a stub `cargo` that fails at once: the
+   stub must still run first and the report must say `node_build_failed`,
+   as before this check existed.
+
+Standard library only; no build, no node, no systemd needed.
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import importlib.machinery
+import importlib.util
+import io
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+DOCTOR = ROOT / "scripts/testnet-validator-doctor"
+FIXTURES = ROOT / "scripts/fixtures/validator-doctor-invocations"
+UNIT_DIRS = "deployments/*/rootfs/etc/systemd/system"
+VALIDATOR_UNIT_RE = re.compile(r"^postfiat-(validator-([0-9]+))\.service$")
+RPC_UNIT_RE = re.compile(r"^postfiat-(validator-([0-9]+))-rpc\.service$")
+FENCE_RE = re.compile(r"^\s*(```+|~~~+)")
+ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+# The stub `cargo` must be executable, and /tmp is often mounted noexec on
+# hardened hosts, so the scratch dir lives under the gitignored target/.
+SCRATCH_PARENT = ROOT / "target"
+PREBUILD_LIMIT_SECONDS = 1.0
+
+# fixture file -> the failure reason it must produce (None = must pass)
+FIXTURE_EXPECTATIONS = {
+    "good.md": None,
+    "bare-unit.md": "not node_id=unit",
+    "wrong-rpc-unit.md": "not a shipped rpc unit",
+    "wrong-rpc-template.md": "template expands to",
+    "unknown-node.md": "not a shipped node id",
+    "unknown-flag.md": "flags do not parse",
+}
+
+
+def load_doctor():
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader("testnet_validator_doctor", str(DOCTOR))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def shipped_units() -> tuple[dict[str, str], dict[str, str], dict[str, int]]:
+    """node_id -> unit for the validator and RPC units the deployments ship,
+    and node_id -> index (N in validator-N)."""
+    validator: dict[str, str] = {}
+    rpc: dict[str, str] = {}
+    index: dict[str, int] = {}
+    for unit in sorted(ROOT.glob(f"{UNIT_DIRS}/*.service")):
+        for pattern, table in ((VALIDATOR_UNIT_RE, validator), (RPC_UNIT_RE, rpc)):
+            match = pattern.match(unit.name)
+            if match:
+                table[match.group(1)] = unit.name
+                index[match.group(1)] = int(match.group(2))
+    return validator, rpc, index
+
+
+def fenced_commands(path: Path) -> list[tuple[int, str]]:
+    """(first line number, logical line) for each line inside a fenced code
+    block, with backslash continuations joined. Text outside fences is
+    ignored, and a fence closes only with a bare run of its own character at
+    least as long as the one that opened it (CommonMark)."""
+    found: list[tuple[int, str]] = []
+    fence: str | None = None
+    pending: list[str] = []
+    start = 0
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        match = FENCE_RE.match(line)
+        if fence is None:
+            if match:
+                fence = match.group(1)
+            continue
+        marker = match.group(1) if match else ""
+        if marker[:1] == fence[0] and len(marker) >= len(fence) and line.strip() == marker:
+            fence = None
+            pending = []
+            continue
+        if not pending:
+            start = number
+        stripped = line.rstrip()
+        if stripped.endswith("\\"):
+            pending.append(stripped[:-1])
+            continue
+        pending.append(stripped)
+        found.append((start, " ".join(part.strip() for part in pending)))
+        pending = []
+    return found
+
+
+def doctor_invocations(path: Path) -> list[tuple[int, list[str]]]:
+    invocations: list[tuple[int, list[str]]] = []
+    for number, line in fenced_commands(path):
+        try:
+            words = shlex.split(line, comments=True)
+        except ValueError:
+            continue
+        # The doctor must be the command word, after any VAR=value
+        # assignments or `sudo`/`env`; a file list that names it is not a call.
+        position = 0
+        while position < len(words) and (ASSIGNMENT_RE.match(words[position]) or words[position] in ("sudo", "env")):
+            position += 1
+        if position < len(words) and words[position].endswith("scripts/testnet-validator-doctor"):
+            invocations.append((number, words[position + 1 :]))
+    return invocations
+
+
+def check_invocation(doctor, argv: list[str], shipped) -> list[str]:
+    validator_units, rpc_units, indexes = shipped
+    problems: list[str] = []
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            args = doctor.parse_args(argv)
+    except SystemExit:
+        return [f"flags do not parse: {shlex.join(argv)}"]
+    for flag, values, table, role in (
+        ("--validator-service", args.validator_service, validator_units, "validator"),
+        ("--rpc-service", args.rpc_service, rpc_units, "rpc"),
+    ):
+        try:
+            mapping = doctor.parse_unit_map(values)
+        except SystemExit:
+            problems.append(f"{flag} value is not node_id=unit: {values}")
+            continue
+        for node_id, unit in mapping.items():
+            if node_id not in table:
+                problems.append(f"{flag} {node_id}={unit}: {node_id!r} is not a shipped node id")
+            elif unit != table[node_id]:
+                problems.append(
+                    f"{flag} {node_id}={unit}: not a shipped {role} unit (ships {table[node_id]})"
+                )
+    for flag, template, table in (
+        ("--validator-service-template", args.validator_service_template, validator_units),
+        ("--rpc-service-template", args.rpc_service_template, rpc_units),
+    ):
+        if not template:
+            continue
+        for node_id, unit in sorted(table.items()):
+            got = doctor.format_template(template, node_id, indexes[node_id])
+            if got != unit:
+                problems.append(f"{flag} {template!r}: template expands to {got} for {node_id}, ships {unit}")
+                break
+    return problems
+
+
+def check_files(doctor, paths: list[Path], shipped) -> tuple[int, list[str]]:
+    count = 0
+    failures: list[str] = []
+    for path in paths:
+        for number, argv in doctor_invocations(path):
+            count += 1
+            label = f"{path.relative_to(ROOT)}:{number}"
+            problems = check_invocation(doctor, argv, shipped)
+            for problem in problems:
+                failures.append(f"{label}: {problem}")
+            print(f"{'BAD ' if problems else 'ok  '} {label} {shlex.join(argv)}")
+    return count, failures
+
+
+def doc_paths() -> list[Path]:
+    paths = [ROOT / "README.md"] if (ROOT / "README.md").is_file() else []
+    return paths + sorted((ROOT / "docs").rglob("*.md"))
+
+
+def stub_cargo(directory: Path, marker: Path, *, seconds: float, exit_code: int) -> None:
+    stub = directory / "cargo"
+    stub.write_text(
+        "#!/bin/sh\n"
+        f"echo \"$@\" >> '{marker}'\n"
+        f"sleep {seconds}\n"
+        f"exit {exit_code}\n",
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+
+
+def run_doctor(argv: list[str], scratch: Path, stub_dir: Path) -> tuple[subprocess.CompletedProcess, float]:
+    env = dict(os.environ, PATH=f"{stub_dir}{os.pathsep}{os.environ.get('PATH', '')}")
+    started = time.monotonic()
+    completed = subprocess.run(
+        [sys.executable, str(DOCTOR), *argv,
+         "--log-dir", str(scratch / "logs"), "--output", str(scratch / "report.json")],
+        capture_output=True, text=True, env=env, timeout=60, check=False,
+    )
+    return completed, time.monotonic() - started
+
+
+def check_prebuild() -> list[str]:
+    failures: list[str] = []
+    SCRATCH_PARENT.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="test-validator-doctor-invocations-", dir=SCRATCH_PARENT) as tmp:
+        base = Path(tmp)
+        data_dir = base / "validator-0"
+        data_dir.mkdir()
+        for name, flag, value in (
+            ("bare-validator-unit", "--validator-service", "postfiat-validator-0.service"),
+            ("bare-rpc-unit", "--rpc-service", "postfiat-validator-0-rpc.service"),
+            ("empty-node-id", "--validator-service", "=postfiat-validator-0.service"),
+            ("empty-unit", "--rpc-service", "validator-0="),
+            ("bare-log-file", "--log-file", "/var/log/postfiat/validator-0.log"),
+        ):
+            scratch = base / name
+            stub_dir = scratch / "bin"
+            stub_dir.mkdir(parents=True)
+            marker = scratch / "cargo-ran"
+            stub_cargo(stub_dir, marker, seconds=5, exit_code=0)
+            completed, elapsed = run_doctor(["--data-dir", str(data_dir), flag, value], scratch, stub_dir)
+            message = (completed.stderr or completed.stdout).strip().splitlines()
+            last = message[-1] if message else ""
+            ok = (
+                completed.returncode != 0
+                and not marker.exists()
+                and elapsed < PREBUILD_LIMIT_SECONDS
+                and flag in last
+                and "node_id=" in last
+            )
+            print(
+                f"{'ok  ' if ok else 'FAIL'} malformed {name}: {flag} {value!r} -> exit={completed.returncode} "
+                f"elapsed={elapsed:.3f}s cargo_started={marker.exists()} message={last!r}"
+            )
+            if not ok:
+                failures.append(f"malformed {name} was not rejected before the build")
+
+        scratch = base / "valid"
+        stub_dir = scratch / "bin"
+        stub_dir.mkdir(parents=True)
+        marker = scratch / "cargo-ran"
+        stub_cargo(stub_dir, marker, seconds=0, exit_code=1)
+        completed, elapsed = run_doctor(
+            [
+                "--data-dir", str(data_dir),
+                "--validator-service", "validator-0=postfiat-validator-0.service",
+                "--rpc-service", "validator-0=postfiat-validator-0-rpc.service",
+            ],
+            scratch, stub_dir,
+        )
+        report_path = scratch / "report.json"
+        reason = json.loads(report_path.read_text())["actionable_reason"] if report_path.exists() else None
+        cargo_args = marker.read_text().strip() if marker.exists() else None
+        ok = completed.returncode == 1 and cargo_args == "build -p postfiat-node" and reason == "node_build_failed"
+        print(
+            f"{'ok  ' if ok else 'FAIL'} valid mappings still build first: exit={completed.returncode} "
+            f"cargo_args={cargo_args!r} reason={reason} stdout={completed.stdout.strip()!r}"
+        )
+        if not ok:
+            failures.append("valid mappings no longer reach the build step")
+    return failures
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("paths", nargs="*", type=Path, help="Markdown files to check instead of the docs")
+    args = parser.parse_args(argv)
+    doctor = load_doctor()
+    shipped = shipped_units()
+    validator_units, rpc_units, _ = shipped
+    print(f"shipped validator units: {sorted(validator_units.values())}")
+    print(f"shipped rpc units: {sorted(rpc_units.values())}")
+    failures: list[str] = []
+    if not validator_units or set(validator_units) != set(rpc_units):
+        failures.append("could not derive matching validator/rpc unit sets from the deployments")
+
+    if args.paths:
+        count, found = check_files(doctor, [path.resolve() for path in args.paths], shipped)
+        failures += found
+        print(f"invocations checked: {count}")
+    else:
+        print("== published docs ==")
+        count, found = check_files(doctor, doc_paths(), shipped)
+        failures += found
+        print(f"invocations checked: {count}")
+        if count == 0:
+            failures.append("no doctor invocations found in the docs")
+
+        print("== fixtures (negative controls) ==")
+        on_disk = sorted(path.name for path in FIXTURES.glob("*.md"))
+        if on_disk != sorted(FIXTURE_EXPECTATIONS):
+            failures.append(f"fixture set {on_disk} != expected {sorted(FIXTURE_EXPECTATIONS)}")
+        for name, expected in FIXTURE_EXPECTATIONS.items():
+            path = FIXTURES / name
+            if not path.is_file():
+                continue
+            fixture_count, found = check_files(doctor, [path], shipped)
+            if expected is None:
+                ok = fixture_count > 0 and not found
+            else:
+                ok = fixture_count > 0 and bool(found) and all(expected in item for item in found)
+            print(f"{'ok  ' if ok else 'FAIL'} fixture {name}: expected {expected or 'pass'}, got {found or 'pass'}")
+            if not ok:
+                failures.append(f"fixture {name} did not give {expected or 'pass'}")
+
+        print("== mapping validation happens before the build ==")
+        failures += check_prebuild()
+
+    for failure in failures:
+        print(f"FAIL {failure}")
+    print(f"test_validator_doctor_invocations={'failed' if failures else 'ok'} failures={len(failures)}")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
