@@ -1,0 +1,31 @@
+{
+	email {$NOSTR_RELAY_TLS_EMAIL:ops@postfiat.org}
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$NOSTR_RELAY_HOST:relay.postfiat.org} {
+	request_body {
+		max_size 256KB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	handle /healthz {
+		header Content-Type "application/json"
+		respond `{"ok":true,"service":"postfiat-nostr-relay","host":"relay.postfiat.org"}` 200
+	}
+
+	handle {
+		reverse_proxy strfry:7777 {
+			header_up X-Forwarded-Proto https
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}
