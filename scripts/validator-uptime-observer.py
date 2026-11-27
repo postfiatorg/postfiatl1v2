@@ -921,20 +921,27 @@ def main(argv: list[str] | None = None) -> int:
         feed = reconcile_observer_bundles(bundles, generated_at=args.generated_at)
         out_path = Path(args.output)
         atomic_write_json(out_path, feed)
+        verified: dict[str, Any] | None = None
+        if args.keyset_file:
+            verified = verify_feed_via_node(
+                args.node_bin, out_path, Path(args.keyset_file), args.now_unix
+            )
+        reconcile_ok = (
+            bool(verified.get("valid"))
+            if verified is not None
+            else len(feed["observer_attestations"]) >= 2
+        )
         report: dict[str, Any] = {
-            "ok": True,
+            "ok": reconcile_ok,
             "schema": feed["schema"],
             "validators": len(feed["validators"]),
             "observers": len(feed["observer_attestations"]),
             "output": str(out_path),
         }
-        if args.keyset_file:
-            verified = verify_feed_via_node(
-                args.node_bin, out_path, Path(args.keyset_file), args.now_unix
-            )
+        if verified is not None:
             report["verification"] = verified
         print(json.dumps(report))
-        return 0
+        return 0 if reconcile_ok else 1
 
     if args.command == "verify":
         feed_path = Path(args.feed_file)

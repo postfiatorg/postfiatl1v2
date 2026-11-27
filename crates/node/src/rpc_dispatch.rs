@@ -2921,7 +2921,10 @@ pub(crate) fn rpc_server_info_response(
     response
 }
 
-pub(super) fn rpc_ledger_alias(data_dir: PathBuf, limit: Option<usize>) -> Result<serde_json::Value, String> {
+pub(super) fn rpc_ledger_alias(
+    data_dir: PathBuf,
+    limit: Option<usize>,
+) -> Result<serde_json::Value, String> {
     let metrics_report = metrics(NodeOptions {
         data_dir: data_dir.clone(),
     })
