@@ -2,7 +2,7 @@
 
 **Rehearsal archive compatibility.** Rehearsal archives containing public-payer issued Internal or Exit actions require their original decoder. This includes rejected and mixed batches, historical commits and snapshot replay. Bare-schedule native payments and issued deposits retain base validation. The integration specification lists the affected relay and wallet records.
 
-**Guidance reviewed 2026-11-26; latest fleet observation 2026-11-26.**
+**Guidance reviewed 2026-11-27; latest fleet observation 2026-11-27.**
 This page summarizes recorded observations and separately labels newer source
 work. It is not a live query. The full, dated operating log is
 [Current State](chain-state-current.md); when the two disagree, the log wins.
@@ -17,7 +17,7 @@ open, and the software has not been externally audited. Do not put real value
 on it. See [Security](../security/index.md) for the audit and release-gate
 position.
 
-The PFSH02 branch allows activation only on its disposable rehearsal genesis. In this design deposits and exits expose the public account and amount. A payment exposes its asset, fee, inclusion time and tree. Its sender account stays off the wire. [Private payments](../quantum/private-payments.md).
+PFSH03 post-quantum private payments run on this devnet: by the handoff of 27 November they were activated at block 1910 and used end to end from the signed Mac app, and blocks 1912 to 1914 hold one shielded deposit, one private payment and one exit (read on 27 November). Deposits and exits expose the public account and amount. A payment exposes its asset, fee, inclusion time and tree. Its sender account stays off the wire. [Private payments](../quantum/private-payments.md).
 
 ## Network facts
 
@@ -38,9 +38,9 @@ The PFSH02 branch allows activation only on its disposable rehearsal genesis. In
 
 | Component and evidence | Chain / height | Last observed | Result |
 | --- | --- | --- | --- |
-| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/615d3d37e5c3d911454dc6533a880855e02a6ecf/docs/status/handoff-2026-11-26.md) | postfiat-wan-devnet-2 / 1906 | 2026-11-26 10:13 UTC | Six validators on sol-exit-r3, one state root |
+| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/chain-state-current.md) | postfiat-wan-devnet-2 / 1915 | 2026-11-27 09:01 UTC | Six validators on pq-r3, one state root |
 | [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
-| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45701171620) | Source build / n/a | 2026-11-25T21:22:27Z | Verified (workflow success, comparison success) |
+| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45938002025) | Source build / n/a | 2026-11-27T04:22:33Z | Unverified (workflow failure, comparison failure) |
 
 [Observation records, source revisions, artifacts and observers](component-observations.json)
 
@@ -48,26 +48,30 @@ The PFSH02 branch allows activation only on its disposable rehearsal genesis. In
 
 
 
-On 2026-11-26 a read-only `status` read of all six validators found the
-release `sol-exit-r3` running, with one tip and one state root
+On 2026-11-27 a read-only `status` read of all six validators found the
+release `pq-r3` running, with one tip and one state root
 ([Current State](chain-state-current.md)). The 2026-10-30 deployment is still
 the last one with a deployment receipt on that page. Since 21 November `main`
-is the only long-lived branch and releases are cut from it
-([Master State](master-state.md)).
+is the only long-lived branch; the running build `9dcb689e` is not a commit of
+`main` ([Master State](master-state.md)).
 
 | Item | Value |
 | --- | --- |
-| Running deployment | `sol-exit-r3`: build revision `2356caf1` (`main` at #237) on all six validators, rolled one host at a time from 20:59 to 21:32 UTC on 2026-11-25, no scheduled height. It adds one settlement path for Solana exits, settlement of a Solana exit payout or refund with five of six validators, `status` answers during a block commit, and the opt-in FastPay inventory revision |
-| Its node binary SHA-256 | `5e3a5e9862fdac81894dc013225d5947ef407f5338e14be8e92ec6a3dc6c83fb` (all six, 2026-11-26 read) |
-| Earlier releases this week | the second Solana exit release (`04600868`, 2026-11-24, rules from block 1890), `sol-exit-r1` (`71dbc9b3`, 2026-11-23, rules from block 1841) and `main-r64-20261121` (`674dbb18a`, 2026-11-21); all are on `main` |
+| Running deployment | `pq-r3`: build revision `9dcb689e` on all six validators since the evening of 2026-11-26. It carries PFSH03 post-quantum private payments, activated at block 1910 (27 November handoff). `9dcb689e47a4` is a commit of #280's branch, not of `main`; `main` holds #280 as the squashed, newer `b121df606` |
+| Its node binary SHA-256 | `c563a4dcf48ad4359ab0f37fb7a626efed2b2b6808fc1ebd57e2963900326fb6` (all six, 2026-11-27 read) |
+| Earlier releases | `sol-exit-r3` (`2356caf1`, 2026-11-25), the second Solana exit release (`04600868`, 2026-11-24, rules from block 1890), `sol-exit-r1` (`71dbc9b3`, 2026-11-23, rules from block 1841) and `main-r64-20261121` (`674dbb18a`, 2026-11-21); all are on `main` |
 | Last deployment receipt | `vote-records-20261030` (source `ae70d66d`), 2026-10-30, with `scripts/postfiat-safe-rollout apply-next` |
-| Latest verified height | 1906 on all six validators (state root `c5fcc4bf…`), 2026-11-26 10:13 UTC |
-| Latest fleet observation | 2026-11-26 10:13:19–10:14:35 UTC, read-only `status` on all six: one tip, one state root, one deployment manifest, empty mempools |
+| Latest verified height | 1915 on all six validators (state root `ef5e41baae1b…`, tip `ef4b9c66d62e…`), 2026-11-27 09:01 UTC |
+| Latest fleet observation | 2026-11-27 09:01:27–09:01:34 UTC, read-only `status` on all six through local forwards: one tip, one state root, one deployment manifest (`25edebe2ba40…`, verified on all six), empty mempools |
 
-Changes merged to `main` after `2356caf1` are not evidence of deployment: on
-2026-11-26 ten such pull requests (#244 to #248, #252 to #256) were not
-deployed. A `main` commit runs on the devnet only once the validators report a
-build that contains it.
+Changes merged to `main` are not evidence of deployment. Nothing merged to
+`main` after the running build was cut is deployed: #257, #274, #281, #285,
+`b121df606` itself and every later commit. A `main` commit runs on the devnet
+only once the validators report a build that contains it.
+
+`main`'s lane-export identity check (`build-lane-export-identity`) fails from
+`b121df606` on, because #280 changed the export program's inputs; the 27
+November handoff calls this expected and leaves it to its own step.
 
 The chain makes blocks only when there are transactions to order, so height
 does not advance with wall-clock time. A height that has not moved for days is
@@ -83,11 +87,18 @@ Solana and withdrawals to Solana or Ethereum need a proof, and proofs are now
 made only while a proving session runs. The plan is one session a day, open
 from 17:00 to 19:00 UTC. Outside it, Solana deposits and both withdrawal paths
 are closed on purpose, to cut cost: a deposit is not credited and a
-withdrawal is not paid until the next session. On 26 November the daily
-session was not yet started automatically, so a day can pass without one, and
-a session that stops inside the window is not restarted. The Task Node does not
-yet say why a route is closed or when it reopens
-([26 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-26.md)).
+withdrawal is not paid until the next session. On 26 November at 17:13 UTC the
+window was not open: the Task Node showed Solana deposits and withdrawals
+closed. The window's launcher (#257) was merged into `main` on 27 November at
+00:41 UTC, with two changes of the evening of 26 November (ask for a GPU two
+hours ahead and alert when deposits stay closed; rent a Vast 5090 for deposits
+when Colab has no G4); by the 27 November handoff it is not deployed. A day can
+pass without a session. The Task Node's opening-hours screens (tasknode #442
+and #445) are merged in the Task Node's `main` and not deployed, and its
+setting `L1_PROVING_WINDOW_UTC` is not set, so the Task Node does not say when
+a route reopens
+([26 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/handoff-2026-11-26.md),
+[27 November handoff](../handoffs/2026-11-27___antigravity__pfsh03_merged_big_milestone_specs_and_wave1_to_dravlic.md)).
 
 - **Solana USDC, both directions.** Deposits mint pfUSDC through the Task Node;
   withdrawals burn pfUSDC and pay USDC on Solana. Withdrawals have run since the
@@ -149,9 +160,12 @@ the [23 November handoff](https://github.com/postfiatorg/postfiatl1v2/blob/main/
   File-signer mode needs `--unsafe-devnet-file-signer`. Services on JSON/JSONL
   or not-yet-activated storage need `--unsafe-devnet-json-storage`; that flag
   bypasses the startup check and does not select JSON storage.
-- **Private wallet path.** Public submission of shielded actions is off on
-  every validator (23 November handoff). Source and local tests do not
-  establish a live private-wallet service. See the
+- **Private wallet path.** PFSH03 payments were made end to end from the
+  signed Mac app at blocks 1912 to 1914 (27 November handoff; the blocks were
+  read on 27 November). The Task Node's private relay for them (tasknode #444)
+  is merged and, by that handoff, not deployed. For the Orchard pool, public
+  submission of shielded actions was off on every validator at the 23 November
+  handoff. See [Private payments](../quantum/private-payments.md) and the
   [readiness milestone](../plans/active/user-proven-shielded-actions-milestone.md).
 
 ## Newer implementation on main

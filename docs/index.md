@@ -50,9 +50,9 @@ Codenames such as A666, BMNRC, Z3 or G4 are defined in the
 
 | Component and evidence | Chain / height | Last observed | Result |
 | --- | --- | --- | --- |
-| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/615d3d37e5c3d911454dc6533a880855e02a6ecf/docs/status/handoff-2026-11-26.md) | postfiat-wan-devnet-2 / 1906 | 2026-11-26 10:13 UTC | Six validators on sol-exit-r3, one state root |
+| [Validator release](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/status/chain-state-current.md) | postfiat-wan-devnet-2 / 1915 | 2026-11-27 09:01 UTC | Six validators on pq-r3, one state root |
 | [Validator-trust authority](https://github.com/postfiatorg/postfiatl1v2/blob/003af00011c6af086f14f4d4017e450a11eaf45f/docs/governance/cobalt.md#current-controlled-devnet-state) | postfiat-wan-devnet-2 / 924 | 2026-08-26 06:35:50 UTC | Cobalt last verified active for validator trust |
-| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45701171620) | Source build / n/a | 2026-11-25T21:22:27Z | Verified (workflow success, comparison success) |
+| [Lane-export proof identity](https://github.com/postfiatorg/postfiatl1v2/actions/runs/45938002025) | Source build / n/a | 2026-11-27T04:22:33Z | Unverified (workflow failure, comparison failure) |
 
 [Observation records, source revisions, artifacts and observers](status/component-observations.json)
 
