@@ -42,13 +42,35 @@ pub const UPGRADE_JOURNAL_FILE: &str = "upgrade-journal.json";
 pub const RELEASE_KEYSET_ROTATION_SCHEMA: &str = "postfiat.release_keyset_rotation.v1";
 pub const RELEASE_KEYSET_ROTATION_CONTEXT: &str = "postfiat-l1-v2/release-keyset-rotation/v1";
 /// Entries of the data directory that are never backed up and never rolled
-/// back: the validator's own vote record, its key file, and runtime state.
-/// A vote record is only ever carried forward.
+/// back. The rule: anything that records what this validator has signed is
+/// only ever carried forward, because a rolled-back record lets the old
+/// binary sign a second, different message for the same slot. That covers
+/// consensus votes (`consensus-v2-safety`, `block_proposal_vote_locks`,
+/// `transport_votes`), the certificates those votes refer to
+/// (`consensus-v2-qcs`), FastPay owned-object locks, and the Ethereum
+/// checkpoint and FastSwap control signing state. Key files and runtime
+/// state are excluded too.
 pub const DEFAULT_BACKUP_EXCLUDES: &[&str] = &[
     crate::CONSENSUS_V2_SAFETY_DIR,
+    crate::CONSENSUS_V2_QC_DIR,
+    "block_proposal_vote_locks",
+    "transport_votes",
+    "owned_locks.json",
+    "owned_locks.wal",
+    "owned_locks.guard",
+    "ethereum-checkpoint-signing",
+    "fastswap-control-signing",
     crate::VALIDATOR_KEYS_FILE,
     "runtime",
     "readiness",
+];
+/// A file at most this large that names a private key field is a key file.
+pub const KEY_FILE_SCAN_MAX_BYTES: u64 = 1_048_576; // 1 MiB
+const KEY_FILE_MARKERS: &[&[u8]] = &[
+    b"\"private_key_hex\"",
+    b"\"private_key\"",
+    b"\"secret_key_hex\"",
+    b"\"secret_key\"",
 ];
 pub const MAX_RELEASE_MANIFEST_BYTES: usize = 1_048_576; // 1 MiB
 
@@ -487,6 +509,43 @@ pub fn backup_excludes(extra: &[String]) -> Result<Vec<PathBuf>, String> {
         }
     }
     Ok(excludes)
+}
+
+/// Files under `data_dir` that hold a private key, whatever their name, as
+/// paths relative to `data_dir`. Entries already under `excludes` are not
+/// descended into. Symbolic links are not followed. A missing data directory
+/// yields nothing; a file that cannot be read is an error, so that a key file
+/// is never copied because it could not be inspected.
+pub fn key_bearing_files(data_dir: &Path, excludes: &[PathBuf]) -> io::Result<Vec<PathBuf>> {
+    let mut found = Vec::new();
+    if fs::symlink_metadata(data_dir).is_err() {
+        return Ok(found);
+    }
+    let mut stack = vec![PathBuf::new()];
+    while let Some(rel) = stack.pop() {
+        let mut children: Vec<_> = fs::read_dir(data_dir.join(&rel))?.collect::<io::Result<_>>()?;
+        children.sort_by_key(|e| e.file_name());
+        for child in children {
+            let child_rel = rel.join(child.file_name());
+            if is_excluded(&child_rel, excludes) {
+                continue;
+            }
+            let meta = fs::symlink_metadata(child.path())?;
+            if meta.is_dir() {
+                stack.push(child_rel);
+            } else if meta.is_file() && meta.len() <= KEY_FILE_SCAN_MAX_BYTES {
+                let bytes = fs::read(child.path())?;
+                if KEY_FILE_MARKERS
+                    .iter()
+                    .any(|marker| bytes.windows(marker.len()).any(|w| w == *marker))
+                {
+                    found.push(child_rel);
+                }
+            }
+        }
+    }
+    found.sort();
+    Ok(found)
 }
 
 fn is_excluded(relative: &Path, excludes: &[PathBuf]) -> bool {
@@ -1660,6 +1719,27 @@ pub fn execute_upgrade(
             return report;
         }
     };
+
+    // Key files under any name stay out of the backup. They join the
+    // exclusion list, so the journal names them and a rollback carries them over.
+    let mut excludes = excludes;
+    match key_bearing_files(&options.data_dir, &excludes) {
+        Ok(found) => {
+            for path in found {
+                if !excludes.contains(&path) {
+                    excludes.push(path);
+                }
+            }
+        }
+        Err(error) => {
+            report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+            report.error_code = Some("key_file_scan_failed".to_string());
+            report.message = Some(format!(
+                "could not inspect the data directory for key files: {error}"
+            ));
+            return report;
+        }
+    }
 
     // An earlier run that did not finish comes first. Nothing else is done
     // until its rollback is complete.
@@ -3046,6 +3126,78 @@ mod tests {
             !parent.join(".data.failed-upgrade").exists()
                 && !parent.join(".data.rollback-stage").exists()
         );
+    }
+
+    /// Everything that records what the validator signed, and every key file
+    /// whatever its name, stays out of the backup and survives a rollback.
+    #[test]
+    fn signing_records_and_key_files_under_any_name_are_never_backed_up_or_rolled_back() {
+        let fixture = Fixture::new("signing-state");
+        let data_dir = fixture.options.data_dir.clone();
+        let signing = [
+            "block_proposal_vote_locks/v3/432000.json",
+            "transport_votes/432000.precommit.block_vote.json",
+            "consensus-v2-qcs/432000.json",
+            "owned_locks.json",
+            "owned_locks.wal",
+            "owned_locks.guard",
+            "ethereum-checkpoint-signing/state.json",
+            "fastswap-control-signing/state.json",
+        ];
+        for relative in signing {
+            let path = data_dir.join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, b"SIGNED_BEFORE_UPGRADE").unwrap();
+        }
+        let keys = ["finality-vote.key.json", "bridge/keys/issuer.json"];
+        for relative in keys {
+            let path = data_dir.join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, br#"{"address":"pf1","private_key_hex":"00ff"}"#).unwrap();
+        }
+        fs::write(data_dir.join("bridge/route.json"), b"{}").unwrap();
+        assert_eq!(
+            key_bearing_files(&data_dir, &backup_excludes(&[]).unwrap()).unwrap(),
+            [
+                PathBuf::from("bridge/keys/issuer.json"),
+                PathBuf::from("finality-vote.key.json")
+            ]
+        );
+
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+        let backup = PathBuf::from(report.backup_path.expect("backup path"));
+        assert_eq!(
+            files_under(&backup.join("chain-data")),
+            ["blocks/000001.json", "bridge/route.json", "ledger.dat"],
+            "no signing record and no key file is in the backup"
+        );
+        let manifest: UpgradeBackupManifestV1 =
+            serde_json::from_slice(&fs::read(backup.join("backup-manifest.json")).unwrap())
+                .unwrap();
+        for relative in keys {
+            assert!(
+                manifest.excluded_paths.contains(&relative.to_string()),
+                "{relative}"
+            );
+        }
+        // After the rollback every one of them is where the failed binary left it.
+        for relative in signing {
+            assert_eq!(
+                fixture.data(relative),
+                b"SIGNED_BEFORE_UPGRADE",
+                "{relative}"
+            );
+        }
+        for relative in keys {
+            assert!(
+                fixture.data(relative).starts_with(b"{\"address\""),
+                "{relative}"
+            );
+        }
+        assert_eq!(fixture.data("bridge/route.json"), b"{}");
     }
 
     #[test]
