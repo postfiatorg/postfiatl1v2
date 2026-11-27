@@ -3248,6 +3248,35 @@ mod tests {
     }
 
     #[test]
+    fn failed_sequence_commit_is_recovered_even_after_backup_rotation() {
+        let fixture = Fixture::new("record-failure");
+        let state = installation_state(&fixture.options.binary_path);
+        fs::create_dir_all(&state).unwrap();
+        let record = state.join(INSTALLED_RELEASE_FILE);
+        let fault = record.with_extension(format!("tmp.{}", std::process::id()));
+        fs::create_dir(&fault).unwrap();
+        let failed = execute_upgrade(&fixture.options, &fixture.hooks());
+        assert_ne!(failed.exit_code, UPGRADE_EXIT_OK);
+        assert_eq!(
+            failed.error_code.as_deref(),
+            Some("installed_release_write_failed")
+        );
+        assert!(fixture.journal().exists());
+        fs::remove_dir(&fault).unwrap();
+        let mut options = fixture.options.clone();
+        options.backup_dir = options.backup_dir.with_extension("rotated");
+        let recovered = execute_upgrade(&options, &fixture.hooks());
+        assert_eq!(
+            recovered.exit_code, UPGRADE_EXIT_ROLLED_BACK,
+            "{recovered:?}"
+        );
+        assert_eq!(
+            fs::read(&options.binary_path).unwrap(),
+            b"OLD_BINARY_BYTES_V2"
+        );
+    }
+
+    #[test]
     fn concurrent_applies_share_one_installation_lock_across_backup_paths() {
         let fixture = Fixture::new("concurrent");
         let dir = installation_state(&fixture.options.binary_path);
@@ -3370,6 +3399,7 @@ mod tests {
         let log_after_install = hooks.log();
 
         let mut options = fixture.options.clone();
+        options.backup_dir = options.backup_dir.with_extension("rotated");
         for check_only in [true, false] {
             options.check_only = check_only;
             // Validly signed, inside its validity window, and older.
