@@ -38,7 +38,10 @@ def route_for(path: Path) -> str:
 
 
 def pages() -> list[dict]:
-    files = [ROOT / "README.md", *sorted((ROOT / "pillars").glob("*.md"))]
+    files = [ROOT / "README.md"]
+    if (ROOT / "PROGRESS.md").exists():
+        files.append(ROOT / "PROGRESS.md")
+    files += sorted((ROOT / "pillars").glob("*.md"))
     rounds = sorted((ROOT / "feedback").glob("round-*"), key=lambda d: int(d.name.split("-")[1]))
     if (ROOT / "feedback" / "README.md").exists():
         files.append(ROOT / "feedback" / "README.md")
