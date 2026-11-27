@@ -7,6 +7,12 @@ use wasm_bindgen::prelude::*;
 mod b23_signing;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod b23_signing_tests;
+pub mod identity_signing;
+pub mod nft_signing;
+pub mod pillar78_builders;
+pub mod unified_kdf;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod w3_signing_tests;
 
 use postfiat_crypto_provider::{bytes_to_hex, ml_dsa_65_sign_with_context, ML_DSA_65_ALGORITHM};
 use postfiat_rpc_sdk::{
@@ -1046,4 +1052,636 @@ pub fn pq_review_payment(action_json: &str) -> Result<String, JsError> {
         "action_hash":private_action_hash(&action).map_err(|_| JsError::new("invalid payment"))?,
     })
     .to_string())
+}
+
+// ===========================================================================
+// Wave 3 client-side WASM exports:
+// - Unified v2 BIP-39 KDF (Pillar 5/6 parity)
+// - Pillar 4 NFT envelopes & on-chain NFT signing
+// - Pillar 6 `identity_set` dual-key (ML-DSA-65 + BIP-340 Schnorr) signing
+// - Pillar 7/8 transaction builders & delegated 0-PFT credential acceptance
+// ===========================================================================
+
+fn parse_browser_backup(backup_json: String) -> Result<BrowserWalletBackup, JsValue> {
+    let backup_json = Zeroizing::new(backup_json);
+    let backup: WalletBackupFile = serde_json::from_str(&backup_json)
+        .map_err(|e| JsValue::from_str(&format!("backup parse: {e}")))?;
+    Ok(BrowserWalletBackup(backup))
+}
+
+// --- Unified v2 BIP-39 KDF ---
+
+/// Derive a public-only unified KDF preview from NFKD-normalized BIP-39 inputs.
+/// Zero secret material crosses the WASM boundary.
+#[wasm_bindgen]
+pub fn wallet_bip39_derive_public_preview(
+    mnemonic_nfkd: String,
+    passphrase_nfkd: String,
+    chain_id: &str,
+    genesis_hash_hex: &str,
+    account_index: u32,
+    address_index: u32,
+) -> Result<JsValue, JsValue> {
+    let mnemonic_nfkd = Zeroizing::new(mnemonic_nfkd);
+    let passphrase_nfkd = Zeroizing::new(passphrase_nfkd);
+    let seed64 = unified_kdf::bip39_seed64_from_nfkd(&mnemonic_nfkd, &passphrase_nfkd)
+        .map_err(|e| JsValue::from_str(&e))?;
+    let preview = unified_kdf::derive_unified_public_preview(
+        seed64.as_slice(),
+        chain_id,
+        genesis_hash_hex,
+        account_index,
+        address_index,
+    )
+    .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&preview)
+}
+
+/// Derive a local browser wallet initialization payload (ML-DSA backup + v2 Nostr identity)
+/// from NFKD-normalized BIP-39 inputs.
+#[wasm_bindgen]
+pub fn wallet_bip39_derive_wallet_init(
+    mnemonic_nfkd: String,
+    passphrase_nfkd: String,
+    chain_id: &str,
+    genesis_hash_hex: &str,
+    account_index: u32,
+    address_index: u32,
+) -> Result<JsValue, JsValue> {
+    let mnemonic_nfkd = Zeroizing::new(mnemonic_nfkd);
+    let passphrase_nfkd = Zeroizing::new(passphrase_nfkd);
+    let seed64 = unified_kdf::bip39_seed64_from_nfkd(&mnemonic_nfkd, &passphrase_nfkd)
+        .map_err(|e| JsValue::from_str(&e))?;
+    let init = unified_kdf::derive_unified_wallet_init(
+        seed64.as_slice(),
+        chain_id,
+        genesis_hash_hex,
+        account_index,
+        address_index,
+    )
+    .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&init)
+}
+
+/// Derive the public Pillar 6 v2 Nostr identity (`nostr_pubkey_hex` + `npub`) from a 64-byte BIP-39 seed.
+#[wasm_bindgen]
+pub fn wallet_derive_nostr_v2_public_identity(
+    bip39_seed64_hex: String,
+    account_index: u32,
+    key_index: u32,
+) -> Result<JsValue, JsValue> {
+    let bip39_seed64_hex = Zeroizing::new(bip39_seed64_hex);
+    let seed64 = unified_kdf::decode_bip39_seed64_hex(&bip39_seed64_hex)
+        .map_err(|e| JsValue::from_str(&e))?;
+    let kp = unified_kdf::derive_nostr_v2_keypair(seed64.as_slice(), account_index, key_index)
+        .map_err(|e| JsValue::from_str(&e))?;
+    let public_identity = unified_kdf::NostrPublicIdentity {
+        derivation_version: kp.derivation_version,
+        account_index: kp.account_index,
+        key_index: kp.key_index,
+        nostr_pubkey_hex: kp.pubkey_xonly_hex.clone(),
+        npub: kp.npub.clone(),
+    };
+    to_json_js_value(&public_identity)
+}
+
+/// Encode a 32-byte lowercase hex x-only Nostr public key as NIP-19 bech32 `npub1...`.
+#[wasm_bindgen]
+pub fn wallet_encode_npub(xonly_pubkey_hex: &str) -> Result<String, JsValue> {
+    unified_kdf::encode_npub(xonly_pubkey_hex).map_err(|e| JsValue::from_str(&e))
+}
+
+/// Decode a NIP-19 bech32 `npub1...` into a 64-char lowercase hex x-only public key.
+#[wasm_bindgen]
+pub fn wallet_decode_npub(npub: &str) -> Result<String, JsValue> {
+    unified_kdf::decode_npub(npub).map_err(|e| JsValue::from_str(&e))
+}
+
+// --- Pillar 4 NFT signing ---
+
+/// Compute the deterministic on-chain SHA3-384 `nft_id` for `(chain_id, issuer, collection_id, serial)`.
+#[wasm_bindgen]
+pub fn wallet_compute_nft_id(
+    chain_id: &str,
+    issuer: &str,
+    collection_id: &str,
+    serial: u64,
+) -> Result<String, JsValue> {
+    nft_signing::compute_onchain_nft_id(chain_id, issuer, collection_id, serial)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Compute the deterministic bit-63-partitioned migrated NFT serial (returned as a decimal string
+/// so JS callers never lose precision beyond `Number.MAX_SAFE_INTEGER`).
+#[wasm_bindgen]
+pub fn wallet_compute_nft_migrated_serial(
+    source_chain: &str,
+    nftoken_id: &str,
+) -> Result<String, JsValue> {
+    let serial = nft_signing::compute_nft_migrated_serial(source_chain, nftoken_id)
+        .map_err(|e| JsValue::from_str(&e))?;
+    Ok(serial.to_string())
+}
+
+/// Sign a Pillar 4 `pf.nft.metadata.v1` envelope locally with ML-DSA-65.
+#[wasm_bindgen]
+pub fn wallet_sign_nft_metadata_envelope(
+    backup_json: String,
+    metadata_json: &str,
+    created_at_unix_ms: u64,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(backup_json)?;
+    let metadata: nft_signing::NftMetadataInput = serde_json::from_str(metadata_json)
+        .map_err(|e| JsValue::from_str(&format!("nft metadata parse: {e}")))?;
+    let signed = nft_signing::sign_nft_metadata_envelope(&backup.0, &metadata, created_at_unix_ms)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&signed)
+}
+
+/// Sign a Pillar 4 `pf.nft.claim.v1` migration claim envelope locally with ML-DSA-65.
+#[wasm_bindgen]
+pub fn wallet_sign_nft_claim_envelope(
+    backup_json: String,
+    claim_json: &str,
+    created_at_unix_ms: u64,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(backup_json)?;
+    let claim: nft_signing::NftMigrationClaimInput = serde_json::from_str(claim_json)
+        .map_err(|e| JsValue::from_str(&format!("nft claim parse: {e}")))?;
+    let signed = nft_signing::sign_nft_claim_envelope(&backup.0, &claim, created_at_unix_ms)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&signed)
+}
+
+/// Verify a raw signed PUBLIC Pillar 2/4 NFT envelope without re-serializing protobuf bytes.
+#[wasm_bindgen]
+pub fn wallet_verify_nft_envelope(
+    envelope_hex: &str,
+    expected_schema_name: &str,
+    expected_sender_account: &str,
+    expected_metadata_hash_sha3_384: Option<String>,
+) -> Result<JsValue, JsValue> {
+    let envelope_bytes = postfiat_crypto_provider::hex_to_bytes(envelope_hex)
+        .map_err(|e| JsValue::from_str(&format!("envelope hex decode: {e}")))?;
+    let summary = nft_signing::verify_signed_public_nft_envelope(
+        &envelope_bytes,
+        expected_schema_name,
+        expected_sender_account,
+        expected_metadata_hash_sha3_384.as_deref(),
+    )
+    .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&summary)
+}
+
+/// Sign an on-chain NFT transaction (`nft_mint`, `nft_transfer`, `nft_burn`) from an RPC fee quote.
+#[wasm_bindgen]
+pub fn wallet_sign_nft_transaction(
+    backup_json: String,
+    quote_json: &str,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(backup_json)?;
+    let quote_response: RpcResponse = serde_json::from_str(quote_json)
+        .map_err(|e| JsValue::from_str(&format!("nft quote parse: {e}")))?;
+    let signed = nft_signing::sign_nft_transaction_quote(&backup.0, &quote_response)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&signed)
+}
+
+/// Sign an on-chain NFT transaction (`nft_mint`, `nft_transfer`, `nft_burn`) from explicit fields.
+#[wasm_bindgen]
+pub fn wallet_sign_nft_transaction_fields(
+    backup_json: String,
+    fields_json: &str,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(backup_json)?;
+    let fields: postfiat_rpc_sdk::WalletSignNftTransactionFields =
+        serde_json::from_str(fields_json)
+            .map_err(|e| JsValue::from_str(&format!("nft fields parse: {e}")))?;
+    let signed = nft_signing::sign_nft_transaction_fields(&backup.0, fields)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&signed)
+}
+
+/// Build a Train A `nft_burn` payload (supporting optional `issuer` for `ISSUER_BURNABLE`).
+#[wasm_bindgen]
+pub fn wallet_build_train_a_nft_burn_payload(
+    nft_id_hex: &str,
+    owner: &str,
+    issuer: Option<String>,
+) -> Result<JsValue, JsValue> {
+    let payload = nft_signing::build_train_a_nft_burn_payload(nft_id_hex, owner, issuer.as_deref())
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+// --- Pillar 6 Identity signing ---
+
+/// Enforce the Pillar 6 §1 client-side v1 signing guard (`"collaboration"` or `"nostr_v1_derivation"`).
+#[wasm_bindgen]
+pub fn wallet_validate_v1_signing_guard(purpose: &str, message: &str) -> Result<bool, JsValue> {
+    identity_signing::validate_v1_signing_guard(purpose, message)
+        .map_err(|e| JsValue::from_str(&e))?;
+    Ok(true)
+}
+
+/// Compute the salted SHA3-384 handle reservation commitment.
+#[wasm_bindgen]
+pub fn wallet_compute_handle_reservation_commitment(
+    handle: &str,
+    nostr_pubkey_hex: &str,
+    salt_hex: &str,
+) -> Result<String, JsValue> {
+    identity_signing::compute_handle_reservation_commitment(handle, nostr_pubkey_hex, salt_hex)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Compute the deterministic `link_id` for an identity link.
+#[wasm_bindgen]
+pub fn wallet_compute_identity_link_id(
+    account: &str,
+    kind: &str,
+    target: &str,
+    identity_sequence: u64,
+) -> Result<String, JsValue> {
+    identity_signing::validate_canonical_pf_account("account", account)
+        .map_err(|e| JsValue::from_str(&e))?;
+    let link_kind: identity_signing::IdentityLinkKind =
+        serde_json::from_value(serde_json::Value::String(kind.to_string()))
+            .map_err(|e| JsValue::from_str(&format!("invalid link kind: {e}")))?;
+    Ok(identity_signing::compute_identity_link_id(
+        account,
+        link_kind,
+        target,
+        identity_sequence,
+    ))
+}
+
+/// Sign a Pillar 6 `identity_set` `mint` dual-key bundle (ML-DSA-65 + BIP-340 Schnorr)
+/// using unified v2 BIP-39 Nostr derivation.
+#[wasm_bindgen]
+pub fn wallet_sign_identity_set_mint_v2(
+    backup_json: String,
+    bip39_seed64_hex: String,
+    params_json: &str,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(backup_json)?;
+    let bip39_seed64_hex = Zeroizing::new(bip39_seed64_hex);
+    let params: identity_signing::IdentityMintParams = serde_json::from_str(params_json)
+        .map_err(|e| JsValue::from_str(&format!("identity mint params parse: {e}")))?;
+    let bundle = identity_signing::sign_identity_set_mint_v2(&backup.0, &bip39_seed64_hex, params)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&bundle)
+}
+
+/// Sign a Pillar 6 `identity_set` `mint` dual-key bundle preserving a legacy v1 Nostr key.
+#[wasm_bindgen]
+pub fn wallet_sign_identity_set_mint_v1(
+    backup_json: String,
+    nostr_v1_secret_hex: String,
+    params_json: &str,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(backup_json)?;
+    let nostr_v1_secret_hex = Zeroizing::new(nostr_v1_secret_hex);
+    let params: identity_signing::IdentityMintParams = serde_json::from_str(params_json)
+        .map_err(|e| JsValue::from_str(&format!("identity mint params parse: {e}")))?;
+    let bundle =
+        identity_signing::sign_identity_set_mint_v1(&backup.0, &nostr_v1_secret_hex, params)
+            .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&bundle)
+}
+
+/// Sign a Pillar 6 `identity_set` `rotate` dual-key bundle to a new unified v2 Nostr key.
+#[wasm_bindgen]
+pub fn wallet_sign_identity_set_rotate_v2(
+    backup_json: String,
+    bip39_seed64_hex: String,
+    params_json: &str,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(backup_json)?;
+    let bip39_seed64_hex = Zeroizing::new(bip39_seed64_hex);
+    let params: identity_signing::IdentityRotateParams = serde_json::from_str(params_json)
+        .map_err(|e| JsValue::from_str(&format!("identity rotate params parse: {e}")))?;
+    let bundle =
+        identity_signing::sign_identity_set_rotate_v2(&backup.0, &bip39_seed64_hex, params)
+            .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&bundle)
+}
+
+/// Verify both the ML-DSA-65 binding signature and BIP-340 Nostr Schnorr proof on a bundle.
+#[wasm_bindgen]
+pub fn wallet_verify_identity_set_bundle(bundle_json: &str) -> Result<bool, JsValue> {
+    let bundle: identity_signing::SignedIdentitySetBundle = serde_json::from_str(bundle_json)
+        .map_err(|e| JsValue::from_str(&format!("identity bundle parse: {e}")))?;
+    identity_signing::verify_signed_identity_set_bundle(&bundle).map_err(|e| JsValue::from_str(&e))
+}
+
+/// Verify a standalone BIP-340 Nostr binding proof for an `identity_set` `mint` or `rotate`.
+#[wasm_bindgen]
+pub fn wallet_verify_nostr_binding_proof(
+    nostr_pubkey_hex: &str,
+    nostr_proof_sig_hex: &str,
+    op: &str,
+    chain_id: &str,
+    account: &str,
+    tx_sequence: u64,
+) -> Result<bool, JsValue> {
+    identity_signing::verify_nostr_binding_proof(
+        nostr_pubkey_hex,
+        nostr_proof_sig_hex,
+        op,
+        chain_id,
+        account,
+        tx_sequence,
+    )
+    .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Sign destination-account ML-DSA-65 co-signature for `identity_set` `rotate_account`.
+#[wasm_bindgen]
+pub fn wallet_sign_identity_rotate_account_cosig(
+    new_account_backup_json: String,
+    old_account: &str,
+    identity_sequence: u64,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(new_account_backup_json)?;
+    let proof = identity_signing::sign_identity_rotate_account_cosig(
+        &backup.0,
+        old_account,
+        identity_sequence,
+    )
+    .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&proof)
+}
+
+/// Sign human-controller ML-DSA-65 co-signature for an `agent_controller` identity link.
+#[wasm_bindgen]
+pub fn wallet_sign_identity_controller_link_proof(
+    controller_backup_json: String,
+    agent_account: &str,
+    tx_sequence: u64,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(controller_backup_json)?;
+    let proof = identity_signing::sign_identity_controller_link_proof(
+        &backup.0,
+        agent_account,
+        tx_sequence,
+    )
+    .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&proof)
+}
+
+/// Sign linked-key ML-DSA-65 self-unlink proof committing strictly to `link_id`.
+#[wasm_bindgen]
+pub fn wallet_sign_identity_self_unlink_proof(
+    linked_backup_json: String,
+    link_id: &str,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(linked_backup_json)?;
+    let proof = identity_signing::sign_identity_self_unlink_proof(&backup.0, link_id)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&proof)
+}
+
+/// Validate a serialized `IdentitySetOperationPayload` locally before submission.
+#[wasm_bindgen]
+pub fn wallet_validate_identity_set_operation(operation_json: &str) -> Result<bool, JsValue> {
+    let op: identity_signing::IdentitySetOperationPayload = serde_json::from_str(operation_json)
+        .map_err(|e| JsValue::from_str(&format!("identity operation parse: {e}")))?;
+    identity_signing::validate_identity_set_operation(&op).map_err(|e| JsValue::from_str(&e))?;
+    Ok(true)
+}
+
+// --- Pillar 7 & Pillar 8 transaction builders & delegated credential signing ---
+
+/// Build and validate a Pillar 7 `nav_fee_schedule_attach` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_nav_fee_schedule_attach(
+    issuer: &str,
+    asset_id: &str,
+    schedule_json: &str,
+) -> Result<JsValue, JsValue> {
+    let schedule: pillar78_builders::NavFeeScheduleInputV1 = serde_json::from_str(schedule_json)
+        .map_err(|e| JsValue::from_str(&format!("nav fee schedule parse: {e}")))?;
+    let payload =
+        pillar78_builders::build_nav_fee_schedule_attach_payload(issuer, asset_id, schedule)
+            .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+/// Build and validate a Pillar 7 `nav_fee_schedule_set` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_nav_fee_schedule_set(
+    issuer: &str,
+    asset_id: &str,
+    schedule_json: &str,
+) -> Result<JsValue, JsValue> {
+    let schedule: pillar78_builders::NavFeeScheduleInputV1 = serde_json::from_str(schedule_json)
+        .map_err(|e| JsValue::from_str(&format!("nav fee schedule parse: {e}")))?;
+    let payload = pillar78_builders::build_nav_fee_schedule_set_payload(issuer, asset_id, schedule)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+/// Build and validate a Pillar 7 `nav_fee_schedule_cancel` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_nav_fee_schedule_cancel(
+    issuer: &str,
+    asset_id: &str,
+) -> Result<JsValue, JsValue> {
+    let payload = pillar78_builders::build_nav_fee_schedule_cancel_payload(issuer, asset_id)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+/// Build and validate a Pillar 7 `nav_fee_claim` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_nav_fee_claim(
+    recipient: &str,
+    asset_id: &str,
+    amount: u64,
+) -> Result<JsValue, JsValue> {
+    let payload = pillar78_builders::build_nav_fee_claim_payload(recipient, asset_id, amount)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+/// Compute the deterministic Pillar 8 aggregated bridge hold key for `(asset_id, recipient)`.
+#[wasm_bindgen]
+pub fn wallet_compute_asset_bridge_hold_key(
+    asset_id: &str,
+    recipient: &str,
+) -> Result<String, JsValue> {
+    pillar78_builders::compute_asset_bridge_hold_key(asset_id, recipient)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Compute the deterministic Pillar 8 `issuer_id` for `(chain_id, admin_account, registration_nonce)`.
+#[wasm_bindgen]
+pub fn wallet_compute_credential_issuer_id(
+    chain_id: &str,
+    admin_account: &str,
+    registration_nonce: u64,
+) -> Result<String, JsValue> {
+    pillar78_builders::compute_credential_issuer_id(chain_id, admin_account, registration_nonce)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Compute the deterministic Pillar 8 `credential_id` for `(subject, issuer_id, credential_type)`.
+#[wasm_bindgen]
+pub fn wallet_compute_credential_id(
+    subject: &str,
+    issuer_id: &str,
+    credential_type: &str,
+) -> Result<String, JsValue> {
+    pillar78_builders::compute_credential_id(subject, issuer_id, credential_type)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Build and validate a Pillar 8 `bridge_hold_claim` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_bridge_hold_claim(
+    recipient: &str,
+    asset_id: &str,
+    amount: u64,
+) -> Result<JsValue, JsValue> {
+    let payload = pillar78_builders::build_bridge_hold_claim_payload(recipient, asset_id, amount)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+/// Build and validate a Pillar 8 `bridge_hold_return` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_bridge_hold_return(
+    recipient: &str,
+    asset_id: &str,
+    amount: u64,
+    burn: bool,
+) -> Result<JsValue, JsValue> {
+    let payload =
+        pillar78_builders::build_bridge_hold_return_payload(recipient, asset_id, amount, burn)
+            .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+/// Build and validate a Pillar 8 `offer_prune_ineligible` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_offer_prune_ineligible(
+    pruner: &str,
+    offer_ids_json: &str,
+) -> Result<JsValue, JsValue> {
+    let offer_ids: Vec<String> = serde_json::from_str(offer_ids_json)
+        .map_err(|e| JsValue::from_str(&format!("offer_ids parse: {e}")))?;
+    let payload = pillar78_builders::build_offer_prune_ineligible_payload(pruner, offer_ids)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+#[derive(Debug, Deserialize)]
+struct BrowserIssuerRegisterInput {
+    admin_account: String,
+    domain: String,
+    signing_accounts: Vec<String>,
+    allowed_credential_types: Vec<String>,
+    #[serde(default)]
+    vendor_dids: Vec<String>,
+    registration_nonce: u64,
+}
+
+/// Build and validate a Pillar 8 `issuer_register` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_issuer_register(params_json: &str) -> Result<JsValue, JsValue> {
+    let input: BrowserIssuerRegisterInput = serde_json::from_str(params_json)
+        .map_err(|e| JsValue::from_str(&format!("issuer_register params parse: {e}")))?;
+    let payload = pillar78_builders::build_issuer_register_payload(
+        &input.admin_account,
+        &input.domain,
+        input.signing_accounts,
+        input.allowed_credential_types,
+        input.vendor_dids,
+        input.registration_nonce,
+    )
+    .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+/// Build and validate a Pillar 8 `asset_access_set` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_asset_access_set(payload_json: &str) -> Result<JsValue, JsValue> {
+    let payload: pillar78_builders::AssetAccessSetPayload = serde_json::from_str(payload_json)
+        .map_err(|e| JsValue::from_str(&format!("asset_access_set parse: {e}")))?;
+    let validated = pillar78_builders::build_asset_access_set_payload(payload)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&validated)
+}
+
+/// Build and validate a Pillar 8 `credential_accept` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_credential_accept(
+    subject: &str,
+    credential_id: &str,
+) -> Result<JsValue, JsValue> {
+    let payload = pillar78_builders::build_credential_accept_payload(subject, credential_id)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+/// Build and validate a Pillar 8 `credential_delete` operation payload.
+#[wasm_bindgen]
+pub fn wallet_build_credential_delete(
+    caller: &str,
+    credential_id: &str,
+) -> Result<JsValue, JsValue> {
+    let payload = pillar78_builders::build_credential_delete_payload(caller, credential_id)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
+}
+
+/// Sign a Pillar 8 delegated 0-PFT credential acceptance locally with the subject's ML-DSA-65 key.
+#[wasm_bindgen]
+pub fn wallet_sign_delegated_credential_accept(
+    subject_backup_json: String,
+    input_json: &str,
+) -> Result<JsValue, JsValue> {
+    let backup = parse_browser_backup(subject_backup_json)?;
+    let input: pillar78_builders::DelegatedCredentialAcceptInput = serde_json::from_str(input_json)
+        .map_err(|e| JsValue::from_str(&format!("delegated accept input parse: {e}")))?;
+    let signed = pillar78_builders::sign_delegated_credential_accept(&backup.0, &input)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&signed)
+}
+
+/// Verify a Pillar 8 delegated 0-PFT credential acceptance signature.
+#[wasm_bindgen]
+pub fn wallet_verify_delegated_credential_accept(
+    input_json: &str,
+    signed_json: &str,
+) -> Result<bool, JsValue> {
+    let input: pillar78_builders::DelegatedCredentialAcceptInput = serde_json::from_str(input_json)
+        .map_err(|e| JsValue::from_str(&format!("delegated accept input parse: {e}")))?;
+    let signed: pillar78_builders::SignedDelegatedCredentialAccept =
+        serde_json::from_str(signed_json)
+            .map_err(|e| JsValue::from_str(&format!("delegated accept sig parse: {e}")))?;
+    pillar78_builders::verify_delegated_credential_accept(&input, &signed)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Assemble and verify a Pillar 8 `credential_create_and_accept` payload.
+#[wasm_bindgen]
+pub fn wallet_build_credential_create_and_accept(
+    signing_account: &str,
+    input_json: &str,
+    signed_json: &str,
+) -> Result<JsValue, JsValue> {
+    let input: pillar78_builders::DelegatedCredentialAcceptInput = serde_json::from_str(input_json)
+        .map_err(|e| JsValue::from_str(&format!("delegated accept input parse: {e}")))?;
+    let signed: pillar78_builders::SignedDelegatedCredentialAccept =
+        serde_json::from_str(signed_json)
+            .map_err(|e| JsValue::from_str(&format!("delegated accept sig parse: {e}")))?;
+    let payload = pillar78_builders::build_credential_create_and_accept_payload(
+        signing_account,
+        &input,
+        &signed,
+    )
+    .map_err(|e| JsValue::from_str(&e))?;
+    to_json_js_value(&payload)
 }
