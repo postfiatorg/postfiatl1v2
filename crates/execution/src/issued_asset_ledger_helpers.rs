@@ -544,7 +544,19 @@ fn auto_prune_empty_implicit_trustline(
         return Ok(());
     }
     let reserved = issued_asset_reserved_total_for_account(ledger, account, asset_id, None, None)?;
-    if reserved == 0 {
+    // A pending vault-bridge redemption (a Solana exit burn) may be cancelled
+    // and refunded to this line; keep it until the redemption settles.
+    let family = ledger
+        .asset_definition(asset_id)
+        .map(|asset| asset.asset_family_id.as_str())
+        .filter(|family| !family.is_empty())
+        .unwrap_or(asset_id);
+    let pending_redemption = ledger.vault_bridge_redemptions.iter().any(|redemption| {
+        redemption.owner == account
+            && redemption.state == postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_PENDING
+            && (redemption.asset_id == asset_id || redemption.asset_id == family)
+    });
+    if reserved == 0 && !pending_redemption {
         ledger.trustlines.remove(index);
     }
     Ok(())

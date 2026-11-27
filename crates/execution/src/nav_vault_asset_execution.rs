@@ -7926,12 +7926,14 @@ fn apply_vault_bridge_burn_to_redeem(
         .map_err(|error| ("bad_vault_bridge_bucket", error))?;
 
     ledger.trustlines[owner_index].balance -= operation.amount_atoms;
+    ledger.vault_bridge_bucket_states[bucket_index] = bucket_after;
+    ledger.vault_bridge_redemptions.push(redemption);
+    // After the pending redemption is recorded, so the burner's line, which a
+    // cancelled burn is refunded to, is kept (only once the gate is active).
     if compatibility.asset_gate_v1_active(block_height) {
         let _ =
             auto_prune_empty_implicit_trustline(ledger, &operation.owner, &movement_asset.asset_id);
     }
-    ledger.vault_bridge_bucket_states[bucket_index] = bucket_after;
-    ledger.vault_bridge_redemptions.push(redemption);
     Ok(())
 }
 

@@ -501,6 +501,92 @@ mod tests {
         (genesis, ledger)
     }
 
+    /// Point 7 (B03): with the asset gate active, a Solana deposit makes an
+    /// implicit line; burning all of it must keep that line while the burn is
+    /// pending, so a cancelled burn is refunded to it.
+    #[test]
+    fn a_full_solana_burn_keeps_its_refund_line_under_the_asset_gate() {
+        postfiat_types::solana_exit::set_second_release_for_tests(Some(0));
+        let (genesis, mut ledger, mut route, mut journal) = setup();
+        let family = postfiat_types::solana_exit::FAMILY.to_string();
+        ledger.asset_definitions[0].asset_id = family.clone();
+        ledger.nav_assets[0].asset_id = family.clone();
+        route.profile.asset_id = family;
+        route.profile.route_epoch = 9;
+        route.profile.vault_address = EXIT_VAULT.into();
+        route.profile.token_address = EXIT_MINT.into();
+        let pins = route.profile.solana.as_mut().unwrap();
+        pins.genesis_hash = EXIT_GENESIS.into();
+        pins.route_binding = postfiat_types::solana_deposit_route_binding(
+            &genesis.chain_id,
+            &genesis_hash(&genesis),
+            &route.profile.route_id,
+            EXIT_GENESIS,
+            EXIT_VAULT,
+        )
+        .unwrap();
+        journal[163..195].copy_from_slice(&hex_to_bytes(EXIT_VAULT).unwrap());
+        journal[195..227].copy_from_slice(&hex_to_bytes(&pins.route_binding).unwrap());
+        ledger.solana_route = Some(route.clone());
+        let gate =
+            AssetExecutionCompatibility::strict().with_asset_gate_v1_activation_height(Some(1));
+        credit_verified(
+            &genesis,
+            &mut ledger,
+            &route,
+            &route.profile.profile_hash().unwrap(),
+            &journal,
+            10,
+            gate,
+            &[],
+            &mut Vec::new(),
+        )
+        .unwrap();
+        let nav = &mut ledger.nav_assets[0];
+        nav.finalized_epoch = 1;
+        nav.finalized_reserve_packet_hash = "aa".repeat(48);
+        nav.nav_per_unit = 1_000_000;
+
+        let bucket = ledger.vault_bridge_bucket_states[0].bucket_id.clone();
+        let line = ledger.trustlines[0].clone();
+        assert!(!line.authorized && line.reserve_paid == 0, "implicit line");
+        let compatibility = open_exit().with_asset_gate_v1_activation_height(Some(1));
+        exit_burn_with(
+            &genesis,
+            &mut ledger,
+            &bucket,
+            line.balance,
+            exit_destination(),
+            compatibility,
+        )
+        .unwrap();
+        let kept = ledger
+            .trustline_for_account_asset(&line.account, &line.asset_id)
+            .expect("the pending burn keeps its line");
+        assert_eq!(kept.balance, 0);
+        let packet = ledger
+            .vault_bridge_redemptions
+            .last()
+            .unwrap()
+            .withdrawal_packet_hash
+            .clone();
+        refund_cancelled_solana_burn(
+            &mut ledger,
+            &genesis.chain_id,
+            &packet,
+            &"6e".repeat(48),
+            21,
+        )
+        .expect("the cancelled burn is refunded");
+        assert_eq!(
+            ledger
+                .trustline_for_account_asset(&line.account, &line.asset_id)
+                .unwrap()
+                .balance,
+            line.balance
+        );
+    }
+
     /// The compatibility a governed, open Solana exit gives the burn path.
     fn open_exit() -> AssetExecutionCompatibility {
         let mut compatibility = AssetExecutionCompatibility::strict()
