@@ -16,12 +16,14 @@ permissions:
 
 jobs:
   node:
-    name: node (${{ matrix.arch }})
+    name: node (${{ matrix.arch }}, ${{ matrix.builder }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
       fail-fast: true
       matrix:
+        arch: [linux-x86_64, linux-aarch64]
+        builder: [first, second]
         include:
           - arch: linux-x86_64
             runner: ubuntu-24.04
@@ -40,7 +42,7 @@ jobs:
           "./postfiat-node-${{ matrix.arch }}" release-build-info
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: postfiat-node-${{ matrix.arch }}
+          name: ${{ matrix.builder }}-postfiat-node-${{ matrix.arch }}
           path: postfiat-node-${{ matrix.arch }}
           if-no-files-found: error
 
@@ -58,9 +60,16 @@ jobs:
         run: rustup toolchain install 1.95.0 --profile minimal
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          pattern: postfiat-node-*
-          path: release
-          merge-multiple: true
+          pattern: '*-postfiat-node-*'
+          path: builds
+      - name: Require matching independent native builds for each target
+        run: |
+          mkdir release
+          for arch in linux-x86_64 linux-aarch64; do
+            file="postfiat-node-$arch"
+            cmp -- "builds/first-$file/$file" "builds/second-$file/$file"
+            install -m 0755 "builds/first-$file/$file" "release/$file"
+          done
       - name: Assemble the release directory
         run: scripts/release-assemble release
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

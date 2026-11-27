@@ -110,7 +110,7 @@ class ReleaseFlow(unittest.TestCase):
             run(*create)
             manifest = json.loads(manifest_file.read_text())
             self.assertEqual((manifest["release_sequence"], manifest["signatures"]), (1, []))
-            self.assertEqual(manifest["artifacts"]["linux-x86_64"]["binary_sha256"], info["binary_sha256"])
+            self.assertEqual(manifest["artifacts"][native_arch]["binary_sha256"], info["binary_sha256"])
             self.assertNotEqual(run(*create, ok=False).returncode, 0, "a manifest is never overwritten")
 
             verify = ["release-manifest-verify", "--manifest-file", str(manifest_file), "--keyset-file", str(keyset_file),
@@ -132,7 +132,7 @@ class ReleaseFlow(unittest.TestCase):
             # 6. Another binary than the one the manifest names is refused at start.
             other = tmp / "other-binary"
             other.write_bytes(b"not the release binary")
-            refused = run(*verify[:6], "--runtime-binary-file", str(other), "--arch", "linux-x86_64", ok=False)
+            refused = run(*verify[:6], "--runtime-binary-file", str(other), "--arch", native_arch, ok=False)
             self.assertNotEqual(refused.returncode, 0)
             # A changed manifest is refused too.
             manifest = json.loads(manifest_file.read_text())
