@@ -1,0 +1,324 @@
+// Post Fiat L1v2 — Canonical Hive Governance Packet Schema (Pillar 1, Contract C1)
+//
+// Frozen canonical protobuf3 definitions for:
+//   - pf.governance.snapshot.v1: single-block-pinned protocol state snapshot + prior deliverables carry-over
+//   - pf.governance.packet.v1: founder-signed opening brief with explicit carry-over accountability
+//   - pf.governance.transcript.v1: frozen server-receipt-ordered session transcript + excluded events
+//   - pf.governance.minutes.v1: two-pass prompt-injection-isolated minutes + threshold-ready approvals
+//   - pf.governance.ruling.v1: optional founder-flagged deterministic governance ruling anchor
+//
+// All governance artifacts are wrapped in PUBLIC Pillar 2 Envelopes (postfiat.message.v1.Envelope,
+// body_encoding = BODY_ENCODING_CANONICAL_JSON [RFC 8785] or BODY_ENCODING_PROTOBUF) and anchored on
+// postfiatl1v2 via payment_v2 memos carrying pf.ptr v5 with kind = CONTENT_KIND_GOVERNANCE (12) and
+// thread_id = session_id.
+//
+// Wire & canonical serialization specification: docs/specs/message-protocol-v1.md
+
+syntax = "proto3";
+
+package postfiat.governance.v1;
+
+import "postfiat/message/v1/message.proto";
+
+// Explicit governance session lifecycle state machine.
+enum SessionState {
+  SESSION_STATE_UNSPECIFIED = 0;
+  SESSION_STATE_DRAFT = 1;
+  SESSION_STATE_LIVE = 2;
+  SESSION_STATE_FROZEN = 3;
+  SESSION_STATE_IN_REVIEW = 4;
+  SESSION_STATE_ANCHORING = 5;
+  SESSION_STATE_PUBLISHED = 6;
+  SESSION_STATE_ABORTED = 7;
+  SESSION_STATE_RULING_PENDING = 8;
+  SESSION_STATE_RULING_ANCHORED = 9;
+}
+
+// Mandatory public accountability status for every deliverable carried over from the prior session.
+enum DeliverableStatus {
+  DELIVERABLE_STATUS_UNSPECIFIED = 0;
+  DELIVERABLE_STATUS_DONE = 1;
+  DELIVERABLE_STATUS_IN_PROGRESS = 2;
+  DELIVERABLE_STATUS_NOT_DONE = 3;
+  DELIVERABLE_STATUS_DROPPED = 4;
+}
+
+// Who is permitted to post in a dedicated 30-minute Hive governance session room.
+enum PostingPolicy {
+  POSTING_POLICY_UNSPECIFIED = 0;
+  POSTING_POLICY_FOUNDER_ONLY = 1;
+  POSTING_POLICY_ALLOWLIST = 2;
+  POSTING_POLICY_ALL_MEMBERS = 3;
+}
+
+// AI facilitator operating mode during a live governance session.
+enum FacilitatorMode {
+  FACILITATOR_MODE_UNSPECIFIED = 0;
+  FACILITATOR_MODE_OFF = 1;
+  FACILITATOR_MODE_AGENDA = 2;
+  FACILITATOR_MODE_INTERACTIVE = 3;
+}
+
+// Reason code recorded when an observed Nostr event is excluded from the frozen canonical transcript.
+enum ExclusionReason {
+  EXCLUSION_REASON_UNSPECIFIED = 0;
+  EXCLUSION_REASON_INVALID_SIGNATURE = 1;
+  EXCLUSION_REASON_WRONG_ROOM = 2;
+  EXCLUSION_REASON_INELIGIBLE_AUTHOR = 3;
+  EXCLUSION_REASON_OUTSIDE_WINDOW = 4;
+  EXCLUSION_REASON_RATE_LIMITED = 5;
+  EXCLUSION_REASON_ACCOUNT_CAP_EXCEEDED = 6;
+}
+
+// Compute backend executing optional founder-flagged deterministic governance rulings (read-only compute;
+// never holds a founder signing key).
+enum RulingComputeBackend {
+  RULING_COMPUTE_BACKEND_UNSPECIFIED = 0;
+  RULING_COMPUTE_BACKEND_GOOGLE = 1;
+  RULING_COMPUTE_BACKEND_VAST = 2;
+}
+
+// Authority binding and threshold metadata.
+// Launch policy is founder-only (1-of-1); signer_set_id + threshold allow future multi-sig stewards
+// without breaking the schema.
+message AuthorityBinding {
+  string signer_set_id = 1;
+  uint32 threshold = 2;
+  uint32 total_signers = 3;
+  // Pinned postfiatl1v2 authority account address(es).
+  repeated string authorized_accounts = 4;
+  // Authorized founder Nostr x-only public key (64 lowercase hex chars), explicitly bound in the wallet-signed packet.
+  string founder_nostr_pubkey = 5;
+  // Optional Pillar 6 NIP-05 identity handle once minted.
+  string identity_handle = 6;
+}
+
+// Raw RPC / API source attestation inside a ProtocolSnapshot so third parties can re-derive every field offline.
+message SnapshotSourceRecord {
+  string source_id = 1;
+  string endpoint = 2;
+  // Pinned finalized L1 block height (all L1 reads share one finalized height to prevent torn reads).
+  uint64 block_height = 3;
+  uint64 captured_at_unix_ms = 4;
+  // 32-byte SHA-256 of the raw upstream response bytes.
+  bytes raw_response_sha256 = 5;
+  // CIDv1 raw of the raw response pinned alongside the snapshot.
+  postfiat.message.v1.IpfsCidRef raw_response_cid = 6;
+}
+
+// Concrete action item / deliverable produced by governance minutes and automatically carried over
+// into the next governance session's opening packet (no automatic PFT bounties).
+message DeliverableItem {
+  string deliverable_id = 1;
+  string origin_session_id = 2;
+  string title = 3;
+  string description = 4;
+  string owner = 5;
+  string target_date = 6;
+  // Exact founder/agenda Nostr event IDs cited in Pass 1 minutes drafting.
+  repeated string cited_event_ids = 7;
+}
+
+// Public carry-over accountability entry for a deliverable from the prior governance session.
+message DeliverableCarryOver {
+  string deliverable_id = 1;
+  string origin_session_id = 2;
+  string title = 3;
+  DeliverableStatus status = 4;
+  string evidence_note = 5;
+  repeated string evidence_refs = 6;
+}
+
+// Single-block-pinned protocol state snapshot (schema_name = "pf.governance.snapshot.v1").
+message ProtocolSnapshot {
+  uint32 schema_version = 1;
+  string session_id = 2;
+  string chain_id = 3;
+  // Single finalized L1 block height to which all chain/validator/bridge/NAVCoin reads are pinned.
+  uint64 finalized_block_height = 4;
+  // 48-byte SHA3-384 hash of the block at finalized_block_height: the raw bytes of its 96-lowercase-hex
+  // BlockHeader.block_hash.
+  bytes finalized_block_hash = 5;
+  uint64 captured_at_unix_ms = 6;
+  uint32 active_validator_count = 7;
+  string bridge_status_summary = 8;
+  string navcoin_supply_summary = 9;
+  string cobalt_verdict_summary = 10;
+  string tasknode_health_summary = 11;
+  // Previous published governance session ID whose deliverables are automatically loaded below.
+  string previous_session_id = 12;
+  postfiat.message.v1.IpfsCidRef previous_minutes_cid = 13;
+  repeated DeliverableItem carried_deliverables = 14;
+  repeated SnapshotSourceRecord sources = 15;
+}
+
+// Proposed decision listed in the founder's opening brief.
+message ProposedDecision {
+  string decision_id = 1;
+  string title = 2;
+  string summary = 3;
+  // Default false; deterministic governance runner runs ONLY when explicitly flagged by the founder.
+  bool run_deterministic_ruling = 4;
+}
+
+// Live governance session room configuration and anti-spam / turn-budget parameters.
+message SessionConfig {
+  string channel_id = 1;
+  PostingPolicy posting_policy = 2;
+  FacilitatorMode facilitator_mode = 3;
+  // Default 30 minutes (founder may extend or close early).
+  uint32 duration_minutes = 4;
+  // Default 15 seconds per non-founder registered account.
+  uint32 rate_limit_seconds = 5;
+  // Default 10 messages per non-founder account per session.
+  uint32 max_non_founder_messages = 6;
+  // Default 25 total AI facilitator turns.
+  uint32 max_facilitator_turns = 7;
+  // Default 15 turns reserved exclusively for founder/agenda prompts.
+  uint32 reserved_founder_turns = 8;
+  // Required when posting_policy is ALLOWLIST or ALL_MEMBERS; enables offline eligibility verification.
+  postfiat.message.v1.IpfsCidRef eligible_pubkeys_cid = 9;
+  bytes eligible_pubkeys_sha256 = 10;
+}
+
+// Founder-signed opening governance packet (schema_name = "pf.governance.packet.v1").
+message GovernancePacket {
+  uint32 schema_version = 1;
+  string session_id = 2;
+  string chain_id = 3;
+  uint64 session_number = 4;
+  string title = 5;
+  string summary = 6;
+  AuthorityBinding authority = 7;
+  postfiat.message.v1.IpfsCidRef snapshot_cid = 8;
+  bytes snapshot_sha256 = 9;
+  // Mandatory public scorecard for every deliverable carried over from the previous session.
+  repeated DeliverableCarryOver previous_deliverables_status = 10;
+  repeated string open_questions = 11;
+  repeated ProposedDecision proposed_decisions = 12;
+  // Optional IPFS attachments (text/Markdown/JSON only for agents).
+  repeated postfiat.message.v1.IpfsCidRef attachments = 13;
+  SessionConfig session_config = 14;
+  uint64 created_at_unix_ms = 15;
+}
+
+// Single included message in the frozen canonical session transcript.
+message TranscriptEntry {
+  // Strictly ascending Task Node server receipt sequence (prevents client timestamp backdating).
+  uint64 receipt_seq = 1;
+  // 64-char lowercase hex Nostr event ID.
+  string nostr_event_id = 2;
+  // 64-char lowercase hex Nostr x-only author public key.
+  string author_pubkey = 3;
+  // Logical participant role: "founder", "facilitator", or "community".
+  string author_role = 4;
+  uint64 event_created_at_unix_s = 5;
+  uint64 server_received_at_unix_ms = 6;
+  // 32-byte SHA-256 of the raw signed Nostr event JSON pinned to IPFS.
+  bytes raw_event_sha256 = 7;
+  postfiat.message.v1.IpfsCidRef raw_event_cid = 8;
+}
+
+// Audit entry for an observed Nostr event excluded by the canonical inclusion rule.
+message ExcludedEvent {
+  string nostr_event_id = 1;
+  string author_pubkey = 2;
+  ExclusionReason reason = 3;
+  string detail = 4;
+}
+
+// Frozen, self-contained session transcript manifest (schema_name = "pf.governance.transcript.v1").
+message SessionTranscript {
+  uint32 schema_version = 1;
+  string session_id = 2;
+  string channel_id = 3;
+  postfiat.message.v1.IpfsCidRef opening_packet_cid = 4;
+  postfiat.message.v1.IpfsCidRef eligible_pubkeys_cid = 5;
+  uint64 opened_at_unix_ms = 6;
+  uint64 frozen_at_unix_ms = 7;
+  repeated TranscriptEntry included_entries = 8;
+  repeated ExcludedEvent excluded_events = 9;
+  // Readable Markdown rendering pinned alongside the manifest and raw signed Nostr events.
+  postfiat.message.v1.IpfsCidRef markdown_transcript_cid = 10;
+  // 32-byte SHA-256 over the canonical ordered (receipt_seq, nostr_event_id, raw_event_sha256) sequence.
+  bytes transcript_root_sha256 = 11;
+}
+
+// Finalized decision recorded in governance minutes (Pass 1 — isolated from community messages).
+message DecisionRecord {
+  string decision_id = 1;
+  string title = 2;
+  string resolution = 3;
+  // MUST cite only founder-signed packet, agenda prompts, or founder-signed messages.
+  repeated string cited_event_ids = 4;
+  bool run_deterministic_ruling = 5;
+}
+
+// Summarized community participation (Pass 2 — isolated quoted data).
+message CommunityInputSummary {
+  string topic = 1;
+  string summary = 2;
+  repeated string cited_event_ids = 3;
+}
+
+// Wallet-signed approval record (1-of-1 founder at launch; threshold-ready for multi-sig stewards).
+message ApprovalSignature {
+  string signer_account = 1;
+  postfiat.message.v1.SignatureAlgorithm signature_algorithm = 2;
+  bytes signer_pubkey = 3;
+  bytes signature = 4;
+  uint64 signed_at_unix_ms = 5;
+}
+
+// Signed governance minutes & next-session carry-over deliverables (schema_name = "pf.governance.minutes.v1").
+message GovernanceMinutes {
+  uint32 schema_version = 1;
+  string session_id = 2;
+  // Increments on founder edits during InReview without ever rebuilding the frozen transcript.
+  uint32 revision = 3;
+  SessionState state = 4;
+  AuthorityBinding authority = 5;
+  postfiat.message.v1.IpfsCidRef opening_packet_cid = 6;
+  postfiat.message.v1.IpfsCidRef transcript_cid = 7;
+  bytes transcript_root_sha256 = 8;
+  string summary = 9;
+  // Pass 1: reviewed accountability status of prior-session deliverables.
+  repeated DeliverableCarryOver previous_deliverables_review = 10;
+  // Pass 1: finalized decisions (structurally isolated from community prompt injection).
+  repeated DecisionRecord decisions = 11;
+  // Pass 1: next deliverables automatically loaded into the next governance session's opening packet.
+  repeated DeliverableItem next_deliverables = 12;
+  // Pass 2: community messages summarized strictly as quoted data.
+  repeated CommunityInputSummary community_input = 13;
+  // Threshold-ready approval signatures (1-of-1 founder wallet signature at launch).
+  repeated ApprovalSignature approvals = 14;
+  uint64 finalized_at_unix_ms = 15;
+}
+
+// Replayable deterministic governance ruling anchor (schema_name = "pf.governance.ruling.v1").
+// Produced ONLY for decisions explicitly flagged with run_deterministic_ruling == true.
+// The Google/Vast runner is read-only compute and never holds a founder signing key; the founder's
+// wallet signs the anchored RulingAnchor after reviewing the replayable output.
+message RulingAnchor {
+  uint32 schema_version = 1;
+  string session_id = 2;
+  string decision_id = 3;
+  string ruling_id = 4;
+  RulingComputeBackend compute_backend = 5;
+  postfiat.message.v1.IpfsCidRef snapshot_cid = 6;
+  postfiat.message.v1.IpfsCidRef opening_packet_cid = 7;
+  postfiat.message.v1.IpfsCidRef minutes_cid = 8;
+  postfiat.message.v1.IpfsCidRef ruling_artifact_cid = 9;
+  // 32-byte SHA-256 of the canonical deterministic runner input bundle (snapshot + brief + minutes).
+  bytes input_bundle_sha256 = 10;
+  // 32-byte SHA-256 of the deterministic ruling output artifact.
+  bytes output_ruling_sha256 = 11;
+  // 32-byte SHA-256 of the deterministic replay trace for third-party verification.
+  bytes replay_trace_sha256 = 12;
+  string model_digest = 13;
+  string constitution_version = 14;
+  string verdict = 15;
+  AuthorityBinding authority = 16;
+  repeated ApprovalSignature approvals = 17;
+  uint64 anchored_at_unix_ms = 18;
+}

@@ -1,63 +1,98 @@
 #!/usr/bin/env python3
 """Prove that the rust-ci test jobs together run every listed test exactly once.
 
-Reads the `cargo test` commands of the `test` and `test-pq` jobs in
-.github/workflows/rust-ci.yml, applies libtest's filter rules (positional
-filters, --skip, --exact) to the listing of
-`cargo test --workspace --locked -- --list`, and fails when any listed test is
-selected by no command or by more than one. Commands with --ignored only add
-#[ignore] tests on top and are not part of the split.
+Reads every `cargo test` command of every job in .github/workflows/rust-ci.yml,
+applies cargo's package and target selection (--workspace, --exclude, -p,
+--lib, --bin, --test) and libtest's filter rules (positional filters, --skip,
+--exact) to the listing of `cargo test --workspace --locked -- --list`, and
+fails when any listed test is selected by no command or by more than one.
+Commands with --ignored only add #[ignore] tests on top and are not part of
+the split.
+
+`-p` and `--exclude` resolve features over fewer packages than `--workspace`.
+A selected package that loses a feature could compile fewer tests than the
+listing shows, so the check also fails when a selected package's own features
+differ from its features under `--workspace`.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import re
 import shlex
+import subprocess
 import sys
 from pathlib import Path
 
 import yaml
 
-JOBS = ("test", "test-pq")
 # Cargo options that change how tests are built or reported, not which run.
-NOT_SELECTING = ("--no-fail-fast", "--release")
-WORKSPACE = ("--workspace", "--locked")
-# A command for one package's binary, and the listing prefix of that binary.
-ONE_BINARY = {
-    ("--locked", "-p", "postfiat-node", "--bin", "postfiat-node"): "src/main.rs (postfiat_node-",
-    ("--locked", "-p", "postfiat-privacy-binius", "--lib"): "src/lib.rs (postfiat_privacy_binius-",
-}
+NOT_SELECTING = ("--locked", "--no-fail-fast", "--release")
+LIB_KINDS = {"lib", "rlib", "dylib", "cdylib", "staticlib", "proc-macro"}
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 RUNNING_RE = re.compile(r"^\s*Running (?:unittests )?(\S+) \((\S+)\)$")
 DOC_RE = re.compile(r"^\s*Doc-tests (\S+)$")
 TEST_RE = re.compile(r"^(.+): (?:test|bench)$")
 
 
-def read_listing(path: Path) -> dict[str, list[str]]:
-    """Map each test binary (or doc-test crate) to the tests it lists."""
-    binaries: dict[str, list[str]] = {}
+def cargo(*args: str) -> str:
+    """Return cargo's stdout without colour codes, whatever CARGO_TERM_COLOR the caller set."""
+    return subprocess.run(["cargo", "--color", "never", *args], capture_output=True, text=True, check=True,
+                          env={**os.environ, "CARGO_TERM_COLOR": "never"}).stdout
+
+
+def read_listing(path: Path) -> dict[tuple[str, str], list[str]]:
+    """Map each test binary, as (source path, crate name) or ("doc", crate), to its tests."""
+    binaries: dict[tuple[str, str], list[str]] = {}
     current = None
     for raw in path.read_text(errors="replace").splitlines():
         line = ANSI_RE.sub("", raw).rstrip()
         if match := RUNNING_RE.match(line):
-            current = f"{match.group(1)} ({Path(match.group(2)).name})"
+            current = (match.group(1), Path(match.group(2)).name.rsplit("-", 1)[0])
             binaries[current] = []
         elif match := DOC_RE.match(line):
-            current = f"doc-tests {match.group(1)}"
+            current = ("doc", match.group(1))
             binaries[current] = []
         elif (match := TEST_RE.match(line)) and current is not None:
             binaries[current].append(match.group(1))
     return binaries
 
 
+def workspace_targets() -> tuple[dict[tuple[str, str], list[tuple[str, tuple[str, ...]]]], dict[str, bool]]:
+    """Map (source path, crate name) of every member target to (package, target selector)."""
+    metadata = json.loads(cargo("metadata", "--locked", "--no-deps", "--format-version", "1"))
+    targets: dict[tuple[str, str], list[tuple[str, tuple[str, ...]]]] = {}
+    tested: dict[str, bool] = {}
+    for package in metadata["packages"]:
+        if package["id"] not in metadata["workspace_members"]:
+            continue
+        root = Path(package["manifest_path"]).parent
+        tested[package["name"]] = False
+        for target in package["targets"]:
+            crate = target["name"].replace("-", "_")
+            source = Path(target["src_path"])
+            source = source.relative_to(root).as_posix() if source.is_relative_to(root) else str(source)
+            kinds = set(target["kind"])
+            if kinds & LIB_KINDS:
+                selector: tuple[str, ...] = ("lib",)
+                if target.get("doctest"):
+                    targets.setdefault(("doc", crate), []).append((package["name"], ("doc",)))
+            elif kinds & {"bin", "test", "example", "bench"}:
+                selector = (sorted(kinds)[0], target["name"])
+            else:
+                continue
+            targets.setdefault((source, crate), []).append((package["name"], selector))
+            tested[package["name"]] |= bool(target.get("test"))
+    return targets, tested
+
+
 def cargo_test_commands(workflow: Path) -> list[tuple[str, list[str]]]:
     jobs = yaml.safe_load(workflow.read_text())["jobs"]
     commands = []
-    for job in JOBS:
-        if job not in jobs:
-            sys.exit(f"{workflow}: job `{job}` is missing")
-        for step in jobs[job]["steps"]:
+    for job, spec in jobs.items():
+        for step in spec.get("steps", []):
             for line in step.get("run", "").replace("\\\n", " ").splitlines():
                 # The listing that feeds this check is not a test run.
                 if line.strip().startswith("cargo test") and "--list" not in line.split():
@@ -65,9 +100,9 @@ def cargo_test_commands(workflow: Path) -> list[tuple[str, list[str]]]:
     return commands
 
 
-def selection(tokens: list[str]) -> tuple[tuple[str, ...], list[str], list[str], bool, bool]:
+def selection(tokens: list[str]) -> tuple[list[str], list[str], list[str], bool, bool]:
     cut = tokens.index("--") if "--" in tokens else len(tokens)
-    cargo_args = tuple(arg for arg in tokens[2:cut] if arg not in NOT_SELECTING)
+    cargo_args = [arg for arg in tokens[2:cut] if arg not in NOT_SELECTING]
     libtest_args = tokens[cut + 1 :]
     filters, skips, exact, ignored = [], [], False, False
     args = iter(libtest_args)
@@ -89,6 +124,49 @@ def selection(tokens: list[str]) -> tuple[tuple[str, ...], list[str], list[str],
     return cargo_args, filters, skips, exact, ignored
 
 
+def packages_and_targets(cargo_args: list[str], members: set[str]) -> tuple[list[str], set[str], set[tuple[str, ...]]]:
+    """Return the cargo selection arguments, the selected packages and the target selectors."""
+    workspace, packages, excluded, targets, select_args = False, [], set(), set(), []
+    args = iter(cargo_args)
+    try:
+        for arg in args:
+            if arg == "--workspace":
+                workspace = True
+                select_args.append(arg)
+            elif arg in ("-p", "--package", "--exclude"):
+                name = next(args)
+                if name not in members:
+                    raise ValueError(f"{name} is not a workspace member")
+                if arg == "--exclude":
+                    excluded.add(name)
+                else:
+                    packages.append(name)
+                select_args += [arg, name]
+            elif arg == "--lib":
+                targets.add(("lib",))
+            elif arg in ("--bin", "--test"):
+                targets.add((arg[2:], next(args)))
+            else:
+                raise ValueError(f"cargo option {arg}")
+    except (StopIteration, ValueError) as error:
+        raise ValueError(str(error) or "missing option value") from None
+    if workspace == bool(packages) or (excluded and not workspace):
+        raise ValueError("needs either --workspace [--exclude P] or -p P")
+    return select_args, (members - excluded if workspace else set(packages)), targets
+
+
+def member_features(select_args: list[str], members: set[str]) -> dict[str, set[str]]:
+    out = cargo("tree", "--locked", "-e", "normal,build,dev", "--prefix", "none", "-f", "{p}|{f}", *select_args)
+    features: dict[str, set[str]] = {}
+    for line in out.splitlines():
+        # "(*)" marks a dependency already printed above, not a feature.
+        package, _, enabled = ANSI_RE.sub("", line).replace("(*)", "").partition("|")
+        name = package.split(" ", 1)[0]
+        if name in members and "(/" in package:
+            features.setdefault(name, set()).update(f.strip() for f in enabled.split(",") if f.strip())
+    return features
+
+
 def selects(name: str, filters: list[str], skips: list[str], exact: bool) -> bool:
     def hit(pattern: str) -> bool:
         return name == pattern if exact else pattern in name
@@ -103,24 +181,40 @@ def main() -> int:
     options = parser.parse_args()
 
     binaries = read_listing(options.listing)
-    one_binary = {form: [b for b in binaries if b.startswith(prefix)] for form, prefix in ONE_BINARY.items()}
-    if len(binaries) < 2 or any(len(found) != 1 for found in one_binary.values()):
-        sys.exit(f"{options.listing}: not a complete `cargo test --workspace -- --list` listing")
+    targets, tested = workspace_targets()
+    members = set(tested)
+    owner = {}
+    for binary in binaries:
+        found = targets.get(binary, [])
+        if len(found) != 1:
+            sys.exit(f"{options.listing}: binary {binary} matches {len(found)} workspace targets")
+        owner[binary] = found[0]
+    listed = {package for package, _ in owner.values()}
+    if missing := sorted(p for p, has_tests in tested.items() if has_tests and p not in listed):
+        sys.exit(f"{options.listing}: not a complete `cargo test --workspace -- --list` listing, "
+                 f"no binary of {', '.join(missing)}")
     counts = {(binary, test): 0 for binary, tests in binaries.items() for test in tests}
+    workspace_features = member_features(["--workspace"], members)
 
     for job, tokens in cargo_test_commands(options.workflow):
         cargo_args, filters, skips, exact, ignored = selection(tokens)
         if ignored or "--manifest-path" in cargo_args:
             print(f"{job}: outside the split: {shlex.join(tokens)}")
             continue
-        if cargo_args == WORKSPACE:
-            covered = list(binaries)
-        elif cargo_args in one_binary:
-            covered = one_binary[cargo_args]
-        else:
-            sys.exit(f"{job}: unknown cargo test form, extend this check: {shlex.join(tokens)}")
+        try:
+            select_args, packages, wanted = packages_and_targets(cargo_args, members)
+        except ValueError as error:
+            sys.exit(f"{job}: unknown cargo test form ({error}), extend this check: {shlex.join(tokens)}")
+        if select_args != ["--workspace"]:
+            features = member_features(select_args, members)
+            for package in sorted(packages):
+                if lost := workspace_features.get(package, set()) - features.get(package, set()):
+                    sys.exit(f"{job}: {package} loses features {sorted(lost)} under "
+                             f"{shlex.join(select_args)}; its listed tests may not all compile there")
         selected = 0
-        for binary in covered:
+        for binary, (package, selector) in owner.items():
+            if package not in packages or (wanted and selector not in wanted):
+                continue
             for test in binaries[binary]:
                 if selects(test, filters, skips, exact):
                     counts[(binary, test)] += 1
@@ -129,11 +223,11 @@ def main() -> int:
 
     lost = sorted(key for key, count in counts.items() if count == 0)
     repeated = sorted(key for key, count in counts.items() if count > 1)
-    print(f"listed {len(counts)} tests in {len(binaries)} binaries; "
+    print(f"listed {len(counts)} tests in {len(binaries)} binaries of {len(listed)} packages; "
           f"{len(lost)} run nowhere, {len(repeated)} run more than once")
     for label, keys in (("run nowhere", lost), ("run more than once", repeated)):
-        for binary, test in keys[:50]:
-            print(f"  {label}: {test}  [{binary}]")
+        for (source, crate), test in keys[:50]:
+            print(f"  {label}: {test}  [{crate} {source}]")
     return 1 if lost or repeated else 0
 
 
