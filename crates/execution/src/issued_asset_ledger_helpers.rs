@@ -226,12 +226,366 @@ impl SolanaExitAccounting {
     }
 }
 
+/// Opt-in account flag bit reserved for Train B (`ACCOUNT_FLAG_REFUSE_UNSOLICITED_ASSETS`).
+/// Checking it inside `asset_gate` is a no-op until Train B enables setting bit `0x2`.
+const ACCOUNT_FLAG_REFUSE_UNSOLICITED_ASSETS_BIT: u32 = 0x0000_0002;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssetMovementOpKind {
+    IssuedPayment,
+    AtomicSwap,
+    OfferCreate,
+    OfferFill,
+    OfferCancelRefund,
+    EscrowCreate,
+    EscrowFinish,
+    EscrowCancelRefund,
+    NavMint,
+    NavRedeem,
+    NavRedeemSettle,
+    NavFeeClaim,
+    AssetBurn,
+    AssetClawback,
+    BridgeCredit,
+    BridgeHoldClaim,
+    BridgeHoldReturnOrBurn,
+    ShieldedEntry,
+    ShieldedExit,
+    FastLaneDeposit,
+    FastLaneRedeem,
+    FastLaneIntent,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AssetGateOutcome {
+    /// Movement permitted under normal rules.
+    Allow,
+    /// Movement permitted strictly via Return-only exit path (lapsed/uncredentialed holder).
+    AllowReturnOnly,
+    /// Cross-chain finalized bridge credit cannot land on recipient line;
+    /// MUST route into aggregated `(asset_id, recipient)` hold without failing the batch.
+    RouteToHold { reason_code: &'static str },
+    /// Local movement rejected with typed receipt code.
+    Reject { code: &'static str, message: String },
+}
+
+fn asset_gate_holder_is_eligible(
+    ledger: &LedgerState,
+    asset: &AssetDefinition,
+    account: &str,
+    _block_height: u64,
+) -> bool {
+    if account == asset.issuer {
+        return true;
+    }
+    ledger
+        .trustline_for_account_asset(account, &asset.asset_id)
+        .is_some_and(|line| line.authorized)
+}
+
+fn account_refuses_unsolicited_assets(ledger: &LedgerState, account: &str) -> bool {
+    ledger
+        .account(account)
+        .is_some_and(|acc| acc.flags & ACCOUNT_FLAG_REFUSE_UNSOLICITED_ASSETS_BIT != 0)
+}
+
+pub fn asset_gate(
+    ledger: &LedgerState,
+    asset: &AssetDefinition,
+    from: Option<&str>,
+    to: Option<&str>,
+    op_kind: AssetMovementOpKind,
+    block_height: u64,
+) -> AssetGateOutcome {
+    // 1. Self-unlock refunds never strand funds.
+    if matches!(
+        op_kind,
+        AssetMovementOpKind::OfferCancelRefund | AssetMovementOpKind::EscrowCancelRefund
+    ) {
+        return AssetGateOutcome::Allow;
+    }
+
+    // 2. Shielded pool bar for gated assets.
+    if matches!(
+        op_kind,
+        AssetMovementOpKind::ShieldedEntry | AssetMovementOpKind::ShieldedExit
+    ) && asset.requires_authorization
+    {
+        return AssetGateOutcome::Reject {
+            code: "gated_asset_shielded_pool_forbidden",
+            message: format!(
+                "gated asset `{}` is forbidden from entering or exiting shielded pools",
+                asset.asset_id
+            ),
+        };
+    }
+
+    // 3. Issuer clawback.
+    if op_kind == AssetMovementOpKind::AssetClawback {
+        if !asset.clawback_enabled {
+            return AssetGateOutcome::Reject {
+                code: "clawback_not_enabled",
+                message: "asset policy does not allow issuer clawback".to_string(),
+            };
+        }
+        return AssetGateOutcome::Allow;
+    }
+
+    // 4. Freeze check (when asset.freeze_enabled or line.frozen).
+    if let Some(sender) = from {
+        if sender != asset.issuer
+            && ledger
+                .trustline_for_account_asset(sender, &asset.asset_id)
+                .is_some_and(|line| line.frozen)
+        {
+            return AssetGateOutcome::Reject {
+                code: "trustline_frozen",
+                message: format!("sender `{sender}` trustline is frozen"),
+            };
+        }
+    }
+    if let Some(recipient) = to {
+        if recipient != asset.issuer
+            && ledger
+                .trustline_for_account_asset(recipient, &asset.asset_id)
+                .is_some_and(|line| line.frozen)
+        {
+            if op_kind == AssetMovementOpKind::BridgeCredit {
+                return AssetGateOutcome::RouteToHold {
+                    reason_code: "trustline_frozen",
+                };
+            }
+            return AssetGateOutcome::Reject {
+                code: "trustline_frozen",
+                message: format!("recipient `{recipient}` trustline is frozen"),
+            };
+        }
+    }
+
+    // 5. Default (permissionless) assets.
+    if !asset.requires_authorization {
+        if let Some(recipient) = to {
+            if recipient != asset.issuer
+                && from != Some(recipient)
+                && ledger
+                    .trustline_for_account_asset(recipient, &asset.asset_id)
+                    .is_none()
+                && account_refuses_unsolicited_assets(ledger, recipient)
+            {
+                if op_kind == AssetMovementOpKind::BridgeCredit {
+                    return AssetGateOutcome::RouteToHold {
+                        reason_code: "recipient_refuses_unsolicited_assets",
+                    };
+                }
+                return AssetGateOutcome::Reject {
+                    code: "recipient_refuses_unsolicited_assets",
+                    message: format!("recipient `{recipient}` refuses unsolicited assets"),
+                };
+            }
+        }
+        return AssetGateOutcome::Allow;
+    }
+
+    // 6. Gated assets (`asset.requires_authorization == true`).
+    // Return-only exit path (default rule in Train A): lapsed/uncredentialed holders can
+    // always exit to issuer / NAV redeem / burn / bridge hold return-or-burn, never stranded.
+    let is_return_only_op = matches!(
+        op_kind,
+        AssetMovementOpKind::AssetBurn
+            | AssetMovementOpKind::NavRedeem
+            | AssetMovementOpKind::BridgeHoldReturnOrBurn
+    ) || (op_kind == AssetMovementOpKind::IssuedPayment
+        && to == Some(asset.issuer.as_str()));
+
+    if is_return_only_op {
+        if let Some(sender) = from {
+            if sender != asset.issuer
+                && !asset_gate_holder_is_eligible(ledger, asset, sender, block_height)
+            {
+                return AssetGateOutcome::AllowReturnOnly;
+            }
+        }
+        return AssetGateOutcome::Allow;
+    }
+
+    // Normal sender check.
+    if let Some(sender) = from {
+        if sender != asset.issuer
+            && !asset_gate_holder_is_eligible(ledger, asset, sender, block_height)
+        {
+            return AssetGateOutcome::Reject {
+                code: "asset_gate_sender_ineligible",
+                message: format!(
+                    "sender `{sender}` is not eligible to move gated asset `{}`",
+                    asset.asset_id
+                ),
+            };
+        }
+    }
+
+    // Normal recipient check.
+    if let Some(recipient) = to {
+        if recipient != asset.issuer {
+            if !asset_gate_holder_is_eligible(ledger, asset, recipient, block_height) {
+                if op_kind == AssetMovementOpKind::BridgeCredit {
+                    return AssetGateOutcome::RouteToHold {
+                        reason_code: "asset_gate_recipient_ineligible",
+                    };
+                }
+                return AssetGateOutcome::Reject {
+                    code: "asset_gate_recipient_ineligible",
+                    message: format!(
+                        "recipient `{recipient}` is not eligible to receive gated asset `{}`",
+                        asset.asset_id
+                    ),
+                };
+            }
+            if from != Some(recipient)
+                && ledger
+                    .trustline_for_account_asset(recipient, &asset.asset_id)
+                    .is_none()
+                && account_refuses_unsolicited_assets(ledger, recipient)
+            {
+                if op_kind == AssetMovementOpKind::BridgeCredit {
+                    return AssetGateOutcome::RouteToHold {
+                        reason_code: "recipient_refuses_unsolicited_assets",
+                    };
+                }
+                return AssetGateOutcome::Reject {
+                    code: "recipient_refuses_unsolicited_assets",
+                    message: format!("recipient `{recipient}` refuses unsolicited assets"),
+                };
+            }
+        }
+    }
+
+    AssetGateOutcome::Allow
+}
+
+pub fn route_bridge_credit_to_hold(
+    ledger: &mut LedgerState,
+    asset: &AssetDefinition,
+    recipient: &str,
+    amount: u64,
+    source_reference: &str,
+    reason_code: &'static str,
+    block_height: u64,
+) -> Result<postfiat_types::AssetBridgeHoldReceiptEventV1, (&'static str, String)> {
+    if amount == 0 {
+        return Err((
+            "zero_bridge_hold_credit",
+            "bridge hold credit amount must be nonzero".to_string(),
+        ));
+    }
+    if recipient == asset.issuer {
+        return Err((
+            "issuer_credit_unsupported",
+            "bridge hold cannot target asset issuer".to_string(),
+        ));
+    }
+    let hold_key = postfiat_types::asset_bridge_hold_key(&asset.asset_id, recipient);
+    match ledger.asset_bridge_holds.get_mut(&hold_key) {
+        Some(existing) => {
+            existing.amount = existing.amount.checked_add(amount).ok_or_else(|| {
+                (
+                    "bridge_hold_overflow",
+                    "aggregated bridge hold amount would overflow".to_string(),
+                )
+            })?;
+            existing.credit_count = existing.credit_count.checked_add(1).ok_or_else(|| {
+                (
+                    "bridge_hold_overflow",
+                    "aggregated bridge hold credit_count would overflow".to_string(),
+                )
+            })?;
+            existing.last_updated_height = block_height;
+            existing.last_reason_code = reason_code.to_string();
+            existing
+                .validate()
+                .map_err(|error| ("bad_asset_bridge_hold", error))?;
+        }
+        None => {
+            let hold = postfiat_types::AssetBridgeHoldV1 {
+                hold_key: hold_key.clone(),
+                asset_id: asset.asset_id.clone(),
+                issuer: asset.issuer.clone(),
+                recipient: recipient.to_string(),
+                amount,
+                credit_count: 1,
+                created_at_height: block_height,
+                last_updated_height: block_height,
+                last_reason_code: reason_code.to_string(),
+            };
+            hold.validate()
+                .map_err(|error| ("bad_asset_bridge_hold", error))?;
+            ledger.asset_bridge_holds.insert(hold_key.clone(), hold);
+        }
+    }
+    Ok(postfiat_types::AssetBridgeHoldReceiptEventV1 {
+        hold_key,
+        asset_id: asset.asset_id.clone(),
+        recipient: recipient.to_string(),
+        amount,
+        source_reference: source_reference.to_string(),
+        reason_code: reason_code.to_string(),
+    })
+}
+
+fn auto_prune_empty_implicit_trustline(
+    ledger: &mut LedgerState,
+    account: &str,
+    asset_id: &str,
+) -> Result<(), (&'static str, String)> {
+    let Some(index) = trustline_index(ledger, account, asset_id) else {
+        return Ok(());
+    };
+    let line = &ledger.trustlines[index];
+    if line.balance != 0 || line.frozen || line.authorized || line.reserve_paid != 0 {
+        return Ok(());
+    }
+    let reserved = issued_asset_reserved_total_for_account(ledger, account, asset_id, None, None)?;
+    // A pending vault-bridge redemption (a Solana exit burn) may be cancelled
+    // and refunded to this line; keep it until the redemption settles.
+    let family = ledger
+        .asset_definition(asset_id)
+        .map(|asset| asset.asset_family_id.as_str())
+        .filter(|family| !family.is_empty())
+        .unwrap_or(asset_id);
+    let pending_redemption = ledger.vault_bridge_redemptions.iter().any(|redemption| {
+        redemption.owner == account
+            && redemption.state == postfiat_types::VAULT_BRIDGE_REDEMPTION_STATE_PENDING
+            && (redemption.asset_id == asset_id || redemption.asset_id == family)
+    });
+    if reserved == 0 && !pending_redemption {
+        ledger.trustlines.remove(index);
+    }
+    Ok(())
+}
+
 fn apply_issued_payment(
     genesis: &Genesis,
     ledger: &mut LedgerState,
     operation: &IssuedPaymentOperation,
     block_height: u64,
     compatibility: AssetExecutionCompatibility,
+) -> Result<(), (&'static str, String)> {
+    apply_issued_payment_for_op(
+        genesis,
+        ledger,
+        operation,
+        block_height,
+        compatibility,
+        AssetMovementOpKind::IssuedPayment,
+    )
+}
+
+fn apply_issued_payment_for_op(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    operation: &IssuedPaymentOperation,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+    op_kind: AssetMovementOpKind,
 ) -> Result<(), (&'static str, String)> {
     if operation.from == operation.to {
         return Err((
@@ -282,6 +636,32 @@ fn apply_issued_payment(
             .into(),
         ));
     }
+
+    let gate_active = compatibility.asset_gate_v1_active(block_height);
+    let mut allow_return_only = false;
+    if gate_active {
+        match asset_gate(
+            ledger,
+            &asset,
+            Some(&operation.from),
+            Some(&operation.to),
+            op_kind,
+            block_height,
+        ) {
+            AssetGateOutcome::Allow => {}
+            AssetGateOutcome::AllowReturnOnly => {
+                allow_return_only = true;
+            }
+            AssetGateOutcome::RouteToHold { reason_code } => {
+                return Err((
+                    reason_code,
+                    "local issued_payment rejected by asset_gate".to_string(),
+                ));
+            }
+            AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+        }
+    }
+
     let from_index = if operation.from == operation.issuer {
         None
     } else {
@@ -296,6 +676,14 @@ fn apply_issued_payment(
     };
     let to_index = if operation.to == operation.issuer {
         None
+    } else if gate_active {
+        Some(issued_asset_credit_recipient_line_index_gated(
+            ledger,
+            &asset,
+            &operation.to,
+            operation.amount,
+            "issued_payment",
+        )?)
     } else {
         Some(issued_asset_credit_recipient_line_index(
             ledger,
@@ -307,7 +695,15 @@ fn apply_issued_payment(
     };
 
     if let Some(index) = from_index {
-        ensure_line_can_move(&asset, &ledger.trustlines[index])?;
+        if !allow_return_only {
+            if gate_active {
+                if ledger.trustlines[index].frozen {
+                    return Err(("trustline_frozen", "trustline is frozen".to_string()));
+                }
+            } else {
+                ensure_line_can_move(&asset, &ledger.trustlines[index])?;
+            }
+        }
         if ledger.trustlines[index].balance < operation.amount {
             return Err((
                 "insufficient_issued_balance",
@@ -316,14 +712,25 @@ fn apply_issued_payment(
         }
     }
     let recipient_credit = if let Some(index) = to_index {
-        Some(prepare_issued_asset_credit(
-            ledger,
-            &asset,
-            &operation.to,
-            index,
-            operation.amount,
-            "issued_payment",
-        )?)
+        Some(if gate_active {
+            prepare_issued_asset_credit_gated(
+                ledger,
+                &asset,
+                &operation.to,
+                index,
+                operation.amount,
+                "issued_payment",
+            )?
+        } else {
+            prepare_issued_asset_credit(
+                ledger,
+                &asset,
+                &operation.to,
+                index,
+                operation.amount,
+                "issued_payment",
+            )?
+        })
     } else {
         None
     };
@@ -368,7 +775,47 @@ fn apply_issued_payment(
             apply_prepared_issued_asset_credit(ledger, index, recipient_after, required_limit);
         }
     }
+    if gate_active && from_index.is_some() {
+        auto_prune_empty_implicit_trustline(ledger, &operation.from, &operation.asset_id)?;
+    }
     Ok(())
+}
+
+pub fn ensure_shielded_entry_allowed_with_compatibility(
+    ledger: &LedgerState,
+    from: &str,
+    asset_id: &str,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> Result<(), (&'static str, String)> {
+    if !compatibility.asset_gate_v1_active(block_height) {
+        return Ok(());
+    }
+    let asset = ledger.asset_definition(asset_id).ok_or_else(|| {
+        (
+            "missing_asset",
+            format!("asset `{asset_id}` does not exist"),
+        )
+    })?;
+    match asset_gate(
+        ledger,
+        asset,
+        Some(from),
+        None,
+        AssetMovementOpKind::ShieldedEntry,
+        block_height,
+    ) {
+        AssetGateOutcome::Allow => Ok(()),
+        AssetGateOutcome::AllowReturnOnly => Err((
+            "asset_gate_sender_ineligible",
+            "shielded entry is not a return-only exit".to_string(),
+        )),
+        AssetGateOutcome::RouteToHold { reason_code } => Err((
+            reason_code,
+            "shielded entry rejected by asset_gate".to_string(),
+        )),
+        AssetGateOutcome::Reject { code, message } => Err((code, message)),
+    }
 }
 
 pub fn credit_issued_asset_from_shielded_pool(
@@ -376,6 +823,24 @@ pub fn credit_issued_asset_from_shielded_pool(
     to: &str,
     asset_id: &str,
     amount: u64,
+) -> Result<(), (&'static str, String)> {
+    credit_issued_asset_from_shielded_pool_with_compatibility(
+        ledger,
+        to,
+        asset_id,
+        amount,
+        0,
+        AssetExecutionCompatibility::strict(),
+    )
+}
+
+pub fn credit_issued_asset_from_shielded_pool_with_compatibility(
+    ledger: &mut LedgerState,
+    to: &str,
+    asset_id: &str,
+    amount: u64,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     if amount == 0 {
         return Err((
@@ -389,6 +854,48 @@ pub fn credit_issued_asset_from_shielded_pool(
             format!("asset `{asset_id}` does not exist"),
         )
     })?;
+    if compatibility.asset_gate_v1_active(block_height) {
+        match asset_gate(
+            ledger,
+            &asset,
+            None,
+            Some(to),
+            AssetMovementOpKind::ShieldedExit,
+            block_height,
+        ) {
+            AssetGateOutcome::Allow => {}
+            AssetGateOutcome::AllowReturnOnly => {
+                return Err((
+                    "asset_gate_recipient_ineligible",
+                    "shielded exit is not a return-only exit".to_string(),
+                ));
+            }
+            AssetGateOutcome::RouteToHold { reason_code } => {
+                return Err((
+                    reason_code,
+                    "shielded exit rejected by asset_gate".to_string(),
+                ));
+            }
+            AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+        }
+        let to_index = issued_asset_credit_recipient_line_index_gated(
+            ledger,
+            &asset,
+            to,
+            amount,
+            "shielded-pool credit",
+        )?;
+        let (recipient_after, required_limit) = prepare_issued_asset_credit_gated(
+            ledger,
+            &asset,
+            to,
+            to_index,
+            amount,
+            "shielded-pool credit",
+        )?;
+        apply_prepared_issued_asset_credit(ledger, to_index, recipient_after, required_limit);
+        return Ok(());
+    }
     let to_index =
         issued_asset_credit_recipient_line_index(ledger, &asset, to, amount, "shielded-pool credit")?;
     let (recipient_after, required_limit) =
@@ -402,6 +909,44 @@ fn trustline_index(ledger: &LedgerState, account: &str, asset_id: &str) -> Optio
         .trustlines
         .iter()
         .position(|line| line.account == account && line.asset_id == asset_id)
+}
+
+/// Post-activation (`asset_gate_v1`) implicit line creator.
+/// Callers MUST have already passed `asset_gate(...)`. Implicit lines are ALWAYS created
+/// with `authorized = false` (never permanently flipping `authorized = true`).
+fn issued_asset_credit_recipient_line_index_gated(
+    ledger: &mut LedgerState,
+    asset: &AssetDefinition,
+    account: &str,
+    amount: u64,
+    context: &str,
+) -> Result<usize, (&'static str, String)> {
+    if let Some(index) = trustline_index(ledger, account, &asset.asset_id) {
+        return Ok(index);
+    }
+    if account == asset.issuer {
+        return Err((
+            "issuer_credit_unsupported",
+            format!("{context} cannot credit an issued asset to its issuer"),
+        ));
+    }
+    if ledger.account(account).is_none() {
+        return Err((
+            "missing_recipient",
+            format!("{context} recipient `{account}` does not exist"),
+        ));
+    }
+    let mut line =
+        TrustLine::new(account, asset.issuer.clone(), asset.asset_id.clone(), amount, 0).map_err(
+            |message| ("invalid_implicit_issued_balance", message),
+        )?;
+    // CRITICAL SECURITY INVARIANT (Pillar 8 M1): never set `authorized = true` on implicit lines.
+    line.authorized = false;
+    line.frozen = false;
+    line.validate()
+        .map_err(|message| ("invalid_implicit_issued_balance", message))?;
+    ledger.trustlines.push(line);
+    Ok(ledger.trustlines.len() - 1)
 }
 
 fn issued_asset_credit_recipient_line_index(
@@ -436,6 +981,39 @@ fn issued_asset_credit_recipient_line_index(
         .map_err(|message| ("invalid_implicit_issued_balance", message))?;
     ledger.trustlines.push(line);
     Ok(ledger.trustlines.len() - 1)
+}
+
+fn prepare_issued_asset_credit_gated(
+    ledger: &LedgerState,
+    asset: &AssetDefinition,
+    account: &str,
+    line_index: usize,
+    amount: u64,
+    context: &str,
+) -> Result<(u64, u64), (&'static str, String)> {
+    if ledger.trustlines[line_index].frozen {
+        return Err(("trustline_frozen", "trustline is frozen".to_string()));
+    }
+    let recipient_after = ledger.trustlines[line_index]
+        .balance
+        .checked_add(amount)
+        .ok_or_else(|| {
+            (
+                "issued_balance_overflow",
+                format!("{context} recipient balance would overflow"),
+            )
+        })?;
+    let reserved_escrows =
+        issued_asset_reserved_total_for_account(ledger, account, &asset.asset_id, None, None)?;
+    let required_limit = recipient_after
+        .checked_add(reserved_escrows)
+        .ok_or_else(|| {
+            (
+                "issued_balance_overflow",
+                format!("{context} recipient balance and reservations would overflow"),
+            )
+        })?;
+    Ok((recipient_after, required_limit))
 }
 
 fn prepare_issued_asset_credit(
@@ -486,10 +1064,6 @@ fn escrow_index(ledger: &LedgerState, escrow_id: &str) -> Option<usize> {
         .escrows
         .iter()
         .position(|escrow| escrow.escrow_id == escrow_id)
-}
-
-fn nft_index(ledger: &LedgerState, nft_id: &str) -> Option<usize> {
-    ledger.nfts.iter().position(|nft| nft.nft_id == nft_id)
 }
 
 fn offer_index(ledger: &LedgerState, offer_id: &str) -> Option<usize> {
@@ -1021,6 +1595,18 @@ fn issued_asset_supply_with_non_nav_spread(
                 .and_then(|n| n.checked_add(reserved))
                 .ok_or_else(|| ("issued_supply_overflow", "source custody overflow".to_string()))
         })?;
+    let bridge_hold_supply = ledger
+        .asset_bridge_holds
+        .values()
+        .filter(|hold| hold.asset_id == asset_id)
+        .try_fold(0_u64, |total, hold| {
+            total.checked_add(hold.amount).ok_or_else(|| {
+                (
+                    "issued_supply_overflow",
+                    "issued asset bridge hold supply total overflowed".to_string(),
+                )
+            })
+        })?;
     trustline_supply
         .checked_add(ledger.collected_private_fees.get(asset_id).copied().unwrap_or(0))
         .and_then(|supply| supply.checked_add(source_custody))
@@ -1028,6 +1614,7 @@ fn issued_asset_supply_with_non_nav_spread(
         .and_then(|supply| supply.checked_add(open_offer_supply))
         .and_then(|supply| supply.checked_add(fast_lane_reserve_supply))
         .and_then(|supply| supply.checked_add(pftl_uniswap_route_custody_supply))
+        .and_then(|supply| supply.checked_add(bridge_hold_supply))
         .ok_or_else(|| {
             (
                 "issued_supply_overflow",
@@ -1143,6 +1730,11 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         beacon_finality_states: _,
         solana_route: _,
         additional_solana_routes: _,
+        nfts_by_id: _,
+        used_nft_serials: _,
+        nft_collection_policies: _,
+        asset_bridge_holds: _, // counted in `bridge_hold_supply` above
+        revoked_fast_lane_holder_permits: _,
     } = ledger;
 }
 

@@ -1540,6 +1540,9 @@
                 issuer: faucet_key.address.clone(),
                 asset_id: asset_id.clone(),
                 amount: 15,
+                offer_ids: Vec::new(),
+                escrow_ids: Vec::new(),
+                include_bridge_hold: false,
             },
         );
         let clawback_quote = asset_fee_quote(AssetFeeQuoteOptions {
@@ -1826,6 +1829,7 @@
             data_dir: data_dir.clone(),
             account: owner.clone(),
             include_burned: false,
+            cursor: None,
             limit: Some(10),
         })
         .expect("owner account_nfts after mint");
@@ -1837,6 +1841,7 @@
             issuer: faucet_key.address.clone(),
             collection_id: Some("NFT-003".to_string()),
             include_burned: false,
+            cursor: None,
             limit: Some(10),
         })
         .expect("issuer_nfts after mint");
@@ -1980,6 +1985,7 @@
             data_dir: data_dir.clone(),
             account: owner.clone(),
             include_burned: false,
+            cursor: None,
             limit: Some(10),
         })
         .expect("owner account_nfts after transfer");
@@ -1988,6 +1994,7 @@
             data_dir: data_dir.clone(),
             account: recipient.clone(),
             include_burned: false,
+            cursor: None,
             limit: Some(10),
         })
         .expect("recipient account_nfts after transfer");
@@ -2023,6 +2030,7 @@
         let burn_operation = NftTransactionOperation::NftBurn(NftBurnOperation {
             nft_id: nft_id.clone(),
             owner: recipient.clone(),
+            issuer: String::new(),
         });
         let burn_quote = nft_fee_quote(NftFeeQuoteOptions {
             data_dir: data_dir.clone(),
@@ -2090,6 +2098,7 @@
             data_dir: data_dir.clone(),
             account: recipient.clone(),
             include_burned: false,
+            cursor: None,
             limit: Some(10),
         })
         .expect("recipient live account_nfts after burn");
@@ -2098,6 +2107,7 @@
             data_dir: data_dir.clone(),
             account: recipient.clone(),
             include_burned: true,
+            cursor: None,
             limit: Some(10),
         })
         .expect("recipient burned account_nfts after burn");
@@ -2108,6 +2118,7 @@
             issuer: faucet_key.address.clone(),
             collection_id: Some("NFT-003".to_string()),
             include_burned: false,
+            cursor: None,
             limit: Some(10),
         })
         .expect("issuer live nfts after burn");
@@ -2117,6 +2128,7 @@
             issuer: faucet_key.address.clone(),
             collection_id: Some("NFT-003".to_string()),
             include_burned: true,
+            cursor: None,
             limit: Some(10),
         })
         .expect("issuer burned nfts after burn");

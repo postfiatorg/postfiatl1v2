@@ -179,6 +179,8 @@ struct FastSwapSnapshotStateV1 {
     terminal_tombstones: Vec<(FastSwapIdV1, FastSwapTerminalTombstoneV1)>,
     asset_rules: Vec<(FastAssetRuleHashV1, FastAssetRuleV1)>,
     holder_permits: Vec<(FastHolderPermitIdV1, FastHolderPermitV1)>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    revoked_holder_permits: Vec<(FastHolderPermitIdV1, u64)>,
     policy_snapshots: Vec<(FastSwapPolicyHashV1, FastSwapPolicySnapshotV1)>,
     prepare_fences: Vec<(u64, FastLanePrepareFenceV1)>,
     pending_fee_burns: Vec<FastSwapWalFeeBurnV1>,
@@ -225,6 +227,11 @@ impl FastSwapSnapshotStateV1 {
                 .holder_permits
                 .iter()
                 .map(|(key, value)| (*key, value.clone()))
+                .collect(),
+            revoked_holder_permits: state
+                .revoked_holder_permits
+                .iter()
+                .map(|(key, value)| (*key, *value))
                 .collect(),
             policy_snapshots: state
                 .policy_snapshots
@@ -300,6 +307,11 @@ impl FastSwapSnapshotStateV1 {
             "holder permits"
         );
         require_sorted!(
+            self.revoked_holder_permits,
+            |row: &(FastHolderPermitIdV1, u64)| row.0,
+            "revoked holder permits"
+        );
+        require_sorted!(
             self.policy_snapshots,
             |row: &(FastSwapPolicyHashV1, FastSwapPolicySnapshotV1)| row.0,
             "policies"
@@ -350,6 +362,7 @@ impl FastSwapSnapshotStateV1 {
             terminal_tombstones: self.terminal_tombstones.into_iter().collect(),
             asset_rules: self.asset_rules.into_iter().collect(),
             holder_permits: self.holder_permits.into_iter().collect(),
+            revoked_holder_permits: self.revoked_holder_permits.into_iter().collect(),
             policy_snapshots: self.policy_snapshots.into_iter().collect(),
             prepare_fences: self.prepare_fences.into_iter().collect(),
             pending_fee_burns,
@@ -1899,6 +1912,7 @@ mod tests {
             terminal_tombstones: BTreeMap::new(),
             asset_rules: BTreeMap::new(),
             holder_permits: BTreeMap::new(),
+            revoked_holder_permits: BTreeMap::new(),
             policy_snapshots: BTreeMap::new(),
             prepare_fences: BTreeMap::new(),
             pending_fee_burns: BTreeMap::new(),

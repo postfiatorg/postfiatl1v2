@@ -1456,6 +1456,20 @@ fn apply_asset_orchard_ingress_action_to_state(
     }
     log_ingress_timing!("duplicate_check");
 
+    if let Err((code, message)) = ensure_shielded_entry_allowed_with_compatibility(
+        ledger,
+        &payload.burn_transaction.unsigned.source,
+        &payload.asset_id,
+        block_height,
+        asset_execution_compatibility,
+    ) {
+        return Ok(Receipt::rejected(
+            asset_orchard_ingress_receipt_id(genesis, payload, code)?,
+            code,
+            message,
+        ));
+    }
+
     let mut trial_ledger = ledger.clone();
     log_ingress_timing!("clone_ledger");
     let burn_receipt = postfiat_execution::execute_asset_orchard_ingress_burn(
@@ -1533,6 +1547,8 @@ fn apply_asset_orchard_egress_action_to_state(
     ledger: &mut LedgerState,
     shielded: &mut ShieldedState,
     payload: &AssetOrchardEgressActionPayload,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> io::Result<Receipt> {
     if let Err(error) = validate_asset_orchard_egress_payload_for_genesis(genesis, payload) {
         return Ok(Receipt::rejected(
@@ -1584,11 +1600,13 @@ fn apply_asset_orchard_egress_action_to_state(
     }
 
     let mut trial_ledger = ledger.clone();
-    if let Err((code, message)) = credit_issued_asset_from_shielded_pool(
+    if let Err((code, message)) = credit_issued_asset_from_shielded_pool_with_compatibility(
         &mut trial_ledger,
         &payload.to,
         &payload.asset_id,
         payload.amount,
+        block_height,
+        compatibility,
     ) {
         return Ok(Receipt::rejected(
             asset_orchard_egress_receipt_id(genesis, payload, code)?,
@@ -1636,6 +1654,8 @@ fn apply_asset_orchard_private_egress_action_to_state(
     payload: &AssetOrchardPrivateEgressActionPayload,
     archived_pre_repin: bool,
     archive_replay: bool,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> io::Result<Receipt> {
     let total_start = std::time::Instant::now();
     let mut timing = AssetOrchardPrivateEgressStateApplyTimingReport::default();
@@ -1779,11 +1799,13 @@ fn apply_asset_orchard_private_egress_action_to_state(
     timing.trial_ledger_clone_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    if let Err((code, message)) = credit_issued_asset_from_shielded_pool(
+    if let Err((code, message)) = credit_issued_asset_from_shielded_pool_with_compatibility(
         &mut trial_ledger,
         &payload.to,
         &payload.asset_id,
         payload.amount,
+        block_height,
+        compatibility,
     ) {
         timing.trial_ledger_credit_ms = node_timing_elapsed_ms(stage_start);
         finish_receipt!(Receipt::rejected(

@@ -1589,6 +1589,7 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 data_dir,
                 account: account.to_string(),
                 include_burned: flag_present(flags, "--include-burned"),
+                cursor: flag_value(flags, "--cursor").map(ToString::to_string),
                 limit,
             })
             .map_err(|error| format!("rpc account_nfts failed: {error}"))?;
@@ -1616,6 +1617,7 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 issuer: issuer.to_string(),
                 collection_id: flag_value(flags, "--collection-id").map(ToString::to_string),
                 include_burned: flag_present(flags, "--include-burned"),
+                cursor: flag_value(flags, "--cursor").map(ToString::to_string),
                 limit,
             })
             .map_err(|error| format!("rpc issuer_nfts failed: {error}"))?;
@@ -1626,6 +1628,99 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                     "issuer_nfts",
                     report.issuer.clone(),
                     "issuer nfts queried",
+                )],
+            )
+        }
+        "fastpay_fee_quote" => {
+            let operation = flag_value(flags, "--operation").unwrap_or("transfer");
+            let inputs_count = flag_value(flags, "--inputs-count")
+                .unwrap_or("1")
+                .parse::<usize>()
+                .map_err(|_| "--inputs-count must be a usize".to_string())?;
+            let outputs_count = flag_value(flags, "--outputs-count")
+                .unwrap_or("1")
+                .parse::<usize>()
+                .map_err(|_| "--outputs-count must be a usize".to_string())?;
+            let memo_bytes = flag_value(flags, "--memo-bytes")
+                .unwrap_or("0")
+                .parse::<usize>()
+                .map_err(|_| "--memo-bytes must be a usize".to_string())?;
+            let estimated_weight_bytes = flag_value(flags, "--estimated-weight-bytes")
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "--estimated-weight-bytes must be a usize".to_string())
+                })
+                .transpose()?;
+            let report = fastpay_fee_quote(FastPayFeeQuoteOptions {
+                data_dir,
+                operation: operation.to_string(),
+                owner_pubkey_hex: flag_value(flags, "--owner-pubkey-hex").map(ToString::to_string),
+                inputs_count,
+                outputs_count,
+                memo_bytes,
+                estimated_weight_bytes,
+            })
+            .map_err(|error| format!("rpc fastpay_fee_quote failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "fastpay_fee_quote",
+                    report.operation.clone(),
+                    "fastpay fee quoted",
+                )],
+            )
+        }
+        "account_bridge_holds" => {
+            let recipient = flag_value(flags, "--recipient").ok_or("missing --recipient")?;
+            let limit = flag_value(flags, "--limit")
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "--limit must be a usize".to_string())
+                })
+                .transpose()?;
+            let report = account_bridge_holds(AccountBridgeHoldsOptions {
+                data_dir,
+                recipient: recipient.to_string(),
+                asset_id: flag_value(flags, "--asset-id").map(ToString::to_string),
+                limit,
+            })
+            .map_err(|error| format!("rpc account_bridge_holds failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "account_bridge_holds",
+                    report.recipient.clone(),
+                    "account bridge holds queried",
+                )],
+            )
+        }
+        "asset_bridge_holds" => {
+            let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
+            let limit = flag_value(flags, "--limit")
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "--limit must be a usize".to_string())
+                })
+                .transpose()?;
+            let report = asset_bridge_holds(AssetBridgeHoldsOptions {
+                data_dir,
+                asset_id: asset_id.to_string(),
+                cursor: flag_value(flags, "--cursor").map(ToString::to_string),
+                limit,
+            })
+            .map_err(|error| format!("rpc asset_bridge_holds failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "asset_bridge_holds",
+                    report.asset_id.clone(),
+                    "asset bridge holds queried",
                 )],
             )
         }

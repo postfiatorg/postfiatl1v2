@@ -811,6 +811,11 @@ pub enum FastLaneControlActionV1 {
     ActivateProtocol {
         activation_height: u64,
     },
+    RevokeHolderPermit {
+        permit_id: FastHolderPermitIdV1,
+        revoked_at_height: u64,
+        reason_code: String,
+    },
 }
 
 impl FastLaneControlActionV1 {
@@ -860,6 +865,19 @@ impl FastLaneControlActionV1 {
                 }
                 encoder.u8(6);
                 encoder.fixed(&permit.permit_id.0)?;
+            }
+            Self::RevokeHolderPermit {
+                permit_id,
+                revoked_at_height,
+                reason_code,
+            } => {
+                if reason_code.is_empty() || reason_code.len() > MAX_TEXT_FIELD_BYTES {
+                    return Err(FastSwapCodecError::NonCanonical("revoke reason code"));
+                }
+                encoder.u8(7);
+                encoder.fixed(&permit_id.0)?;
+                encoder.u64(*revoked_at_height);
+                encoder.string(reason_code)?;
             }
         }
         Ok(encoder.finish())
@@ -1670,6 +1688,8 @@ pub struct FastLaneStateV1 {
     pub pending_fee_burns: BTreeMap<FastAssetIdV1, u128>,
     #[serde(default)]
     pub anchored_checkpoints: BTreeSet<FastLaneCheckpointIdV1>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub revoked_holder_permits: BTreeMap<FastHolderPermitIdV1, u64>,
 }
 
 impl FastLaneStateV1 {
@@ -1689,6 +1709,7 @@ impl FastLaneStateV1 {
             prepare_fences: BTreeMap::new(),
             pending_fee_burns: BTreeMap::new(),
             anchored_checkpoints: BTreeSet::new(),
+            revoked_holder_permits: BTreeMap::new(),
         }
     }
 }

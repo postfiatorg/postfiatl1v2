@@ -595,6 +595,7 @@ fn fastswap_prefunded_effects_match_w6_asset_deltas_for_the_same_trade() {
         terminal_tombstones: BTreeMap::new(),
         asset_rules: BTreeMap::from([(rule_hash_0, rule_0), (rule_hash_1, rule_1)]),
         holder_permits: BTreeMap::new(),
+        revoked_holder_permits: BTreeMap::new(),
         policy_snapshots: BTreeMap::from([(policy.policy_hash, policy)]),
         prepare_fences: BTreeMap::new(),
         pending_fee_burns: BTreeMap::new(),

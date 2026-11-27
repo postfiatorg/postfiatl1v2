@@ -102,8 +102,11 @@ path; its redemption rows are in `vault_bridge_status`.
 | `escrow_info` | Escrow object lookup. |
 | `account_escrows` | Escrows by owner or recipient. |
 | `nft_info` | NFT object lookup. |
-| `account_nfts` | NFTs by account. |
-| `issuer_nfts` | NFTs by issuer and optional collection. |
+| `account_nfts` | Cursor-paginated NFTs by account. |
+| `issuer_nfts` | Cursor-paginated NFTs by issuer and optional collection. |
+| `fastpay_fee_quote` | FastPay v3 fee quote and owned-object capacity read. |
+| `account_bridge_holds` | Aggregated bridge holds for a recipient account. |
+| `asset_bridge_holds` | Cursor-paginated aggregated bridge holds for an issued asset. |
 | `offer_info` | DEX offer lookup. |
 | `account_offers` | Offers by owner. |
 | `book_offers` | Offers in a deterministic book pair. |

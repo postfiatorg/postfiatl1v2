@@ -76,6 +76,7 @@
             payload,
             registry,
             false,
+            AssetExecutionCompatibility::strict(),
         );
         assert!(!receipt.accepted);
         assert_eq!(ledger, ledger_before, "a refused egress changes no ledger state");

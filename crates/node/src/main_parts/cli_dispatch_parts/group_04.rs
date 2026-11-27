@@ -1858,6 +1858,7 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 data_dir: PathBuf::from(data_dir),
                 account: account.to_string(),
                 include_burned: flag_present(flags, "--include-burned"),
+                cursor: flag_value(flags, "--cursor").map(ToString::to_string),
                 limit,
             })
             .map_err(|error| format!("account-nfts failed: {error}"))?;
@@ -1881,6 +1882,7 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 issuer: issuer.to_string(),
                 collection_id: flag_value(flags, "--collection-id").map(ToString::to_string),
                 include_burned: flag_present(flags, "--include-burned"),
+                cursor: flag_value(flags, "--cursor").map(ToString::to_string),
                 limit,
             })
             .map_err(|error| format!("issuer-nfts failed: {error}"))?;
