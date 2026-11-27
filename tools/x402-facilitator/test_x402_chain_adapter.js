@@ -25,9 +25,10 @@ function startMockValidatorRpc(handler) {
       req.on('data', (c) => chunks.push(c));
       req.on('end', () => {
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        assert.equal(body.version, 'postfiat-local-rpc-v1');
         const out = handler(body.method, body.params || {});
         res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, ...out }));
+        res.end(JSON.stringify({ version: body.version, id: body.id, ok: !out.error, ...out }));
       });
     });
     srv.listen(0, '127.0.0.1', () => {
@@ -132,11 +133,13 @@ async function runTests() {
         return {
           result: {
             tx_id: 'cd'.repeat(48),
-            accepted: true,
-            block_height: 1933,
-            to: payeeAccount,
-            amount: 5000,
-            memos: [buildX402InlineMemo(requestHash)],
+            chain_id: 'postfiat-wan-devnet-2',
+            confirmed: true,
+            receipt: { tx_id: params.tx_id, accepted: true },
+            block: { header: { height: 1933 } },
+            transaction_rows: [{ tx_id: params.tx_id, transaction_kind: 'payment_v2',
+              block_height: 1933, from: payerAccount, to: payeeAccount, amount: 5000,
+              memos: [buildX402InlineMemo(requestHash)] }],
           },
         };
       }
@@ -192,17 +195,16 @@ async function runTests() {
       const consSettled = await consCore.settlePayment(cSigHeader, { expectedRequired: cChallenge.required });
       assert.equal(consSettled.response.settled, true);
       assert.equal(consSettled.response.payment_ref.finalized_height, 1933);
+      assert.equal(consSettled.response.payment_ref.tx_hash.toString('hex'), 'cd'.repeat(48));
 
-      // 3. `server.js` production mode succeeds automatically when X402_RPC_URLS is set
+      // Configured endpoints alone cannot supply a trusted committee.
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'x402-prod-env-'));
       try {
-        const created = createFacilitatorFromEnv({
+        assert.throws(() => createFacilitatorFromEnv({
           X402_MODE: 'production',
           X402_SPENT_STORE_PATH: path.join(tmpDir, 'spent.ndjson'),
           X402_RPC_URLS: validators.map((v) => v.url).join(','),
-        });
-        assert.equal(created.mode, 'production');
-        assert.ok(created.core);
+        }), /injected settlement adapter/);
       } finally {
         fs.rmSync(tmpDir, { recursive: true, force: true });
       }
@@ -213,7 +215,7 @@ async function runTests() {
     validators.forEach((v) => v.server.close());
   }
 
-  console.log('test_x402_chain_adapter: FastPay quorum, consensus finality, and X402_MODE=production RPC tests passed');
+  console.log('test_x402_chain_adapter: prototype adapter contract tests passed');
 }
 
 runTests().catch((err) => {
