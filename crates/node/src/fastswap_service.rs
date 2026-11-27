@@ -1,5 +1,8 @@
 use postfiat_crypto_provider::{hex_to_bytes, ml_dsa_65_sign_with_context};
-use postfiat_execution::fastswap::{validate_fastswap_admission, PreparedFastSwapV1};
+use postfiat_execution::fastswap::{
+    validate_fastswap_admission, validate_fastswap_admission_with_ledger, FastSwapAdmissionError,
+    PreparedFastSwapV1,
+};
 use postfiat_execution::fastswap_asset_control::validate_fast_asset_control;
 use postfiat_execution::fastswap_bridge::{
     validate_fastlane_exit, validate_fastlane_exit_authorization,
@@ -48,6 +51,10 @@ pub(crate) struct FastSwapValidatorServiceV1 {
     activation_height: u64,
     committee_active: bool,
     canonical_tip: Option<ChainTipState>,
+    /// The canonical ledger, kept only once `asset_gate_v1` is active at the
+    /// finalized height, so intent admission enforces the live asset gate
+    /// and permit revocations (Train A).
+    gate_ledger: Option<std::sync::Arc<LedgerState>>,
 }
 
 impl FastSwapValidatorServiceV1 {
@@ -186,6 +193,7 @@ impl FastSwapValidatorServiceV1 {
             activation_height,
             committee_active,
             canonical_tip: None,
+            gate_ledger: None,
         };
         service.refresh_canonical(data_dir)?;
         Ok(service)
@@ -327,6 +335,16 @@ impl FastSwapValidatorServiceV1 {
             ));
         }
         self.finalized_primary_height = tip_after.height;
+        let asset_gate_v1_activation_height = match node_store.read_governance() {
+            Ok(governance) => governance.asset_gate_v1_activation_height(),
+            // A FastSwap-only test directory has no governance file: no gate.
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error),
+        };
+        self.gate_ledger = postfiat_execution::AssetExecutionCompatibility::strict()
+            .with_asset_gate_v1_activation_height(asset_gate_v1_activation_height)
+            .asset_gate_v1_active(tip_after.height)
+            .then(|| std::sync::Arc::new(ledger.clone()));
         self.activation_height = ledger.fastswap_activation_height.unwrap_or(u64::MAX);
         self.committee_active = ledger.fastswap_committees.last() == Some(&self.committee);
         self.canonical_tip = Some(tip_after);
@@ -354,7 +372,37 @@ impl FastSwapValidatorServiceV1 {
             activation_height: 0,
             committee_active: true,
             canonical_tip: None,
+            gate_ledger: None,
         })
+    }
+
+    /// Intent admission: ledger-aware (asset gate and permit revocations)
+    /// once `asset_gate_v1` is active, the FastLane-state rules before.
+    fn admit_intent(
+        &self,
+        signed: &SignedFastSwapIntentV1,
+        height: u64,
+    ) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
+        match &self.gate_ledger {
+            Some(ledger) => {
+                validate_fastswap_admission_with_ledger(&self.state, ledger, signed, height)
+            }
+            None => validate_fastswap_admission(&self.state, signed, height),
+        }
+    }
+
+    /// Recomputes the effects of an intent a verified CONFIRM certificate
+    /// already decided, by the FastLane-state rules only. The asset gate
+    /// decides admission and signing (`admit_intent`); a later L1 change,
+    /// such as a freeze, must not stop one validator from applying or
+    /// catching up on effects a quorum certified. The caller still checks
+    /// the result against the certified effects digest.
+    fn certified_effects(
+        &self,
+        signed: &SignedFastSwapIntentV1,
+        height: u64,
+    ) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
+        postfiat_execution::fastswap::validate_fastswap_certified_effects(&self.state, signed, height)
     }
 
     pub(crate) fn capabilities(&self) -> FastSwapCapabilitiesV1 {
@@ -412,7 +460,7 @@ impl FastSwapValidatorServiceV1 {
                 effects,
             }
         } else {
-            validate_fastswap_admission(&self.state, signed, self.finalized_primary_height)
+            self.admit_intent(signed, self.finalized_primary_height)
                 .map_err(|error| invalid_input(&format!("FastSwap admission failed: {error:?}")))?
         };
         let effects_digest = prepared.effects.digest().map_err(codec_error)?;
@@ -552,10 +600,10 @@ impl FastSwapValidatorServiceV1 {
         &self,
         signed: &SignedFastSwapIntentV1,
     ) -> io::Result<postfiat_types::FastSwapPreviewResponseV1> {
-        let effects =
-            validate_fastswap_admission(&self.state, signed, self.finalized_primary_height)
-                .map_err(|error| invalid_input(&format!("FastSwap preview failed: {error:?}")))?
-                .effects;
+        let effects = self
+            .admit_intent(signed, self.finalized_primary_height)
+            .map_err(|error| invalid_input(&format!("FastSwap preview failed: {error:?}")))?
+            .effects;
         Ok(postfiat_types::FastSwapPreviewResponseV1 {
             schema: "postfiat-fastswap-preview-v1".to_owned(),
             validator_id: self.validator_id.clone(),
@@ -795,7 +843,7 @@ impl FastSwapValidatorServiceV1 {
                 .map_err(store_error)?
                 .ok_or_else(|| invalid_data("applied FastSwap is missing durable effects"))?
         } else {
-            validate_fastswap_admission(&self.state, signed, self.finalized_primary_height)
+            self.certified_effects(signed, self.finalized_primary_height)
                 .map_err(|error| {
                     invalid_input(&format!("FastSwap apply admission failed: {error:?}"))
                 })?
@@ -1067,7 +1115,7 @@ impl FastSwapValidatorServiceV1 {
         }
 
         let historical_height = signed.intent.expires_at_height;
-        let preliminary = validate_fastswap_admission(&self.state, signed, historical_height);
+        let preliminary = self.certified_effects(signed, historical_height);
         if preliminary.is_err() {
             let consumed = signed
                 .intent
@@ -1091,7 +1139,8 @@ impl FastSwapValidatorServiceV1 {
                     .map_err(store_error)?;
             }
         }
-        let prepared = validate_fastswap_admission(&self.state, signed, historical_height)
+        let prepared = self
+            .certified_effects(signed, historical_height)
             .map_err(|error| {
                 invalid_data(&format!(
                     "certified FastSwap cannot reconcile local inputs: {error:?}"
@@ -2491,6 +2540,121 @@ mod tests {
             validate_fastswap_admission(&fixture.base, &fixture.signed, 110)
                 .expect("expected preview")
                 .effects
+        );
+        drop(validator);
+        fs::remove_dir_all(&fixture.root).expect("cleanup");
+    }
+
+    /// Point 5 (A10, B05): once `asset_gate_v1` is active at the finalized
+    /// height, intent admission on the sign and preview paths checks the
+    /// canonical ledger (here it has no definition of the offered assets).
+    #[test]
+    fn intent_admission_checks_the_ledger_once_the_asset_gate_is_active() {
+        let fixture = fixture();
+        let data_dir = fixture.root.join("asset-gate-admission-node");
+        let fastswap_dir = data_dir.join(FASTSWAP_DIRECTORY);
+        fs::create_dir_all(&fastswap_dir).expect("create FastSwap directory");
+        fs::write(
+            fastswap_dir.join(FASTSWAP_BASE_STATE),
+            postfiat_storage::fastswap_store::encode_fastlane_state_file(&fixture.base)
+                .expect("base state file"),
+        )
+        .expect("write base state");
+        fs::write(
+            fastswap_dir.join(FASTSWAP_COMMITTEE),
+            serde_json::to_vec(&fixture.committee).expect("committee JSON"),
+        )
+        .expect("write committee");
+        fs::write(
+            data_dir.join("validator_keys.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "validators": [{
+                    "node_id": "validator-0",
+                    "private_key_hex": bytes_to_hex(&fixture.validator_keys[0]),
+                }]
+            }))
+            .expect("validator key JSON"),
+        )
+        .expect("write validator key");
+        let mut ledger = LedgerState::empty();
+        ledger.fastswap_committees.push(fixture.committee.clone());
+        ledger.fast_lane_asset_rules = fixture.base.asset_rules.values().cloned().collect();
+        ledger.fastswap_policy_snapshots =
+            fixture.base.policy_snapshots.values().cloned().collect();
+        ledger.fastswap_activation_height = Some(1);
+        let store = NodeStore::new(&data_dir);
+        store.write_ledger(&ledger).expect("write ledger");
+        store
+            .write_chain_tip(&ChainTipState {
+                schema: "postfiat-chain-tip-v1".to_owned(),
+                chain_id: "test".to_owned(),
+                genesis_hash: "genesis".to_owned(),
+                protocol_version: 1,
+                height: 110,
+                block_hash: "block".to_owned(),
+                state_root: "root".to_owned(),
+                ordered_batch_count: 0,
+                receipt_count: 0,
+                history_base_height: 0,
+            })
+            .expect("write tip");
+
+        // Gate scheduled after the tip: admission as before.
+        let mut governance = postfiat_types::GovernanceState::new(1);
+        let mut amendment = postfiat_types::GovernanceAmendment {
+            amendment_id: "amd-gate".to_owned(),
+            chain_id: "test".to_owned(),
+            genesis_hash: "genesis".to_owned(),
+            protocol_version: 1,
+            instance_id: "i".to_owned(),
+            proposal_id: "p".to_owned(),
+            certificate_id: "c".to_owned(),
+            proposer: "validator-0".to_owned(),
+            validators: vec!["validator-0".to_owned()],
+            quorum: 1,
+            support: vec!["validator-0".to_owned()],
+            votes: Vec::new(),
+            signed_authorizations: Vec::new(),
+            kind: postfiat_types::GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT.to_owned(),
+            value: 111,
+            activation_height: 1,
+            veto_until_height: 0,
+            paused: false,
+        };
+        governance.amendments.push(amendment.clone());
+        store
+            .write_governance(&governance)
+            .expect("write governance");
+        let validator =
+            FastSwapValidatorServiceV1::open(&data_dir, "validator-0").expect("open validator");
+        assert!(validator.gate_ledger.is_none());
+        validator
+            .preview(&fixture.signed)
+            .expect("preview before the gate");
+        drop(validator);
+
+        // Gate active at the tip: the canonical ledger decides.
+        amendment.value = 100;
+        governance.amendments = vec![amendment];
+        store
+            .write_governance(&governance)
+            .expect("write governance");
+        let mut validator =
+            FastSwapValidatorServiceV1::open(&data_dir, "validator-0").expect("open validator");
+        assert!(validator.gate_ledger.is_some());
+        let preview = validator
+            .preview(&fixture.signed)
+            .expect_err("ledger-aware preview");
+        assert!(
+            preview.to_string().contains("AssetGateRejected"),
+            "{preview}"
+        );
+        let prepare = validator
+            .prepare(&fixture.signed)
+            .expect_err("ledger-aware sign");
+        assert!(
+            prepare.to_string().contains("AssetGateRejected"),
+            "{prepare}"
         );
         drop(validator);
         fs::remove_dir_all(&fixture.root).expect("cleanup");
@@ -4631,6 +4795,185 @@ mod tests {
             FastSwapLocalStatusV1::Superseded
         );
         drop(restarted);
+        fs::remove_dir_all(&fixture.root).expect("cleanup");
+    }
+
+    /// A certified CONFIRM applies on every validator even when a later L1
+    /// change (here a freeze of the sender's line) would refuse the intent
+    /// at admission; an uncertified intent stays refused.
+    #[test]
+    fn certified_confirm_applies_and_catches_up_after_a_later_l1_freeze() {
+        let mut fixture = fixture();
+        let mut ledger = LedgerState::empty();
+        let issuer_key = ml_dsa_65_keygen_from_seed(&[31; 32]);
+        let issuer = address_from_public_key(&issuer_key.public_key);
+        let chain = fixture.committee.domain.chain.chain_id.clone();
+        let mut defs = vec![
+            postfiat_types::AssetDefinition::new(&chain, &issuer, "GATEA", 1, 6).unwrap(),
+            postfiat_types::AssetDefinition::new(&chain, &issuer, "GATEB", 1, 6).unwrap(),
+        ];
+        defs.sort_by(|a, b| a.asset_id.cmp(&b.asset_id));
+        let mut remap = BTreeMap::new();
+        let old_rules = fixture
+            .base
+            .asset_rules
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        fixture.base.asset_rules.clear();
+        for (index, def) in defs.iter_mut().enumerate() {
+            def.freeze_enabled = true;
+            let old_id = FastAssetIdV1([(index + 1) as u8; 48]);
+            let id = FastAssetIdV1(hex_to_bytes(&def.asset_id).unwrap().try_into().unwrap());
+            let mut rule = old_rules
+                .iter()
+                .find(|r| r.asset_id == old_id)
+                .unwrap()
+                .clone();
+            rule.asset_id = id;
+            rule.asset_definition_hash =
+                postfiat_execution::fastswap_bridge::asset_definition_hash(def).unwrap();
+            rule.issuer_address = issuer.clone();
+            rule.issuer_control_pubkey = issuer_key.public_key.clone();
+            rule.freeze_enabled = true;
+            let hash = rule.rule_hash().unwrap();
+            remap.insert(old_id, (id, hash));
+            fixture.base.asset_rules.insert(hash, rule);
+        }
+        for object in fixture.base.objects.values_mut() {
+            if let Some((id, hash)) = remap.get(&object.asset_id) {
+                object.asset_id = *id;
+                object.asset_rule_hash = *hash;
+            }
+        }
+        let mut policy = fixture
+            .base
+            .policy_snapshots
+            .values()
+            .next()
+            .unwrap()
+            .clone();
+        (policy.pair_asset_0, policy.asset_rule_hash_0) = remap[&policy.pair_asset_0];
+        (policy.pair_asset_1, policy.asset_rule_hash_1) = remap[&policy.pair_asset_1];
+        policy.policy_hash = policy.computed_hash().unwrap();
+        fixture.base.policy_snapshots = BTreeMap::from([(policy.policy_hash, policy.clone())]);
+        fixture.signed.intent.policy_hash = policy.policy_hash;
+        for party in [
+            &mut fixture.signed.intent.party_0,
+            &mut fixture.signed.intent.party_1,
+        ] {
+            (party.offered_asset_id, party.offered_asset_rule_hash) =
+                remap[&party.offered_asset_id];
+            (party.receives_asset_id, party.receives_asset_rule_hash) =
+                remap[&party.receives_asset_id];
+        }
+        let bytes = fixture.signed.intent.canonical_bytes().unwrap();
+        fixture.signed.authorization_0.signature = ml_dsa_65_sign_with_context(
+            &fixture.owner_0_private_key,
+            &bytes,
+            FASTSWAP_INTENT_CONTEXT_V1,
+        )
+        .unwrap();
+        fixture.signed.authorization_1.signature = ml_dsa_65_sign_with_context(
+            &fixture.owner_1_private_key,
+            &bytes,
+            FASTSWAP_INTENT_CONTEXT_V1,
+        )
+        .unwrap();
+        ledger.asset_definitions = defs;
+        let sender = fixture.signed.intent.party_0.owner_address.clone();
+        let asset_id = bytes_to_hex(&fixture.signed.intent.party_0.offered_asset_id.0);
+        ledger.trustlines.push(
+            postfiat_types::TrustLine::new(&sender, &issuer, &asset_id, 1_000_000, 0).unwrap(),
+        );
+        let open_validator = |name: &str, index: usize, ledger: &LedgerState| {
+            let mut validator = FastSwapValidatorServiceV1::from_parts(
+                &fixture.root.join(name),
+                fixture.base.clone(),
+                fixture.committee.clone(),
+                format!("validator-{index}"),
+                fixture.validator_keys[index].clone(),
+                110,
+            )
+            .unwrap();
+            validator.gate_ledger = Some(Arc::new(ledger.clone()));
+            validator
+        };
+        let mut validators = (0..6)
+            .map(|index| open_validator(&format!("gate-recovery-{index}"), index, &ledger))
+            .collect::<Vec<_>>();
+        let prepare = validators
+            .iter_mut()
+            .map(|validator| validator.prepare(&fixture.signed).unwrap())
+            .collect::<Vec<_>>();
+        let lock =
+            aggregate_fastswap_votes(&fixture.committee, prepare, FastSwapPhaseV1::Precommit)
+                .unwrap();
+        let commits = validators
+            .iter_mut()
+            .map(|validator| validator.commit(&lock).unwrap())
+            .collect::<Vec<_>>();
+        let decision =
+            aggregate_fastswap_votes(&fixture.committee, commits, FastSwapPhaseV1::Commit).unwrap();
+        let mut effects = validators[..5]
+            .iter_mut()
+            .map(|validator| validator.apply(&decision, &fixture.signed).unwrap())
+            .collect::<Vec<_>>();
+        aggregate_fastswap_votes(
+            &fixture.committee,
+            effects.clone(),
+            FastSwapPhaseV1::Effects,
+        )
+        .expect("five validators applied and certified the same effects");
+
+        // A later L1 state change freezes the sender's line.
+        let mut frozen = ledger.clone();
+        frozen.trustlines[0].frozen = true;
+        let swap_id = fixture.signed.swap_id().unwrap();
+
+        // An uncertified intent is still refused at signing and preview.
+        let mut fresh = open_validator("gate-recovery-uncertified", 5, &frozen);
+        let refused = fresh.prepare(&fixture.signed).unwrap_err().to_string();
+        assert!(refused.contains("AssetGateRejected"), "{refused}");
+        let refused = fresh.preview(&fixture.signed).unwrap_err().to_string();
+        assert!(refused.contains("AssetGateRejected"), "{refused}");
+        assert!(fresh.apply(&decision, &fixture.signed).is_err());
+        assert!(fresh.state.reservations.is_empty());
+        drop(fresh);
+
+        // The sixth validator applies the certified CONFIRM.
+        validators[5].gate_ledger = Some(Arc::new(frozen.clone()));
+        validators[5].finalized_primary_height = 111;
+        let sixth = validators[5].apply(&decision, &fixture.signed).unwrap();
+        assert_eq!(sixth.receipt_digest, effects[0].receipt_digest);
+        assert_eq!(
+            validators[5].status(swap_id).record.unwrap().status,
+            FastSwapLocalStatusV1::Applied
+        );
+        assert!(validators[5].state.reservations.is_empty());
+        effects.push(sixth);
+        aggregate_fastswap_votes(
+            &fixture.committee,
+            effects.clone(),
+            FastSwapPhaseV1::Effects,
+        )
+        .expect("all six validators certify the same effects");
+
+        // A replica that missed the swap catches up on the certified chain.
+        let mut lagging = open_validator("gate-recovery-lagging", 5, &frozen);
+        lagging.finalized_primary_height = 111;
+        let caught_up = lagging
+            .catch_up_confirm(&lock, &decision, &fixture.signed)
+            .unwrap();
+        assert_eq!(caught_up.receipt_digest, effects[0].receipt_digest);
+        assert_eq!(caught_up.effects_digest, effects[0].effects_digest);
+        assert_eq!(
+            lagging.status(swap_id).record.unwrap().status,
+            FastSwapLocalStatusV1::Applied
+        );
+        assert!(lagging.state.reservations.is_empty());
+        drop(lagging);
+        drop(validators);
         fs::remove_dir_all(&fixture.root).expect("cleanup");
     }
 }

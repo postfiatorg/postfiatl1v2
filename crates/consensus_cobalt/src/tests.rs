@@ -3316,6 +3316,9 @@
             postfiat_types::GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT,
             postfiat_types::GOVERNANCE_KIND_REJECTED_TX_FEE_V2_ACTIVATION_HEIGHT,
             postfiat_types::GOVERNANCE_KIND_REQUIRE_MEMO_V2_ACTIVATION_HEIGHT,
+            postfiat_types::GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT,
+            postfiat_types::GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT,
+            postfiat_types::GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT,
         ] {
             let activation =
                 ratify_governance_amendment(&domain, &config, kind, 4096, support.clone())

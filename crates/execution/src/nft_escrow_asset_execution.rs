@@ -72,6 +72,13 @@ fn apply_nft_operation(
             nft.validate_for_chain(&genesis.chain_id)
                 .map_err(|error| ("bad_nft_definition", error))?;
             if scaling_active {
+                if operation.serial & postfiat_types::NFT_MIGRATED_SERIAL_BIT != 0 {
+                    return Err((
+                        "nft_migrated_serial_reserved",
+                        "nft serials with the migrated-serial bit are reserved for migrated records"
+                            .to_string(),
+                    ));
+                }
                 if ledger.used_nft_serials.contains_key(&nft.nft_id) {
                     return Err((
                         "nft_serial_already_used",
@@ -289,13 +296,23 @@ fn apply_nft_operation(
             if nft.burned {
                 return Err(("nft_burned", "nft is already burned".to_string()));
             }
-            if nft.collection_flags & NFT_COLLECTION_FLAG_BURN_LOCKED != 0 {
+            let burn_locked = nft.collection_flags & NFT_COLLECTION_FLAG_BURN_LOCKED != 0;
+            let owner_mismatch = nft.owner != operation.owner;
+            // Before NFT scaling, keep main's order (owner before burn lock) so
+            // pre-activation receipts stay byte-identical.
+            if owner_mismatch && !scaling_active {
+                return Err((
+                    "nft_owner_mismatch",
+                    "nft_burn owner does not match current owner".to_string(),
+                ));
+            }
+            if burn_locked {
                 return Err((
                     "nft_collection_burn_locked",
                     "nft collection policy does not allow burn".to_string(),
                 ));
             }
-            if nft.owner != operation.owner {
+            if owner_mismatch {
                 return Err((
                     "nft_owner_mismatch",
                     "nft_burn owner does not match current owner".to_string(),

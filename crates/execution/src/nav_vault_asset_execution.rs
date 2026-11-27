@@ -7926,12 +7926,14 @@ fn apply_vault_bridge_burn_to_redeem(
         .map_err(|error| ("bad_vault_bridge_bucket", error))?;
 
     ledger.trustlines[owner_index].balance -= operation.amount_atoms;
+    ledger.vault_bridge_bucket_states[bucket_index] = bucket_after;
+    ledger.vault_bridge_redemptions.push(redemption);
+    // After the pending redemption is recorded, so the burner's line, which a
+    // cancelled burn is refunded to, is kept (only once the gate is active).
     if compatibility.asset_gate_v1_active(block_height) {
         let _ =
             auto_prune_empty_implicit_trustline(ledger, &operation.owner, &movement_asset.asset_id);
     }
-    ledger.vault_bridge_bucket_states[bucket_index] = bucket_after;
-    ledger.vault_bridge_redemptions.push(redemption);
     Ok(())
 }
 
@@ -8084,6 +8086,30 @@ pub fn settle_governed_solana_payout(
     block_height: u64,
     second: bool,
 ) -> Result<(), String> {
+    settle_governed_solana_payout_with_compatibility(
+        ledger,
+        chain_id,
+        packet_hash,
+        amendment_id,
+        block_height,
+        second,
+        AssetExecutionCompatibility::strict(),
+    )
+}
+
+/// `settle_governed_solana_payout`; once `asset_gate_v1` is active it then
+/// prunes the burner's emptied implicit line, which the pending burn kept for
+/// a refund, by the rule that prunes an emptied implicit line elsewhere (so
+/// another pending burn on the same line still keeps it).
+pub fn settle_governed_solana_payout_with_compatibility(
+    ledger: &mut LedgerState,
+    chain_id: &str,
+    packet_hash: &str,
+    amendment_id: &str,
+    block_height: u64,
+    second: bool,
+    compatibility: AssetExecutionCompatibility,
+) -> Result<(), String> {
     use postfiat_types::solana_exit;
     // First release: the revision-8 bucket only, found before the redemption, as released.
     let first_bucket = if second {
@@ -8136,6 +8162,11 @@ pub fn settle_governed_solana_payout(
         settled_atoms: red.amount_atoms,
         withdrawal_observations: vec![],
     };
+    let owner = red.owner.clone();
+    let lines = [
+        postfiat_types::solana_source_series_id(chain_id, &red.asset_id, &red.bucket_id),
+        red.asset_id.clone(),
+    ];
     let mut staged = ledger.clone();
     apply_vault_bridge_settlement_accounting(
         &mut staged,
@@ -8146,6 +8177,25 @@ pub fn settle_governed_solana_payout(
         true,
     )
     .map_err(|(_, message)| message)?;
+    if compatibility.asset_gate_v1_active(block_height) {
+        let mut candidate_lines: Vec<String> = lines.into_iter().collect();
+        for tl in &staged.trustlines {
+            if tl.account != owner || tl.balance != 0 {
+                continue;
+            }
+            let same_family = staged
+                .asset_definition(&tl.asset_id)
+                .map(|def| def.asset_family_id == red.asset_id)
+                .unwrap_or(false);
+            if same_family && !candidate_lines.contains(&tl.asset_id) {
+                candidate_lines.push(tl.asset_id.clone());
+            }
+        }
+        for asset_id in &candidate_lines {
+            auto_prune_empty_implicit_trustline(&mut staged, &owner, asset_id)
+                .map_err(|(_, message)| message)?;
+        }
+    }
     *ledger = staged;
     Ok(())
 }

@@ -368,6 +368,24 @@ pub fn execute_fastlane_deposit(
     rule: &FastAssetRuleV1,
     finalized_height: u64,
 ) -> Result<FastLaneDepositReceiptV1, FastLaneBridgeError> {
+    execute_fastlane_deposit_with_compatibility(
+        ledger,
+        signed,
+        expected_domain,
+        rule,
+        finalized_height,
+        crate::AssetExecutionCompatibility::strict(),
+    )
+}
+
+pub fn execute_fastlane_deposit_with_compatibility(
+    ledger: &mut LedgerState,
+    signed: &SignedFastLaneDepositV1,
+    expected_domain: &postfiat_types::FastSwapChainDomainV1,
+    rule: &FastAssetRuleV1,
+    finalized_height: u64,
+    compatibility: crate::AssetExecutionCompatibility,
+) -> Result<FastLaneDepositReceiptV1, FastLaneBridgeError> {
     let deposit = &signed.deposit;
     if &deposit.domain != expected_domain {
         return Err(FastLaneBridgeError::DomainMismatch);
@@ -420,10 +438,34 @@ pub fn execute_fastlane_deposit(
                 || finalized_height > permit.valid_through_height
                 || ledger
                     .revoked_fast_lane_holder_permits
-                    .contains_key(&bytes_to_hex(&permit_id.0))
+                    .get(&bytes_to_hex(&permit_id.0))
+                    .is_some_and(|revoked_at| finalized_height >= *revoked_at)
             {
                 return Err(FastLaneBridgeError::HolderPermitInvalid);
             }
+        }
+    }
+    // Train A: once the asset gate is active, the destination's current
+    // eligibility is decided by the central gate before anything is written.
+    if compatibility.asset_gate_v1_active(finalized_height)
+        && deposit.asset_id != FastAssetIdV1::native_pft()
+    {
+        let asset = ledger
+            .asset_definition(&bytes_to_hex(&deposit.asset_id.0))
+            .ok_or(FastLaneBridgeError::AssetDefinitionMismatch)?;
+        let destination = address_from_public_key(&deposit.destination_owner_pubkey);
+        if !matches!(
+            crate::asset_gate(
+                ledger,
+                asset,
+                Some(&deposit.source_address),
+                Some(&destination),
+                crate::AssetMovementOpKind::FastLaneDeposit,
+                finalized_height,
+            ),
+            crate::AssetGateOutcome::Allow
+        ) {
+            return Err(FastLaneBridgeError::TrustlineUnauthorized);
         }
     }
     let deposit_id = deposit

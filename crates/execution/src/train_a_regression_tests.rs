@@ -34,8 +34,8 @@ use crate::fastswap_bridge::{
     asset_definition_hash, execute_fastlane_deposit, FastLaneBridgeError,
 };
 use crate::fastswap_control::{
-    execute_fastlane_control, register_fastlane_asset_rule, register_fastlane_holder_permit,
-    register_fastswap_committee,
+    execute_fastlane_control_with_compatibility, register_fastlane_asset_rule,
+    register_fastlane_holder_permit, register_fastswap_committee,
 };
 use crate::{
     credit_issued_asset_from_shielded_pool_with_compatibility, ensure_owned_object_capacity_v2,
@@ -1152,8 +1152,20 @@ fn pillar8_m1_dex_anti_poisoning_prune_and_bounded_clawback() {
     assert_eq!(r.code, "offer_prune_batch_limit_exceeded");
 }
 
-#[test]
-fn pillar8_m1_fastlane_revoke_holder_permit_blocks_deposit() {
+struct FastLanePermitFixture {
+    ledger: LedgerState,
+    compat: AssetExecutionCompatibility,
+    permit: FastHolderPermitV1,
+    cert: FastLaneControlCertificateV1,
+    chain_domain: FastSwapChainDomainV1,
+    rule: FastAssetRuleV1,
+    signed_deposit: SignedFastLaneDepositV1,
+}
+
+/// A gated asset with a registered FastLane rule and holder permit, a signed
+/// `RevokeHolderPermit` certificate for `revoked_at_height`, and a deposit to
+/// the permit's holder.
+fn fastlane_permit_fixture(revoked_at_height: u64) -> FastLanePermitFixture {
     let genesis = test_genesis();
     let issuer = test_key(30);
     let holder = test_key(31);
@@ -1278,10 +1290,9 @@ fn pillar8_m1_fastlane_revoke_holder_permit_blocks_deposit() {
     permit.permit_id = permit.computed_id().unwrap();
     register_fastlane_holder_permit(&mut ledger, permit.clone()).unwrap();
 
-    // Revoke the holder permit via FastLaneControlActionV1::RevokeHolderPermit (tag 7)!
     let action = FastLaneControlActionV1::RevokeHolderPermit {
         permit_id: permit.permit_id,
-        revoked_at_height: 5,
+        revoked_at_height,
         reason_code: "compliance_revoked".to_string(),
     };
     let action_digest = action.digest().unwrap();
@@ -1306,14 +1317,6 @@ fn pillar8_m1_fastlane_revoke_holder_permit_blocks_deposit() {
         })
         .collect();
     let cert = FastLaneControlCertificateV1 { action, votes };
-    execute_fastlane_control(&mut ledger, &cert, 5).unwrap();
-    assert_eq!(
-        ledger
-            .revoked_fast_lane_holder_permits
-            .get(&bytes_to_hex(&permit.permit_id.0)),
-        Some(&5)
-    );
-
     // Deposit referencing the revoked permit MUST fail with HolderPermitInvalid!
     let deposit = postfiat_types::FastLaneDepositV1 {
         domain: chain_domain.clone(),
@@ -1339,9 +1342,207 @@ fn pillar8_m1_fastlane_revoke_holder_permit_blocks_deposit() {
         algorithm_id: FASTSWAP_ML_DSA_65.to_string(),
         signature: dep_sig,
     };
+    FastLanePermitFixture {
+        ledger,
+        compat,
+        permit,
+        cert,
+        chain_domain,
+        rule,
+        signed_deposit,
+    }
+}
+
+#[test]
+fn pillar8_m1_fastlane_revoke_holder_permit_blocks_deposit() {
+    let FastLanePermitFixture {
+        mut ledger,
+        compat,
+        permit,
+        cert,
+        chain_domain,
+        rule,
+        signed_deposit,
+    } = fastlane_permit_fixture(5);
+    execute_fastlane_control_with_compatibility(&mut ledger, &cert, 5, compat).unwrap();
+    assert_eq!(
+        ledger
+            .revoked_fast_lane_holder_permits
+            .get(&bytes_to_hex(&permit.permit_id.0)),
+        Some(&5)
+    );
+
+    // Deposit referencing the revoked permit MUST fail with HolderPermitInvalid!
     let err = execute_fastlane_deposit(&mut ledger, &signed_deposit, &chain_domain, &rule, 6)
         .unwrap_err();
     assert_eq!(err, FastLaneBridgeError::HolderPermitInvalid);
+}
+
+/// Point 5 (A10, B06): `RevokeHolderPermit` is refused while `asset_gate_v1`
+/// is not active, and writes nothing.
+#[test]
+fn fastlane_revoke_holder_permit_is_refused_before_the_asset_gate() {
+    let fixture = fastlane_permit_fixture(5);
+    let transaction = postfiat_types::FastLanePrimaryTransactionV1 {
+        operation: postfiat_types::FastLanePrimaryOperationV1::Control {
+            certificate: fixture.cert.clone(),
+        },
+    };
+    let mut ledger = fixture.ledger.clone();
+    let receipt =
+        crate::fastlane_primary::execute_fastlane_primary_transaction(&mut ledger, &transaction, 5);
+    assert!(!receipt.accepted, "{receipt:?}");
+    assert_eq!(receipt.code, "fastlane_control_rejected");
+    assert!(ledger.revoked_fast_lane_holder_permits.is_empty());
+    assert_eq!(ledger, fixture.ledger);
+}
+
+/// Point 5 (A10, B11): a deposit honours the recorded revocation height.
+#[test]
+fn fastlane_deposit_honours_the_recorded_revocation_height() {
+    let fixture = fastlane_permit_fixture(8);
+    let mut ledger = fixture.ledger.clone();
+    ledger
+        .revoked_fast_lane_holder_permits
+        .insert(bytes_to_hex(&fixture.permit.permit_id.0), 8);
+    let before = execute_fastlane_deposit(
+        &mut ledger.clone(),
+        &fixture.signed_deposit,
+        &fixture.chain_domain,
+        &fixture.rule,
+        6,
+    );
+    assert!(before.is_ok(), "{before:?}");
+    let at = execute_fastlane_deposit(
+        &mut ledger,
+        &fixture.signed_deposit,
+        &fixture.chain_domain,
+        &fixture.rule,
+        8,
+    );
+    assert_eq!(at.unwrap_err(), FastLaneBridgeError::HolderPermitInvalid);
+}
+
+/// Point 8 (B10): with the asset gate active, a FastLane deposit to a
+/// destination whose line the issuer has since unauthorized is refused before
+/// anything is written, even with a still-valid permit and an eligible source.
+#[test]
+fn fastlane_deposit_checks_the_destination_through_the_asset_gate() {
+    let genesis = test_genesis();
+    let issuer = test_key(30);
+    let holder = test_key(31);
+    let source = test_key(36);
+    let FastLanePermitFixture {
+        mut ledger,
+        compat,
+        permit,
+        chain_domain,
+        rule,
+        ..
+    } = fastlane_permit_fixture(5);
+    let gated_id = bytes_to_hex(&rule.asset_id.0);
+    ledger.accounts.push(funded_account(&source, 50_000_000));
+    set_trustline(
+        &genesis,
+        &mut ledger,
+        &source,
+        &issuer.address,
+        &source.address,
+        &gated_id,
+        10_000,
+        false,
+        false,
+        compat,
+        1,
+    );
+    set_trustline(
+        &genesis,
+        &mut ledger,
+        &issuer,
+        &issuer.address,
+        &source.address,
+        &gated_id,
+        10_000,
+        true,
+        false,
+        compat,
+        1,
+    );
+    let seq = ledger.account(&issuer.address).unwrap().sequence + 1;
+    let fund = sign_asset_tx(
+        &genesis,
+        &issuer,
+        seq,
+        50_000,
+        ISSUED_PAYMENT_TRANSACTION_KIND,
+        AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
+            from: issuer.address.clone(),
+            to: source.address.clone(),
+            asset_id: gated_id.clone(),
+            issuer: issuer.address.clone(),
+            amount: 500,
+        }),
+    );
+    assert!(
+        execute_asset_transaction_with_compatibility(&genesis, &mut ledger, &fund, 1, compat)
+            .accepted
+    );
+    // The issuer withdraws the destination's authorization.
+    set_trustline(
+        &genesis,
+        &mut ledger,
+        &issuer,
+        &issuer.address,
+        &holder.address,
+        &gated_id,
+        10_000,
+        false,
+        false,
+        compat,
+        1,
+    );
+    let deposit = postfiat_types::FastLaneDepositV1 {
+        domain: chain_domain.clone(),
+        source_address: source.address.clone(),
+        source_pubkey: source.keypair.public_key.clone(),
+        sequence: ledger.account(&source.address).unwrap().sequence + 1,
+        nonce: [2; 32],
+        asset_id: rule.asset_id,
+        asset_rule_hash: rule.rule_hash().unwrap(),
+        amount_atoms: 100,
+        fee_pft: 100,
+        destination_owner_pubkey: holder.keypair.public_key.clone(),
+        destination_holder_permit_id: Some(permit.permit_id),
+    };
+    let signature = ml_dsa_65_sign_with_context(
+        &source.keypair.private_key,
+        &deposit.signing_bytes().unwrap(),
+        FASTLANE_DEPOSIT_CONTEXT_V1,
+    )
+    .unwrap();
+    let signed = SignedFastLaneDepositV1 {
+        deposit,
+        algorithm_id: FASTSWAP_ML_DSA_65.to_string(),
+        signature,
+    };
+    // Before the gate the old rules apply: the permit alone decides.
+    assert!(
+        execute_fastlane_deposit(&mut ledger.clone(), &signed, &chain_domain, &rule, 6).is_ok()
+    );
+    let before = ledger.clone();
+    let refused = crate::fastswap_bridge::execute_fastlane_deposit_with_compatibility(
+        &mut ledger,
+        &signed,
+        &chain_domain,
+        &rule,
+        6,
+        compat,
+    );
+    assert_eq!(
+        refused.unwrap_err(),
+        FastLaneBridgeError::TrustlineUnauthorized
+    );
+    assert_eq!(ledger, before);
 }
 
 #[test]
@@ -1463,7 +1664,8 @@ fn pillar4_keyed_nft_migration_tombstones_issuer_burn_and_spam_guard() {
 
     // Non-issuer-burnable NFT cannot be burned by issuer (`nft_not_issuer_burnable`).
     let seq = ledger.account(&issuer.address).unwrap().sequence + 1;
-    let migrated_serial = NFT_MIGRATED_SERIAL_BIT | 42;
+    // A native serial; bit 63 is reserved for migrated records.
+    let plain_serial = 42;
     let mint_non_issuer_burn = sign_nft_tx(
         &genesis,
         &issuer,
@@ -1473,10 +1675,10 @@ fn pillar4_keyed_nft_migration_tombstones_issuer_burn_and_spam_guard() {
         NftTransactionOperation::NftMint(NftMintOperation {
             issuer: issuer.address.clone(),
             collection_id: "COL-A".to_string(),
-            serial: migrated_serial,
+            serial: plain_serial,
             owner: owner.address.clone(),
             metadata_hash: "33".repeat(48),
-            metadata_uri: "ipfs://migrated-42".to_string(),
+            metadata_uri: "ipfs://plain-42".to_string(),
             flags: NFT_FLAG_TRANSFERABLE,
             collection_flags: 0,
             issuer_transfer_fee: 0,
@@ -1492,7 +1694,7 @@ fn pillar4_keyed_nft_migration_tombstones_issuer_burn_and_spam_guard() {
         )
         .accepted
     );
-    let migrated_id = nft_id(&genesis.chain_id, &issuer.address, "COL-A", migrated_serial).unwrap();
+    let plain_id = nft_id(&genesis.chain_id, &issuer.address, "COL-A", plain_serial).unwrap();
 
     let seq = ledger.account(&issuer.address).unwrap().sequence + 1;
     let bad_issuer_burn = sign_nft_tx(
@@ -1502,7 +1704,7 @@ fn pillar4_keyed_nft_migration_tombstones_issuer_burn_and_spam_guard() {
         50_000,
         NFT_BURN_TRANSACTION_KIND,
         NftTransactionOperation::NftBurn(NftBurnOperation {
-            nft_id: migrated_id,
+            nft_id: plain_id,
             owner: owner.address.clone(),
             issuer: issuer.address.clone(),
         }),
@@ -1661,4 +1863,117 @@ fn pillar2_fastpay_fee_v1_formula_admission_and_account_soft_cap() {
     )
     .unwrap_err();
     assert!(matches!(err, OwnedTransferError::InsufficientFee { .. }));
+}
+
+/// Point 9 (A12): after NFT scaling, a native mint cannot use a serial with
+/// the migrated-serial bit; before activation the old rules are unchanged.
+#[test]
+fn native_nft_mints_cannot_use_the_migrated_serial_bit_after_nft_scaling() {
+    let genesis = test_genesis();
+    let issuer = test_key(74);
+    let owner = test_key(75);
+    let ledger = LedgerState::new(vec![
+        funded_account(&issuer, 10_000_000),
+        funded_account(&owner, 10_000_000),
+    ]);
+    let mint = sign_nft_tx(
+        &genesis,
+        &issuer,
+        1,
+        50_000,
+        NFT_MINT_TRANSACTION_KIND,
+        NftTransactionOperation::NftMint(NftMintOperation {
+            issuer: issuer.address.clone(),
+            collection_id: "COL".to_string(),
+            serial: NFT_MIGRATED_SERIAL_BIT | 7,
+            owner: owner.address.clone(),
+            metadata_hash: "11".repeat(48),
+            metadata_uri: "ipfs://x".to_string(),
+            flags: NFT_FLAG_TRANSFERABLE,
+            collection_flags: 0,
+            issuer_transfer_fee: 0,
+        }),
+    );
+    let scheduled =
+        AssetExecutionCompatibility::strict().with_nft_scaling_v1_activation_height(Some(10));
+    let before = execute_nft_transaction_with_compatibility(
+        &genesis,
+        &mut ledger.clone(),
+        &mint,
+        9,
+        scheduled,
+    );
+    assert!(before.accepted, "{before:?}");
+    let after = execute_nft_transaction_with_compatibility(
+        &genesis,
+        &mut ledger.clone(),
+        &mint,
+        10,
+        scheduled,
+    );
+    assert_eq!(after.code, "nft_migrated_serial_reserved", "{after:?}");
+}
+
+/// Point 4 (A9, B01): before NFT scaling is active, `nft_burn` keeps main's
+/// check order (burned, owner, burn-locked); the new order applies only after.
+#[test]
+fn nft_burn_keeps_the_old_check_order_until_nft_scaling_is_active() {
+    let genesis = test_genesis();
+    let issuer = test_key(71);
+    let owner = test_key(72);
+    let other = test_key(73);
+    let mut ledger = LedgerState::new(vec![
+        funded_account(&issuer, 10_000_000),
+        funded_account(&owner, 10_000_000),
+        funded_account(&other, 10_000_000),
+    ]);
+    let mint = sign_nft_tx(
+        &genesis,
+        &issuer,
+        1,
+        50_000,
+        NFT_MINT_TRANSACTION_KIND,
+        NftTransactionOperation::NftMint(NftMintOperation {
+            issuer: issuer.address.clone(),
+            collection_id: "COL".to_string(),
+            serial: 1,
+            owner: owner.address.clone(),
+            metadata_hash: "11".repeat(48),
+            metadata_uri: "ipfs://x".to_string(),
+            flags: NFT_FLAG_TRANSFERABLE,
+            collection_flags: NFT_COLLECTION_FLAG_BURN_LOCKED,
+            issuer_transfer_fee: 0,
+        }),
+    );
+    let strict = AssetExecutionCompatibility::strict();
+    let minted =
+        execute_nft_transaction_with_compatibility(&genesis, &mut ledger, &mint, 5, strict);
+    assert!(minted.accepted, "{minted:?}");
+    let id = nft_id(&genesis.chain_id, &issuer.address, "COL", 1).expect("nft id");
+    let burn = sign_nft_tx(
+        &genesis,
+        &other,
+        1,
+        50_000,
+        NFT_BURN_TRANSACTION_KIND,
+        NftTransactionOperation::NftBurn(NftBurnOperation {
+            nft_id: id,
+            owner: other.address.clone(),
+            issuer: String::new(),
+        }),
+    );
+    let scheduled = strict.with_nft_scaling_v1_activation_height(Some(10));
+    for (height, compatibility) in [(6, strict), (6, scheduled), (9, scheduled)] {
+        let receipt = execute_nft_transaction_with_compatibility(
+            &genesis,
+            &mut ledger.clone(),
+            &burn,
+            height,
+            compatibility,
+        );
+        assert_eq!(receipt.code, "nft_owner_mismatch", "{receipt:?}");
+    }
+    let receipt =
+        execute_nft_transaction_with_compatibility(&genesis, &mut ledger, &burn, 10, scheduled);
+    assert_eq!(receipt.code, "nft_collection_burn_locked", "{receipt:?}");
 }

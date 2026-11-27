@@ -1,10 +1,27 @@
 use super::*;
 
+#[cfg(test)]
 pub(super) fn execute_fastlane_primary_for_chain(
     genesis: &Genesis,
     ledger: &mut LedgerState,
     transaction: &postfiat_types::FastLanePrimaryTransactionV1,
     block_height: u64,
+) -> Receipt {
+    execute_fastlane_primary_for_chain_with_compatibility(
+        genesis,
+        ledger,
+        transaction,
+        block_height,
+        AssetExecutionCompatibility::strict(),
+    )
+}
+
+pub(super) fn execute_fastlane_primary_for_chain_with_compatibility(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    transaction: &postfiat_types::FastLanePrimaryTransactionV1,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Receipt {
     if let postfiat_types::FastLanePrimaryOperationV1::OwnedDeposit { signed } =
         &transaction.operation
@@ -78,7 +95,12 @@ pub(super) fn execute_fastlane_primary_for_chain(
             );
         }
     }
-    execute_fastlane_primary_transaction(ledger, transaction, block_height)
+    execute_fastlane_primary_transaction_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    )
 }
 
 #[cfg(test)]
@@ -188,11 +210,12 @@ pub(super) fn execute_transparent_batch_with_orchard(
         ));
     }
     for transaction in &batch.fastlane_primary_transactions {
-        receipts.push(execute_fastlane_primary_for_chain(
+        receipts.push(execute_fastlane_primary_for_chain_with_compatibility(
             genesis,
             ledger,
             transaction,
             block_height,
+            compatibility,
         ));
     }
     for transaction in &batch.escrow_transactions {
@@ -721,11 +744,12 @@ pub(super) fn execute_transparent_batch_for_archive_replay(
         ));
     }
     for transaction in &batch.fastlane_primary_transactions {
-        receipts.push(execute_fastlane_primary_for_chain(
+        receipts.push(execute_fastlane_primary_for_chain_with_compatibility(
             genesis,
             ledger,
             transaction,
             block_height,
+            compatibility,
         ));
     }
     for transaction in &batch.escrow_transactions {
