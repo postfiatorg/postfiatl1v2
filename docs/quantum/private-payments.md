@@ -1,9 +1,13 @@
 # Quantum-Safe Private Payments
 
-Peel-Binius-Shielded is Post Fiat L1's proposed quantum-safe private payment system.
-The release candidate uses **PFSH03**, which adds an ML-DSA-65 spend authorization
-for each input note. Public-chain activation requires a signed governance amendment.
-[Release candidate](https://github.com/postfiatorg/postfiatl1v2/pull/232) · [Protocol specification](../security/peel-binius-shielded-pq-payments.md)
+Peel-Binius-Shielded is Post Fiat L1's quantum-safe private payment system.
+Its current version, **PFSH03**, adds an ML-DSA-65 spend authorization for each
+input note. It is on `main` since #280 (`b121df606`). By the handoff of 27
+November it was activated on the controlled devnet `postfiat-wan-devnet-2` at
+block 1910 and used end to end from the signed Mac app; the read of 27 November
+shows a governance amendment at 1910 and one PQ deposit, one private payment and
+one exit at 1912 to 1914 ([Current State](../status/chain-state-current.md)).
+[#280](https://github.com/postfiatorg/postfiatl1v2/pull/280) · [Protocol specification](../security/peel-binius-shielded-pq-payments.md)
 
 The benchmark figures and milestone rehearsals below were measured on **PFSH02**.
 
@@ -81,10 +85,11 @@ sha256sum -c SHA256SUMS
 
 ## What is missing
 
-PFSH02 is not yet switched on for any public chain. On local test chains everything a user needs now works:
-validators verify and settle payments, the pool keeps its own ledger, and a command-line wallet and the browser wallet
-shield, pay and exit for PFT and pfUSDC. The six-validator upgrade rehearsal is done. Before activation there remain an external review of the cryptography and the code
-(the package for reviewers is ready). Only then does a signed amendment choose an activation height. The build plan is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
+PFSH03 runs on the controlled devnet only; no public network runs it. On local test chains validators verify and
+settle payments, the pool keeps its own ledger, and a command-line wallet and the browser wallet shield, pay and exit
+for PFT and pfUSDC. The six-validator upgrade rehearsal is done. No external review of the cryptography and the code
+is recorded (the package for reviewers is ready). The activation at block 1910 is on the controlled devnet, not on a public network. The build plan
+is [Integrating PFSH02 private payments into Post Fiat L1](../specs/pq-private-payments-integration.md).
 The historical M1–M8 results below cover the standalone fixture and the original L1 profile 1, which charged a public PFT payer on issued spends.
 
 | Milestone | Delivers | Status |
@@ -114,8 +119,9 @@ system is new. Its whole security analysis was written by the project and has no
 it: the classical soundness argument (Appendix A.1–A.2), the reduction for quantum attackers (A.3) and the
 zero-knowledge argument that privacy depends on (Appendix B). Protection against an attacker who reuses parts of
 other people's proofs (A.4) is stated as a conjecture. Privacy and authorization also rely on assumptions about
-SHAKE256 and ML-KEM-1024 that the specification marks as non-standard and gives no numbers for. External review of the verifier and these proofs is a
-condition of activation (M8).
+SHAKE256 and ML-KEM-1024 that the specification marks as non-standard and gives no numbers for. M8 names an external
+review of the verifier and these proofs as a condition of activation. None is recorded; PFSH03 is active on the
+controlled devnet from block 1910, which is not a public network.
 
 Privacy here covers the contents of payments. It does not hide network-level information such as the IP address or
 timing of a submission, and a small pool hides less than a large one.
