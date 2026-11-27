@@ -64,7 +64,7 @@ use postfiat_crypto_provider::{
 };
 #[cfg(test)]
 use postfiat_execution::execute_asset_transaction_with_compatibility;
-use postfiat_execution::fastlane_primary::execute_fastlane_primary_transaction;
+use postfiat_execution::fastlane_primary::execute_fastlane_primary_transaction_with_compatibility;
 use postfiat_execution::{
     apply_asset_orchard_private_primary_issue_route_transition,
     apply_asset_orchard_private_primary_redeem_route_transition,

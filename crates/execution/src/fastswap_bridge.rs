@@ -420,7 +420,8 @@ pub fn execute_fastlane_deposit(
                 || finalized_height > permit.valid_through_height
                 || ledger
                     .revoked_fast_lane_holder_permits
-                    .contains_key(&bytes_to_hex(&permit_id.0))
+                    .get(&bytes_to_hex(&permit_id.0))
+                    .is_some_and(|revoked_at| finalized_height >= *revoked_at)
             {
                 return Err(FastLaneBridgeError::HolderPermitInvalid);
             }

@@ -1,7 +1,7 @@
 use crate::apply_owned_deposit;
 use crate::fastswap_bridge::{execute_fastlane_deposit, execute_fastlane_redeem};
 use crate::fastswap_checkpoint::anchor_fastlane_checkpoint;
-use crate::fastswap_control::execute_fastlane_control;
+
 use postfiat_crypto_provider::bytes_to_hex;
 use postfiat_types::{
     FastLanePrimaryOperationV1, FastLanePrimaryTransactionV1, FastPayOrderRecoveryV1, LedgerState,
@@ -84,6 +84,20 @@ pub fn execute_fastlane_primary_transaction(
     ledger: &mut LedgerState,
     transaction: &FastLanePrimaryTransactionV1,
     finalized_height: u64,
+) -> Receipt {
+    execute_fastlane_primary_transaction_with_compatibility(
+        ledger,
+        transaction,
+        finalized_height,
+        crate::AssetExecutionCompatibility::strict(),
+    )
+}
+
+pub fn execute_fastlane_primary_transaction_with_compatibility(
+    ledger: &mut LedgerState,
+    transaction: &FastLanePrimaryTransactionV1,
+    finalized_height: u64,
+    compatibility: crate::AssetExecutionCompatibility,
 ) -> Receipt {
     let tx_id = match transaction.tx_id() {
         Ok(id) => bytes_to_hex(&id.0),
@@ -232,7 +246,12 @@ pub fn execute_fastlane_primary_transaction(
             }
         }
         FastLanePrimaryOperationV1::Control { certificate } => {
-            match execute_fastlane_control(ledger, certificate, finalized_height) {
+            match crate::fastswap_control::execute_fastlane_control_with_compatibility(
+                ledger,
+                certificate,
+                finalized_height,
+                compatibility,
+            ) {
                 Ok(()) => Receipt::accepted(tx_id, "FastLane control applied")
                     .with_code(FASTLANE_CONTROL_APPLIED),
                 Err(error) => Receipt::rejected(

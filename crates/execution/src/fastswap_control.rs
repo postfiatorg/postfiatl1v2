@@ -32,6 +32,8 @@ pub enum FastSwapControlError {
     ActivationConflict,
     BootstrapConflict,
     InvalidBootstrap,
+    /// `RevokeHolderPermit` before `asset_gate_v1` is active.
+    AssetGateNotActive,
 }
 
 pub fn execute_fastswap_governance_bootstrap(
@@ -134,11 +136,35 @@ pub fn verify_fastlane_control_certificate(
     Ok(())
 }
 
+/// Executes a FastLane control certificate with every Train A rule off, so
+/// `RevokeHolderPermit` is refused. Consensus callers use
+/// [`execute_fastlane_control_with_compatibility`].
 pub fn execute_fastlane_control(
     ledger: &mut LedgerState,
     certificate: &FastLaneControlCertificateV1,
     finalized_height: u64,
 ) -> Result<(), FastSwapControlError> {
+    execute_fastlane_control_with_compatibility(
+        ledger,
+        certificate,
+        finalized_height,
+        crate::AssetExecutionCompatibility::strict(),
+    )
+}
+
+pub fn execute_fastlane_control_with_compatibility(
+    ledger: &mut LedgerState,
+    certificate: &FastLaneControlCertificateV1,
+    finalized_height: u64,
+    compatibility: crate::AssetExecutionCompatibility,
+) -> Result<(), FastSwapControlError> {
+    if matches!(
+        certificate.action,
+        FastLaneControlActionV1::RevokeHolderPermit { .. }
+    ) && !compatibility.asset_gate_v1_active(finalized_height)
+    {
+        return Err(FastSwapControlError::AssetGateNotActive);
+    }
     let active = ledger
         .fastswap_committees
         .last()

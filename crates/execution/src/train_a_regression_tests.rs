@@ -34,8 +34,8 @@ use crate::fastswap_bridge::{
     asset_definition_hash, execute_fastlane_deposit, FastLaneBridgeError,
 };
 use crate::fastswap_control::{
-    execute_fastlane_control, register_fastlane_asset_rule, register_fastlane_holder_permit,
-    register_fastswap_committee,
+    execute_fastlane_control_with_compatibility, register_fastlane_asset_rule,
+    register_fastlane_holder_permit, register_fastswap_committee,
 };
 use crate::{
     credit_issued_asset_from_shielded_pool_with_compatibility, ensure_owned_object_capacity_v2,
@@ -1152,8 +1152,20 @@ fn pillar8_m1_dex_anti_poisoning_prune_and_bounded_clawback() {
     assert_eq!(r.code, "offer_prune_batch_limit_exceeded");
 }
 
-#[test]
-fn pillar8_m1_fastlane_revoke_holder_permit_blocks_deposit() {
+struct FastLanePermitFixture {
+    ledger: LedgerState,
+    compat: AssetExecutionCompatibility,
+    permit: FastHolderPermitV1,
+    cert: FastLaneControlCertificateV1,
+    chain_domain: FastSwapChainDomainV1,
+    rule: FastAssetRuleV1,
+    signed_deposit: SignedFastLaneDepositV1,
+}
+
+/// A gated asset with a registered FastLane rule and holder permit, a signed
+/// `RevokeHolderPermit` certificate for `revoked_at_height`, and a deposit to
+/// the permit's holder.
+fn fastlane_permit_fixture(revoked_at_height: u64) -> FastLanePermitFixture {
     let genesis = test_genesis();
     let issuer = test_key(30);
     let holder = test_key(31);
@@ -1278,10 +1290,9 @@ fn pillar8_m1_fastlane_revoke_holder_permit_blocks_deposit() {
     permit.permit_id = permit.computed_id().unwrap();
     register_fastlane_holder_permit(&mut ledger, permit.clone()).unwrap();
 
-    // Revoke the holder permit via FastLaneControlActionV1::RevokeHolderPermit (tag 7)!
     let action = FastLaneControlActionV1::RevokeHolderPermit {
         permit_id: permit.permit_id,
-        revoked_at_height: 5,
+        revoked_at_height,
         reason_code: "compliance_revoked".to_string(),
     };
     let action_digest = action.digest().unwrap();
@@ -1306,14 +1317,6 @@ fn pillar8_m1_fastlane_revoke_holder_permit_blocks_deposit() {
         })
         .collect();
     let cert = FastLaneControlCertificateV1 { action, votes };
-    execute_fastlane_control(&mut ledger, &cert, 5).unwrap();
-    assert_eq!(
-        ledger
-            .revoked_fast_lane_holder_permits
-            .get(&bytes_to_hex(&permit.permit_id.0)),
-        Some(&5)
-    );
-
     // Deposit referencing the revoked permit MUST fail with HolderPermitInvalid!
     let deposit = postfiat_types::FastLaneDepositV1 {
         domain: chain_domain.clone(),
@@ -1339,9 +1342,85 @@ fn pillar8_m1_fastlane_revoke_holder_permit_blocks_deposit() {
         algorithm_id: FASTSWAP_ML_DSA_65.to_string(),
         signature: dep_sig,
     };
+    FastLanePermitFixture {
+        ledger,
+        compat,
+        permit,
+        cert,
+        chain_domain,
+        rule,
+        signed_deposit,
+    }
+}
+
+#[test]
+fn pillar8_m1_fastlane_revoke_holder_permit_blocks_deposit() {
+    let FastLanePermitFixture {
+        mut ledger,
+        compat,
+        permit,
+        cert,
+        chain_domain,
+        rule,
+        signed_deposit,
+    } = fastlane_permit_fixture(5);
+    execute_fastlane_control_with_compatibility(&mut ledger, &cert, 5, compat).unwrap();
+    assert_eq!(
+        ledger
+            .revoked_fast_lane_holder_permits
+            .get(&bytes_to_hex(&permit.permit_id.0)),
+        Some(&5)
+    );
+
+    // Deposit referencing the revoked permit MUST fail with HolderPermitInvalid!
     let err = execute_fastlane_deposit(&mut ledger, &signed_deposit, &chain_domain, &rule, 6)
         .unwrap_err();
     assert_eq!(err, FastLaneBridgeError::HolderPermitInvalid);
+}
+
+/// Point 5 (A10, B06): `RevokeHolderPermit` is refused while `asset_gate_v1`
+/// is not active, and writes nothing.
+#[test]
+fn fastlane_revoke_holder_permit_is_refused_before_the_asset_gate() {
+    let fixture = fastlane_permit_fixture(5);
+    let transaction = postfiat_types::FastLanePrimaryTransactionV1 {
+        operation: postfiat_types::FastLanePrimaryOperationV1::Control {
+            certificate: fixture.cert.clone(),
+        },
+    };
+    let mut ledger = fixture.ledger.clone();
+    let receipt =
+        crate::fastlane_primary::execute_fastlane_primary_transaction(&mut ledger, &transaction, 5);
+    assert!(!receipt.accepted, "{receipt:?}");
+    assert_eq!(receipt.code, "fastlane_control_rejected");
+    assert!(ledger.revoked_fast_lane_holder_permits.is_empty());
+    assert_eq!(ledger, fixture.ledger);
+}
+
+/// Point 5 (A10, B11): a deposit honours the recorded revocation height.
+#[test]
+fn fastlane_deposit_honours_the_recorded_revocation_height() {
+    let fixture = fastlane_permit_fixture(8);
+    let mut ledger = fixture.ledger.clone();
+    ledger
+        .revoked_fast_lane_holder_permits
+        .insert(bytes_to_hex(&fixture.permit.permit_id.0), 8);
+    let before = execute_fastlane_deposit(
+        &mut ledger.clone(),
+        &fixture.signed_deposit,
+        &fixture.chain_domain,
+        &fixture.rule,
+        6,
+    );
+    assert!(before.is_ok(), "{before:?}");
+    let at = execute_fastlane_deposit(
+        &mut ledger,
+        &fixture.signed_deposit,
+        &fixture.chain_domain,
+        &fixture.rule,
+        8,
+    );
+    assert_eq!(at.unwrap_err(), FastLaneBridgeError::HolderPermitInvalid);
 }
 
 #[test]

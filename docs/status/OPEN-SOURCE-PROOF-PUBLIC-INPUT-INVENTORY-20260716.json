@@ -119,7 +119,7 @@
     "crates/types/src/market_nav_asset_types.rs": "c7ad8d745bce6a2ed67a10162f4675cbaf0543304ddea5cb2602892a24cf59fc",
     "crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol": "0ccced8deed6a10d1ec631c7b78cfa14dcf5b5490cf50a9ca4bfcd1cdc6aa08a",
     "crates/execution/src/vault_bridge_profile_resolution.rs": "8ffdb016183c6afce588c08625b00071bab0c231506d1065787a963c9962ae16",
-    "crates/node/src/execution_actions.rs": "6b70e8dbe57f4d691bcd6c8b10f2d13b232dad45afd8fdf0d00ca44153b8104f"
+    "crates/node/src/execution_actions.rs": "c8a66e28a38f8e0b19ab99c41bd6fa864407d0d7400a22e895ba71ba453dbe23"
   },
   "systems": [
     {

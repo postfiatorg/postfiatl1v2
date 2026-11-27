@@ -1,4 +1,4 @@
-use super::execution_actions::execute_fastlane_primary_for_chain;
+use super::execution_actions::execute_fastlane_primary_for_chain_with_compatibility;
 use super::*;
 
 pub fn transfer(options: TransferOptions) -> io::Result<Receipt> {
@@ -864,11 +864,12 @@ pub fn admit_fastlane_primary_to_mempool(
         compatibility,
         shielded.asset_orchard_balances(),
     )?;
-    let receipt = execute_fastlane_primary_for_chain(
+    let receipt = execute_fastlane_primary_for_chain_with_compatibility(
         &genesis,
         &mut dry_run_ledger,
         &transaction,
         block_height,
+        compatibility,
     );
     if !receipt.accepted {
         return Err(io::Error::new(
@@ -1535,11 +1536,12 @@ pub(super) fn ledger_after_executable_mempool(
         }
     }
     for pending in &mempool.pending_fastlane_primary {
-        let receipt = execute_fastlane_primary_for_chain(
+        let receipt = execute_fastlane_primary_for_chain_with_compatibility(
             genesis,
             &mut ledger,
             &pending.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !receipt.accepted {
             return Err(io::Error::new(
@@ -1709,17 +1711,23 @@ fn apply_pending_atomic_and_fastlane(
         }
     }
     for pending in &mempool.pending_fastlane_primary {
-        let existing_receipt = execute_fastlane_primary_for_chain(
+        let existing_receipt = execute_fastlane_primary_for_chain_with_compatibility(
             genesis,
             &mut without_candidate,
             &pending.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !existing_receipt.accepted {
             continue;
         }
-        let receipt =
-            execute_fastlane_primary_for_chain(genesis, ledger, &pending.transaction, block_height);
+        let receipt = execute_fastlane_primary_for_chain_with_compatibility(
+            genesis,
+            ledger,
+            &pending.transaction,
+            block_height,
+            asset_execution_compatibility,
+        );
         if !receipt.accepted {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -2171,11 +2179,12 @@ pub(super) fn verify_mempool_state(
             postfiat_types::FastLanePrimaryOperationV1::FastPayRecoveryReveal { .. }
             | postfiat_types::FastLanePrimaryOperationV1::FastPayRecoveryDecision { .. } => {}
         }
-        let receipt = execute_fastlane_primary_for_chain(
+        let receipt = execute_fastlane_primary_for_chain_with_compatibility(
             genesis,
             &mut dry_run_ledger,
             &entry.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if !receipt.accepted {
             return Err(io::Error::new(
@@ -2837,11 +2846,12 @@ pub fn create_mempool_batch(options: MempoolBatchOptions) -> io::Result<Transact
             remaining_fastlane_primary.push(entry);
             continue;
         }
-        let receipt = execute_fastlane_primary_for_chain(
+        let receipt = execute_fastlane_primary_for_chain_with_compatibility(
             &genesis,
             &mut dry_run_ledger,
             &entry.transaction,
             block_height,
+            asset_execution_compatibility,
         );
         if receipt.accepted {
             fastlane_primary_transactions.push(entry.transaction);
