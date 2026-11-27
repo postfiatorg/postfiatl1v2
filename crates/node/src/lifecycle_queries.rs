@@ -1709,12 +1709,17 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     };
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
-    // An export is quoted and checked on the ledger asset admission executes
-    // it on (`apply_pending_before_new_asset_transaction`), its source's
-    // existence, balance and sequence included: a pending release or transfer
-    // may create the source. Every other kind keeps the ledger after the
-    // executable mempool.
-    let quote_ledger = if is_export {
+    // An export, and every kind once `asset_gate_v1` is active, is quoted on
+    // the ledger asset admission executes it on
+    // (`apply_pending_before_new_asset_transaction`): the later families
+    // (atomic swaps, FastLane, escrow, NFT, offers) run after it, so a line
+    // one of them creates does not lower the quote. An export's source's
+    // existence, balance and sequence are read there too: a pending release
+    // or transfer may create the source. Before the gate every other kind
+    // keeps the ledger after the executable mempool.
+    let admission_view =
+        is_export || asset_execution_compatibility.asset_gate_v1_active(block_height);
+    let quote_ledger = if admission_view {
         let shielded = store.read_shielded()?;
         let orchard_balances = shielded
             .orchard
