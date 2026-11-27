@@ -134,6 +134,8 @@ async function main() {
             WALLET_PROXY_PRIVATE_ACTIONS_GENESIS_HASH: domain.genesis_hash,
             WALLET_PROXY_PRIVATE_ACTIONS_RPC_SOURCES: rpcPorts.map((port, index) => `validator-${index}=127.0.0.1:${port}`).join(','),
             WALLET_PROXY_PRIVATE_ACTIONS_STORE: path.join(root, 'gateway-store'),
+            // Operator configuration alone cannot enable the M2 archive-only issue.
+            WALLET_PROXY_PQ_ISSUE_ID: 'a1c5b7e096966c3736cbcf2291c0d10a166f3c2edee2d7c5faf9c870c565d0009ad5b0e23e1dbdee4ca9f7e07b954cb8',
         };
         const startProxy = async (env) => {
             const child = spawn(process.execPath, ['server.js'], { cwd: __dirname, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -173,6 +175,35 @@ async function main() {
         admitted = answers.map((answer) => `${answer.source}: ${answer.ok ? 'held' : answer.code}`).join(', ');
         assert.ok(!fs.existsSync(path.join(root, '.local', 'share', 'postfiat', 'wallet-proxy', 'shielded-ingress')),
             'no legacy ingress artifact directory');
+        const pqSnapshot = await request(proxyPort, 'POST', '/api/private/v1/pq/snapshot', {});
+        // Each freshly initialized v0 ledger has its own faucet. The gateway
+        // must refuse a mixed view even though both nodes support the PQ reader.
+        const rawSnapshots = await Promise.all(rpcPorts.map(port => nodeRpc(port, 'private_pool_snapshot',
+            {pool_id:'PFT-PQ-SHIELDED-POOL-V1'})));
+        assert.ok(rawSnapshots.every(r => r.ok && r.result.pool_id === 'PFT-PQ-SHIELDED-POOL-V1'));
+        assert.notEqual(rawSnapshots[0].result.snapshot_token,rawSnapshots[1].result.snapshot_token);
+        assert.deepEqual([pqSnapshot.statusCode,pqSnapshot.body.code],[503,'private_snapshot_sources_diverged']);
+        const wrongPool = await request(proxyPort, 'POST', '/api/private/v1/pq/submit',
+            { address: WALLET, intent_id: intentId, action_json: vector.action_json });
+        assert.deepEqual([wrongPool.statusCode, wrongPool.body.code], [403, 'private_action_pool_mismatch']);
+        for (const rpcPort of rpcPorts) {
+            const result = await nodeRpc(rpcPort, 'private_action_submit', {
+                ...domain, pool_id:'PFT-PQ-SHIELDED-POOL-V1', session_scope:'pool-routing',
+                intent_id:intentId, action_hash:vector.action_hash, action_json:vector.action_json,
+            });
+            assert.equal(result.ok, false);
+            assert.equal(result.error.code, 'private_action_wrong_domain');
+        }
+        const archive = fs.readFileSync(path.join(REPO,'tools/pft-binius-shielded-pq/l1-vectors/pfusdc-shield.bin'));
+        const archiveJson = JSON.stringify({kind:'pq_payment_v1',body:archive.toString('base64')});
+        const disabledIssue = await request(proxyPort,'POST','/api/private/v1/pq/submit',{
+            address:'pf'+archive.subarray(72,92).toString('hex'),
+            intent_id:intentIdFor(domain,archiveJson),action_json:archiveJson,
+        });
+        assert.deepEqual([disabledIssue.statusCode,disabledIssue.body.code],[403,'private_action_asset_refused']);
+        const privateScan = await request(proxyPort, 'POST', '/api/private/v1/pq/page',
+            { snapshot_token:rawSnapshots[0].result.snapshot_token, section:'pq_pairs', cursor:null, limit:1, note_index:1 });
+        assert.equal(privateScan.statusCode, 400);
         await stopProxy(defaultProxy);
 
         // Switch on: the legacy route runs its execution again (no 410) and readiness names it.

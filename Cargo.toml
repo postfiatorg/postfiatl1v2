@@ -20,6 +20,8 @@ members = [
     "crates/node",
     "crates/ordering_fast",
     "crates/privacy",
+    "crates/privacy_binius",
+    "crates/privacy_binius_wallet",
     "crates/privacy_orchard",
     "crates/pfusdc_proofs",
     "crates/pft_lane_proofs",
@@ -32,6 +34,7 @@ members = [
     "tools/pftl-ingress-groth16-verify",
 ]
 exclude = [
+    "tools/pft-binius-shielded-pq/rust-prover",
     "programs/pfusdc-egress",
     "programs/pfusdc-ingress",
     "programs/pfusdc-sol-ingress",

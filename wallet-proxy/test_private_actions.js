@@ -38,6 +38,10 @@ const assetRow = (row) => ({
     issuer: row.issuer.value, code: row.code.value, precision: row.precision.value,
     requires_authorization: row.requires_authorization.value, proof_profile_id: row.proof_profile_id.value,
 });
+function capabilityHash(secret) {
+    return require('crypto').createHash('sha3-384').update('postfiat.gateway.capability.v1\0').update(secret).digest('hex');
+}
+
 function basePool() {
     const field = (n) => `${n.toString(16).padStart(2, '0')}${'00'.repeat(31)}`;
     return {
@@ -106,7 +110,8 @@ function stub(validatorId) {
                 finalized_block_hash: h96('a4'), finalized_state_root: h96('f3'), pool_id: p.pool_id, pool_present: true,
                 counts: Object.fromEntries(SECTIONS.map((section) => [section, state.pool[section].length])),
                 page_limits: { items: 512, outputs: 64, output_ciphertext_bytes: 1048576, assets: 16 },
-                base_asset_id: p.base_asset_id, quote_asset_id: p.quote_asset_id, inclusion_height: height + 1,
+                base_asset_id: p.base_asset_id, quote_asset_id: p.quote_asset_id, inclusion_height: height + (state.quoteOffset || 1),
+                ...(state.quote && {pq_issued_fee:state.quote}),
                 pricing_status: 'ok', pricing_refusal: null, pricing_claim: null, pricing_claim_json: state.pool.pricing_claim_json,
                 egress_status: 'ungoverned', policy_id: null, disclosure_hash: null, completeness: state.pool.completeness,
             } };
@@ -312,6 +317,13 @@ async function main() {
         assert.strictEqual(diverged.statusCode, 503);
         assert.strictEqual(diverged.body.code, 'private_snapshot_sources_diverged');
         b.state.tip = sharedTip;
+
+        for (const [field,value] of [['quoteOffset',2], ['quote',['aa','5']]]) {
+            b.state[field] = value;
+            const response = await post(port, 'snapshot', {address:WALLET});
+            assert.equal(response.body.code, 'private_snapshot_sources_diverged');
+            delete b.state[field];
+        }
 
         // Ceilings: 4096 list items, 64 ciphertexts, and the 4 MiB response.
         const big = basePool();
@@ -598,6 +610,113 @@ async function main() {
         }
         assert.throws(() => rpcTransportError('sensitive-upstream', 'x'), /unknown RPC transport class/);
 
+        // The browser and gateway decode the same eight release vectors as Rust.
+        const wasm = await import('../wallet-web/src/wasm/postfiat_wallet_wasm.js');
+        wasm.initSync({module: fs.readFileSync(path.join(__dirname,'../wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm'))});
+        const address = wasm.pq_encode_address(DOMAIN.chain_id, DOMAIN.genesis_hash, new Uint8Array(48).fill(17), new Uint8Array(1568).fill(31));
+        wasm.pq_check_address(DOMAIN.chain_id, DOMAIN.genesis_hash, address);
+        assert.throws(() => wasm.pq_check_address(DOMAIN.chain_id + '-other', DOMAIN.genesis_hash, address));
+        assert.throws(() => wasm.pq_encode_address(DOMAIN.chain_id, DOMAIN.genesis_hash, new Uint8Array(47), new Uint8Array(1568)));
+        const vectorDir = path.join(__dirname, '../tools/pft-binius-shielded-pq/l1-vectors');
+        const files = fs.readdirSync(vectorDir).filter(f => f.endsWith('.bin')).sort();
+        assert.equal(files.length, 8);
+        for (const file of files) {
+            const body = fs.readFileSync(path.join(vectorDir, file));
+            const json = JSON.stringify({kind:'pq_payment_v1',body:body.toString('base64')});
+            const parsed = parsePublicAction(json);
+            const signed = JSON.parse(wasm.pq_review_payment(json));
+            if (file === 'pft-shield.bin' || file === 'pft-pay.bin') {
+                const route = createPrivateActions({
+                    prefix: '/api/private/v1/pq/',
+                    env: { ...privateEnv, WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID: parsed.poolId,
+                        WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID: '00'.repeat(48),
+                        WALLET_PROXY_PRIVATE_ACTIONS_STORE: path.join(storeDir, 'pq') },
+                    rpcRequest: oneShot,
+                });
+                const intent = intentIdFor(DOMAIN, json);
+                if (!parsed.payer) {
+                    const body = {address:null,intent_id:intent,action_json:json,capability:'12'.repeat(32)};
+                    const before = a.state.submits.length;
+                    await assert.rejects(route.submit(body, 'pq-owner'), e => e.code === 'private_capability_missing');
+                    assert.equal(a.state.submits.length, before);
+                    await route.authorize({intent_id:intent, capability_hash:capabilityHash(body.capability)});
+                }
+                const admitted = await route.submit({address:parsed.payer,intent_id:intent,action_json:json, ...(!parsed.payer && {capability:'12'.repeat(32)})}, 'pq-owner');
+                assert.equal(admitted.state, 'queued');
+                assert.equal(admitted.statement_id, parsePublicAction(json, DOMAIN).statementId);
+                for (const node of [a,b]) assert.equal(submitsFor(node,intent).length, 1, node.validatorId);
+            }
+            const python = spawnSync('python3',['-c', [
+                'import json,sys', 'from postfiat_rpc.client import private_action_hash, private_action_intent_id',
+                'net,action=json.load(sys.stdin)',
+                'print(json.dumps([private_action_hash(action), private_action_intent_id(**net,action_json=action)]))',
+            ].join('\n')], {input:JSON.stringify([DOMAIN,json]), encoding:'utf8',
+                env:{...process.env,PYTHONPATH:path.join(__dirname,'../python')}});
+            assert.equal(python.status, 0);
+            assert.deepEqual(JSON.parse(python.stdout),[signed.action_hash,intentIdFor(DOMAIN,json)]);
+            assert.equal(signed.asset, parsed.assetId);
+            assert.equal(signed.payer, parsed.payer);
+            assert.equal(parsed.canonical,json);
+            const mutations = [[6, 3]];
+            if (file === 'pfusdc-pay.bin' || file === 'pfusdc-exit.bin') {
+                assert.equal(parsed.payer, null);
+                // The published wire corpus uses an archive-only issue. Use the
+                // generic handler with that exact allowed issue for this relay test.
+                const opts = {env: {...privateEnv, WALLET_PROXY_PRIVATE_ACTIONS_POOL_ID: parsed.poolId,
+                    WALLET_PROXY_PRIVATE_ACTIONS_BASE_ASSET_ID: parsed.assetId,
+                    WALLET_PROXY_PRIVATE_ACTIONS_STORE: path.join(storeDir, 'issued') }};
+                const request = {address:null, intent_id:intentIdFor(DOMAIN,json), action_json:json, capability:require('crypto').randomBytes(32).toString('hex')};
+                const route = createPrivateActions({...opts, rpcRequest:oneShot});
+                for (const method of ['submit', 'receipt']) {
+                    await assert.rejects(route[method]({...request, address:WALLET}, WALLET),
+                        e => e.code === 'private_action_address_mismatch');
+                }
+                await route.authorize({intent_id:request.intent_id, capability_hash:capabilityHash(request.capability)});
+                const refusal = createPrivateActions({...opts,
+                    rpcRequest: async (_, req) => req.method === 'private_action_submit'
+                        ? {ok:false, error:{code:'pq_fee_mismatch'}}
+                        : {ok:true, result:{schema:'postfiat.private_action_receipt.v1',
+                            intent_id:request.intent_id, state:'pending_unknown'}}});
+                await assert.rejects(refusal.submit(request, WALLET),
+                    e => e.statusCode === 409 && e.code === 'pq_fee_mismatch'
+                        && e.unreserved.intent_id === request.intent_id && e.unreserved.action_hash === signed.action_hash);
+                const admitted = await route.submit(request, WALLET);
+                assert.equal(admitted.state, 'queued');
+                for (const peer of [a,b]) {
+                    assert.equal(submitsFor(peer, request.intent_id).at(-1).session_scope, 'pq-private-spend:' + route.store.read(request.intent_id).capability_hash);
+                }
+                assert.ok(!JSON.stringify(route.store.read(request.intent_id)).includes(WALLET));
+                const record = route.store.read(request.intent_id);
+                assert.equal(Object.hasOwn(record, 'principal'), false);
+                assert.ok(!JSON.stringify(record).includes(request.capability));
+                let upstreamCalls = 0;
+                const denied = createPrivateActions({...opts, rpcRequest:() => { upstreamCalls++; }});
+                await assert.rejects(denied.receipt({...request, capability:'00'.repeat(32)}, WALLET),
+                    e => e.statusCode === 403);
+                for (const method of ['receipt','submit']) {
+                    await assert.rejects(denied[method]({...request, capability:'00'.repeat(32)}, WALLET),
+                        e => e.statusCode === 403);
+                }
+                assert.equal(upstreamCalls, 0);
+                await route.receipt(request, 'a different login');
+                route.store.write({...record, capability_hash:undefined, principal:'legacy'});
+                const upgraded = createPrivateActions({...opts, rpcRequest:() => { upstreamCalls++; }});
+                assert.ok(!Object.hasOwn(upgraded.store.read(request.intent_id), 'principal'));
+                for (const method of ['receipt','submit'])
+                    await assert.rejects(upgraded[method](request, WALLET), e => e.code === 'private_legacy_record');
+                assert.equal(upstreamCalls, 0);
+                route.store.write(record);
+                mutations.push([5, 1], [63, 1], [71, 1]);
+            }
+            for (const [offset, value] of mutations) {
+                const invalid = Buffer.from(body);
+                invalid[offset] = value;
+                const malformed = JSON.stringify({kind:'pq_payment_v1', body:invalid.toString('base64')});
+                assert.throws(() => parsePublicAction(malformed));
+                assert.throws(() => wasm.pq_review_payment(malformed));
+            }
+        }
+        console.log('8 shared PQ payment vectors: WASM, gateway and Python agree');
         // Disabled without a configured domain.
         const disabled = createPrivateActions({ env: {} });
         assert.strictEqual(disabled.enabled, false);

@@ -629,6 +629,10 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["pq-wallet"]:
+        from .pq_wallet import main as wallet_main
+        return wallet_main(argv[1:])
     args = build_parser().parse_args(argv)
     validate_args(args)
     label, endpoint = parse_endpoint_ref(args.endpoint)

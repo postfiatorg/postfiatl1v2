@@ -1506,6 +1506,17 @@ wss } = runtime;
         });
     }
 
+    function carriesPqPayment(body) {
+        if (body?.pool_id === 'PFT-PQ-SHIELDED-POOL-V1' || body?.kind === 'pq_payment_v1') return true;
+        for (const key of ['action_json', 'batch_json']) {
+            if (typeof body?.[key] !== 'string') continue;
+            let parsed;
+            try { parsed = JSON.parse(body[key]); } catch { continue; }
+            if (parsed?.kind === 'pq_payment_v1' || (Array.isArray(parsed?.actions) && parsed.actions.some(a => a?.kind === 'pq_payment_v1'))) return true;
+        }
+        return false;
+    }
+
     async function handleNavswapHttp(req, res, url) {
         const requiresAuth = httpRequestRequiresAuth(req.method, url.pathname);
         if (!originAllowed(req, requiresAuth)) {
@@ -1842,6 +1853,10 @@ wss } = runtime;
 
             if (req.method === 'POST' && url.pathname === '/api/shielded-nav-swap/ingress') {
                 const body = await readJsonBody(req, 1024 * 1024);
+                if (carriesPqPayment(body)) {
+                    sendJson(req, res, 403, { ok: false, code: 'private_action_pool_mismatch' });
+                    return true;
+                }
                 const result = await executeNavswapIdempotentRequest({
                     method: req.method,
                     pathname: url.pathname,
@@ -1854,6 +1869,10 @@ wss } = runtime;
 
             if (req.method === 'POST' && url.pathname === '/api/shielded-nav-swap/swap') {
                 const body = await readJsonBody(req, 16 * 1024 * 1024);
+                if (carriesPqPayment(body)) {
+                    sendJson(req, res, 403, { ok: false, code: 'private_action_pool_mismatch' });
+                    return true;
+                }
                 const result = await executeNavswapIdempotentRequest({
                     method: req.method,
                     pathname: url.pathname,
@@ -1866,6 +1885,10 @@ wss } = runtime;
 
             if (req.method === 'POST' && url.pathname === '/api/shielded-nav-swap/egress') {
                 const body = await readJsonBody(req, 16 * 1024 * 1024);
+                if (carriesPqPayment(body)) {
+                    sendJson(req, res, 403, { ok: false, code: 'private_action_pool_mismatch' });
+                    return true;
+                }
                 const result = await executeNavswapIdempotentRequest({
                     method: req.method,
                     pathname: url.pathname,

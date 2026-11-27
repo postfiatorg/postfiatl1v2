@@ -26,6 +26,8 @@ pub mod backend_mode;
 pub mod fastswap_store;
 pub mod integrity;
 pub mod ordered_history;
+pub mod pq_archive;
+pub mod pq_pool;
 pub mod transactional;
 
 pub use backend_mode::{
@@ -458,21 +460,25 @@ impl NodeStore {
     }
 
     pub fn write_shielded(&self, shielded: &ShieldedState) -> io::Result<()> {
+        self.ensure_writable()?;
+        pq_pool::persist_pending(&self.data_dir, shielded)?;
         self.write_json(self.data_dir.join(SHIELDED_FILE), shielded)
     }
 
     pub fn read_shielded(&self) -> io::Result<ShieldedState> {
-        if self.transactional_storage_active()? {
-            return self
-                .transactional_store()?
+        let mut shielded = if self.transactional_storage_active()? {
+            self.transactional_store()?
                 .shielded()?
-                .ok_or_else(|| missing_transactional_state("shielded"));
-        }
-        match self.read_json(self.data_dir.join(SHIELDED_FILE)) {
-            Ok(shielded) => Ok(shielded),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(ShieldedState::empty()),
-            Err(error) => Err(error),
-        }
+                .ok_or_else(|| missing_transactional_state("shielded"))?
+        } else {
+            match self.read_json(self.data_dir.join(SHIELDED_FILE)) {
+                Ok(shielded) => shielded,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => ShieldedState::empty(),
+                Err(error) => return Err(error),
+            }
+        };
+        pq_pool::hydrate(&self.data_dir, &mut shielded)?;
+        Ok(shielded)
     }
 
     pub fn write_bridge(&self, bridge: &BridgeState) -> io::Result<()> {
@@ -703,7 +709,14 @@ impl NodeStore {
     }
 
     pub fn write_batch_archive(&self, archive: &BatchArchive) -> io::Result<()> {
-        self.write_json(self.data_dir.join(BATCH_ARCHIVE_FILE), archive)?;
+        let compact = BatchArchive {
+            batches: archive
+                .batches
+                .iter()
+                .map(|entry| self.persist_pq_archive(entry))
+                .collect::<io::Result<_>>()?,
+        };
+        self.write_json(self.data_dir.join(BATCH_ARCHIVE_FILE), &compact)?;
         self.remove_jsonl_log(&self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE))
     }
 
@@ -726,11 +739,17 @@ impl NodeStore {
         )? {
             merge_appended_archive_entry(&mut archive, entry)?;
         }
+        for entry in &mut archive.batches {
+            self.hydrate_pq_archive(entry)?;
+        }
         Ok(archive)
     }
 
     pub fn append_batch_archive_entry(&self, entry: BatchArchiveEntry) -> io::Result<()> {
-        self.append_jsonl_record(self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE), &entry)
+        self.append_jsonl_record(
+            self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE),
+            &self.persist_pq_archive(&entry)?,
+        )
     }
 
     pub fn write_ordered_batches(&self, batch_ids: &[String]) -> io::Result<()> {

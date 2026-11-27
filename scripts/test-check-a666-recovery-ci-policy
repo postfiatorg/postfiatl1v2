@@ -83,6 +83,7 @@ def require_exact_direct_proving_allowlist() -> None:
     vectors = {
         "scripts/test_native_campaign_driver.py": (445, 636),
         "scripts/test_native_prover_leaf.py": (180,),
+        "crates/node/src/tests/pq_wallet_merge.rs": (455, 525),
     }
     for relative, allowed_lines in vectors.items():
         source_lines = (repo_root / relative).read_text(encoding="utf-8").splitlines()

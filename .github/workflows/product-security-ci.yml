@@ -90,6 +90,18 @@ jobs:
           cache-dependency-path: requirements-test.txt
       - name: Install hash-locked test dependencies
         run: python -m pip install --require-hashes -r requirements-test.txt
+      - name: Free runner disk
+        # The PQ wallet CLI test builds a release node binary. Same step as rust-ci.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Install pinned Rust toolchain and fetch the locked crates
+        # test_pq_wallet_cli.py builds with --offline --locked; offline resolution needs every
+        # crate of the workspace lock in the local registry, not only those of postfiat-node.
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          cargo fetch --locked
       - name: Python SDK and operations regressions
         env:
           PYTHONPATH: python

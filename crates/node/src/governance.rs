@@ -1638,6 +1638,10 @@ pub fn verify_governance_amendment_replay_bundle(
     for amendment in &bundle.ordered_amendments {
         verify_cobalt_governance_amendment(&domain, amendment)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        if consensus_artifacts::requires_signed_pq_governance(amendment) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData,
+                "PQ governance requires certified block replay with the historical validator registry"));
+        }
         if !seen_amendment_ids.insert(amendment.amendment_id.as_str()) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -2773,8 +2777,13 @@ fn apply_governance_batch_internal(
     crate::solana_exit_governance::verify_rotation_interlock(
         &genesis, &governance, &ledger, parent_numbered_count, &batch, block_height,
     )?;
-    if crate::solana_exit_governance::needs_signatures(&genesis,&batch,block_height)
-        || (historical_replay.is_none() && !allow_unsigned_test_fixture) {
+    if crate::solana_exit_governance::needs_signatures(&genesis, &batch, block_height)
+        || (historical_replay.is_none() && !allow_unsigned_test_fixture)
+        || batch
+            .amendments
+            .iter()
+            .any(|a| consensus_artifacts::requires_pq_registry(a, &governance, block_height))
+    {
         let registry = due_activations.registry.clone().unwrap_or(
             read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?,
         );

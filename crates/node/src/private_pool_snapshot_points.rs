@@ -25,6 +25,8 @@ pub(super) struct PrivatePoolSnapshotPoint {
     pub(super) state_root: String,
     /// The Orchard pool's id at this point; None before the pool exists.
     pub(super) pool_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) pq_head: Option<postfiat_types::pq_payment::PqHead>,
     pub(super) counts: PrivatePoolCounts,
     pub(super) root_history: u64,
     /// The whole-tree root served while `root_history` is still empty.
@@ -77,6 +79,7 @@ pub(super) fn snapshot_point(
         block_hash: tip.block_hash.clone(),
         state_root: tip.state_root.clone(),
         pool_id: None,
+        pq_head: shielded.pq_pool_v1.as_ref().map(|p| p.head.clone()),
         counts: PrivatePoolCounts {
             commitments: 0,
             nullifiers: 0,

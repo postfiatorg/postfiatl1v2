@@ -29,6 +29,11 @@ fn private_action_error_parts(error: &std::io::Error) -> (String, String) {
         {
             (code.to_string(), message.to_string())
         }
+        _ if text.starts_with("pq_")
+            && text.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') =>
+        {
+            (text.clone(), text)
+        }
         _ => ("private_action_failed".to_string(), text),
     }
 }
@@ -120,10 +125,55 @@ fn private_action_rpc_result(
     }
 }
 
+fn reserve_private_attempt(context: &RpcServeConnectionContext) -> bool {
+    let Ok(mut attempts) = context.private_submit_state.lock() else {
+        return false;
+    };
+    let now = Instant::now();
+    prune_rpc_serve_rate_limit_window(&mut attempts, now);
+    let peer_count = attempts
+        .counts_by_peer
+        .get(&context.peer_addr)
+        .map_or(0, |q| q.len());
+    if peer_count as u64 >= context.max_mempool_submit_per_peer
+        || attempts.total_timestamps.len() as u64 >= context.max_mempool_submit_total
+    {
+        return false;
+    }
+    attempts.total_timestamps.push_back(now);
+    attempts
+        .counts_by_peer
+        .entry(context.peer_addr.clone())
+        .or_default()
+        .push_back(now);
+    true
+}
+
 fn run_rpc_serve_private_action(
     request: &RpcRequest,
     context: &RpcServeConnectionContext,
 ) -> RpcResponse {
+    let _worker = if request.method == "private_action_submit" {
+        if !reserve_private_attempt(context) {
+            return rpc_serve_error_response(
+                &request.id,
+                "private_action_rate_limited",
+                "retry after the admission window",
+            );
+        }
+        match try_acquire_rpc_serve_child_dispatch(context) {
+            Ok(worker) => Some(worker),
+            Err(_) => {
+                return rpc_serve_error_response(
+                    &request.id,
+                    "private_action_busy",
+                    "verification capacity in use",
+                )
+            }
+        }
+    } else {
+        None
+    };
     let result = request
         .params
         .as_object()
@@ -288,11 +338,21 @@ fn run_rpc_private_action(id: &str, method: &str, flags: &[String], data_dir: &P
         );
         let action_json = match (flag_value(flags, "--action-json"), flag_value(flags, "--action-file")) {
             (Some(json), None) => json.to_string(),
-            (None, Some(path)) => std::fs::read_to_string(path)
-                .map_err(|error| format!("read --action-file `{path}` failed: {error}"))?,
+            (None, Some(path)) => {
+                use std::io::Read;
+                let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+                let mut text = String::new();
+                file.take(postfiat_types::pq_payment::REQUEST_LIMIT as u64 + 1)
+                    .read_to_string(&mut text)
+                    .map_err(|e| e.to_string())?;
+                text
+            }
             _ => return Err("use exactly one of --action-json or --action-file".to_string()),
         };
         params.insert("action_json".to_string(), serde_json::Value::String(action_json));
+        if serde_json::to_vec(&params).map_err(|e| e.to_string())?.len() > postfiat_types::pq_payment::REQUEST_LIMIT {
+            return Err("private action request exceeded 1048576 bytes".into());
+        }
     }
     match private_action_rpc_result(data_dir, method, &params) {
         Ok((value, label)) => print_rpc_success(
@@ -327,7 +387,7 @@ fn private_action_round_service_pass(
                 "shield_batch_finality",
                 serde_json::json!({ "batch_json": record.batch_json }),
             );
-            match run_rpc_serve_shield_batch_finality_inner(0, &request, context) {
+            match run_rpc_serve_shield_batch_finality_inner(0, &request, context, true) {
                 Ok(_) => postfiat_node::PrivateActionDispatch::Finished,
                 Err((code, _))
                     if code == "rpc_finality_wrong_proposer" || code == "rpc_finality_submit_busy" =>

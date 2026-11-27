@@ -76,6 +76,17 @@ Match deposit tags on the hex fields: the `*_text` fields are a convenience.
 the archived block payload, so they are available for every finalized
 `payment_v2` and `issued_payment_v2`, not only for mempool entries.
 
+## PQ payments on the disposable development chain
+
+Accepted `pq_payment_v1` actions expose the public deposit or exit account and the amount in atoms of the selected asset.
+
+| Account history role | Amount | Fee and sequence |
+| --- | --- | --- |
+| Deposit (`shielded_deposit`) | Exact public debit into the pool | The native fee comes from the deposited value. A pfUSDC depositor pays the PFT fee separately. The row records the depositor's sequence. |
+| Withdrawal (`shielded_withdrawal`) | Exact credit from the pool | Private notes pay the fee in atoms of the selected asset. The credit uses sequence zero. |
+
+Internal payments have no account history row. Their asset, fee, inclusion time and tree are public. The PQ pair records the fee. Native fees burn and issued fees enter the series collector. The receipt's chain-wide burn fields count PFT only.
+
 ## Shielded Withdrawals
 
 A shielded withdrawal credits a transparent account from a shielded pool. It is
@@ -179,9 +190,9 @@ blocks above it.
 
 The disk index, the archive scan and `tx` build their rows with the same
 function (`account_tx_rows_for_block`), so they return the same rows. The
-Python fallback (`_account_tx_client_side_scan`) reads the same kinds,
+Python fallback (`_account_tx_client_side_scan`) covers a subset,
 including atomic swaps (one row per leg the account owns or receives,
-`tx_role` `leg_0` or `leg_1`), memo contents and shielded withdrawals. It
+`tx_role` `leg_0` or `leg_1`), memo contents and Orchard withdrawals. It skips PQ Shield and Exit. Use the node archive scan or disk index for these rows. A governed collector withdrawal credits the destination trustline without producing an account-history row. Use the certified governance receipt and series balance for reconciliation. It
 numbers rows after a block's swaps and FastLane primary transactions so
 `transaction_index` and `tx_id` match the index and the archive scan
 (`python/tests/test_account_tx_fallback.py`,
@@ -218,14 +229,10 @@ postfiat-node account-tx-index-build --data-dir <validator-data>
 The build extends a current index from its tip, or rebuilds it from every
 retained block when it cannot be extended.
 
-The current index schema is `postfiat-account-tx-index-v4`: the v3 layout (rows
-in bounded per-account chunks and metadata-only aggregate files), with the
-`escrow_finish` row attributed to the recipient who signed it (v3 named the
-owner). Schema v2 added memo contents and shielded withdrawals. An index
-written with an older schema (v1, v2 or v3) is never read or extended. After
-upgrading, run `account-tx-index-build` once: it rebuilds the index from all
-retained blocks, which for a v1 index also backfills memo contents and
-historical shielded withdrawals. Until then,
+Schema `postfiat-account-tx-index-v5` adds public PQ payment rows. It retains the
+v3 chunk layout and the v4 attribution of `escrow_finish` to the recipient who
+signed it. After upgrading from v1–v4, run `account-tx-index-build` once to
+rebuild from retained blocks. Until then,
 `account_tx_index_status` reports the index unusable with
 `unsupported account_tx index schema`, and `account_tx` answers from the
 bounded archive scan, which already returns the new rows. History pruned below

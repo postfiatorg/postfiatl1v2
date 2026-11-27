@@ -4036,3 +4036,36 @@ def private_action_hash(action_json: str) -> str:
     this equals it when the text is canonical, which is what the wallet
     persists. The node recomputes it and refuses a mismatch."""
     return _domain_hash_hex(PRIVATE_ACTION_HASH_DOMAIN, action_json.encode())
+
+
+PQ_POOL_ID = "PFT-PQ-SHIELDED-POOL-V1"
+
+
+class PqCursorExpired(RuntimeError):
+    pass
+
+
+def pq_public_pages(client, token, section, total, offset=0):
+    """Fetch only public ordinals. Every page must cover the pinned range exactly."""
+    limit = {"pq_pairs": 32, "pq_assets": 16}[section]
+    cursor = None
+    if offset:
+        tag = _domain_hash_hex("postfiat.private_pool_page.cursor.v1", f"{token}\n{section}".encode())[:16]
+        cursor = f"ppc1:{section}:{offset}:{tag}"
+    if not 0 <= offset <= total:
+        raise ValueError("checkpoint ahead of snapshot")
+    while offset < total:
+        page = client.private_pool_page(token, section, cursor=cursor, limit=limit)
+        if page.get("status") == "refused" and (page.get("refusal") or {}).get("code") in {"snapshot_expired", "snapshot_unavailable"}:
+            raise PqCursorExpired("finalized cursor expired")
+        rows = page.get("items")
+        if (page.get("status") != "ok" or page.get("section") != section or
+                page.get("snapshot_token") != token or page.get("offset") != offset or
+                page.get("total") != total or not isinstance(rows, list) or
+                not 1 <= len(rows) <= min(limit, total-offset) or page.get("item_count") != len(rows)):
+            raise ValueError("invalid finalized page coverage")
+        offset += len(rows)
+        cursor = page.get("next_cursor")
+        if bool(cursor) != (offset < total):
+            raise ValueError("invalid finalized continuation")
+        yield rows

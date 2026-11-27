@@ -1265,7 +1265,7 @@ pub fn propose_nonuniform_governance_amendment(
 ) -> Result<CobaltProposal, String> {
     validate_domain(domain)?;
     validate_trust_graph(domain, graph)?;
-    validate_amendment_kind(kind)?;
+    validate_domain_amendment_kind(domain, kind)?;
     validate_amendment_value(kind, value)?;
     let proposer = graph
         .trust_views

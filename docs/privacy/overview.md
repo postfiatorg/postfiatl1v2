@@ -6,6 +6,10 @@ chain adapter and application circuits; it does not implement a new Halo2 proof
 system. The exact dependency and narrow local compatibility patch are described
 in [Halo2 Dependency And Local Patch Boundary](../security/halo2-dependency.md).
 
+Orchard uses classical proof assumptions. The separate PFSH02 rehearsal pool settles private PFT and one governed pfUSDC source series on a disposable six-validator genesis. It has a Rust validator verifier, an independent Go verifier, a Python wallet CLI and a local browser wallet. No public network has an activation height in this release. [Quantum-safe private payments](../quantum/private-payments.md).
+
+In the M8 rehearsal the validators finalized both assets, then refused new PQ inclusion after a signed pause. An independently imported signed snapshot recovered notes for both assets and replayed the finalized history. The pre-activation M4 binary rejected the scheduling amendment during replay, so the upgrade compatibility gate remains open. [Rehearsal record](../evidence/pq-private-payments-m8/rehearsal-record.md).
+
 The goal is confidential settlement for workflows where transparent ledgers leak
 too much: balances, counterparties, timing, execution intent, treasury movement,
 and position changes.

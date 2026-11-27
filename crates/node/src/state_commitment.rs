@@ -100,6 +100,7 @@ pub(super) fn replicated_state_root_v2(
         "ordered_history_accumulator",
         &ordered_history.accumulator,
     );
+    pq_payment_fixture::check_state_domain(&genesis_hash_hex, shielded)?;
     append_shielded_state(&mut state_bytes, shielded);
     append_bridge_state(&mut state_bytes, bridge);
     Ok(hash_hex("postfiat.replicated_state.v2", &state_bytes))
@@ -570,6 +571,7 @@ fn replicated_state_root_with_options(
         pre_age_release_campaign_commitments,
     )?;
     append_string_list(&mut state_bytes, "ordered_batch", ordered_batches);
+    pq_payment_fixture::check_state_domain(&genesis_hash_hex, shielded)?;
     append_shielded_state(&mut state_bytes, shielded);
     append_bridge_state(&mut state_bytes, bridge);
     Ok(hash_hex("postfiat.replicated_state.v1", &state_bytes))
@@ -595,60 +597,19 @@ fn verify_global_issued_asset_supply_caps_with_non_nav_spread(
     include_non_nav_spread: bool,
 ) -> io::Result<()> {
     validate_issued_supply_custody_inventory(ledger, shielded)?;
-    let orchard_balances = shielded
-        .orchard
-        .as_ref()
-        .map(|pool| pool.asset_orchard_balances.as_slice())
-        .unwrap_or_default();
-    let mut orchard_by_asset = BTreeMap::<&str, u64>::new();
-    for balance in orchard_balances {
-        if orchard_by_asset
-            .insert(balance.asset_id.as_str(), balance.live_total)
-            .is_some()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "duplicate AssetOrchard balance for issued asset `{}`",
-                    balance.asset_id
-                ),
-            ));
-        }
-        if ledger.asset_definition(&balance.asset_id).is_none() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "AssetOrchard balance references unknown issued asset `{}`",
-                    balance.asset_id
-                ),
-            ));
-        }
-    }
-    for reserve in &ledger.fast_lane_reserves {
-        if reserve.asset_id == postfiat_types::FastAssetIdV1::native_pft() {
-            continue;
-        }
-        let asset_id = bytes_to_hex(&reserve.asset_id.0);
-        if ledger.asset_definition(&asset_id).is_none() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("FastLane reserve references unknown issued asset `{asset_id}`"),
-            ));
-        }
-    }
-
+    let shielded_by_asset = issued_shielded_reserves(shielded)?;
     for definition in &ledger.asset_definitions {
         let global_supply = if definition.asset_family_id.is_empty() {
             issued_asset_family_global_supply_after_inventory(
                 ledger,
-                &orchard_by_asset,
+                &shielded_by_asset,
                 &definition.asset_id,
                 include_non_nav_spread,
             )?
         } else {
             issued_asset_global_supply_after_inventory(
                 ledger,
-                &orchard_by_asset,
+                &shielded_by_asset,
                 &definition.asset_id,
                 include_non_nav_spread,
             )?
@@ -699,29 +660,46 @@ pub fn global_issued_asset_supply(
             format!("missing issued asset `{asset_id}`"),
         ));
     }
-    let orchard_by_asset = shielded
-        .orchard
-        .as_ref()
-        .map(|pool| {
-            pool.asset_orchard_balances
-                .iter()
-                .map(|balance| (balance.asset_id.as_str(), balance.live_total))
-                .collect::<BTreeMap<_, _>>()
-        })
-        .unwrap_or_default();
+    let shielded_by_asset = issued_shielded_reserves(shielded)?;
     let definition = ledger
         .asset_definition(asset_id)
         .expect("asset definition checked above");
     if definition.asset_family_id.is_empty() {
-        issued_asset_family_global_supply_after_inventory(ledger, &orchard_by_asset, asset_id, true)
+        issued_asset_family_global_supply_after_inventory(
+            ledger,
+            &shielded_by_asset,
+            asset_id,
+            true,
+        )
     } else {
-        issued_asset_global_supply_after_inventory(ledger, &orchard_by_asset, asset_id, true)
+        issued_asset_global_supply_after_inventory(ledger, &shielded_by_asset, asset_id, true)
     }
+}
+
+fn issued_shielded_reserves(shielded: &ShieldedState) -> io::Result<BTreeMap<&str, u64>> {
+    let mut reserves = BTreeMap::new();
+    if let Some(pool) = &shielded.orchard {
+        for balance in &pool.asset_orchard_balances {
+            reserves.insert(balance.asset_id.as_str(), balance.live_total);
+        }
+    }
+    if let Some(pool) = &shielded.pq_pool_v1 {
+        for (id, state) in pool.issued_assets() {
+            let total = reserves.entry(id).or_default();
+            *total = total.checked_add(state.reserve).ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "issued shielded reserve overflow",
+                )
+            })?;
+        }
+    }
+    Ok(reserves)
 }
 
 fn issued_asset_family_global_supply_after_inventory(
     ledger: &LedgerState,
-    orchard_by_asset: &BTreeMap<&str, u64>,
+    shielded_by_asset: &BTreeMap<&str, u64>,
     asset_family_id: &str,
     include_non_nav_spread: bool,
 ) -> io::Result<u64> {
@@ -739,7 +717,7 @@ fn issued_asset_family_global_supply_after_inventory(
         total
             .checked_add(issued_asset_global_supply_after_inventory(
                 ledger,
-                orchard_by_asset,
+                shielded_by_asset,
                 asset_id,
                 include_non_nav_spread,
             )?)
@@ -754,7 +732,7 @@ fn issued_asset_family_global_supply_after_inventory(
 
 fn issued_asset_global_supply_after_inventory(
     ledger: &LedgerState,
-    orchard_by_asset: &BTreeMap<&str, u64>,
+    shielded_by_asset: &BTreeMap<&str, u64>,
     asset_id: &str,
     include_non_nav_spread: bool,
 ) -> io::Result<u64> {
@@ -766,14 +744,14 @@ fn issued_asset_global_supply_after_inventory(
     let public_fastlane_external = supply.map_err(|(code, message)| {
         io::Error::new(io::ErrorKind::InvalidData, format!("{code}: {message}"))
     })?;
-    let orchard_live = orchard_by_asset.get(asset_id).copied().unwrap_or(0);
+    let shielded_live = shielded_by_asset.get(asset_id).copied().unwrap_or(0);
     public_fastlane_external
-        .checked_add(orchard_live)
+        .checked_add(shielded_live)
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "issued asset supply overflow for `{asset_id}` across transparent, FastLane, external bridge, and AssetOrchard custody"
+                    "issued asset supply overflow for `{asset_id}` across transparent, FastLane, external bridge, AssetOrchard and PQ custody"
                 ),
             )
         })
@@ -808,6 +786,7 @@ fn validate_issued_supply_custody_inventory(
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits: _,
+        collected_private_fees,
         pftl_uniswap_source_custody,
         pftl_uniswap_routes,
         pftl_uniswap_receipts: _,
@@ -835,6 +814,8 @@ fn validate_issued_supply_custody_inventory(
         additional_solana_routes: _,
     } = ledger;
     let ShieldedState {
+        pq_pool_v1,
+        pq_fixture: _,
         next_note_position: _,
         notes: _,
         nullifiers: _,
@@ -855,6 +836,20 @@ fn validate_issued_supply_custody_inventory(
         }
     }
     let known = |asset_id: &str| definition_ids.contains(asset_id);
+
+    if let Some(pool) = pq_pool_v1 {
+        for (id, _) in pool.issued_assets() {
+            if ledger
+                .asset_definition(id)
+                .is_none_or(|asset| asset.source_series_id != id)
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("PQ reserve references unknown source series `{id}`"),
+                ));
+            }
+        }
+    }
 
     let mut trustline_keys = BTreeSet::new();
     for line in trustlines {
@@ -967,6 +962,14 @@ fn validate_issued_supply_custody_inventory(
         }
     }
 
+    for (id, amount) in collected_private_fees {
+        if *amount == 0 || id != postfiat_types::PQ_REHEARSAL_ISSUE || !known(id) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid PQ collected private fees",
+            ));
+        }
+    }
     for row in pftl_uniswap_source_custody {
         if !known(&row.asset_id) {
             return Err(io::Error::new(
@@ -1029,6 +1032,13 @@ pub(super) fn legacy_json_replicated_state_root(
     bridge: &BridgeState,
 ) -> io::Result<String> {
     let genesis_hash_hex = genesis_hash(genesis);
+    pq_payment_fixture::check_state_domain(&genesis_hash_hex, shielded)?;
+    if shielded.pq_fixture.is_some() || shielded.pq_pool_v1.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "legacy state root cannot commit the PQ fixture",
+        ));
+    }
     let legacy_governance = LegacyJsonGovernanceState {
         active_validator_count: governance.active_validator_count,
         active_validators: governance.active_validators.as_slice(),
@@ -1531,6 +1541,10 @@ pub(super) fn append_ledger_state(
         }
     }
 
+    for (series, balance) in &ledger.collected_private_fees {
+        append_canonical_str(bytes, "ledger.pq_fee_asset", series);
+        append_canonical_u64(bytes, "ledger.pq_collected_fees", *balance);
+    }
     if !ledger.pftl_uniswap_source_custody.is_empty() {
         let mut rows = ledger
             .pftl_uniswap_source_custody
@@ -1845,6 +1859,7 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits: _,
+        collected_private_fees: _,
         pftl_uniswap_source_custody: _,
         pftl_uniswap_routes: _,
         pftl_uniswap_receipts: _,
@@ -1919,6 +1934,8 @@ fn assert_governance_state_commitment_inventory_complete(governance: &Governance
 
 fn assert_shielded_state_commitment_inventory_complete(shielded: &ShieldedState) {
     let ShieldedState {
+        pq_pool_v1: _,
+        pq_fixture: _,
         next_note_position: _,
         notes: _,
         nullifiers: _,
@@ -1963,6 +1980,63 @@ fn append_sorted_raw_commitments(
 
 pub(super) fn append_shielded_state(bytes: &mut Vec<u8>, shielded: &ShieldedState) {
     assert_shielded_state_commitment_inventory_complete(shielded);
+    if let Some(pool) = &shielded.pq_pool_v1 {
+        use postfiat_types::pq_payment::{PqAsset, PqEpoch, PqHead};
+        let PqHead {
+            pairs,
+            last_page,
+            serial_index_root,
+            commitment_index_root,
+            output_index_root,
+            assets,
+        } = &pool.head;
+        append_canonical_u64(bytes, "pq_pool.v1.pairs", *pairs);
+        append_canonical_str(bytes, "pq_pool.v1.last_page", last_page);
+        append_canonical_str(bytes, "pq_pool.v1.serials", serial_index_root);
+        append_canonical_str(bytes, "pq_pool.v1.commitments", commitment_index_root);
+        append_canonical_str(bytes, "pq_pool.v1.outputs", output_index_root);
+        append_canonical_usize(bytes, "pq_pool.v1.assets", assets.len());
+        for (
+            id,
+            PqAsset {
+                epoch,
+                reserve,
+                ingress,
+                exits,
+                fees,
+                frozen_epochs_root,
+                writable,
+            },
+        ) in assets
+        {
+            append_canonical_str(bytes, "pq.asset", id);
+            append_canonical_u64(bytes, "pq.epoch", *epoch);
+            append_canonical_u64(bytes, "pq.reserve", *reserve);
+            append_canonical_u128(bytes, "pq.ingress", *ingress);
+            append_canonical_u128(bytes, "pq.exits", *exits);
+            append_canonical_u128(bytes, "pq.fees", *fees);
+            append_canonical_str(bytes, "pq.frozen", frozen_epochs_root);
+            let PqEpoch {
+                count,
+                frontier,
+                anchors,
+            } = writable;
+            append_canonical_u32(bytes, "pq.count", *count);
+            for slot in frontier {
+                append_option_str(bytes, "pq.frontier", slot);
+            }
+            append_canonical_usize(bytes, "pq.anchors", anchors.len());
+            for root in anchors {
+                append_canonical_str(bytes, "pq.anchor", root);
+            }
+        }
+    }
+    if let Some(fixture) = &shielded.pq_fixture {
+        append_string_list(bytes, "pq_fixture.commitment", &fixture.commitments);
+        append_string_list(bytes, "pq_fixture.serial", &fixture.spent_serials);
+        append_canonical_str(bytes, "pq_fixture.root", &fixture.root);
+        append_canonical_u64(bytes, "pq_fixture.reserve", fixture.reserve);
+    }
     append_canonical_u64(
         bytes,
         "shielded.next_note_position",

@@ -279,15 +279,26 @@ pub fn wallet_sign_pftl_swap_intent(
 #[wasm_bindgen]
 pub fn wallet_sign_transfer(
     backup_json: &str,
-    quote_json: &str,
-    intent_json: &str,
+    quote_json: Option<String>,
+    intent_json: Option<String>,
 ) -> Result<JsValue, JsValue> {
+    let (Some(quote_json), Some(intent_json)) = (quote_json, intent_json) else {
+        return Err(JsValue::from_str(
+            "transfer quote and intent must be valid JSON",
+        ));
+    };
     let backup: WalletBackupFile = serde_json::from_str(backup_json)
         .map_err(|e| JsValue::from_str(&format!("backup parse: {e}")))?;
-    let quote: TransferFeeQuoteSummary = serde_json::from_str(quote_json)
-        .map_err(|e| JsValue::from_str(&format!("quote parse: {e}")))?;
-    let intent: BrowserTransferIntent = serde_json::from_str(intent_json)
-        .map_err(|e| JsValue::from_str(&format!("transfer intent parse: {e}")))?;
+    let quote: TransferFeeQuoteSummary = serde_json::from_str(&quote_json).map_err(|e| {
+        JsValue::from_str(&format!(
+            "transfer quote and intent must be valid JSON: {e}"
+        ))
+    })?;
+    let intent: BrowserTransferIntent = serde_json::from_str(&intent_json).map_err(|e| {
+        JsValue::from_str(&format!(
+            "transfer quote and intent must be valid JSON: {e}"
+        ))
+    })?;
 
     let identity =
         wallet_identity_from_backup(&backup).map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -974,4 +985,65 @@ fn counter() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     COUNTER.fetch_add(1, Ordering::Relaxed)
+}
+
+fn pq_network(chain: &str, genesis_hex: &str) -> Result<Vec<u8>, JsError> {
+    let genesis = postfiat_crypto_provider::hex_to_bytes(genesis_hex)
+        .ok()
+        .and_then(|v| v.try_into().ok())
+        .ok_or_else(|| JsError::new("invalid genesis"))?;
+    postfiat_types::pq_address::network_frame(chain, &genesis).map_err(JsError::new)
+}
+
+/// Encode only the recipient's public owner commitment and ML-KEM encapsulation key.
+#[wasm_bindgen]
+pub fn pq_encode_address(
+    chain: &str,
+    genesis_hex: &str,
+    owner: &[u8],
+    kem: &[u8],
+) -> Result<String, JsError> {
+    Ok(postfiat_types::pq_address::encode(
+        &pq_network(chain, genesis_hex)?,
+        owner
+            .try_into()
+            .map_err(|_| JsError::new("invalid owner commitment"))?,
+        kem.try_into()
+            .map_err(|_| JsError::new("invalid encapsulation key"))?,
+    ))
+}
+
+/// Check the public checksum and network before asking the native prover to pay.
+#[wasm_bindgen]
+pub fn pq_check_address(chain: &str, genesis_hex: &str, address: &str) -> Result<(), JsError> {
+    postfiat_types::pq_address::decode(&pq_network(chain, genesis_hex)?, address)
+        .map_err(JsError::new)?;
+    Ok(())
+}
+
+/// Decode the same canonical payment as a validator. Amount strings preserve all u64 bits.
+#[wasm_bindgen]
+pub fn pq_review_payment(action_json: &str) -> Result<String, JsError> {
+    use postfiat_types::{private_action_hash, ShieldedAction};
+    if action_json.len() > postfiat_types::pq_payment::REQUEST_LIMIT {
+        return Err(JsError::new("payment too large"));
+    }
+    let action: ShieldedAction =
+        serde_json::from_str(action_json).map_err(|_| JsError::new("invalid payment"))?;
+    let ShieldedAction::PqPaymentV1(ref payment) = action else {
+        return Err(JsError::new("wrong pool"));
+    };
+    let (terms, _, inner) = payment.parts().map_err(JsError::new)?;
+    let atoms = |start| u64::from_le_bytes(inner[start..start + 8].try_into().unwrap());
+    let exit = atoms(64);
+    Ok(serde_json::json!({
+        "mode":terms.mode, "asset":bytes_to_hex(&terms.asset),
+        "mint":atoms(56).to_string(), "exit":exit.to_string(),
+        "recipient":(exit > 0).then(|| format!("pf{}", bytes_to_hex(&inner[84..104]))),
+        "fee":(terms.public_fee + atoms(104)).to_string(),
+        "payer":terms.account.as_ref().map(|a| format!("pf{}",bytes_to_hex(&a.id))),
+        "sequence":terms.account.as_ref().map(|a| a.sequence.to_string()),
+        "action_hash":private_action_hash(&action).map_err(|_| JsError::new("invalid payment"))?,
+    })
+    .to_string())
 }

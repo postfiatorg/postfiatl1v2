@@ -394,7 +394,11 @@ pub(super) fn init_with_genesis(
         faucet_balance,
         Some(faucet_key.public_key_hex.clone()),
     );
+    let shielded = pq_payment_fixture::genesis_shielded_state(&genesis)?;
     store.init(&genesis, &state)?;
+    if shielded.pq_fixture.is_some() {
+        store.write_shielded(&shielded)?;
+    }
     renew_inventory_incarnation(&data_dir)?;
     store.write_ledger(&genesis_ledger_state(&genesis, faucet_account.clone())?)?;
     write_faucet_account_file(&data_dir.join(FAUCET_ACCOUNT_FILE), &faucet_account)?;
@@ -1454,7 +1458,7 @@ pub fn metrics(options: NodeOptions) -> io::Result<NodeMetrics> {
             transfer_fee_per_quantum: TRANSFER_FEE_PER_QUANTUM,
             state_root: status_report.state_root,
         },
-        assets: asset_metrics(&ledger)?,
+        assets: asset_metrics(&ledger, &shielded)?,
         mempool: MempoolMetrics {
             pending: mempool.len() as u64,
         },
@@ -3951,6 +3955,7 @@ pub(super) fn issued_asset_report(
         requires_authorization: asset.requires_authorization,
         freeze_enabled: asset.freeze_enabled,
         clawback_enabled: asset.clawback_enabled,
+        collected_private_fees: ledger.collected_private_fees.get(&asset.asset_id).copied(),
         outstanding_supply,
         trustline_count,
         holder_count,
@@ -4029,12 +4034,22 @@ pub(super) fn metric_increment(total: &mut u64, label: &str) -> io::Result<()> {
     metric_add(total, 1, label)
 }
 
-pub(super) fn asset_metrics(ledger: &LedgerState) -> io::Result<AssetMetrics> {
+pub(super) fn asset_metrics(
+    ledger: &LedgerState,
+    shielded: &ShieldedState,
+) -> io::Result<AssetMetrics> {
     let mut metrics = AssetMetrics {
         asset_count: ledger.asset_definitions.len() as u64,
         ..AssetMetrics::default()
     };
 
+    for amount in ledger.collected_private_fees.values() {
+        metric_add(
+            &mut metrics.total_outstanding_supply,
+            *amount,
+            "collected private fees",
+        )?;
+    }
     for asset in &ledger.asset_definitions {
         if asset.requires_authorization {
             metric_increment(
@@ -4126,6 +4141,15 @@ pub(super) fn asset_metrics(ledger: &LedgerState) -> io::Result<AssetMetrics> {
         )?;
     }
 
+    if let Some(pool) = &shielded.pq_pool_v1 {
+        for (_, state) in pool.issued_assets() {
+            metric_add(
+                &mut metrics.total_outstanding_supply,
+                state.reserve,
+                "PQ issued custody",
+            )?;
+        }
+    }
     Ok(metrics)
 }
 
@@ -4154,7 +4178,11 @@ pub(super) fn issued_asset_stats(
     ledger: &LedgerState,
     asset_id: &str,
 ) -> io::Result<(u64, u64, u64)> {
-    let mut outstanding_supply = 0_u64;
+    let mut outstanding_supply = ledger
+        .collected_private_fees
+        .get(asset_id)
+        .copied()
+        .unwrap_or(0);
     let mut trustline_count = 0_u64;
     let mut holder_count = 0_u64;
     for line in ledger
