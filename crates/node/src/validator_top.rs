@@ -551,7 +551,7 @@ pub fn collect_top_snapshot(
             configured_peers,
             connected_peers,
             quorum_size,
-            latest_day_bps: latest_day_bps,
+            latest_day_bps,
             mean_daily_participation_bps: mean_30d_bps,
             last_voted_height,
         },
@@ -838,7 +838,13 @@ fn check_uptime_feed_fail_soft(
         format!("{}/3", verified.verified_observers.len())
     };
     if verified.indeterminate {
-        return (default_panel("unknown", &quorum_label), None, None, None, None);
+        return (
+            default_panel("unknown", &quorum_label),
+            None,
+            None,
+            None,
+            None,
+        );
     }
 
     let height_lag = verified
@@ -853,12 +859,22 @@ fn check_uptime_feed_fail_soft(
         .map(|row| &row.claim)
         .find(|claim| claim.validator_id == node_id)
     else {
-        let state = if verified.validators_without_quorum.iter().any(|v| v == node_id) {
+        let state = if verified
+            .validators_without_quorum
+            .iter()
+            .any(|v| v == node_id)
+        {
             "no_quorum"
         } else {
             "not_listed"
         };
-        return (default_panel(state, &quorum_label), height_lag, None, None, None);
+        return (
+            default_panel(state, &quorum_label),
+            height_lag,
+            None,
+            None,
+            None,
+        );
     };
 
     if row
@@ -1294,9 +1310,11 @@ mod tests {
 
     #[test]
     fn eligibility_panel_reads_only_a_feed_that_passed_every_check() {
-        let schemas = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/specs/schemas");
+        let schemas =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/specs/schemas");
         let feed_file = schemas.join("postfiat-validator-uptime-v1.fixture.json");
-        let now = crate::validator_uptime::parse_utc_timestamp("2026-11-27T01:40:40Z").unwrap() as u64;
+        let now =
+            crate::validator_uptime::parse_utc_timestamp("2026-11-27T01:40:40Z").unwrap() as u64;
         let options = |feed: PathBuf| ValidatorTopOptions {
             rpc_host: "127.0.0.1".to_string(),
             rpc_port: 1,
@@ -1326,14 +1344,21 @@ mod tests {
             &mut warnings,
         );
         assert_eq!(panel.access_state, "lapsed");
-        assert_eq!(panel.access_state_reason.as_deref(), Some("below_liveness_threshold"));
+        assert_eq!(
+            panel.access_state_reason.as_deref(),
+            Some("below_liveness_threshold")
+        );
         assert_eq!(panel.observer_quorum, "3/3");
         assert_eq!(panel.feed_age_seconds, Some(40));
         assert_eq!(panel.observed_days, Some(28));
         assert_eq!(panel.recovery_streak_days, Some(1));
-        assert_eq!((panel.finance_hub_access, panel.reward_eligible), (Some(true), Some(false)));
+        assert_eq!(
+            (panel.finance_hub_access, panel.reward_eligible),
+            (Some(true), Some(false))
+        );
         // Grace runs by the clock until 2026-12-08T00:00:00Z.
-        let expires = crate::validator_uptime::parse_utc_timestamp("2026-12-08T00:00:00Z").unwrap() as u64;
+        let expires =
+            crate::validator_uptime::parse_utc_timestamp("2026-12-08T00:00:00Z").unwrap() as u64;
         assert_eq!(panel.grace_remaining_seconds, Some(expires - now));
         assert_eq!(height_lag, Some(10));
         assert_eq!(latest_day_bps, Some(9_800));
@@ -1343,23 +1368,46 @@ mod tests {
 
         // A healthy validator has no grace and no warning.
         let mut warnings = Vec::new();
-        let (panel, ..) =
-            check_uptime_feed_fail_soft(&options(feed_file.clone()), "validator-0", 6_600, now, &mut warnings);
-        assert_eq!((panel.access_state.as_str(), panel.grace_remaining_seconds), ("active", None));
+        let (panel, ..) = check_uptime_feed_fail_soft(
+            &options(feed_file.clone()),
+            "validator-0",
+            6_600,
+            now,
+            &mut warnings,
+        );
+        assert_eq!(
+            (panel.access_state.as_str(), panel.grace_remaining_seconds),
+            ("active", None)
+        );
         assert!(warnings.is_empty(), "{warnings:?}");
-        let (panel, ..) =
-            check_uptime_feed_fail_soft(&options(feed_file.clone()), "validator-9", 6_600, now, &mut Vec::new());
+        let (panel, ..) = check_uptime_feed_fail_soft(
+            &options(feed_file.clone()),
+            "validator-9",
+            6_600,
+            now,
+            &mut Vec::new(),
+        );
         assert_eq!(panel.access_state, "not_listed");
 
         // One changed byte in a served row: nothing of the feed is shown.
-        let tampered = std::env::temp_dir().join(format!("postfiat-top-tampered-{}.json", std::process::id()));
-        let mut feed: serde_json::Value = serde_json::from_slice(&fs::read(&feed_file).unwrap()).unwrap();
+        let tampered =
+            std::env::temp_dir().join(format!("postfiat-top-tampered-{}.json", std::process::id()));
+        let mut feed: serde_json::Value =
+            serde_json::from_slice(&fs::read(&feed_file).unwrap()).unwrap();
         feed["validators"][3]["access_state"] = serde_json::json!("active");
         fs::write(&tampered, feed.to_string()).unwrap();
         let mut warnings = Vec::new();
-        let (panel, ..) =
-            check_uptime_feed_fail_soft(&options(tampered.clone()), "validator-3", 6_590, now, &mut warnings);
-        assert_eq!((panel.access_state.as_str(), panel.observer_quorum.as_str()), ("unknown", "invalid"));
+        let (panel, ..) = check_uptime_feed_fail_soft(
+            &options(tampered.clone()),
+            "validator-3",
+            6_590,
+            now,
+            &mut warnings,
+        );
+        assert_eq!(
+            (panel.access_state.as_str(), panel.observer_quorum.as_str()),
+            ("unknown", "invalid")
+        );
         assert_eq!(panel.finance_hub_access, None);
         assert!(warnings.iter().any(|w| w.code == "FEED_UNAVAILABLE"));
         let _ = fs::remove_file(tampered);
@@ -1373,7 +1421,10 @@ mod tests {
             now + 3_700,
             &mut warnings,
         );
-        assert_eq!((panel.access_state.as_str(), panel.observer_quorum.as_str()), ("unknown", "stale"));
+        assert_eq!(
+            (panel.access_state.as_str(), panel.observer_quorum.as_str()),
+            ("unknown", "stale")
+        );
         assert!(warnings.iter().any(|w| w.code == "FEED_STALE"));
     }
 

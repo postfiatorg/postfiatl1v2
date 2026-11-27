@@ -1,7 +1,7 @@
 [Unit]
-Description=PostFiat Public RPC TLS 1.3 Reverse Proxy Edge
-After=network-online.target postfiat-rpc-public.service
-Wants=network-online.target postfiat-rpc-public.service
+Description=PostFiat public RPC TLS proxy (in front of postfiat-rpc-http-edge)
+After=network-online.target postfiat-rpc-http-edge.service
+Wants=network-online.target postfiat-rpc-http-edge.service
 StartLimitIntervalSec=300
 StartLimitBurst=5
 
@@ -9,6 +9,7 @@ StartLimitBurst=5
 Type=simple
 User=postfiat-edge
 Group=postfiat-edge
+EnvironmentFile=/etc/postfiat/rpc-public.env
 ExecStart=/usr/bin/caddy run --config /etc/postfiat/Caddyfile.public-rpc --adapter caddyfile
 ExecReload=/usr/bin/caddy reload --config /etc/postfiat/Caddyfile.public-rpc --adapter caddyfile
 Restart=always

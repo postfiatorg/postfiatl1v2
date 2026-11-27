@@ -212,13 +212,14 @@ fn replica_reads_equal_the_worker_path_and_a_replica_refuses_what_it_must() {
 
     // One vote record, as a proposer writes it: validator-2 answered after the
     // quorum had closed, validator-3 did not answer.
-    let entry = |validator: &str, outcome: BlockVoteOutcome, after_quorum: bool| BlockVoteRecordEntry {
-        validator: validator.to_string(),
-        vote_id: (outcome != BlockVoteOutcome::NoAnswer).then(|| "ab".repeat(48)),
-        outcome,
-        refusal_class: None,
-        answered_after_quorum: after_quorum,
-    };
+    let entry =
+        |validator: &str, outcome: BlockVoteOutcome, after_quorum: bool| BlockVoteRecordEntry {
+            validator: validator.to_string(),
+            vote_id: (outcome != BlockVoteOutcome::NoAnswer).then(|| "ab".repeat(48)),
+            outcome,
+            refusal_class: None,
+            answered_after_quorum: after_quorum,
+        };
     write_block_vote_record(
         &data_dir,
         &BlockVoteRecord {
@@ -315,12 +316,27 @@ fn replica_reads_equal_the_worker_path_and_a_replica_refuses_what_it_must() {
             j(serde_json::json!({ "asset_id": "none" })),
         ),
         ("bridge_status", j(serde_json::json!({}))),
-        ("block_vote_records", j(serde_json::json!({ "from_height": 1, "limit": 4 }))),
-        ("block_vote_records", j(serde_json::json!({ "from_height": 7 }))),
-        ("block_vote_records", j(serde_json::json!({ "from_height": 999_999, "limit": 64 }))),
+        (
+            "block_vote_records",
+            j(serde_json::json!({ "from_height": 1, "limit": 4 })),
+        ),
+        (
+            "block_vote_records",
+            j(serde_json::json!({ "from_height": 7 })),
+        ),
+        (
+            "block_vote_records",
+            j(serde_json::json!({ "from_height": 999_999, "limit": 64 })),
+        ),
         ("block_vote_records", j(serde_json::json!({}))),
-        ("block_vote_records", j(serde_json::json!({ "from_height": 0 }))),
-        ("block_vote_records", j(serde_json::json!({ "from_height": 1, "limit": 65 }))),
+        (
+            "block_vote_records",
+            j(serde_json::json!({ "from_height": 0 })),
+        ),
+        (
+            "block_vote_records",
+            j(serde_json::json!({ "from_height": 1, "limit": 65 })),
+        ),
     ];
     let mut compared = 0;
     for (index, (method, params)) in cases.iter().enumerate() {
@@ -411,16 +427,26 @@ fn replica_reads_equal_the_worker_path_and_a_replica_refuses_what_it_must() {
     // The vote record comes back as written; a height without one says so.
     let reply = replica_call(
         replica.port,
-        &RpcRequest::new("records", "block_vote_records", serde_json::json!({ "from_height": 6, "limit": 2 })),
+        &RpcRequest::new(
+            "records",
+            "block_vote_records",
+            serde_json::json!({ "from_height": 6, "limit": 2 }),
+        ),
     )
     .result
     .expect("vote records");
     assert_eq!(reply["schema"], "postfiat-block-vote-records-v1");
-    assert_eq!(reply["records"][0], serde_json::json!({ "height": 6, "available": false, "record": null }));
+    assert_eq!(
+        reply["records"][0],
+        serde_json::json!({ "height": 6, "available": false, "record": null })
+    );
     assert_eq!(reply["records"][1]["available"], true);
     let entries = &reply["records"][1]["record"]["entries"];
     assert_eq!(entries[2]["validator"], "validator-2");
-    assert_eq!((&entries[2]["outcome"], &entries[2]["answered_after_quorum"]), (&serde_json::json!("accepted"), &serde_json::json!(true)));
+    assert_eq!(
+        (&entries[2]["outcome"], &entries[2]["answered_after_quorum"]),
+        (&serde_json::json!("accepted"), &serde_json::json!(true))
+    );
     assert_eq!(entries[3]["outcome"], "no_answer");
 
     // What a replica never serves.

@@ -1,0 +1,31 @@
+[Unit]
+Description=PostFiat validator uptime feed: bundle the three observers' attestations
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=postfiat-observer
+Group=postfiat-observer
+# POSTFIAT_BUNDLE_ATTESTATIONS: one `--attestation <file or https URL>` per observer.
+EnvironmentFile=/etc/postfiat/uptime-bundle.env
+ExecStart=/usr/local/lib/postfiat/validator-uptime-observer.py bundle \
+  $POSTFIAT_BUNDLE_ATTESTATIONS \
+  --keyset-file /etc/postfiat/observer-keyset.json \
+  --output /var/lib/postfiat-observer/public/validator-uptime-feed.json \
+  --node-bin /usr/local/bin/postfiat-node
+TimeoutStartSec=120
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+UMask=0077
+ReadWritePaths=/var/lib/postfiat-observer

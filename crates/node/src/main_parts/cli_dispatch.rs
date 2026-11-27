@@ -805,6 +805,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "release-keyset-rotation-sign"
         | "observer-key-create"
         | "observer-uptime-sign"
+        | "observer-uptime-bundle"
         | "observer-uptime-verify" => run_cli_group_05(command, flags),
         other => Err(format!("unknown command `{other}`")),
     }

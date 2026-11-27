@@ -1,7 +1,7 @@
 [Unit]
 Description=PostFiat Public Read-Replica RPC (non-voting follower)
 After=network-online.target
-Wants=network-online.target
+Wants=network-online.target postfiat-rpc-catchup@public.timer
 StartLimitIntervalSec=300
 StartLimitBurst=5
 
@@ -9,16 +9,11 @@ StartLimitBurst=5
 Type=simple
 User=postfiat-rpc
 Group=postfiat-rpc
-EnvironmentFile=-/etc/postfiat/rpc-public.env
-ExecStartPre=/usr/local/bin/postfiat-node upgrade \
-  --check \
+# The binary about to run is the one a 2-of-3 signed release manifest names.
+ExecStartPre=/usr/local/bin/postfiat-node release-manifest-verify \
   --manifest-file /etc/postfiat/release-manifest.json \
   --keyset-file /etc/postfiat/release-keyset.json \
-  --data-dir /var/lib/postfiat-rpc/replica \
-  --signer-guard-dir /var/lib/postfiat/signer-guard \
-  --binary-path /usr/local/bin/postfiat-node \
-  --backup-dir /var/lib/postfiat/backups \
-  --skip-rpc-preflight
+  --runtime-binary-file /usr/local/bin/postfiat-node
 ExecStart=/usr/local/bin/postfiat-node rpc-serve \
   --rpc-profile public-replica \
   --data-dir /var/lib/postfiat-rpc/replica \
@@ -32,7 +27,7 @@ ExecStart=/usr/local/bin/postfiat-node rpc-serve \
   --max-child-dispatch-concurrent 8 \
   --max-child-dispatch-per-peer 4 \
   --max-replica-lag-blocks 5 \
-  --event-log /var/log/postfiat-rpc/rpc-events.ndjson \
+  --event-log /var/log/postfiat-rpc/rpc-public-events.ndjson \
   --keep-alive
 RuntimeDirectory=postfiat-rpc-public
 RuntimeDirectoryMode=0700
@@ -47,7 +42,6 @@ MemoryMax=4G
 IOWeight=50
 TasksMax=512
 LimitNOFILE=65536
-LimitCORE=0
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
@@ -62,8 +56,9 @@ RestrictRealtime=true
 SystemCallArchitectures=native
 CapabilityBoundingSet=
 AmbientCapabilities=
-ReadWritePaths=/var/lib/postfiat-rpc/replica /var/log/postfiat-rpc /run/postfiat-rpc-public
+LimitCORE=0
 UMask=0077
+ReadWritePaths=/var/lib/postfiat-rpc/replica /var/log/postfiat-rpc /run/postfiat-rpc-public
 
 [Install]
 WantedBy=multi-user.target

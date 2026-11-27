@@ -3662,6 +3662,60 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             }
             Ok(())
         }
+        "observer-uptime-bundle" => {
+            // Bundles the observers' attestation files into one feed. Needs no key.
+            use postfiat_node::validator_uptime::{
+                bundle_validator_uptime_feed, ObserverAttestationEnvelopeV1, ObserverKeysetV1,
+            };
+            let keyset_file = flag_value(flags, "--keyset-file").ok_or("missing --keyset-file")?;
+            let output_file = flag_value(flags, "--output-file").ok_or("missing --output-file")?;
+            let now_unix = match flag_value(flags, "--now-unix") {
+                Some(raw) => raw
+                    .parse::<i64>()
+                    .map_err(|_| "--now-unix must be an integer".to_string())?,
+                None => std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |elapsed| elapsed.as_secs() as i64),
+            };
+            let keyset: ObserverKeysetV1 = serde_json::from_slice(
+                &fs::read(keyset_file).map_err(|error| format!("read --keyset-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("parse --keyset-file failed: {error}"))?;
+            let mut envelopes = Vec::new();
+            let mut unreadable = std::collections::BTreeMap::new();
+            for pair in flags.windows(2).filter(|pair| pair[0] == "--attestation-file") {
+                // One unreadable file is one missing observer, not a failed bundle.
+                match fs::read(&pair[1])
+                    .map_err(|error| error.to_string())
+                    .and_then(|bytes| {
+                        serde_json::from_slice::<ObserverAttestationEnvelopeV1>(&bytes)
+                            .map_err(|error| error.to_string())
+                    }) {
+                    Ok(envelope) => envelopes.push(envelope),
+                    Err(error) => {
+                        unreadable.insert(pair[1].clone(), error);
+                    }
+                }
+            }
+            let (feed, rejected) = bundle_validator_uptime_feed(&envelopes, &keyset, now_unix)?;
+            let json = serde_json::to_string(&feed)
+                .map_err(|error| format!("feed serialize failed: {error}"))?;
+            let tmp = format!("{output_file}.tmp.{}", process::id());
+            fs::write(&tmp, format!("{json}\n"))
+                .and_then(|()| fs::rename(&tmp, output_file))
+                .map_err(|error| format!("write --output-file failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::json!({
+                    "bundled_observers": feed.observer_attestations.iter().map(|a| a.observer_id.clone()).collect::<Vec<_>>(),
+                    "rejected_observers": rejected,
+                    "unreadable_files": unreadable,
+                    "validators": feed.validators.len(),
+                    "window_end": feed.window_spec.window_end,
+                })
+            );
+            Ok(())
+        }
         "observer-uptime-verify" => {
             // Reads a feed the way a consumer must (spec section 4) and prints
             // the result. Exit 1 when the feed as a whole is refused.

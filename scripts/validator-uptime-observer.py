@@ -1,968 +1,556 @@
 #!/usr/bin/env python3
-"""Multi-observer signed validator uptime collector & verifier (`postfiat-validator-uptime-v1`).
+"""Validator uptime observer for the postfiat-validator-uptime-v1 feed.
 
-Implements frozen Phase 0 Contract C2:
-  - Latency-fair round-window participation metric (`prepare_vote`, `precommit_vote`,
-    `timeout_vote`, `consensus_heartbeat`) over deterministic block-height windows
-    (zero wall-clock drift; exact integer basis points 0..=10000; 9500 bps threshold).
-  - Access lifecycle state machine: `pending -> active -> lapsed (14d grace) -> revoked`
-    with Day-0 ramp-in, 3-consecutive-height-day fast recovery, stale-feed (>3600s)
-    non-revocation invariant, and Research API key invalidation on `revoked`.
-  - 3-observer (2-of-3 quorum) pure FIPS 204 ML-DSA-65 signing and verification under
-    context `postfiat-l1-v2/validator-uptime-feed/v1` (reconciling median of 3 / min of 2).
-  - Strictly read-only towards validator RPC endpoints and refuses writing inside
-    any validator data directory.
+One of three independent observers. It only reads: it holds no validator key
+and no governance key. The contract is docs/specs/validator-uptime-feed-v1.md.
 
-Subcommands:
-  collect-observer   Query read-only RPC(s) (or offline input), compute deterministic
-                     height-day observations + state transitions, and emit a signed
-                     observer attestation JSON using `postfiat-node observer-uptime-sign`.
-  reconcile          Combine 2 or 3 signed observer attestations into a canonical
-                     `postfiat-validator-uptime-v1` quorum feed and verify it.
-  verify             Verify a `postfiat-validator-uptime-v1` feed against a pinned
-                     3-observer `postfiat.observer_keyset.v1` trust store (both
-                     cryptographic ML-DSA-65 via `postfiat-node observer-uptime-verify`
-                     and Contract C2 schema/semantic/freshness rules).
+  run      Read the chain once, date the new blocks, count accepted votes,
+           apply the access lifecycle, and write one signed attestation.
+           Run it from a timer every 5 minutes (it must run at least every 15).
+  bundle   Put the observers' attestations (files or URLs) into one feed.
+           Needs no key. Anybody may run it.
+  verify   Read a feed the way a consumer must and print the result.
+
+How a block gets its day: block headers carry no time. Blocks that appear
+between two consecutive reads on the same UTC day belong to that day. If the
+head moved between two reads that straddle midnight, or two reads are more than
+900 seconds apart, the blocks cannot be dated and the affected days are marked
+incomplete. Nothing is inferred for the time before the observer started.
+
+How a vote is counted: a validator is credited for a block when its vote is in
+the block's precommit or prepare certificate, or when the proposer's vote
+record for that block lists it as accepted (also after the quorum closed).
+
+Signing and verifying are done by `postfiat-node` (observer-uptime-sign,
+observer-uptime-bundle, observer-uptime-verify).
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
-import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import socket
 import subprocess
 import sys
 import tempfile
 from typing import Any
+import urllib.request
 
-UTC = dt.timezone.utc
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import validator_uptime_contract as contract  # noqa: E402
+
+STATE_SCHEMA = "postfiat-validator-uptime-observer-state-v1"
 RPC_VERSION = "postfiat-local-rpc-v1"
-FEED_SCHEMA = "postfiat-validator-uptime-v1"
-FEED_SCHEMA_VERSION = 1
-SIGNING_CONTEXT = "postfiat-l1-v2/validator-uptime-feed/v1"
-METRIC_VERSION = "latency-fair-round-window-v1"
-CREDIT_SOURCES = [
-    "prepare_vote",
-    "precommit_vote",
-    "timeout_vote",
-    "consensus_heartbeat",
-]
-EVALUATION_HORIZON_DAYS = 30
-MIN_OBSERVED_DAYS = 25
-LIVENESS_THRESHOLD_BPS = 9500
-GRACE_PERIOD_DAYS = 14
-RECOVERY_CONSECUTIVE_DAYS = 3
-STALE_AFTER_SECONDS = 3600
-MAX_FUTURE_SKEW_SECONDS = 60
-STALE_BEHAVIOR = "block_new_bindings_and_credits_preserve_existing_access"
+MAX_OBSERVATION_GAP_SECONDS = 900
+BLOCKS_PAGE = 8
+VOTE_RECORDS_PAGE = 64
+# Vote records are fetched for blocks of this many most recent days; a proposer
+# that was unreachable gets that long to answer.
+VOTE_RECORD_RETRY_DAYS = 2
+MAX_REPLY_BYTES = 64 * 1024 * 1024
+CREDITED_OUTCOMES = {"accepted", "late_after_deadline"}
+
+QUORUM_POLICY = {
+    "observer_count": 3,
+    "quorum_threshold": contract.QUORUM_THRESHOLD,
+    "algorithm_id": "ML-DSA-65",
+    "signing_context": contract.SIGNING_CONTEXT.decode(),
+    "stale_after_seconds": contract.STALE_AFTER_SECONDS,
+    "max_future_skew_seconds": contract.MAX_FUTURE_SKEW_SECONDS,
+    "indeterminate_behavior": "block_new_bindings_and_credits_preserve_existing_access",
+}
+WINDOW_SPEC = {
+    "metric_version": "accepted-votes-observer-brackets-v1",
+    "credit_sources": ["precommit_certificate", "prepare_certificate", "proposer_vote_record"],
+    "time_basis": "observer_brackets",
+    "max_observation_gap_seconds": MAX_OBSERVATION_GAP_SECONDS,
+    "evaluation_horizon_days": contract.EVALUATION_HORIZON_DAYS,
+    "min_observed_days": contract.MIN_OBSERVED_DAYS,
+    "liveness_threshold_bps": contract.LIVENESS_THRESHOLD_BPS,
+    "grace_period_days": contract.GRACE_PERIOD_DAYS,
+    "recovery_consecutive_days": contract.RECOVERY_CONSECUTIVE_DAYS,
+}
 
 
-def format_utc(value: dt.datetime) -> str:
-    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+class ObserverError(Exception):
+    """The observer cannot go on without writing something false. It stops instead."""
 
 
-def parse_utc(raw: str) -> dt.datetime:
-    parsed = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        raise ValueError(f"UTC timestamp required: {raw}")
-    return parsed.astimezone(UTC)
+# --------------------------------------------------------------------------- reading the chain
 
 
-def canonical_json_bytes(obj: Any) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
-        "utf-8"
-    )
+class Source:
+    """A read-only RPC endpoint: `tcp://host:port` (rpc-serve) or `http(s)://.../rpc` (the HTTP edge)."""
 
+    def __init__(self, spec: str, timeout: float = 20.0) -> None:
+        self.spec = spec
+        self.timeout = timeout
+        if spec.startswith(("http://", "https://")):
+            self.kind = "http"
+        elif spec.startswith("tcp://") and spec.rsplit(":", 1)[-1].isdigit():
+            self.kind = "tcp"
+            host, port = spec[len("tcp://") :].rsplit(":", 1)
+            self.address = (host, int(port))
+        else:
+            raise ObserverError(f"source `{spec}` must be tcp://host:port or http(s)://host/rpc")
 
-def observer_claim_body(feed_chain: dict[str, Any], window_spec: dict[str, Any], att: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "chain_id": feed_chain["chain_id"],
-        "finalized_block_hash": att["finalized_block_hash"],
-        "finalized_height": att["finalized_height"],
-        "genesis_hash": feed_chain["genesis_hash"],
-        "network": feed_chain["network"],
-        "observed_at": att["observed_at"],
-        "observer_id": att["observer_id"],
-        "operator_group": att["operator_group"],
-        "region": att["region"],
-        "registry_root": att["registry_root"],
-        "schema": FEED_SCHEMA,
-        "schema_version": FEED_SCHEMA_VERSION,
-        "validator_claims": att["validator_claims"],
-        "window_spec": window_spec,
-    }
-
-
-def compute_claim_digest_sha256(
-    feed_chain: dict[str, Any], window_spec: dict[str, Any], att: dict[str, Any]
-) -> str:
-    return hashlib.sha256(
-        canonical_json_bytes(observer_claim_body(feed_chain, window_spec, att))
-    ).hexdigest()
-
-
-def reconcile_bps(scores: list[int | None]) -> int | None:
-    non_null = sorted(s for s in scores if s is not None)
-    if not non_null:
-        return None
-    if len(non_null) == 3:
-        return non_null[1]  # deterministic median of 3
-    if len(non_null) == 2:
-        return non_null[0]  # conservative min of 2 when 1 observer is down
-    raise ValueError(f"2-of-3 quorum requires 2 or 3 scores, got {len(non_null)}")
-
-
-def refuse_validator_data_dir(path: Path) -> None:
-    resolved = path.resolve()
-    for directory in (resolved, *resolved.parents):
-        if (directory / "node_state.json").exists() or (directory / "guard.state").exists():
-            raise ValueError(
-                f"refusing to write inside validator data or signer-guard directory: {path}"
+    def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        request = json.dumps({"version": RPC_VERSION, "id": f"observer-{method}", "method": method, "params": params or {}})
+        if self.kind == "tcp":
+            with socket.create_connection(self.address, timeout=self.timeout) as sock:
+                sock.sendall(request.encode() + b"\n")
+                buffer = b""
+                while not buffer.endswith(b"\n"):
+                    chunk = sock.recv(1 << 20)
+                    if not chunk:
+                        break
+                    buffer += chunk
+                    if len(buffer) > MAX_REPLY_BYTES:
+                        raise ObserverError(f"{self.spec}: reply to {method} is too large")
+        else:
+            http_request = urllib.request.Request(
+                self.spec, data=request.encode(), headers={"Content-Type": "application/json"}, method="POST"
             )
+            with urllib.request.urlopen(http_request, timeout=self.timeout) as response:  # noqa: S310 (scheme checked above)
+                buffer = response.read(MAX_REPLY_BYTES + 1)
+        reply = json.loads(buffer)
+        if not reply.get("ok"):
+            error = reply.get("error") or {}
+            raise ObserverError(f"{self.spec}: {method} failed: {error.get('code')}: {error.get('message')}")
+        return reply["result"]
+
+
+def best_source(sources: list[Source], chain_id: str | None) -> tuple[Source, dict[str, Any]]:
+    """The source that is furthest ahead, among those that answer and are on this observer's chain."""
+    best: tuple[Source, dict[str, Any]] | None = None
+    errors = []
+    for source in sources:
+        try:
+            status = source.call("status")
+        except (OSError, ValueError, ObserverError) as exc:
+            errors.append(f"{source.spec}: {exc}")
+            continue
+        if chain_id is not None and status.get("chain_id") != chain_id:
+            errors.append(f"{source.spec}: on chain {status.get('chain_id')}")
+            continue
+        if best is None or status["block_height"] > best[1]["block_height"]:
+            best = (source, status)
+    if best is None:
+        raise ObserverError("no source answers for this chain: " + "; ".join(errors))
+    return best
+
+
+def fetch_blocks(source: Source, from_height: int, to_height: int) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    height = from_height
+    while height <= to_height:
+        page = source.call("blocks", {"from_height": height, "limit": min(BLOCKS_PAGE, to_height - height + 1)})
+        if not page:
+            raise ObserverError(f"{source.spec}: no block at height {height} below the reported tip {to_height}")
+        for block in page:
+            header = block["header"]
+            if header["height"] != height:
+                raise ObserverError(f"{source.spec}: asked for block {height}, got {header['height']}")
+            blocks.append(header)
+            height += 1
+    return blocks
+
+
+def certificate_voters(header: dict[str, Any]) -> set[str]:
+    commit = header.get("consensus_v2_commit") or {}
+    voters: set[str] = set()
+    for certificate in ("precommit_qc", "prepare_qc"):
+        for vote in (commit.get(certificate) or {}).get("votes", []):
+            if isinstance(vote, dict) and isinstance(vote.get("validator"), str):
+                voters.add(vote["validator"])
+    return voters
+
+
+# --------------------------------------------------------------------------- state
+
+
+def load_state(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    state = json.loads(path.read_text(encoding="utf-8"))
+    if state.get("schema") != STATE_SCHEMA:
+        raise ObserverError(f"{path} is not an observer state file")
+    return state
 
 
 def atomic_write_json(path: Path, payload: Any) -> None:
-    refuse_validator_data_dir(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    handle, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, sort_keys=False)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(tmp_name, 0o644)
-        os.replace(tmp_name, path)
-    finally:
-        if os.path.exists(tmp_name):
-            os.unlink(tmp_name)
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            json.dump(payload, out, sort_keys=True, separators=(",", ":"))
+            out.write("\n")
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
-def read_only_rpc(host: str, port: int, method: str, params: dict[str, Any] | None = None, timeout: float = 15.0) -> Any:
-    if method not in {"status", "validators", "blocks", "metrics"}:
-        raise ValueError(f"non-read RPC method refused: {method}")
-    req_id = f"uptime-observer-{method}"
-    payload = {
-        "version": RPC_VERSION,
-        "id": req_id,
-        "method": method,
-        "params": params or {},
-    }
-    with socket.create_connection((host, port), timeout) as stream:
-        stream.settimeout(timeout)
-        stream.sendall((json.dumps(payload) + "\n").encode("utf-8"))
-        raw = stream.makefile("rb").readline(8 * 1024 * 1024 + 1)
-    if len(raw) > 8 * 1024 * 1024 or not raw.endswith(b"\n"):
-        raise ValueError(f"RPC `{method}` frame truncated or oversized")
-    resp = json.loads(raw.decode("utf-8"))
-    if resp.get("version") != RPC_VERSION or resp.get("id") != req_id or resp.get("ok") is not True:
-        raise ValueError(f"RPC `{method}` failed or protocol mismatch: {resp.get('error')}")
-    return resp["result"]
+def day_entry(state: dict[str, Any], date: dt.date) -> dict[str, Any]:
+    """Every key of the state is a string; a JSON round trip changes nothing."""
+    return state["days"].setdefault(date.isoformat(), {"complete": True, "blocks": {}, "counts": None})
 
 
-def compute_height_day_observations(
-    *,
-    eligible_heights_by_day: dict[int, int],
-    credited_heights_by_day: dict[int, int],
-    precommit_qc_heights_by_day: dict[int, int],
-    complete_days: set[int],
-    blocks_per_height_day: int,
-    finalized_height: int,
-    recovery_floor_height: int | None = None,
-) -> tuple[list[dict[str, Any]], int, int | None, int]:
-    """Compute trailing height-day rows, observed_height_days, mean bps, and streak."""
-    latest_complete_day = (finalized_height // blocks_per_height_day) - 1
-    if latest_complete_day < 0:
-        return [], 0, None, 0
+def mark_incomplete(state: dict[str, Any], first: dt.date, last: dt.date) -> None:
+    day = first
+    while day <= last:
+        day_entry(state, day)["complete"] = False
+        day += contract.DAY
 
-    first_day = max(0, latest_complete_day - EVALUATION_HORIZON_DAYS + 1)
-    rows: list[dict[str, Any]] = []
-    scored_days: list[int] = []
 
-    for day_index in range(first_day, latest_complete_day + 1):
-        from_h = day_index * blocks_per_height_day + 1
-        to_h = (day_index + 1) * blocks_per_height_day
-        if recovery_floor_height is not None and from_h < recovery_floor_height:
+# --------------------------------------------------------------------------- one read
+
+
+def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now: dt.datetime) -> dict[str, Any]:
+    source, status = best_source(sources, state["chain"]["chain_id"] if state else None)
+    chain = {"network": network, "chain_id": status["chain_id"], "genesis_hash": status["genesis_hash"]}
+    registry_reply = source.call("validators")
+    registry = {v["node_id"]: v["public_key_hex"] for v in registry_reply["validators"]}
+    tip_height = status["block_height"]
+    today = now.date()
+
+    if state is None:
+        # The observer starts here. Its first day is not a whole day, and no
+        # block before this moment is ever dated.
+        state = {
+            "schema": STATE_SCHEMA,
+            "chain": chain,
+            "started_at": contract.format_utc(now),
+            "days": {},
+            "validators": {},
+        }
+        day_entry(state, today)["complete"] = False
+    else:
+        if state["chain"] != chain:
+            raise ObserverError(f"the source is on another chain than this observer's state: {chain} != {state['chain']}")
+        last_poll = contract.parse_utc(state["last_poll_at"])
+        if now < last_poll:
+            raise ObserverError("the clock went backwards since the last read")
+        if tip_height < state["last_height"]:
+            raise ObserverError(f"the source is behind this observer: height {tip_height} < {state['last_height']}")
+        gap_too_long = (now - last_poll).total_seconds() > MAX_OBSERVATION_GAP_SECONDS
+        if gap_too_long:
+            mark_incomplete(state, last_poll.date(), today)
+        if tip_height > state["last_height"]:
+            headers = fetch_blocks(source, state["last_height"] + 1, tip_height)
+            parent = state["last_block_hash"]
+            for header in headers:
+                if header["parent_hash"] != parent:
+                    raise ObserverError(f"block {header['height']} does not follow the block this observer saw last")
+                parent = header["block_hash"]
+            if last_poll.date() != today:
+                # The head moved across midnight: these blocks cannot be dated.
+                mark_incomplete(state, last_poll.date(), today)
+            elif not gap_too_long:
+                day = day_entry(state, today)
+                for header in headers:
+                    day["blocks"][str(header["height"])] = {
+                        "hash": header["block_hash"],
+                        "proposer": header["proposer"],
+                        "registry": sorted(registry),
+                        "credited": sorted(certificate_voters(header) & set(registry)),
+                        "record": False,
+                    }
+        else:
+            day_entry(state, today)
+
+    tip = fetch_blocks(source, tip_height, tip_height)[0] if tip_height >= 1 else None
+    state["last_poll_at"] = contract.format_utc(now)
+    state["last_height"] = tip_height
+    state["last_block_hash"] = tip["block_hash"] if tip else ""
+    state["registry"] = registry
+    state["registry_root"] = registry_reply["registry_root"]
+    domain = (((tip or {}).get("consensus_v2_commit") or {}).get("precommit_qc") or {}).get("domain") or {}
+    state["committee_epoch"] = domain.get("committee_epoch", state.get("committee_epoch", 0))
+
+    read_vote_records(state, sources, today)
+    close_old_days(state, today)
+    return state
+
+
+def read_vote_records(state: dict[str, Any], sources: list[Source], today: dt.date) -> None:
+    """Add the votes the certificates left out. A source holds records only for the blocks it proposed."""
+    wanted: dict[int, dict[str, Any]] = {}
+    for date_text, day in state["days"].items():
+        if (today - contract.parse_date(date_text)).days > VOTE_RECORD_RETRY_DAYS:
             continue
-        eligible = eligible_heights_by_day.get(day_index, 0)
-        credited = min(credited_heights_by_day.get(day_index, 0), eligible)
-        qc_heights = min(precommit_qc_heights_by_day.get(day_index, 0), credited)
-        complete = day_index in complete_days
-        if complete and eligible > 0:
-            bps: int | None = (credited * 10_000) // eligible
-            scored_days.append(bps)
-        else:
-            bps = None
-        rows.append(
-            {
-                "day_index": day_index,
-                "from_height": from_h,
-                "to_height": to_h,
-                "complete": complete,
-                "eligible_heights": eligible,
-                "credited_heights": credited,
-                "precommit_qc_heights": qc_heights,
-                "participation_bps": bps,
-            }
-        )
-
-    observed_days = len(scored_days)
-    mean_bps = (sum(scored_days) // observed_days) if observed_days > 0 else None
-
-    streak = 0
-    for row in reversed(rows):
-        if row["complete"] and row["eligible_heights"] > 0:
-            if row["participation_bps"] is not None and row["participation_bps"] >= LIVENESS_THRESHOLD_BPS:
-                streak += 1
-            else:
-                break
-        else:
-            break
-
-    return rows, observed_days, mean_bps, streak
-
-
-def evaluate_validator_lifecycle(
-    *,
-    previous_state: str,
-    registry_active: bool,
-    finalized_height: int,
-    observed_at: dt.datetime,
-    first_active_height: int | None,
-    observed_height_days: int,
-    mean_daily_participation_bps: int | None,
-    consecutive_passing_days: int,
-    grace_started_height: int | None = None,
-    grace_started_at: dt.datetime | None = None,
-    recovery_floor_height: int | None = None,
-    blocks_per_height_day: int = 14400,
-) -> dict[str, Any]:
-    """Deterministic Contract C2 pending -> active -> lapsed (14d) -> revoked transition."""
-    if previous_state == "pending":
-        if not registry_active:
-            return {
-                "first_active_height": None,
-                "ramp_in_active": False,
-                "liveness_met": False,
-                "access_state": "pending",
-                "access_state_reason": "awaiting_ratification",
-                "grace_started_at": None,
-                "grace_expires_at": None,
-                "grace_started_height": None,
-                "grace_expires_height": None,
-                "recovery_floor_height": None,
-                "removal_proposal_eligible": False,
-                "reward_eligible": False,
-                "finance_hub_access": False,
-                "research_api_keys_active": False,
-            }
-        first_h = first_active_height or finalized_height
-        return {
-            "first_active_height": first_h,
-            "ramp_in_active": True,
-            "liveness_met": True,
-            "access_state": "active",
-            "access_state_reason": "day0_ramp_in",
-            "grace_started_at": None,
-            "grace_expires_at": None,
-            "grace_started_height": None,
-            "grace_expires_height": None,
-            "recovery_floor_height": None,
-            "removal_proposal_eligible": False,
-            "reward_eligible": True,
-            "finance_hub_access": True,
-            "research_api_keys_active": True,
-        }
-
-    first_h = first_active_height or 1
-    ramp_in_active = finalized_height < first_h + EVALUATION_HORIZON_DAYS * blocks_per_height_day
-    in_recovery = (
-        recovery_floor_height is not None
-        and finalized_height < recovery_floor_height + EVALUATION_HORIZON_DAYS * blocks_per_height_day
-    )
-
-    def enter_lapsed(reason: str) -> dict[str, Any]:
-        return {
-            "first_active_height": first_h,
-            "ramp_in_active": ramp_in_active,
-            "liveness_met": False,
-            "access_state": "lapsed",
-            "access_state_reason": reason,
-            "grace_started_at": format_utc(observed_at),
-            "grace_expires_at": format_utc(observed_at + dt.timedelta(days=GRACE_PERIOD_DAYS)),
-            "grace_started_height": finalized_height,
-            "grace_expires_height": finalized_height + GRACE_PERIOD_DAYS * blocks_per_height_day,
-            "recovery_floor_height": recovery_floor_height,
-            "removal_proposal_eligible": False,
-            "reward_eligible": False,
-            "finance_hub_access": True,
-            "research_api_keys_active": True,
-        }
-
-    if previous_state == "active":
-        if not registry_active:
-            return enter_lapsed("removed_from_registry")
-        if ramp_in_active or in_recovery:
-            if observed_height_days == 0 or (
-                mean_daily_participation_bps is not None
-                and mean_daily_participation_bps >= LIVENESS_THRESHOLD_BPS
-            ):
-                return {
-                    "first_active_height": first_h,
-                    "ramp_in_active": ramp_in_active,
-                    "liveness_met": True,
-                    "access_state": "active",
-                    "access_state_reason": "day0_ramp_in" if ramp_in_active else "recovered_3day_streak",
-                    "grace_started_at": None,
-                    "grace_expires_at": None,
-                    "grace_started_height": None,
-                    "grace_expires_height": None,
-                    "recovery_floor_height": recovery_floor_height if in_recovery else None,
-                    "removal_proposal_eligible": False,
-                    "reward_eligible": True,
-                    "finance_hub_access": True,
-                    "research_api_keys_active": True,
-                }
-            return enter_lapsed("below_liveness_threshold")
-        if observed_height_days < MIN_OBSERVED_DAYS:
-            return enter_lapsed("insufficient_observed_days")
-        if mean_daily_participation_bps is None or mean_daily_participation_bps < LIVENESS_THRESHOLD_BPS:
-            return enter_lapsed("below_liveness_threshold")
-        return {
-            "first_active_height": first_h,
-            "ramp_in_active": False,
-            "liveness_met": True,
-            "access_state": "active",
-            "access_state_reason": "healthy_liveness",
-            "grace_started_at": None,
-            "grace_expires_at": None,
-            "grace_started_height": None,
-            "grace_expires_height": None,
-            "recovery_floor_height": None,
-            "removal_proposal_eligible": False,
-            "reward_eligible": True,
-            "finance_hub_access": True,
-            "research_api_keys_active": True,
-        }
-
-    if previous_state == "lapsed":
-        g_start_h = grace_started_height or finalized_height
-        g_start_at = grace_started_at or observed_at
-        g_exp_h = g_start_h + GRACE_PERIOD_DAYS * blocks_per_height_day
-        g_exp_at = g_start_at + dt.timedelta(days=GRACE_PERIOD_DAYS)
-        if registry_active and consecutive_passing_days >= RECOVERY_CONSECUTIVE_DAYS:
-            streak_floor = max(
-                1, finalized_height - RECOVERY_CONSECUTIVE_DAYS * blocks_per_height_day + 1
-            )
-            return {
-                "first_active_height": first_h,
-                "ramp_in_active": ramp_in_active,
-                "liveness_met": True,
-                "access_state": "active",
-                "access_state_reason": "recovered_3day_streak",
-                "grace_started_at": None,
-                "grace_expires_at": None,
-                "grace_started_height": None,
-                "grace_expires_height": None,
-                "recovery_floor_height": streak_floor,
-                "removal_proposal_eligible": False,
-                "reward_eligible": True,
-                "finance_hub_access": True,
-                "research_api_keys_active": True,
-            }
-        if finalized_height >= g_exp_h:
-            return {
-                "first_active_height": first_h,
-                "ramp_in_active": ramp_in_active,
-                "liveness_met": False,
-                "access_state": "revoked",
-                "access_state_reason": "grace_expired" if registry_active else "removed_from_registry",
-                "grace_started_at": None,
-                "grace_expires_at": None,
-                "grace_started_height": None,
-                "grace_expires_height": None,
-                "recovery_floor_height": None,
-                "removal_proposal_eligible": registry_active,
-                "reward_eligible": False,
-                "finance_hub_access": False,
-                "research_api_keys_active": False,
-            }
-        return {
-            "first_active_height": first_h,
-            "ramp_in_active": ramp_in_active,
-            "liveness_met": False,
-            "access_state": "lapsed",
-            "access_state_reason": "removed_from_registry" if not registry_active else "below_liveness_threshold",
-            "grace_started_at": format_utc(g_start_at),
-            "grace_expires_at": format_utc(g_exp_at),
-            "grace_started_height": g_start_h,
-            "grace_expires_height": g_exp_h,
-            "recovery_floor_height": recovery_floor_height,
-            "removal_proposal_eligible": False,
-            "reward_eligible": False,
-            "finance_hub_access": True,
-            "research_api_keys_active": True,
-        }
-
-    if previous_state == "revoked":
-        if registry_active and consecutive_passing_days >= RECOVERY_CONSECUTIVE_DAYS:
-            streak_floor = max(
-                1, finalized_height - RECOVERY_CONSECUTIVE_DAYS * blocks_per_height_day + 1
-            )
-            return {
-                "first_active_height": first_h,
-                "ramp_in_active": ramp_in_active,
-                "liveness_met": True,
-                "access_state": "active",
-                "access_state_reason": "recovered_3day_streak",
-                "grace_started_at": None,
-                "grace_expires_at": None,
-                "grace_started_height": None,
-                "grace_expires_height": None,
-                "recovery_floor_height": streak_floor,
-                "removal_proposal_eligible": False,
-                "reward_eligible": True,
-                "finance_hub_access": True,
-                "research_api_keys_active": True,
-            }
-        return {
-            "first_active_height": first_h,
-            "ramp_in_active": ramp_in_active,
-            "liveness_met": False,
-            "access_state": "revoked",
-            "access_state_reason": "grace_expired" if registry_active else "removed_from_registry",
-            "grace_started_at": None,
-            "grace_expires_at": None,
-            "grace_started_height": None,
-            "grace_expires_height": None,
-            "recovery_floor_height": None,
-            "removal_proposal_eligible": registry_active,
-            "reward_eligible": False,
-            "finance_hub_access": False,
-            "research_api_keys_active": False,
-        }
-
-    raise ValueError(f"unknown previous_state: {previous_state}")
-
-
-def sign_attestation_via_node(
-    node_bin: str,
-    key_file: Path,
-    chain: dict[str, Any],
-    window_spec: dict[str, Any],
-    observed_at: str,
-    validator_claims: list[dict[str, Any]],
-) -> dict[str, Any]:
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as tmp:
-        json.dump(
-            {
-                "chain": chain,
-                "window_spec": window_spec,
-                "observed_at": observed_at,
-                "validator_claims": validator_claims,
-            },
-            tmp,
-        )
-        tmp_path = tmp.name
-    try:
-        proc = subprocess.run(
-            [
-                node_bin,
-                "observer-uptime-sign",
-                "--key-file",
-                str(key_file),
-                "--input-file",
-                tmp_path,
-            ],
-            check=True,
-            text=True,
-            capture_output=True,
-        )
-        return json.loads(proc.stdout)
-    finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-
-
-def verify_feed_via_node(
-    node_bin: str, feed_file: Path, keyset_file: Path, now_unix: int | None = None
-) -> dict[str, Any]:
-    cmd = [
-        node_bin,
-        "observer-uptime-verify",
-        "--feed-file",
-        str(feed_file),
-        "--keyset-file",
-        str(keyset_file),
-    ]
-    if now_unix is not None:
-        cmd.extend(["--now-unix", str(now_unix)])
-    proc = subprocess.run(cmd, check=False, text=True, capture_output=True)
-    if proc.returncode != 0:
-        raise ValueError(f"ML-DSA-65 verification failed: {proc.stderr.strip() or proc.stdout.strip()}")
-    return json.loads(proc.stdout)
-
-
-def reconcile_observer_bundles(
-    bundles: list[dict[str, Any]],
-    *,
-    generated_at: str | None = None,
-) -> dict[str, Any]:
-    """Reconcile 2 or 3 signed observer bundles into a canonical postfiat-validator-uptime-v1 feed."""
-    if not (2 <= len(bundles) <= 3):
-        raise ValueError(f"2-of-3 quorum reconciliation requires 2 or 3 observer bundles, got {len(bundles)}")
-
-    chain = bundles[0]["chain"]
-    window_spec = bundles[0]["window_spec"]
-    for idx, bundle in enumerate(bundles[1:], start=1):
-        if bundle["chain"] != chain:
-            raise ValueError(f"observer bundle #{idx} chain identity disagrees with bundle #0")
-        if bundle["window_spec"] != window_spec:
-            raise ValueError(f"observer bundle #{idx} window_spec disagrees with bundle #0")
-
-    attestations = [b["attestation"] for b in bundles]
-    # Collect validator rows across observers and enforce 2-of-3 agreement.
-    rows_by_vid: dict[str, list[tuple[str, dict[str, Any], dict[str, Any]]]] = {}
-    for bundle in bundles:
-        oid = bundle["attestation"]["observer_id"]
-        claim_by_id = {c["validator_id"]: c for c in bundle["attestation"]["validator_claims"]}
-        for row in bundle["validators"]:
-            vid = row["validator_id"]
-            if vid not in claim_by_id:
-                raise ValueError(f"observer {oid} missing claim for validator {vid}")
-            rows_by_vid.setdefault(vid, []).append((oid, row, claim_by_id[vid]))
-
-    reconciled_validators: list[dict[str, Any]] = []
-    for vid in sorted(rows_by_vid):
-        entries = rows_by_vid[vid]
-        # Group agreeing observers by (ml_dsa_public_key, registry_active, liveness_met, access_state)
-        buckets: dict[tuple[Any, ...], list[tuple[str, dict[str, Any], dict[str, Any]]]] = {}
-        for item in entries:
-            _, _, claim = item
-            sig = (
-                claim["ml_dsa_public_key"],
-                claim["registry_active"],
-                claim["liveness_met"],
-                claim["access_state"],
-            )
-            buckets.setdefault(sig, []).append(item)
-        winner = max(buckets.values(), key=len)
-        if len(winner) < 2:
-            raise ValueError(f"validator {vid} lacks 2-of-3 observer agreement on access_state")
-
-        agreeing_ids = [oid for oid, _, _ in winner]
-        scores = [claim["mean_daily_participation_bps"] for _, _, claim in winner]
-        reconciled_mean = reconcile_bps(scores)
-
-        # Pick deterministic template row from the first agreeing observer (sorted by observer_id).
-        base_row = dict(winner[0][1])
-        base_row["agreeing_observer_ids"] = agreeing_ids
-        base_row["mean_daily_participation_bps"] = reconciled_mean
-        reconciled_validators.append(base_row)
-
-    feed = {
-        "schema": FEED_SCHEMA,
-        "schema_version": FEED_SCHEMA_VERSION,
-        "generated_at": generated_at or format_utc(dt.datetime.now(UTC)),
-        "chain": chain,
-        "quorum_policy": {
-            "observer_count": 3,
-            "quorum_threshold": 2,
-            "algorithm_id": "ML-DSA-65",
-            "signing_context": SIGNING_CONTEXT,
-            "stale_after_seconds": STALE_AFTER_SECONDS,
-            "max_future_skew_seconds": MAX_FUTURE_SKEW_SECONDS,
-            "stale_behavior": STALE_BEHAVIOR,
-        },
-        "window_spec": window_spec,
-        "validators": reconciled_validators,
-        "observer_attestations": attestations,
-    }
-    return feed
-
-
-def build_observer_bundle(
-    *,
-    chain: dict[str, Any],
-    blocks_per_height_day: int,
-    validator_inputs: list[dict[str, Any]],
-    observed_at: dt.datetime,
-    key_file: Path,
-    node_bin: str,
-) -> dict[str, Any]:
-    """Build and sign a single observer's uptime bundle from observed validator telemetry."""
-    finalized_height = int(chain["finalized_height"])
-    latest_complete_day = (finalized_height // blocks_per_height_day) - 1
-    window_start_height = (
-        max(0, latest_complete_day - EVALUATION_HORIZON_DAYS + 1) * blocks_per_height_day + 1
-        if latest_complete_day >= 0
-        else 1
-    )
-    window_end_height = (
-        (latest_complete_day + 1) * blocks_per_height_day
-        if latest_complete_day >= 0
-        else finalized_height
-    )
-    window_spec = {
-        "metric_version": METRIC_VERSION,
-        "credit_sources": list(CREDIT_SOURCES),
-        "blocks_per_height_day": blocks_per_height_day,
-        "evaluation_horizon_days": EVALUATION_HORIZON_DAYS,
-        "min_observed_days": MIN_OBSERVED_DAYS,
-        "liveness_threshold_bps": LIVENESS_THRESHOLD_BPS,
-        "grace_period_days": GRACE_PERIOD_DAYS,
-        "recovery_consecutive_days": RECOVERY_CONSECUTIVE_DAYS,
-        "window_start_height": window_start_height,
-        "window_end_height": window_end_height,
-    }
-
-    validators_out: list[dict[str, Any]] = []
-    claims_out: list[dict[str, Any]] = []
-
-    for item in sorted(validator_inputs, key=lambda v: v["validator_id"]):
-        vid = item["validator_id"]
-        pk = item["ml_dsa_public_key"]
-        if not re.fullmatch(r"[0-9a-f]{3904}", pk):
-            raise ValueError(f"validator {vid} has invalid ML-DSA-65 public key hex")
-
-        eligible_map = {int(k): int(v) for k, v in item.get("eligible_heights_by_day", {}).items()}
-        credited_map = {int(k): int(v) for k, v in item.get("credited_heights_by_day", {}).items()}
-        qc_map = {int(k): int(v) for k, v in item.get("precommit_qc_heights_by_day", {}).items()}
-        complete_days = {int(d) for d in item.get("complete_days", eligible_map.keys())}
-
-        height_days, obs_days, mean_bps, streak = compute_height_day_observations(
-            eligible_heights_by_day=eligible_map,
-            credited_heights_by_day=credited_map,
-            precommit_qc_heights_by_day=qc_map,
-            complete_days=complete_days,
-            blocks_per_height_day=blocks_per_height_day,
-            finalized_height=finalized_height,
-            recovery_floor_height=item.get("recovery_floor_height"),
-        )
-
-        lifecycle = evaluate_validator_lifecycle(
-            previous_state=item.get("previous_state", "pending"),
-            registry_active=bool(item["registry_active"]),
-            finalized_height=finalized_height,
-            observed_at=observed_at,
-            first_active_height=item.get("first_active_height"),
-            observed_height_days=obs_days,
-            mean_daily_participation_bps=mean_bps,
-            consecutive_passing_days=streak,
-            grace_started_height=item.get("grace_started_height"),
-            grace_started_at=(
-                parse_utc(item["grace_started_at"]) if item.get("grace_started_at") else None
-            ),
-            recovery_floor_height=item.get("recovery_floor_height"),
-            blocks_per_height_day=blocks_per_height_day,
-        )
-
-        validators_out.append(
-            {
-                "validator_id": vid,
-                "ml_dsa_public_key": pk,
-                "operator_identity_id": item.get("operator_identity_id"),
-                "public_rpc_url": item.get("public_rpc_url"),
-                "registry_active": bool(item["registry_active"]),
-                "first_active_height": lifecycle["first_active_height"],
-                "ramp_in_active": lifecycle["ramp_in_active"],
-                "observed_height_days": obs_days,
-                "mean_daily_participation_bps": mean_bps,
-                "consecutive_passing_days": streak,
-                "liveness_met": lifecycle["liveness_met"],
-                "access_state": lifecycle["access_state"],
-                "access_state_reason": lifecycle["access_state_reason"],
-                "grace_started_at": lifecycle["grace_started_at"],
-                "grace_expires_at": lifecycle["grace_expires_at"],
-                "grace_started_height": lifecycle["grace_started_height"],
-                "grace_expires_height": lifecycle["grace_expires_height"],
-                "recovery_floor_height": lifecycle["recovery_floor_height"],
-                "removal_proposal_eligible": lifecycle["removal_proposal_eligible"],
-                "reward_eligible": lifecycle["reward_eligible"],
-                "finance_hub_access": lifecycle["finance_hub_access"],
-                "research_api_keys_active": lifecycle["research_api_keys_active"],
-                "agreeing_observer_ids": [],
-                "height_days": height_days,
-            }
-        )
-        claims_out.append(
-            {
-                "validator_id": vid,
-                "ml_dsa_public_key": pk,
-                "registry_active": bool(item["registry_active"]),
-                "observed_height_days": obs_days,
-                "mean_daily_participation_bps": mean_bps,
-                "consecutive_passing_days": streak,
-                "liveness_met": lifecycle["liveness_met"],
-                "access_state": lifecycle["access_state"],
-            }
-        )
-
-    observed_at_str = format_utc(observed_at)
-    attestation = sign_attestation_via_node(
-        node_bin=node_bin,
-        key_file=key_file,
-        chain=chain,
-        window_spec=window_spec,
-        observed_at=observed_at_str,
-        validator_claims=claims_out,
-    )
-    return {
-        "schema": "postfiat-validator-uptime-observer-bundle-v1",
-        "chain": chain,
-        "window_spec": window_spec,
-        "validators": validators_out,
-        "attestation": attestation,
-    }
-
-
-def collect_live_rpc_observation(
-    *,
-    rpc_host: str,
-    rpc_port: int,
-    network: str,
-    blocks_per_height_day: int,
-    max_blocks_scan: int,
-    state: dict[str, Any],
-) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
-    """Query a read-only RPC node for chain tip, validator registry, and recent block votes."""
-    status_before = read_only_rpc(rpc_host, rpc_port, "status")
-    validators_resp = read_only_rpc(rpc_host, rpc_port, "validators")
-    status_after = read_only_rpc(rpc_host, rpc_port, "status")
-    for field in ("chain_id", "genesis_hash", "block_height", "block_tip_hash"):
-        if status_before.get(field) != status_after.get(field):
-            raise ValueError(f"chain moved during read snapshot on `{field}`")
-
-    height = int(status_before["block_height"])
-    chain = {
-        "network": network,
-        "chain_id": status_before["chain_id"],
-        "genesis_hash": status_before["genesis_hash"],
-        "committee_epoch": int(state.get("committee_epoch", 0)),
-        "registry_root": validators_resp["registry_root"],
-        "finalized_height": max(1, height),
-        "finalized_block_hash": status_before["block_tip_hash"],
-    }
-
-    records = validators_resp["validators"]
-    day_credit: dict[str, dict[int, int]] = state.get("day_credit", {})
-    day_qc: dict[str, dict[int, int]] = state.get("day_qc", {})
-    day_eligible: dict[str, dict[int, int]] = state.get("day_eligible", {})
-    last_scanned = int(state.get("last_scanned_height", 0))
-    start_h = max(1, last_scanned + 1)
-    if height - start_h + 1 > max_blocks_scan:
-        start_h = max(1, height - max_blocks_scan + 1)
-
-    if height >= start_h:
-        for batch_start in range(start_h, height + 1, 16):
-            limit = min(16, height + 1 - batch_start)
-            batch = read_only_rpc(
-                rpc_host,
-                rpc_port,
-                "blocks",
-                {"from_height": batch_start, "limit": limit},
-            )
-            for block in batch:
-                header = block.get("header", {})
-                bh = int(header.get("height", 0))
-                if bh < 1:
+        for height, block in day["blocks"].items():
+            if not block["record"]:
+                wanted[int(height)] = block
+    if not wanted:
+        return
+    for source in sources:
+        heights = sorted(h for h, block in wanted.items() if not block["record"])
+        index = 0
+        while index < len(heights):
+            start = heights[index]
+            try:
+                reply = source.call("block_vote_records", {"from_height": start, "limit": VOTE_RECORDS_PAGE})
+            except (OSError, ValueError, KeyError, ObserverError):
+                break  # unreachable, or a release without the method: certificates only for its blocks
+            for row in reply.get("records", []):
+                block = wanted.get(row.get("height"))
+                record = row.get("record")
+                if block is None or not record:
                     continue
-                day_idx = (bh - 1) // blocks_per_height_day
-                qc = header.get("consensus_v2_commit", {}).get("precommit_qc") or {}
-                qc_signers = {
-                    v.get("validator") for v in qc.get("votes", []) if isinstance(v, dict)
+                # The record must be about this very block and come from its proposer.
+                if record.get("block_hash") != block["hash"] or record.get("proposer") != block["proposer"]:
+                    continue
+                voted = {
+                    entry["validator"]
+                    for entry in record.get("entries", [])
+                    if entry.get("outcome") in CREDITED_OUTCOMES and entry.get("validator") in block["registry"]
                 }
-                for rec in records:
-                    vid = rec["node_id"]
-                    day_eligible.setdefault(vid, {})
-                    day_eligible[vid][day_idx] = day_eligible[vid].get(day_idx, 0) + 1
-                    if vid in qc_signers:
-                        day_credit.setdefault(vid, {})
-                        day_credit[vid][day_idx] = day_credit[vid].get(day_idx, 0) + 1
-                        day_qc.setdefault(vid, {})
-                        day_qc[vid][day_idx] = day_qc[vid].get(day_idx, 0) + 1
+                block["credited"] = sorted(set(block["credited"]) | voted)
+                block["record"] = True
+            while index < len(heights) and heights[index] < start + VOTE_RECORDS_PAGE:
+                index += 1
 
-    prev_meta = state.get("validator_state", {})
-    validator_inputs: list[dict[str, Any]] = []
-    for rec in records:
-        vid = rec["node_id"]
-        meta = prev_meta.get(vid, {})
-        validator_inputs.append(
-            {
-                "validator_id": vid,
-                "ml_dsa_public_key": rec["public_key_hex"],
-                "operator_identity_id": meta.get("operator_identity_id"),
-                "public_rpc_url": meta.get("public_rpc_url"),
-                "registry_active": True,
-                "previous_state": meta.get("access_state", "pending"),
-                "first_active_height": meta.get("first_active_height", max(1, height)),
-                "grace_started_height": meta.get("grace_started_height"),
-                "grace_started_at": meta.get("grace_started_at"),
-                "recovery_floor_height": meta.get("recovery_floor_height"),
-                "eligible_heights_by_day": day_eligible.get(vid, {}),
-                "credited_heights_by_day": day_credit.get(vid, {}),
-                "precommit_qc_heights_by_day": day_qc.get(vid, {}),
-                "complete_days": [
-                    d
-                    for d, cnt in day_eligible.get(vid, {}).items()
-                    if cnt >= blocks_per_height_day
-                ],
-            }
-        )
 
-    new_state = {
-        "last_scanned_height": height,
-        "committee_epoch": chain["committee_epoch"],
-        "day_credit": day_credit,
-        "day_qc": day_qc,
-        "day_eligible": day_eligible,
-        "validator_state": prev_meta,
+def day_counts(day: dict[str, Any]) -> dict[str, Any]:
+    if day.get("counts") is not None:
+        return day["counts"]
+    heights = sorted(int(h) for h in day["blocks"])
+    validators: dict[str, dict[str, int]] = {}
+    for block in day["blocks"].values():
+        for vid in block["registry"]:
+            entry = validators.setdefault(vid, {"committed": 0, "signed": 0})
+            entry["committed"] += 1
+            if vid in block["credited"]:
+                entry["signed"] += 1
+    return {
+        "from_height": heights[0] if heights else None,
+        "to_height": heights[-1] if heights else None,
+        "validators": validators,
     }
-    return chain, validator_inputs, new_state
+
+
+def close_old_days(state: dict[str, Any], today: dt.date) -> None:
+    """Keep per-block detail while a vote record may still arrive, then only the counts. Drop what left the window."""
+    for date_text in sorted(state["days"]):
+        age = (today - contract.parse_date(date_text)).days
+        day = state["days"][date_text]
+        if age > contract.EVALUATION_HORIZON_DAYS + 1:
+            del state["days"][date_text]
+        elif age > VOTE_RECORD_RETRY_DAYS and day.get("counts") is None:
+            day["counts"] = day_counts(day)
+            day["blocks"] = {}
+
+
+# --------------------------------------------------------------------------- the attestation
+
+
+def days_for(state: dict[str, Any], vid: str, first_active: dt.date, today: dt.date) -> list[dict[str, Any]]:
+    window_start = today - contract.EVALUATION_HORIZON_DAYS * contract.DAY
+    out, date = [], max(first_active, window_start)
+    while date < today:
+        day = state["days"].get(date.isoformat())
+        if day is None:
+            # The observer was not running: it knows nothing about this day.
+            out.append({"date": date.isoformat(), "complete": False, "from_height": None, "to_height": None,
+                        "committed_blocks": 0, "signed_blocks": 0, "participation_bps": None})
+        else:
+            counts = day_counts(day)
+            mine = counts["validators"].get(vid, {"committed": 0, "signed": 0})
+            complete = bool(day["complete"])
+            committed, signed = mine["committed"], mine["signed"]
+            out.append({
+                "date": date.isoformat(),
+                "complete": complete,
+                "from_height": counts["from_height"],
+                "to_height": counts["to_height"],
+                "committed_blocks": committed,
+                "signed_blocks": signed,
+                "participation_bps": signed * 10000 // committed if complete and committed else None,
+            })
+        date += contract.DAY
+    return out
+
+
+FACT_KEYS = ("validator_id", "ml_dsa_public_key", "registry_active", "access_state", "first_active_date",
+             "grace_started_at", "recovery_floor_date", "days")
+
+
+def build_rows(state: dict[str, Any], now: dt.datetime) -> list[dict[str, Any]]:
+    today = now.date()
+    rows = []
+    for vid in sorted(set(state["registry"]) | set(state["validators"])):
+        previous = state["validators"].get(vid)
+        key = state["registry"].get(vid) or previous["ml_dsa_public_key"]
+        if previous and previous["ml_dsa_public_key"] != key:
+            # A validator id under a new key is a new validator.
+            previous = None
+        first_text = previous["first_active_date"] if previous else None
+        first = contract.parse_date(first_text) if first_text else today
+        row = contract.next_row(
+            previous,
+            validator_id=vid,
+            ml_dsa_public_key=key,
+            registry_active=vid in state["registry"],
+            days=days_for(state, vid, first, today) if first_text else [],
+            window_end=today,
+            observed_at=now,
+        )
+        window_start = today - contract.EVALUATION_HORIZON_DAYS * contract.DAY
+        contract.check_row(row, window_start, today)
+        rows.append(row)
+        state["validators"][vid] = {k: row[k] for k in FACT_KEYS if k != "days"}
+    return rows
+
+
+def attest(state: dict[str, Any], rows: list[dict[str, Any]], keyset_id: str, key_file: Path, node_bin: str,
+           now: dt.datetime) -> dict[str, Any]:
+    today = now.date()
+    window_spec = {
+        **WINDOW_SPEC,
+        "window_start": contract.format_utc(contract.midnight(today - contract.EVALUATION_HORIZON_DAYS * contract.DAY)),
+        "window_end": contract.format_utc(contract.midnight(today)),
+    }
+    quorum_policy = {"observer_keyset_id": keyset_id, **QUORUM_POLICY}
+    unsigned = {
+        "chain": state["chain"],
+        "quorum_policy": quorum_policy,
+        "window_spec": window_spec,
+        "observed_at": contract.format_utc(now),
+        "committee_epoch": state["committee_epoch"],
+        "finalized_height": state["last_height"],
+        "finalized_block_hash": state["last_block_hash"],
+        "registry_root": state["registry_root"],
+        "validator_facts": [{k: row[k] for k in FACT_KEYS} for row in rows],
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        input_file = Path(tmp) / "unsigned.json"
+        input_file.write_text(json.dumps(unsigned), encoding="utf-8")
+        signed = subprocess.run(
+            [node_bin, "observer-uptime-sign", "--key-file", str(key_file), "--input-file", str(input_file)],
+            capture_output=True, text=True, check=False,
+        )
+    if signed.returncode != 0:
+        raise ObserverError(f"signing failed: {signed.stderr.strip() or signed.stdout.strip()}")
+    attestation = json.loads(signed.stdout)
+    # Two implementations of the contract must give the same rows.
+    if attestation["validator_claims"] != rows:
+        raise ObserverError("the node derived other rows than this observer; nothing is published")
+    return {"chain": state["chain"], "quorum_policy": quorum_policy, "window_spec": window_spec, "attestation": attestation}
+
+
+def refuse_validator_data_dir(path: Path) -> None:
+    for parent in [path.resolve(), *path.resolve().parents]:
+        if (parent / "validator_keys.json").exists() or (parent / "consensus-v2-safety").exists():
+            raise ObserverError(f"`{path}` is inside a validator data directory; an observer writes nothing there")
+
+
+# --------------------------------------------------------------------------- commands
+
+
+def parse_now(raw: str | None) -> dt.datetime:
+    now = contract.parse_utc(raw) if raw else dt.datetime.now(contract.UTC)
+    return now.replace(microsecond=0)
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    state_file, output = Path(args.state_file), Path(args.output)
+    for path in (state_file, output):
+        refuse_validator_data_dir(path.parent)
+    now = parse_now(args.now)
+    state = poll(load_state(state_file), [Source(spec) for spec in args.source], args.network, now)
+    rows = build_rows(state, now)
+    if rows:
+        envelope = attest(state, rows, args.keyset_id, Path(args.key_file), args.node_bin, now)
+        atomic_write_json(output, envelope)
+    # The state is written last: a run that failed above is repeated from the same state.
+    atomic_write_json(state_file, state)
+    print(json.dumps({
+        "observed_at": contract.format_utc(now),
+        "height": state["last_height"],
+        "validators": {row["validator_id"]: [row["access_state"], row["access_state_reason"]] for row in rows},
+    }))
+    return 0
+
+
+def cmd_bundle(args: argparse.Namespace) -> int:
+    with tempfile.TemporaryDirectory() as tmp:
+        command = [args.node_bin, "observer-uptime-bundle", "--keyset-file", args.keyset_file, "--output-file", args.output]
+        if args.now:
+            command += ["--now-unix", str(int(parse_now(args.now).timestamp()))]
+        for index, origin in enumerate(args.attestation):
+            if origin.startswith("https://"):
+                local = Path(tmp) / f"attestation-{index}.json"
+                try:
+                    with urllib.request.urlopen(origin, timeout=20) as response:  # noqa: S310 (https only)
+                        local.write_bytes(response.read(MAX_REPLY_BYTES))
+                except OSError as exc:
+                    print(f"{origin}: {exc}", file=sys.stderr)
+                    continue
+                origin = str(local)
+            command += ["--attestation-file", origin]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+    sys.stdout.write(result.stdout)
+    sys.stderr.write(result.stderr)
+    return result.returncode
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    command = [args.node_bin, "observer-uptime-verify", "--feed-file", args.feed_file, "--keyset-file", args.keyset_file]
+    if args.now:
+        command += ["--now-unix", str(int(parse_now(args.now).timestamp()))]
+    if args.last_accepted_file:
+        command += ["--last-accepted-file", args.last_accepted_file]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    sys.stdout.write(result.stdout)
+    sys.stderr.write(result.stderr)
+    return result.returncode
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_collect = sub.add_parser("collect-observer", help="Collect and sign a single observer bundle")
-    p_collect.add_argument("--node-bin", default="postfiat-node")
-    p_collect.add_argument("--key-file", required=True)
-    p_collect.add_argument("--output", required=True)
-    p_collect.add_argument("--input-observations", help="Offline observation JSON file (bypasses live RPC)")
-    p_collect.add_argument("--rpc-host", default="127.0.0.1")
-    p_collect.add_argument("--rpc-port", type=int, default=27650)
-    p_collect.add_argument("--network", default="l1-testnet", choices=["l1-devnet", "l1-testnet", "l1-mainnet"])
-    p_collect.add_argument("--blocks-per-height-day", type=int, default=14400)
-    p_collect.add_argument("--max-blocks-scan", type=int, default=1000)
-    p_collect.add_argument("--state-file", help="Persistent observer state JSON path")
-    p_collect.add_argument("--observed-at", help="Optional RFC3339 UTC timestamp override")
+    run = sub.add_parser("run", help="read the chain once and write one signed attestation")
+    run.add_argument("--source", action="append", required=True,
+                     help="read-only RPC: tcp://host:port or https://host/rpc. Repeat for every validator whose vote records should count; the one furthest ahead gives the blocks")
+    run.add_argument("--network", required=True, choices=["l1-devnet", "l1-testnet", "l1-mainnet"])
+    run.add_argument("--keyset-id", required=True, help="keyset_id of the pinned observer keyset this observer is in")
+    run.add_argument("--key-file", required=True, help="this observer's key file (observer-key-create)")
+    run.add_argument("--state-file", required=True)
+    run.add_argument("--output", required=True, help="where the signed attestation is written")
+    run.add_argument("--node-bin", default="postfiat-node")
+    run.add_argument("--now", help=argparse.SUPPRESS)  # tests
+    run.set_defaults(handler=cmd_run)
 
-    p_rec = sub.add_parser("reconcile", help="Reconcile 2-of-3 signed observer bundles into feed")
-    p_rec.add_argument("--bundles", nargs="+", required=True)
-    p_rec.add_argument("--output", required=True)
-    p_rec.add_argument("--keyset-file", help="Optional pinned observer keyset to verify immediately")
-    p_rec.add_argument("--node-bin", default="postfiat-node")
-    p_rec.add_argument("--generated-at")
-    p_rec.add_argument("--now-unix", type=int)
+    bundle = sub.add_parser("bundle", help="put attestations into one feed")
+    bundle.add_argument("--attestation", action="append", required=True, help="attestation file or https URL; repeat")
+    bundle.add_argument("--keyset-file", required=True)
+    bundle.add_argument("--output", required=True)
+    bundle.add_argument("--node-bin", default="postfiat-node")
+    bundle.add_argument("--now", help=argparse.SUPPRESS)
+    bundle.set_defaults(handler=cmd_bundle)
 
-    p_ver = sub.add_parser("verify", help="Verify signed postfiat-validator-uptime-v1 feed")
-    p_ver.add_argument("--feed-file", required=True)
-    p_ver.add_argument("--keyset-file", required=True)
-    p_ver.add_argument("--node-bin", default="postfiat-node")
-    p_ver.add_argument("--schema-file", help="Optional JSON Schema Draft 2020-12 file")
-    p_ver.add_argument("--now-unix", type=int)
+    verify = sub.add_parser("verify", help="read a feed the way a consumer must")
+    verify.add_argument("--feed-file", required=True)
+    verify.add_argument("--keyset-file", required=True)
+    verify.add_argument("--last-accepted-file")
+    verify.add_argument("--node-bin", default="postfiat-node")
+    verify.add_argument("--now", help=argparse.SUPPRESS)
+    verify.set_defaults(handler=cmd_verify)
 
     args = parser.parse_args(argv)
-
-    if args.command == "collect-observer":
-        obs_at = parse_utc(args.observed_at) if args.observed_at else dt.datetime.now(UTC)
-        if args.input_observations:
-            raw = json.loads(Path(args.input_observations).read_text(encoding="utf-8"))
-            chain = raw["chain"]
-            bpd = int(raw.get("blocks_per_height_day", args.blocks_per_height_day))
-            validators = raw["validators"]
-            new_state = None
-        else:
-            state_path = Path(args.state_file) if args.state_file else None
-            state = json.loads(state_path.read_text(encoding="utf-8")) if state_path and state_path.exists() else {}
-            chain, validators, new_state = collect_live_rpc_observation(
-                rpc_host=args.rpc_host,
-                rpc_port=args.rpc_port,
-                network=args.network,
-                blocks_per_height_day=args.blocks_per_height_day,
-                max_blocks_scan=args.max_blocks_scan,
-                state=state,
-            )
-            bpd = args.blocks_per_height_day
-        bundle = build_observer_bundle(
-            chain=chain,
-            blocks_per_height_day=bpd,
-            validator_inputs=validators,
-            observed_at=obs_at,
-            key_file=Path(args.key_file),
-            node_bin=args.node_bin,
-        )
-        atomic_write_json(Path(args.output), bundle)
-        if new_state is not None and args.state_file:
-            new_state["validator_state"] = {
-                v["validator_id"]: {
-                    "access_state": v["access_state"],
-                    "first_active_height": v["first_active_height"],
-                    "grace_started_height": v["grace_started_height"],
-                    "grace_started_at": v["grace_started_at"],
-                    "recovery_floor_height": v["recovery_floor_height"],
-                    "operator_identity_id": v["operator_identity_id"],
-                    "public_rpc_url": v["public_rpc_url"],
-                }
-                for v in bundle["validators"]
-            }
-            atomic_write_json(Path(args.state_file), new_state)
-        print(
-            json.dumps(
-                {
-                    "ok": True,
-                    "observer_id": bundle["attestation"]["observer_id"],
-                    "finalized_height": chain["finalized_height"],
-                    "claim_digest_sha256": bundle["attestation"]["claim_digest_sha256"],
-                    "output": args.output,
-                }
-            )
-        )
-        return 0
-
-    if args.command == "reconcile":
-        bundles = [json.loads(Path(p).read_text(encoding="utf-8")) for p in args.bundles]
-        feed = reconcile_observer_bundles(bundles, generated_at=args.generated_at)
-        out_path = Path(args.output)
-        atomic_write_json(out_path, feed)
-        verified: dict[str, Any] | None = None
-        if args.keyset_file:
-            verified = verify_feed_via_node(
-                args.node_bin, out_path, Path(args.keyset_file), args.now_unix
-            )
-        reconcile_ok = (
-            bool(verified.get("valid"))
-            if verified is not None
-            else len(feed["observer_attestations"]) >= 2
-        )
-        report: dict[str, Any] = {
-            "ok": reconcile_ok,
-            "schema": feed["schema"],
-            "validators": len(feed["validators"]),
-            "observers": len(feed["observer_attestations"]),
-            "output": str(out_path),
-        }
-        if verified is not None:
-            report["verification"] = verified
-        print(json.dumps(report))
-        return 0 if reconcile_ok else 1
-
-    if args.command == "verify":
-        feed_path = Path(args.feed_file)
-        feed = json.loads(feed_path.read_text(encoding="utf-8"))
-        if args.schema_file:
-            import jsonschema
-
-            schema = json.loads(Path(args.schema_file).read_text(encoding="utf-8"))
-            jsonschema.Draft202012Validator(schema).validate(feed)
-        verified = verify_feed_via_node(
-            args.node_bin, feed_path, Path(args.keyset_file), args.now_unix
-        )
-        print(json.dumps(verified, indent=2))
-        return 0
-
-    return 2
+    try:
+        return args.handler(args)
+    except ObserverError as exc:
+        print(f"validator-uptime-observer: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:
-        print(f"validator-uptime-observer error: {exc}", file=sys.stderr)
-        raise SystemExit(1)
+    raise SystemExit(main())

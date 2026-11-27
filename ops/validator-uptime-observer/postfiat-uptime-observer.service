@@ -1,0 +1,37 @@
+[Unit]
+Description=PostFiat validator uptime observer: one read of the chain, one signed attestation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=postfiat-observer
+Group=postfiat-observer
+# POSTFIAT_OBSERVER_SOURCES: one `--source tcp://host:port` or `--source https://host/rpc`
+#   per endpoint, space separated. Name every validator whose vote records should count.
+# POSTFIAT_OBSERVER_NETWORK: l1-devnet, l1-testnet or l1-mainnet.
+# POSTFIAT_OBSERVER_KEYSET_ID: keyset_id of the pinned keyset this observer is in.
+EnvironmentFile=/etc/postfiat/uptime-observer.env
+ExecStart=/usr/local/lib/postfiat/validator-uptime-observer.py run \
+  $POSTFIAT_OBSERVER_SOURCES \
+  --network ${POSTFIAT_OBSERVER_NETWORK} \
+  --keyset-id ${POSTFIAT_OBSERVER_KEYSET_ID} \
+  --key-file /etc/postfiat/uptime-observer.key.json \
+  --state-file /var/lib/postfiat-observer/state.json \
+  --output /var/lib/postfiat-observer/public/attestation.json \
+  --node-bin /usr/local/bin/postfiat-node
+TimeoutStartSec=240
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+UMask=0077
+ReadWritePaths=/var/lib/postfiat-observer

@@ -28,7 +28,13 @@ pub const OBSERVER_KEYSET_SCHEMA: &str = "postfiat.observer_keyset.v1";
 pub const OBSERVER_PRIVATE_KEY_SCHEMA: &str = "postfiat.observer_private_key.v1";
 pub const OBSERVER_KEY_PURPOSE: &str = "validator-uptime-observer";
 
-pub const UPTIME_METRIC_VERSION: &str = "precommit-qc-observer-brackets-v1";
+pub const UPTIME_METRIC_VERSION: &str = "accepted-votes-observer-brackets-v1";
+/// A vote counts when any one of these shows it.
+pub const UPTIME_CREDIT_SOURCES: [&str; 3] = [
+    "precommit_certificate",
+    "prepare_certificate",
+    "proposer_vote_record",
+];
 pub const UPTIME_TIME_BASIS: &str = "observer_brackets";
 pub const UPTIME_MAX_OBSERVATION_GAP_SECONDS: u64 = 900;
 pub const UPTIME_EVALUATION_HORIZON_DAYS: u32 = 30;
@@ -148,6 +154,7 @@ pub struct UptimeQuorumPolicyV1 {
 #[serde(deny_unknown_fields)]
 pub struct UptimeWindowSpecV1 {
     pub metric_version: String,
+    pub credit_sources: Vec<String>,
     pub time_basis: String,
     pub max_observation_gap_seconds: u64,
     pub evaluation_horizon_days: u32,
@@ -367,7 +374,6 @@ fn days_from_civil(year: i64, month: u32, day: u32) -> Result<i64, String> {
     Ok(era * 146_097 + doe as i64 - 719_468)
 }
 
-
 /// Days since 1970-01-01 to `(year, month, day)`.
 fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let z = days + 719_468;
@@ -489,20 +495,33 @@ fn scoring_days<'a>(
 }
 
 /// Build the full claim from the facts. Mirrors `derive_row` of the reference.
-pub fn derive_claim(facts: &ValidatorFactsV1, window_end_day: i64) -> Result<ValidatorClaimV1, String> {
-    let scored = scoring_days(&facts.days, facts.recovery_floor_date.as_ref(), window_end_day)?;
+pub fn derive_claim(
+    facts: &ValidatorFactsV1,
+    window_end_day: i64,
+) -> Result<ValidatorClaimV1, String> {
+    let scored = scoring_days(
+        &facts.days,
+        facts.recovery_floor_date.as_ref(),
+        window_end_day,
+    )?;
     let observed_days = scored.len() as u32;
     let mut sum = 0_u64;
     for day in &scored {
         sum += u64::from(day.participation_bps.ok_or_else(|| {
-            format!("{} {}: a scored day has no participation_bps", facts.validator_id, day.date)
+            format!(
+                "{} {}: a scored day has no participation_bps",
+                facts.validator_id, day.date
+            )
         })?);
     }
     let mean = (observed_days > 0).then(|| (sum / u64::from(observed_days)) as u32);
     let streak = scored
         .iter()
         .rev()
-        .take_while(|day| day.participation_bps.is_some_and(|bps| bps >= UPTIME_LIVENESS_THRESHOLD_BPS))
+        .take_while(|day| {
+            day.participation_bps
+                .is_some_and(|bps| bps >= UPTIME_LIVENESS_THRESHOLD_BPS)
+        })
         .count() as u32;
     let ramp_in = within_days_after(facts.first_active_date.as_ref(), window_end_day)?;
     let in_recovery = within_days_after(facts.recovery_floor_date.as_ref(), window_end_day)?;
@@ -513,14 +532,21 @@ pub fn derive_claim(facts: &ValidatorFactsV1, window_end_day: i64) -> Result<Val
         "pending" => ("awaiting_ratification", false, false, false),
         "active" if ramp_in => ("day0_ramp_in", true, true, false),
         "active" if in_recovery => ("recovered_3day_streak", true, true, false),
-        "active" if observed_days >= UPTIME_MIN_OBSERVED_DAYS => ("healthy_liveness", true, true, false),
+        "active" if observed_days >= UPTIME_MIN_OBSERVED_DAYS => {
+            ("healthy_liveness", true, true, false)
+        }
         // Too few days with blocks to judge. Access stays, the credit waits.
         "active" => ("insufficient_observed_days", true, false, false),
         "lapsed" if facts.registry_active => ("below_liveness_threshold", true, false, false),
         "lapsed" => ("removed_from_registry", true, false, false),
         "revoked" if facts.registry_active => ("grace_expired", false, false, true),
         "revoked" => ("removed_from_registry", false, false, false),
-        other => return Err(format!("{}: unknown access_state `{other}`", facts.validator_id)),
+        other => {
+            return Err(format!(
+                "{}: unknown access_state `{other}`",
+                facts.validator_id
+            ))
+        }
     };
     let grace_expires_at = match &facts.grace_started_at {
         None => None,
@@ -565,14 +591,22 @@ fn facts_of(claim: &ValidatorClaimV1) -> ValidatorFactsV1 {
 }
 
 /// Refuse a signed claim that does not follow from its own facts.
-pub fn check_claim(claim: &ValidatorClaimV1, window_start_day: i64, window_end_day: i64) -> Result<(), String> {
+pub fn check_claim(
+    claim: &ValidatorClaimV1,
+    window_start_day: i64,
+    window_end_day: i64,
+) -> Result<(), String> {
     let vid = &claim.validator_id;
     let state = claim.access_state.as_str();
     if !is_lowercase_hex_len(&claim.ml_dsa_public_key, ML_DSA_65_PUBLIC_KEY_BYTES * 2) {
-        return Err(format!("{vid}: ml_dsa_public_key is not an ML-DSA-65 public key"));
+        return Err(format!(
+            "{vid}: ml_dsa_public_key is not an ML-DSA-65 public key"
+        ));
     }
     if (state == "pending") != claim.first_active_date.is_none() {
-        return Err(format!("{vid}: first_active_date is null exactly while pending"));
+        return Err(format!(
+            "{vid}: first_active_date is null exactly while pending"
+        ));
     }
     if state == "pending" && claim.registry_active {
         return Err(format!("{vid}: a pending validator is not in the registry"));
@@ -581,17 +615,24 @@ pub fn check_claim(claim: &ValidatorClaimV1, window_start_day: i64, window_end_d
         return Err(format!("{vid}: an active validator is in the registry"));
     }
     if (state == "lapsed") != claim.grace_started_at.is_some() {
-        return Err(format!("{vid}: grace_started_at is set exactly while lapsed"));
+        return Err(format!(
+            "{vid}: grace_started_at is set exactly while lapsed"
+        ));
     }
     if let Some(started) = &claim.grace_started_at {
         if parse_utc_midnight(started)? > window_end_day {
-            return Err(format!("{vid}: grace starts at a UTC midnight, not after the evaluation day"));
+            return Err(format!(
+                "{vid}: grace starts at a UTC midnight, not after the evaluation day"
+            ));
         }
     }
     if claim.recovery_floor_date.is_some()
-        && (state != "active" || !within_days_after(claim.recovery_floor_date.as_ref(), window_end_day)?)
+        && (state != "active"
+            || !within_days_after(claim.recovery_floor_date.as_ref(), window_end_day)?)
     {
-        return Err(format!("{vid}: recovery_floor_date outlived its 30 days or its active state"));
+        return Err(format!(
+            "{vid}: recovery_floor_date outlived its 30 days or its active state"
+        ));
     }
 
     let mut expected_day = match &claim.first_active_date {
@@ -602,7 +643,9 @@ pub fn check_claim(claim: &ValidatorClaimV1, window_start_day: i64, window_end_d
     for day in &claim.days {
         let label = format!("{vid} {}", day.date);
         if parse_utc_date(&day.date)? != expected_day || expected_day >= window_end_day {
-            return Err(format!("{vid}: days must list every window day from first_active_date, once, in order"));
+            return Err(format!(
+                "{vid}: days must list every window day from first_active_date, once, in order"
+            ));
         }
         expected_day += 1;
         if day.signed_blocks > day.committed_blocks {
@@ -623,7 +666,11 @@ pub fn check_claim(claim: &ValidatorClaimV1, window_start_day: i64, window_end_d
                 }
                 last_to = to;
             }
-            _ => return Err(format!("{label}: from_height and to_height are set together")),
+            _ => {
+                return Err(format!(
+                    "{label}: from_height and to_height are set together"
+                ))
+            }
         }
         let expected_bps = (day.complete && day.committed_blocks > 0)
             .then(|| (day.signed_blocks * 10_000 / day.committed_blocks) as u32);
@@ -635,7 +682,9 @@ pub fn check_claim(claim: &ValidatorClaimV1, window_start_day: i64, window_end_d
         }
     }
     if expected_day < window_end_day {
-        return Err(format!("{vid}: days must list every window day from first_active_date, once, in order"));
+        return Err(format!(
+            "{vid}: days must list every window day from first_active_date, once, in order"
+        ));
     }
 
     let derived = derive_claim(&facts_of(claim), window_end_day)?;
@@ -646,7 +695,10 @@ pub fn check_claim(claim: &ValidatorClaimV1, window_start_day: i64, window_end_d
         );
         let field = want
             .as_object()
-            .and_then(|want| want.iter().find(|(key, value)| got.get(key.as_str()) != Some(value)))
+            .and_then(|want| {
+                want.iter()
+                    .find(|(key, value)| got.get(key.as_str()) != Some(value))
+            })
             .map_or_else(|| "a derived field".to_string(), |(key, _)| key.clone());
         return Err(format!("{vid}: {field} is not what the signed facts give"));
     }
@@ -704,9 +756,13 @@ fn check_policy_and_window(
         return Err("schema: quorum_policy differs from the fixed policy".to_string());
     }
     if window_spec.metric_version != UPTIME_METRIC_VERSION {
-        return Err(format!("schema: unknown metric_version `{}`", window_spec.metric_version));
+        return Err(format!(
+            "schema: unknown metric_version `{}`",
+            window_spec.metric_version
+        ));
     }
-    if window_spec.time_basis != UPTIME_TIME_BASIS
+    if window_spec.credit_sources != UPTIME_CREDIT_SOURCES
+        || window_spec.time_basis != UPTIME_TIME_BASIS
         || window_spec.max_observation_gap_seconds != UPTIME_MAX_OBSERVATION_GAP_SECONDS
         || window_spec.evaluation_horizon_days != UPTIME_EVALUATION_HORIZON_DAYS
         || window_spec.min_observed_days != UPTIME_MIN_OBSERVED_DAYS
@@ -732,10 +788,16 @@ pub fn validate_observer_keyset(keyset: &ObserverKeysetV1) -> Result<(), String>
         || keyset.algorithm_id != ML_DSA_65_ALGORITHM
         || keyset.signing_context != VALIDATOR_UPTIME_FEED_SIGNING_CONTEXT
     {
-        return Err("observer keyset is not a 2-of-3 ML-DSA-65 postfiat.observer_keyset.v1".to_string());
+        return Err(
+            "observer keyset is not a 2-of-3 ML-DSA-65 postfiat.observer_keyset.v1".to_string(),
+        );
     }
-    let (mut ids, mut regions, mut groups, mut keys) =
-        (BTreeSet::new(), BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
+    let (mut ids, mut regions, mut groups, mut keys) = (
+        BTreeSet::new(),
+        BTreeSet::new(),
+        BTreeSet::new(),
+        BTreeSet::new(),
+    );
     for entry in &keyset.observers {
         if !ids.insert(&entry.observer_id)
             || !regions.insert(&entry.region)
@@ -747,10 +809,18 @@ pub fn validate_observer_keyset(keyset: &ObserverKeysetV1) -> Result<(), String>
                 entry.observer_id
             ));
         }
-        let public_key = hex_to_bytes(&entry.public_key_hex)
-            .map_err(|error| format!("observer `{}` bad public key hex: {error}", entry.observer_id))?;
-        ml_dsa_65_validate_public_key(&public_key)
-            .map_err(|error| format!("observer `{}` invalid ML-DSA-65 public key: {error}", entry.observer_id))?;
+        let public_key = hex_to_bytes(&entry.public_key_hex).map_err(|error| {
+            format!(
+                "observer `{}` bad public key hex: {error}",
+                entry.observer_id
+            )
+        })?;
+        ml_dsa_65_validate_public_key(&public_key).map_err(|error| {
+            format!(
+                "observer `{}` invalid ML-DSA-65 public key: {error}",
+                entry.observer_id
+            )
+        })?;
     }
     Ok(())
 }
@@ -758,7 +828,7 @@ pub fn validate_observer_keyset(keyset: &ObserverKeysetV1) -> Result<(), String>
 /// Why one observer's attestation must not count, or its `observed_at` in Unix seconds.
 #[allow(clippy::too_many_arguments)]
 fn check_attestation(
-    feed: &ValidatorUptimeFeedV1,
+    context: (&UptimeChainV1, &UptimeQuorumPolicyV1, &UptimeWindowSpecV1),
     attestation: &ObserverAttestationV1,
     keyset: &ObserverKeysetV1,
     window: (i64, i64),
@@ -784,7 +854,7 @@ fn check_attestation(
     {
         return Err("ML-DSA-65 signature does not verify".to_string());
     }
-    let body = observer_claim_canonical_bytes(&feed.chain, &feed.quorum_policy, &feed.window_spec, attestation)?;
+    let body = observer_claim_canonical_bytes(context.0, context.1, context.2, attestation)?;
     if attestation.claim_digest_sha256 != sha256_hex(&body) {
         return Err("claim_digest_sha256 does not match the claim body".to_string());
     }
@@ -817,12 +887,16 @@ fn check_attestation(
         return Err("observed_at is outside the evaluation day of this window".to_string());
     }
     if attestation.finalized_height == 0 || attestation.validator_claims.is_empty() {
-        return Err("an attestation names a finalized height and at least one validator".to_string());
+        return Err(
+            "an attestation names a finalized height and at least one validator".to_string(),
+        );
     }
     let mut keys = BTreeSet::new();
     for pair in attestation.validator_claims.windows(2) {
         if pair[0].validator_id >= pair[1].validator_id {
-            return Err("validator_claims must be sorted by validator_id without repeats".to_string());
+            return Err(
+                "validator_claims must be sorted by validator_id without repeats".to_string(),
+            );
         }
     }
     for claim in &attestation.validator_claims {
@@ -865,16 +939,25 @@ pub fn reconcile_validator_rows(
                 None => groups.push(vec![(observer_id, claim)]),
             }
         }
-        let Some(mut group) = groups.into_iter().max_by_key(Vec::len).filter(|g| g.len() >= UPTIME_QUORUM_THRESHOLD)
+        let Some(mut group) = groups
+            .into_iter()
+            .max_by_key(Vec::len)
+            .filter(|g| g.len() >= UPTIME_QUORUM_THRESHOLD)
         else {
             no_quorum.push(validator_id.to_string());
             continue;
         };
         group.sort_by_key(|(observer_id, claim)| {
-            (claim.mean_daily_participation_bps.map_or(-1, i64::from), *observer_id)
+            (
+                claim.mean_daily_participation_bps.map_or(-1, i64::from),
+                *observer_id,
+            )
         });
         let (source_observer_id, source) = if group.len() == 3 { group[1] } else { group[0] };
-        let mut agreeing: Vec<String> = group.iter().map(|(observer_id, _)| (*observer_id).to_string()).collect();
+        let mut agreeing: Vec<String> = group
+            .iter()
+            .map(|(observer_id, _)| (*observer_id).to_string())
+            .collect();
         agreeing.sort();
         rows.push(ValidatorRowV1 {
             claim: source.clone(),
@@ -894,7 +977,9 @@ pub fn verify_validator_uptime_feed(
     last_accepted: &BTreeMap<String, String>,
 ) -> Result<UptimeFeedVerificationReport, String> {
     validate_observer_keyset(keyset)?;
-    if feed.schema != VALIDATOR_UPTIME_FEED_SCHEMA || feed.schema_version != VALIDATOR_UPTIME_FEED_SCHEMA_VERSION {
+    if feed.schema != VALIDATOR_UPTIME_FEED_SCHEMA
+        || feed.schema_version != VALIDATOR_UPTIME_FEED_SCHEMA_VERSION
+    {
         return Err("schema: not a postfiat-validator-uptime-v1 feed".to_string());
     }
     parse_utc_timestamp(&feed.generated_at).map_err(|error| format!("schema: {error}"))?;
@@ -902,13 +987,18 @@ pub fn verify_validator_uptime_feed(
         return Err("feed is for another chain or keyset than the pinned keyset".to_string());
     }
     let window = check_policy_and_window(&feed.quorum_policy, &feed.window_spec)?;
-    if feed.observer_attestations.is_empty() || feed.observer_attestations.len() > UPTIME_OBSERVER_COUNT {
+    if feed.observer_attestations.is_empty()
+        || feed.observer_attestations.len() > UPTIME_OBSERVER_COUNT
+    {
         return Err("schema: a feed carries one to three attestations".to_string());
     }
     let mut seen = BTreeSet::new();
     for attestation in &feed.observer_attestations {
         if !seen.insert(&attestation.observer_id) {
-            return Err(format!("observer {} appears twice", attestation.observer_id));
+            return Err(format!(
+                "observer {} appears twice",
+                attestation.observer_id
+            ));
         }
     }
 
@@ -927,16 +1017,31 @@ pub fn verify_validator_uptime_feed(
         highest_finalized_height: None,
     };
     for attestation in &feed.observer_attestations {
-        match check_attestation(feed, attestation, keyset, window, now_unix, last_accepted) {
+        let context = (&feed.chain, &feed.quorum_policy, &feed.window_spec);
+        match check_attestation(
+            context,
+            attestation,
+            keyset,
+            window,
+            now_unix,
+            last_accepted,
+        ) {
             Ok(observed_at) => {
                 verified.push(attestation);
-                report.accepted.insert(attestation.observer_id.clone(), attestation.observed_at.clone());
-                report.newest_observed_at_unix = report.newest_observed_at_unix.max(Some(observed_at));
-                report.highest_finalized_height =
-                    report.highest_finalized_height.max(Some(attestation.finalized_height));
+                report.accepted.insert(
+                    attestation.observer_id.clone(),
+                    attestation.observed_at.clone(),
+                );
+                report.newest_observed_at_unix =
+                    report.newest_observed_at_unix.max(Some(observed_at));
+                report.highest_finalized_height = report
+                    .highest_finalized_height
+                    .max(Some(attestation.finalized_height));
             }
             Err(reason) => {
-                report.rejected_observers.insert(attestation.observer_id.clone(), reason);
+                report
+                    .rejected_observers
+                    .insert(attestation.observer_id.clone(), reason);
             }
         }
     }
@@ -957,6 +1062,108 @@ pub fn verify_validator_uptime_feed(
     report.validators = rows;
     report.validators_without_quorum = no_quorum;
     Ok(report)
+}
+
+/// One observer's attestation with the context its signature covers, as the
+/// observer publishes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObserverAttestationEnvelopeV1 {
+    pub chain: UptimeChainV1,
+    pub quorum_policy: UptimeQuorumPolicyV1,
+    pub window_spec: UptimeWindowSpecV1,
+    pub attestation: ObserverAttestationV1,
+}
+
+/// Bundle the observers' attestations into a feed. Needs no key: it keeps the
+/// attestations of the newest window that count under the pinned keyset and
+/// writes the rows they give. With fewer than two the feed is still written;
+/// a consumer reads it as indeterminate.
+pub fn bundle_validator_uptime_feed(
+    envelopes: &[ObserverAttestationEnvelopeV1],
+    keyset: &ObserverKeysetV1,
+    now_unix: i64,
+) -> Result<(ValidatorUptimeFeedV1, BTreeMap<String, String>), String> {
+    validate_observer_keyset(keyset)?;
+    let mut rejected = BTreeMap::new();
+    // Per observer, the newest attestation that counts; per window, those observers.
+    let mut by_window: BTreeMap<i64, BTreeMap<String, &ObserverAttestationEnvelopeV1>> =
+        BTreeMap::new();
+    for envelope in envelopes {
+        let observer_id = envelope.attestation.observer_id.clone();
+        let checked = (|| {
+            if envelope.chain != keyset.chain
+                || envelope.quorum_policy.observer_keyset_id != keyset.keyset_id
+            {
+                return Err("for another chain or keyset than the pinned keyset".to_string());
+            }
+            let window = check_policy_and_window(&envelope.quorum_policy, &envelope.window_spec)?;
+            let context = (
+                &envelope.chain,
+                &envelope.quorum_policy,
+                &envelope.window_spec,
+            );
+            check_attestation(
+                context,
+                &envelope.attestation,
+                keyset,
+                window,
+                now_unix,
+                &BTreeMap::new(),
+            )?;
+            Ok(window.1)
+        })();
+        match checked {
+            Ok(window_end_day) => {
+                let slot = by_window.entry(window_end_day).or_default();
+                let newer = slot.get(&observer_id).is_none_or(|kept| {
+                    kept.attestation.observed_at < envelope.attestation.observed_at
+                });
+                if newer {
+                    slot.insert(observer_id, envelope);
+                }
+            }
+            Err(reason) => {
+                rejected.insert(observer_id, reason);
+            }
+        }
+    }
+    let Some((_, newest)) = by_window.into_iter().next_back() else {
+        return Err(format!("no attestation counts: {rejected:?}"));
+    };
+    let first = newest.values().next().ok_or("no attestation counts")?;
+    let kept: Vec<&ObserverAttestationEnvelopeV1> = newest
+        .values()
+        .copied()
+        .filter(|envelope| {
+            envelope.quorum_policy == first.quorum_policy
+                && envelope.window_spec == first.window_spec
+        })
+        .collect();
+    let attestations: Vec<&ObserverAttestationV1> =
+        kept.iter().map(|envelope| &envelope.attestation).collect();
+    let rows = if attestations.len() >= UPTIME_QUORUM_THRESHOLD {
+        reconcile_validator_rows(&attestations).0
+    } else {
+        Vec::new()
+    };
+    let mut validators = Vec::new();
+    for row in &rows {
+        validators.push(to_value(row)?);
+    }
+    Ok((
+        ValidatorUptimeFeedV1 {
+            schema: VALIDATOR_UPTIME_FEED_SCHEMA.to_string(),
+            schema_version: VALIDATOR_UPTIME_FEED_SCHEMA_VERSION,
+            generated_at: format_utc_timestamp(now_unix),
+            chain: first.chain.clone(),
+            quorum_policy: first.quorum_policy.clone(),
+            window_spec: first.window_spec.clone(),
+            validators,
+            observer_attestations: attestations.into_iter().cloned().collect(),
+        },
+        rejected,
+    ))
 }
 
 /// Sign one observer's attestation. The claims are derived from the facts
@@ -1016,6 +1223,9 @@ pub fn sign_observer_attestation(
 mod tests {
     use super::*;
 
+    type AttestationChange = Box<dyn Fn(&mut ObserverAttestationV1)>;
+    type ClaimChange = Box<dyn Fn(&mut ValidatorClaimV1)>;
+
     const FIXTURE_NOW: &str = "2026-11-27T01:40:40Z";
 
     fn fixture() -> (ValidatorUptimeFeedV1, ObserverKeysetV1, i64) {
@@ -1025,13 +1235,18 @@ mod tests {
         )
         .expect("the fixture is a feed");
         let keyset = serde_json::from_slice(
-            &fs::read(dir.join("postfiat-observer-keyset-v1.fixture.json")).expect("keyset fixture"),
+            &fs::read(dir.join("postfiat-observer-keyset-v1.fixture.json"))
+                .expect("keyset fixture"),
         )
         .expect("the fixture is a keyset");
         (feed, keyset, parse_utc_timestamp(FIXTURE_NOW).expect("now"))
     }
 
-    fn verify(feed: &ValidatorUptimeFeedV1, keyset: &ObserverKeysetV1, now: i64) -> Result<UptimeFeedVerificationReport, String> {
+    fn verify(
+        feed: &ValidatorUptimeFeedV1,
+        keyset: &ObserverKeysetV1,
+        now: i64,
+    ) -> Result<UptimeFeedVerificationReport, String> {
         verify_validator_uptime_feed(feed, keyset, now, &BTreeMap::new())
     }
 
@@ -1042,7 +1257,9 @@ mod tests {
             .filter(|a| a.observer_id != skip)
             .collect();
         let (rows, _) = reconcile_validator_rows(&kept);
-        rows.iter().map(|row| serde_json::to_value(row).expect("row")).collect()
+        rows.iter()
+            .map(|row| serde_json::to_value(row).expect("row"))
+            .collect()
     }
 
     /// The fixture is signed by the Python reference with another ML-DSA-65
@@ -1054,10 +1271,16 @@ mod tests {
         let report = verify(&feed, &keyset, now).expect("the fixture verifies");
         assert_eq!(
             report.verified_observers,
-            ["observer-ap-northeast-3", "observer-eu-central-2", "observer-us-east-1"]
+            [
+                "observer-ap-northeast-3",
+                "observer-eu-central-2",
+                "observer-us-east-1"
+            ]
         );
         assert!(!report.indeterminate && report.allow_new_bindings && report.allow_credit_grants);
-        assert!(report.rejected_observers.is_empty() && report.validators_without_quorum.is_empty());
+        assert!(
+            report.rejected_observers.is_empty() && report.validators_without_quorum.is_empty()
+        );
         let states: Vec<(&str, &str, &str)> = report
             .validators
             .iter()
@@ -1090,14 +1313,38 @@ mod tests {
     fn one_wrong_observer_is_dropped_and_two_make_the_feed_indeterminate() {
         let (feed, keyset, now) = fixture();
         let first = feed.observer_attestations[0].observer_id.clone();
-        let cases: Vec<(&str, Box<dyn Fn(&mut ObserverAttestationV1)>)> = vec![
-            ("signature does not verify", Box::new(|a| a.signature_hex = "00".repeat(ML_DSA_65_SIGNATURE_BYTES))),
-            ("claim_digest_sha256", Box::new(|a| a.claim_digest_sha256 = "0".repeat(64))),
-            ("region differs", Box::new(|a| a.region = "eu-west".to_string())),
-            ("claim_digest_sha256", Box::new(|a| a.validator_claims[3].access_state = "active".to_string())),
-            ("claim_digest_sha256", Box::new(|a| a.validator_claims[3].removal_proposal_eligible = true)),
-            ("claim_digest_sha256", Box::new(|a| a.validator_claims[3].grace_started_at = Some("2026-11-26T00:00:00Z".to_string()))),
-            ("public_key_hex differs", Box::new(|a| a.public_key_hex = "ab".repeat(ML_DSA_65_PUBLIC_KEY_BYTES))),
+        let cases: Vec<(&str, AttestationChange)> = vec![
+            (
+                "signature does not verify",
+                Box::new(|a| a.signature_hex = "00".repeat(ML_DSA_65_SIGNATURE_BYTES)),
+            ),
+            (
+                "claim_digest_sha256",
+                Box::new(|a| a.claim_digest_sha256 = "0".repeat(64)),
+            ),
+            (
+                "region differs",
+                Box::new(|a| a.region = "eu-west".to_string()),
+            ),
+            (
+                "claim_digest_sha256",
+                Box::new(|a| a.validator_claims[3].access_state = "active".to_string()),
+            ),
+            (
+                "claim_digest_sha256",
+                Box::new(|a| a.validator_claims[3].removal_proposal_eligible = true),
+            ),
+            (
+                "claim_digest_sha256",
+                Box::new(|a| {
+                    a.validator_claims[3].grace_started_at =
+                        Some("2026-11-26T00:00:00Z".to_string())
+                }),
+            ),
+            (
+                "public_key_hex differs",
+                Box::new(|a| a.public_key_hex = "ab".repeat(ML_DSA_65_PUBLIC_KEY_BYTES)),
+            ),
         ];
         for (reason, mutate) in cases {
             let mut bad = feed.clone();
@@ -1106,16 +1353,25 @@ mod tests {
             assert!(verify(&bad, &keyset, now).is_err(), "{reason}");
             // Rebuilt from the two good observers, the feed stands.
             bad.validators = rows_from(&bad, &first);
-            let report = verify(&bad, &keyset, now).unwrap_or_else(|error| panic!("{reason}: {error}"));
+            let report =
+                verify(&bad, &keyset, now).unwrap_or_else(|error| panic!("{reason}: {error}"));
             assert_eq!(report.verified_observers.len(), 2, "{reason}");
-            assert!(report.rejected_observers[&first].contains(reason), "{reason}: {:?}", report.rejected_observers);
+            assert!(
+                report.rejected_observers[&first].contains(reason),
+                "{reason}: {:?}",
+                report.rejected_observers
+            );
             assert!(!report.indeterminate && report.validators.len() == 6);
         }
         // A swapped signature.
         let mut swapped = feed.clone();
-        swapped.observer_attestations[0].signature_hex = feed.observer_attestations[1].signature_hex.clone();
+        swapped.observer_attestations[0].signature_hex =
+            feed.observer_attestations[1].signature_hex.clone();
         swapped.validators = rows_from(&swapped, &first);
-        assert!(verify(&swapped, &keyset, now).expect("two remain").rejected_observers[&first].contains("signature"));
+        assert!(verify(&swapped, &keyset, now)
+            .expect("two remain")
+            .rejected_observers[&first]
+            .contains("signature"));
 
         // Two wrong observers: indeterminate. New grants stop, nobody is revoked.
         let mut two_bad = feed.clone();
@@ -1133,10 +1389,16 @@ mod tests {
         // Every field of a served row is covered: change one and the feed is refused.
         for (field, value) in [
             ("removal_proposal_eligible", serde_json::json!(true)),
-            ("grace_started_at", serde_json::json!("2026-11-26T00:00:00Z")),
+            (
+                "grace_started_at",
+                serde_json::json!("2026-11-26T00:00:00Z"),
+            ),
             ("consecutive_passing_days", serde_json::json!(3)),
             ("finance_hub_access", serde_json::json!(false)),
-            ("source_observer_id", serde_json::json!("observer-us-east-1")),
+            (
+                "source_observer_id",
+                serde_json::json!("observer-us-east-1"),
+            ),
             ("an_added_field", serde_json::json!(1)),
         ] {
             let mut bad = feed.clone();
@@ -1151,21 +1413,41 @@ mod tests {
         let stale = verify(&feed, &keyset, now + 3_700).expect("stale is not an error");
         assert!(stale.indeterminate && stale.rejected_observers.values().all(|r| r == "stale"));
         let accepted = verify(&feed, &keyset, now).expect("ok").accepted;
-        assert!(!verify_validator_uptime_feed(&feed, &keyset, now, &accepted).expect("same").indeterminate);
+        assert!(
+            !verify_validator_uptime_feed(&feed, &keyset, now, &accepted)
+                .expect("same")
+                .indeterminate
+        );
         let newer: BTreeMap<String, String> = accepted
             .iter()
-            .map(|(id, at)| (id.clone(), format_utc_timestamp(parse_utc_timestamp(at).expect("ts") + 5)))
+            .map(|(id, at)| {
+                (
+                    id.clone(),
+                    format_utc_timestamp(parse_utc_timestamp(at).expect("ts") + 5),
+                )
+            })
             .collect();
         let replay = verify_validator_uptime_feed(&feed, &keyset, now, &newer).expect("replay");
-        assert!(replay.indeterminate && replay.rejected_observers.values().all(|r| r.contains("older than")));
+        assert!(
+            replay.indeterminate
+                && replay
+                    .rejected_observers
+                    .values()
+                    .all(|r| r.contains("older than"))
+        );
 
         // The fixed numbers cannot be moved, and an unknown metric is refused.
         let mut bad = feed.clone();
         bad.window_spec.liveness_threshold_bps = 9_400;
         assert!(verify(&bad, &keyset, now).is_err());
         let mut bad = feed.clone();
-        bad.window_spec.metric_version = "latency-fair-round-window-v1".to_string();
-        assert!(verify(&bad, &keyset, now).expect_err("metric").contains("metric_version"));
+        bad.window_spec.metric_version = "precommit-qc-observer-brackets-v1".to_string();
+        assert!(verify(&bad, &keyset, now)
+            .expect_err("metric")
+            .contains("metric_version"));
+        let mut bad = feed.clone();
+        bad.window_spec.credit_sources = vec!["precommit_certificate".to_string()];
+        assert!(verify(&bad, &keyset, now).is_err());
         let mut bad = feed.clone();
         bad.quorum_policy.quorum_threshold = 1;
         assert!(verify(&bad, &keyset, now).is_err());
@@ -1191,18 +1473,56 @@ mod tests {
             check_claim(claim, start, end).expect("fixture claims are consistent");
             assert_eq!(&derive_claim(&facts_of(claim), end).expect("derive"), claim);
         }
-        let cases: Vec<(&str, usize, Box<dyn Fn(&mut ValidatorClaimV1)>)> = vec![
-            ("finance_hub_access", 4, Box::new(|c| c.finance_hub_access = true)),
-            ("research_api_keys_active", 4, Box::new(|c| c.research_api_keys_active = true)),
+        let cases: Vec<(&str, usize, ClaimChange)> = vec![
+            (
+                "finance_hub_access",
+                4,
+                Box::new(|c| c.finance_hub_access = true),
+            ),
+            (
+                "research_api_keys_active",
+                4,
+                Box::new(|c| c.research_api_keys_active = true),
+            ),
             ("reward_eligible", 3, Box::new(|c| c.reward_eligible = true)),
-            ("mean_daily_participation_bps", 0, Box::new(|c| c.mean_daily_participation_bps = Some(10_000))),
-            ("participation_bps", 0, Box::new(|c| c.days[0].participation_bps = Some(10_000))),
-            ("days must list every window day", 0, Box::new(|c| { c.days.remove(5); })),
-            ("grace_expires_at", 3, Box::new(|c| c.grace_expires_at = Some("2026-12-31T00:00:00Z".to_string()))),
-            ("days must list every window day", 1, Box::new(|c| c.first_active_date = Some("2026-10-01".to_string()))),
-            ("signed_blocks exceeds", 0, Box::new(|c| c.days[0].signed_blocks = 10_000)),
+            (
+                "mean_daily_participation_bps",
+                0,
+                Box::new(|c| c.mean_daily_participation_bps = Some(10_000)),
+            ),
+            (
+                "participation_bps",
+                0,
+                Box::new(|c| c.days[0].participation_bps = Some(10_000)),
+            ),
+            (
+                "days must list every window day",
+                0,
+                Box::new(|c| {
+                    c.days.remove(5);
+                }),
+            ),
+            (
+                "grace_expires_at",
+                3,
+                Box::new(|c| c.grace_expires_at = Some("2026-12-31T00:00:00Z".to_string())),
+            ),
+            (
+                "days must list every window day",
+                1,
+                Box::new(|c| c.first_active_date = Some("2026-10-01".to_string())),
+            ),
+            (
+                "signed_blocks exceeds",
+                0,
+                Box::new(|c| c.days[0].signed_blocks = 10_000),
+            ),
             ("liveness_met", 3, Box::new(|c| c.liveness_met = true)),
-            ("first_active_date is null exactly while pending", 5, Box::new(|c| c.first_active_date = Some("2026-11-01".to_string()))),
+            (
+                "first_active_date is null exactly while pending",
+                5,
+                Box::new(|c| c.first_active_date = Some("2026-11-01".to_string())),
+            ),
         ];
         for (reason, index, mutate) in cases {
             let mut claim = claims[index].clone();
@@ -1220,11 +1540,16 @@ mod tests {
         let chain = template.chain.clone();
         let mut quorum_policy = template.quorum_policy.clone();
         quorum_policy.observer_keyset_id = "postfiat-observer-keyset-rust-test".to_string();
-        let observers = [("observer-a-1", "us-east", "group-a"), ("observer-b-2", "eu-central", "group-b"), ("observer-c-3", "ap-northeast", "group-c")];
+        let observers = [
+            ("observer-a-1", "us-east", "group-a"),
+            ("observer-b-2", "eu-central", "group-b"),
+            ("observer-c-3", "ap-northeast", "group-c"),
+        ];
         let keys: Vec<ObserverPrivateKeyFileV1> = observers
             .iter()
             .map(|(id, region, group)| {
-                create_observer_key_file(&dir.join(format!("{id}.json")), id, region, group).expect("key")
+                create_observer_key_file(&dir.join(format!("{id}.json")), id, region, group)
+                    .expect("key")
             })
             .collect();
         let keyset = ObserverKeysetV1 {
@@ -1247,8 +1572,11 @@ mod tests {
         };
         validate_observer_keyset(&keyset).expect("keyset");
         // The facts of the fixture's six validators, signed again by keys made here.
-        let facts: Vec<ValidatorFactsV1> =
-            template.observer_attestations[0].validator_claims.iter().map(facts_of).collect();
+        let facts: Vec<ValidatorFactsV1> = template.observer_attestations[0]
+            .validator_claims
+            .iter()
+            .map(facts_of)
+            .collect();
         let unsigned = |facts: Vec<ValidatorFactsV1>| UnsignedObserverAttestationV1 {
             chain: chain.clone(),
             quorum_policy: quorum_policy.clone(),
@@ -1256,7 +1584,9 @@ mod tests {
             observed_at: "2026-11-27T01:39:00Z".to_string(),
             committee_epoch: 12,
             finalized_height: 6_600,
-            finalized_block_hash: template.observer_attestations[0].finalized_block_hash.clone(),
+            finalized_block_hash: template.observer_attestations[0]
+                .finalized_block_hash
+                .clone(),
             registry_root: template.observer_attestations[0].registry_root.clone(),
             validator_facts: facts,
         };
@@ -1269,6 +1599,7 @@ mod tests {
             sign_observer_attestation(&keys[1], &unsigned(facts.clone())).expect("sign b"),
             sign_observer_attestation(&keys[2], &unsigned(facts.clone())).expect("sign c"),
         ];
+        let all = attestations.clone();
         let refs: Vec<&ObserverAttestationV1> = attestations.iter().collect();
         let (rows, no_quorum) = reconcile_validator_rows(&refs);
         assert!(no_quorum.is_empty());
@@ -1279,7 +1610,10 @@ mod tests {
             chain: chain.clone(),
             quorum_policy: quorum_policy.clone(),
             window_spec: template.window_spec.clone(),
-            validators: rows.iter().map(|row| serde_json::to_value(row).expect("row")).collect(),
+            validators: rows
+                .iter()
+                .map(|row| serde_json::to_value(row).expect("row"))
+                .collect(),
             observer_attestations: attestations,
         };
         let now = parse_utc_timestamp(FIXTURE_NOW).expect("now");
@@ -1295,10 +1629,76 @@ mod tests {
         let refs: Vec<&ObserverAttestationV1> = feed.observer_attestations.iter().collect();
         let (rows, no_quorum) = reconcile_validator_rows(&refs);
         assert_eq!(no_quorum, ["validator-3"]);
-        feed.validators = rows.iter().map(|row| serde_json::to_value(row).expect("row")).collect();
+        feed.validators = rows
+            .iter()
+            .map(|row| serde_json::to_value(row).expect("row"))
+            .collect();
         let report = verify(&feed, &keyset, now).expect("two observers");
         assert_eq!(report.validators_without_quorum, ["validator-3"]);
         assert_eq!(report.validators.len(), 5);
+
+        // The bundler needs no key: it gives the same feed, drops what does not
+        // count, and keeps one attestation per observer, the newest.
+        let envelope = |attestation: &ObserverAttestationV1| ObserverAttestationEnvelopeV1 {
+            chain: chain.clone(),
+            quorum_policy: quorum_policy.clone(),
+            window_spec: template.window_spec.clone(),
+            attestation: attestation.clone(),
+        };
+        let mut later = unsigned(facts.clone());
+        later.observed_at = "2026-11-27T01:40:30Z".to_string();
+        let newer_b = sign_observer_attestation(&keys[1], &later).expect("sign b again");
+        let mut forged = all[2].clone();
+        forged.signature_hex = "00".repeat(ML_DSA_65_SIGNATURE_BYTES);
+        let (bundled, rejected) = bundle_validator_uptime_feed(
+            &[
+                envelope(&all[0]),
+                envelope(&all[1]),
+                envelope(&newer_b),
+                envelope(&forged),
+            ],
+            &keyset,
+            now,
+        )
+        .expect("bundle");
+        assert!(
+            rejected["observer-c-3"].contains("signature"),
+            "{rejected:?}"
+        );
+        let ids: Vec<&str> = bundled
+            .observer_attestations
+            .iter()
+            .map(|a| a.observer_id.as_str())
+            .collect();
+        assert_eq!(ids, ["observer-a-1", "observer-b-2"]);
+        assert_eq!(
+            bundled.observer_attestations[1].observed_at,
+            "2026-11-27T01:40:30Z"
+        );
+        let report = verify(&bundled, &keyset, now).expect("a bundled feed verifies");
+        assert_eq!(report.validators_without_quorum, ["validator-3"]);
+        let (full, rejected) = bundle_validator_uptime_feed(
+            &[envelope(&all[0]), envelope(&all[1]), envelope(&all[2])],
+            &keyset,
+            now,
+        )
+        .expect("bundle of three");
+        assert!(rejected.is_empty());
+        assert_eq!(
+            verify(&full, &keyset, now)
+                .expect("verifies")
+                .validators
+                .len(),
+            6
+        );
+        // One attestation alone still makes a feed; a consumer reads it as indeterminate.
+        let (single, _) =
+            bundle_validator_uptime_feed(&[envelope(&all[0])], &keyset, now).expect("single");
+        assert!(
+            single.validators.is_empty()
+                && verify(&single, &keyset, now).expect("ok").indeterminate
+        );
+        assert!(bundle_validator_uptime_feed(&[envelope(&forged)], &keyset, now).is_err());
 
         // An observer cannot sign facts that contradict themselves.
         let mut nonsense = facts;
@@ -1309,17 +1709,41 @@ mod tests {
 
     #[test]
     fn dates_round_trip() {
-        for raw in ["1970-01-01", "2000-02-29", "2026-11-27", "2026-12-31", "2027-01-01", "2100-03-01"] {
+        for raw in [
+            "1970-01-01",
+            "2000-02-29",
+            "2026-11-27",
+            "2026-12-31",
+            "2027-01-01",
+            "2100-03-01",
+        ] {
             assert_eq!(format_utc_date(parse_utc_date(raw).expect(raw)), raw);
         }
         assert_eq!(parse_utc_date("1970-01-02"), Ok(1));
-        for bad in ["2026-02-30", "2026-13-01", "26-11-27", "2026-11-27T", "2026/11/27", "2100-02-29"] {
+        for bad in [
+            "2026-02-30",
+            "2026-13-01",
+            "26-11-27",
+            "2026-11-27T",
+            "2026/11/27",
+            "2100-02-29",
+        ] {
             assert!(parse_utc_date(bad).is_err(), "{bad}");
         }
         let unix = parse_utc_timestamp("2026-11-27T01:40:40Z").expect("timestamp");
         assert_eq!(format_utc_timestamp(unix), "2026-11-27T01:40:40Z");
-        assert_eq!(format_utc_timestamp(parse_utc_timestamp("2026-11-24T00:00:00Z").expect("ts") + 14 * 86_400), "2026-12-08T00:00:00Z");
-        for bad in ["2026-11-27T01:40:40.5Z", "2026-11-27T01:40:40+00:00", "2026-11-27 01:40:40Z", "2026-11-27T24:00:00Z"] {
+        assert_eq!(
+            format_utc_timestamp(
+                parse_utc_timestamp("2026-11-24T00:00:00Z").expect("ts") + 14 * 86_400
+            ),
+            "2026-12-08T00:00:00Z"
+        );
+        for bad in [
+            "2026-11-27T01:40:40.5Z",
+            "2026-11-27T01:40:40+00:00",
+            "2026-11-27 01:40:40Z",
+            "2026-11-27T24:00:00Z",
+        ] {
             assert!(parse_utc_timestamp(bad).is_err(), "{bad}");
         }
         assert!(parse_utc_midnight("2026-11-27T00:00:01Z").is_err());

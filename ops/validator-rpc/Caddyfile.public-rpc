@@ -1,20 +1,20 @@
-# PostFiat Public RPC TLS 1.3 Edge Configuration
-# Enforces TLS 1.3 only, 64 KiB max request body (MAX_RPC_REQUEST_BYTES=65536),
-# zero JSON body rewriting, and loopback-only upstream routing.
+# TLS in front of `postfiat-node rpc-http-edge`.
+# The node speaks JSON lines over TCP, not HTTP, so the proxy never talks to
+# rpc-serve directly: it forwards HTTPS to the HTTP edge on 127.0.0.1:8650.
+# The edge holds the method list and the per-address request budget.
 {
-	auto_https disable_redirects
 	admin off
 	servers {
 		timeouts {
 			read_body 10s
 			read_header 5s
-			write 15s
+			write 20s
 			idle 60s
 		}
 	}
 }
 
-{$POSTFIAT_PUBLIC_RPC_DOMAIN:rpc.example.postfiat.org} {
+{$POSTFIAT_PUBLIC_RPC_DOMAIN} {
 	tls {
 		protocols tls1.3
 	}
@@ -27,21 +27,28 @@
 		format json
 	}
 
-	request_body {
-		max_size 64KB
-	}
-
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		-Server
 	}
 
-	reverse_proxy 127.0.0.1:27651 {
-		transport http {
-			dial_timeout 3s
-			response_header_timeout 15s
+	@rpc path /rpc /healthz
+	handle @rpc {
+		request_body {
+			max_size 64KB
 		}
-		health_timeout 3s
+		reverse_proxy 127.0.0.1:8650 {
+			health_uri /healthz
+			health_interval 5s
+			health_timeout 3s
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 20s
+			}
+		}
+	}
+	handle {
+		respond 404
 	}
 }
