@@ -407,9 +407,9 @@ Before prompting any irreversible old-chain `NFTokenBurn`:
 
 The JSON block below is the machine-verified single source of truth checked in
 CI by `python3 scripts/test-message-protocol-vectors.py` (including a
-pure-Python check that every message declared in the `.proto` files matches
-the script's tables field by field and that every vector decodes against them,
-plus `protoc`
+pure-Python check that every message and enum declared in the `.proto` files
+matches the script's tables field by field and value by value and that every
+vector decodes against them, plus `protoc`
 decode/re-encode byte-identity round-trip checks when `protoc` is present).
 
 Fixture note: To keep the published wire vectors concise and human-inspectable,

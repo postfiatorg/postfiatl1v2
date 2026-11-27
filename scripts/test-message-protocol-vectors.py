@@ -10,8 +10,9 @@ Validates:
      available on PATH (mandatory when `--require-protoc` is passed), and always
      runs pure-Python stdlib schema + wire-format checks so CI needs zero pip installs:
      the .proto files are parsed, every declared message must match the script's
-     field table (number, label, type, name), and every vector byte string is
-     decoded strictly against the parsed declarations.
+     field table (number, label, type, name), every declared enum its value table
+     (name, number), and every vector byte string is decoded strictly against the
+     parsed declarations.
   2. Exact deterministic worked hex vectors published in
      docs/specs/message-protocol-v1.md (single source of truth; detects any drift
      between the specification document and canonical wire encoding).
@@ -1702,6 +1703,83 @@ PROTO_MESSAGE_FIELDS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+# Every enum declared in the .proto files, value by value as "<NAME> = <number>". verify_proto_field_tables()
+# fails when a .proto file renumbers, renames, removes or adds a value, or declares an enum that has no table here.
+PROTO_ENUM_VALUES: dict[str, tuple[str, ...]] = {
+    "postfiat.message.v1.ContentKind": (
+        "CONTENT_KIND_UNSPECIFIED = 0", "CONTENT_KIND_TASK = 1", "CONTENT_KIND_TASK_UPDATE = 2",
+        "CONTENT_KIND_TASK_SUBMISSION = 3", "CONTENT_KIND_CHAT = 4", "CONTENT_KIND_CONTEXT = 5",
+        "CONTENT_KIND_REWARD = 6", "CONTENT_KIND_POLICY = 7", "CONTENT_KIND_IDENTITY = 8", "CONTENT_KIND_ASSET = 9",
+        "CONTENT_KIND_DOCUMENT = 10", "CONTENT_KIND_SYSTEM = 11", "CONTENT_KIND_GOVERNANCE = 12",
+        "CONTENT_KIND_NFT = 13", "CONTENT_KIND_X402 = 14", "CONTENT_KIND_TEST = 99",
+    ),
+    "postfiat.message.v1.PointerTarget": (
+        "POINTER_TARGET_UNSPECIFIED = 0", "POINTER_TARGET_CONTENT_BLOB = 1", "POINTER_TARGET_MANIFEST = 2",
+        "POINTER_TARGET_INLINE = 3",
+    ),
+    "postfiat.message.v1.PointerFlag": (
+        "POINTER_FLAG_UNSPECIFIED = 0", "POINTER_FLAG_PRIVATE = 1", "POINTER_FLAG_PUBLIC = 2",
+        "POINTER_FLAG_EPHEMERAL = 4", "POINTER_FLAG_TOMBSTONE = 8", "POINTER_FLAG_MULTIPART = 16",
+        "POINTER_FLAG_SEALED = 32",
+    ),
+    "postfiat.message.v1.Visibility": (
+        "VISIBILITY_UNSPECIFIED = 0", "VISIBILITY_PUBLIC = 1", "VISIBILITY_PRIVATE = 2", "VISIBILITY_SEALED = 3",
+    ),
+    "postfiat.message.v1.CipherSuite": (
+        "CIPHER_SUITE_UNSPECIFIED = 0", "CIPHER_SUITE_NONE = 1", "CIPHER_SUITE_XWING_XCHACHA20_POLY1305 = 2",
+        "CIPHER_SUITE_LEGACY_X25519_XCHACHA20_POLY1305 = 3",
+    ),
+    "postfiat.message.v1.SignatureAlgorithm": ("SIGNATURE_ALGORITHM_UNSPECIFIED = 0", "SIGNATURE_ALGORITHM_ML_DSA_65 = 1"),
+    "postfiat.message.v1.BodyEncoding": (
+        "BODY_ENCODING_UNSPECIFIED = 0", "BODY_ENCODING_PROTOBUF = 1", "BODY_ENCODING_CANONICAL_JSON = 2",
+        "BODY_ENCODING_RAW_UTF8 = 3", "BODY_ENCODING_RAW_BYTES = 4",
+    ),
+    "postfiat.message.v1.PaymentLane": (
+        "PAYMENT_LANE_UNSPECIFIED = 0", "PAYMENT_LANE_FASTPAY = 1", "PAYMENT_LANE_CONSENSUS_PFT = 2",
+        "PAYMENT_LANE_CONSENSUS_ISSUED = 3",
+    ),
+    "postfiat.message.v1.X402Scheme": (
+        "X402_SCHEME_UNSPECIFIED = 0", "X402_SCHEME_EXACT = 1", "X402_SCHEME_PF_FASTPAY_SETTLED = 2",
+    ),
+    "postfiat.nft.v1.RetirementMode": (
+        "RETIREMENT_MODE_UNSPECIFIED = 0", "RETIREMENT_MODE_BURN_FIRST = 1", "RETIREMENT_MODE_PIN_ONLY = 2",
+    ),
+    "postfiat.nft.v1.HashAlgorithm": (
+        "HASH_ALGORITHM_UNSPECIFIED = 0", "HASH_ALGORITHM_SHA3_384 = 1", "HASH_ALGORITHM_SHA2_256 = 2",
+    ),
+    "postfiat.nft.v1.MediaRole": (
+        "MEDIA_ROLE_UNSPECIFIED = 0", "MEDIA_ROLE_PRIMARY_IMAGE = 1", "MEDIA_ROLE_THUMBNAIL = 2",
+        "MEDIA_ROLE_ANIMATION = 3", "MEDIA_ROLE_AUDIO = 4", "MEDIA_ROLE_DOCUMENT = 5",
+        "MEDIA_ROLE_ENCRYPTED_PROMPT = 6",
+    ),
+    "postfiat.governance.v1.SessionState": (
+        "SESSION_STATE_UNSPECIFIED = 0", "SESSION_STATE_DRAFT = 1", "SESSION_STATE_LIVE = 2",
+        "SESSION_STATE_FROZEN = 3", "SESSION_STATE_IN_REVIEW = 4", "SESSION_STATE_ANCHORING = 5",
+        "SESSION_STATE_PUBLISHED = 6", "SESSION_STATE_ABORTED = 7", "SESSION_STATE_RULING_PENDING = 8",
+        "SESSION_STATE_RULING_ANCHORED = 9",
+    ),
+    "postfiat.governance.v1.DeliverableStatus": (
+        "DELIVERABLE_STATUS_UNSPECIFIED = 0", "DELIVERABLE_STATUS_DONE = 1", "DELIVERABLE_STATUS_IN_PROGRESS = 2",
+        "DELIVERABLE_STATUS_NOT_DONE = 3", "DELIVERABLE_STATUS_DROPPED = 4",
+    ),
+    "postfiat.governance.v1.PostingPolicy": (
+        "POSTING_POLICY_UNSPECIFIED = 0", "POSTING_POLICY_FOUNDER_ONLY = 1", "POSTING_POLICY_ALLOWLIST = 2",
+        "POSTING_POLICY_ALL_MEMBERS = 3",
+    ),
+    "postfiat.governance.v1.FacilitatorMode": (
+        "FACILITATOR_MODE_UNSPECIFIED = 0", "FACILITATOR_MODE_OFF = 1", "FACILITATOR_MODE_AGENDA = 2",
+        "FACILITATOR_MODE_INTERACTIVE = 3",
+    ),
+    "postfiat.governance.v1.ExclusionReason": (
+        "EXCLUSION_REASON_UNSPECIFIED = 0", "EXCLUSION_REASON_INVALID_SIGNATURE = 1", "EXCLUSION_REASON_WRONG_ROOM = 2",
+        "EXCLUSION_REASON_INELIGIBLE_AUTHOR = 3", "EXCLUSION_REASON_OUTSIDE_WINDOW = 4",
+        "EXCLUSION_REASON_RATE_LIMITED = 5", "EXCLUSION_REASON_ACCOUNT_CAP_EXCEEDED = 6",
+    ),
+    "postfiat.governance.v1.RulingComputeBackend": (
+        "RULING_COMPUTE_BACKEND_UNSPECIFIED = 0", "RULING_COMPUTE_BACKEND_GOOGLE = 1", "RULING_COMPUTE_BACKEND_VAST = 2",
+    ),
+}
+
 
 class ProtoTokens:
     def __init__(self, rel: str, src: str) -> None:
@@ -1911,12 +1989,13 @@ def vector_proto_payloads(vectors: dict[str, dict[str, Any]]) -> list[tuple[str,
     ]
 
 
-def verify_proto_field_tables(vectors: dict[str, dict[str, Any]]) -> tuple[int, int]:
-    """Fail when the .proto files disagree with the script's message tables or with the vector bytes."""
+def verify_proto_field_tables(vectors: dict[str, dict[str, Any]]) -> tuple[int, int, int]:
+    """Fail when the .proto files disagree with the script's message and enum tables or with the vector bytes."""
     messages, enums = parse_proto_sources()
     known_types = set(messages) | set(enums)
     for kind, declared_names, tables in (
         ("message", messages, PROTO_MESSAGE_FIELDS),
+        ("enum", enums, PROTO_ENUM_VALUES),
     ):
         untabled = sorted(set(declared_names) - set(tables))
         if untabled:
@@ -1940,10 +2019,21 @@ def verify_proto_field_tables(vectors: dict[str, dict[str, Any]]) -> tuple[int, 
             ]
             raise AssertionError(f"{message} disagrees with the script's field table: " + "; ".join(differences))
 
+    for enum, entries in PROTO_ENUM_VALUES.items():
+        expected_values = {name: int(number) for name, _, number in (entry.split() for entry in entries)}
+        declared_values = enums[enum]
+        if declared_values != expected_values:
+            differences = [
+                f"{name}: .proto {declared_values.get(name)} vs script {expected_values.get(name)}"
+                for name in sorted(set(declared_values) | set(expected_values))
+                if declared_values.get(name) != expected_values.get(name)
+            ]
+            raise AssertionError(f"{enum} disagrees with the script's value table: " + "; ".join(differences))
+
     visited: set[str] = set()
     for label, message, raw_bytes in vector_proto_payloads(vectors):
         decode_against_proto(raw_bytes, message, messages, enums, visited, label)
-    return len(PROTO_MESSAGE_FIELDS), len(visited)
+    return len(PROTO_MESSAGE_FIELDS), len(PROTO_ENUM_VALUES), len(visited)
 
 
 # ---------------------------------------------------------------------------
@@ -2157,7 +2247,7 @@ def main() -> int:
         return 0
 
     verify_proto_sources_pure_python()
-    proto_messages_checked, proto_messages_in_vectors = verify_proto_field_tables(expected)
+    proto_messages_checked, proto_enums_checked, proto_messages_in_vectors = verify_proto_field_tables(expected)
 
     # Check canonical field ordering on every hex protobuf payload
     for vec_name, fields in expected.items():
@@ -2204,7 +2294,7 @@ def main() -> int:
     print(
         f"message-protocol-v1 vectors PASSED "
         f"(vectors={len(expected)}, proto_messages_checked={proto_messages_checked}, "
-        f"proto_messages_in_vectors={proto_messages_in_vectors}, "
+        f"proto_enums_checked={proto_enums_checked}, proto_messages_in_vectors={proto_messages_in_vectors}, "
         f"protoc_roundtrip={'yes' if protoc_used else 'skipped-no-protoc'})"
     )
     return 0
