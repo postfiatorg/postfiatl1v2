@@ -3411,6 +3411,103 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             );
             Ok(())
         }
+        "release-build-info" => {
+            // What this binary is: the facts a release manifest states about it.
+            let binary = env::current_exe().map_err(|error| format!("cannot find the running binary: {error}"))?;
+            let (sha256, size_bytes) = postfiat_node::release_upgrade::sha256_file_and_size(&binary)
+                .map_err(|error| format!("read `{}` failed: {error}", binary.display()))?;
+            println!(
+                "{}",
+                serde_json::json!({
+                    "schema": "postfiat-node-release-build-info-v1",
+                    "architecture": postfiat_node::release_upgrade::host_release_architecture()?,
+                    "build_git_revision": env!("POSTFIAT_BUILD_GIT_REV"),
+                    "build_profile": env!("POSTFIAT_BUILD_PROFILE"),
+                    "binary_sha256": sha256,
+                    "binary_size_bytes": size_bytes,
+                })
+            );
+            Ok(())
+        }
+        "release-manifest-create" => {
+            // Builds the unsigned manifest of a release from its artifacts.
+            use postfiat_node::release_upgrade::{
+                create_release_manifest_v3, ReleaseCheckpointV3, ReleaseKeysetV1, ReleaseManifestInputs,
+                ReleaseRolloutV3,
+            };
+            let need = |flag: &str| flag_value(flags, flag).ok_or_else(|| format!("missing {flag}"));
+            let number = |flag: &str| -> Result<u64, String> {
+                need(flag)?.parse::<u64>().map_err(|_| format!("{flag} must be a number"))
+            };
+            let keyset: ReleaseKeysetV1 = serde_json::from_slice(
+                &fs::read(need("--keyset-file")?).map_err(|error| format!("read --keyset-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("invalid release keyset: {error}"))?;
+            let rollout = match flag_value(flags, "--activation-height") {
+                None => ReleaseRolloutV3 {
+                    mode: "rolling".to_string(),
+                    activation_height: None,
+                    advance_warning_blocks: None,
+                    halt_if_missed: false,
+                },
+                Some(_) => ReleaseRolloutV3 {
+                    mode: "activation_height".to_string(),
+                    activation_height: Some(number("--activation-height")?),
+                    advance_warning_blocks: Some(number("--advance-warning-blocks")?),
+                    halt_if_missed: true,
+                },
+            };
+            let inputs = ReleaseManifestInputs {
+                release_id: need("--release-id")?.to_string(),
+                release_sequence: number("--release-sequence")?,
+                created_unix: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |elapsed| elapsed.as_secs()),
+                valid_days: flag_value(flags, "--valid-days")
+                    .unwrap_or("90")
+                    .parse::<u64>()
+                    .map_err(|_| "--valid-days must be a number".to_string())?,
+                chain_id: need("--chain-id")?.to_string(),
+                genesis_hash: need("--genesis-hash")?.to_string(),
+                git_revision: need("--git-revision")?.to_string(),
+                build_features: need("--build-features")?
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|feature| !feature.is_empty())
+                    .map(str::to_string)
+                    .collect(),
+                protocol_version: number("--protocol-version")? as u32,
+                min_compatible_protocol_version: number("--min-compatible-protocol-version")? as u32,
+                rollout,
+                checkpoint: ReleaseCheckpointV3 {
+                    height: number("--checkpoint-height")?,
+                    block_hash: need("--checkpoint-block-hash")?.to_string(),
+                    state_root: need("--checkpoint-state-root")?.to_string(),
+                    certificate_id: need("--checkpoint-certificate-id")?.to_string(),
+                    committee_epoch: number("--checkpoint-committee-epoch")?,
+                },
+                url_base: need("--url-base")?.to_string(),
+                binary_x86_64: PathBuf::from(need("--binary-x86-64")?),
+                binary_aarch64: PathBuf::from(need("--binary-aarch64")?),
+                systemd_bundle: PathBuf::from(need("--systemd-bundle")?),
+                docker_profiles: PathBuf::from(need("--docker-profiles")?),
+                sbom: PathBuf::from(need("--sbom")?),
+                checksums: PathBuf::from(need("--checksums")?),
+                swap_circuit_metadata: PathBuf::from(need("--swap-circuit-metadata")?),
+                private_egress_circuit_metadata: PathBuf::from(need("--private-egress-circuit-metadata")?),
+            };
+            let output = PathBuf::from(need("--output")?);
+            if output.exists() {
+                return Err(format!("`{}` already exists; a manifest is never overwritten", output.display()));
+            }
+            let manifest = create_release_manifest_v3(&inputs, &keyset)?;
+            let json = serde_json::to_string_pretty(&manifest)
+                .map_err(|error| format!("serialization failed: {error}"))?;
+            fs::write(&output, format!("{json}\n"))
+                .map_err(|error| format!("write `{}` failed: {error}", output.display()))?;
+            println!("unsigned manifest of `{}` (sequence {}) written to {}", manifest.release_id, manifest.release_sequence, output.display());
+            Ok(())
+        }
         "release-manifest-sign" => {
             // Adds this signer's signature to a manifest. Run once per signer,
             // each on its own machine; two signatures make a release.

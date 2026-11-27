@@ -32,6 +32,84 @@ Production/mainnet promotion additionally requires external cryptography,
 circuits, contracts, and protocol review plus HSM/remote-signer custody and a
 production storage engine. Those are not implied by this process.
 
+## Public release, signed by two of three
+
+A release that outside operators install is described by one manifest
+(`postfiat.release_manifest.v3`) that two of three release signers have signed.
+`postfiat-node upgrade` and the pre-start check of the packaged units accept
+nothing else. The format and the rules are in
+[`validator-rpc-profiles-v1.md`](specs/validator-rpc-profiles-v1.md).
+
+**Once: the keys.** Each of the three signers (release lead, independent
+builder, security custodian) makes a key on a machine of its own and hands over
+only the public entry the command prints:
+
+```sh
+postfiat-node release-key-create --signer-id release-lead-1 --role release_lead --out-file release-lead-1.key.json
+```
+
+The three entries, with `threshold: 2`, are the keyset file
+(`postfiat.release_keyset.v1`) that operators install at
+`/etc/postfiat/release-keyset.json`. The private halves never leave the
+signers' machines and are never in this repository.
+
+**Every release:**
+
+1. Tag the commit on `main`. The `release-build` workflow builds
+   `postfiat-node` for `linux-x86_64` and `linux-aarch64` and assembles the
+   release directory with `scripts/release-assemble`: the unit bundle, the
+   SBOM and `SHA256SUMS`. It signs nothing and publishes nothing.
+2. The independent builder builds the same tag on a clean machine and compares
+   `postfiat-node release-build-info` with `SHA256SUMS`. A different hash stops
+   the release.
+3. The release lead builds the unsigned manifest from the release directory.
+   `--release-sequence` is one more than the last release of the chain; the
+   checkpoint is a finalized block the signers have checked on their own nodes.
+
+   ```sh
+   postfiat-node release-manifest-create --keyset-file release-keyset.json \
+     --release-id v0.3.0-testnet --release-sequence 7 \
+     --chain-id ... --genesis-hash ... --git-revision <40 hex> \
+     --build-features privacy,rpc,transport --protocol-version 2 --min-compatible-protocol-version 1 \
+     --checkpoint-height ... --checkpoint-block-hash ... --checkpoint-state-root ... \
+     --checkpoint-certificate-id ... --checkpoint-committee-epoch ... \
+     --url-base https://releases.postfiat.org \
+     --binary-x86-64 release/postfiat-node-linux-x86_64 --binary-aarch64 release/postfiat-node-linux-aarch64 \
+     --systemd-bundle release/postfiat-units.tar --docker-profiles release/postfiat-docker-profiles.tar \
+     --sbom release/postfiat-cargo-sbom.cdx.json --checksums release/SHA256SUMS \
+     --swap-circuit-metadata ... --private-egress-circuit-metadata ... \
+     --output release/release-manifest.json
+   ```
+
+   For a release that activates at a height, add `--activation-height H
+   --advance-warning-blocks N`.
+4. Two signers sign, each on its own machine, each after checking the manifest
+   against what it built or verified:
+
+   ```sh
+   postfiat-node release-manifest-sign --manifest-file release-manifest.json --key-file release-lead-1.key.json
+   ```
+
+5. Check the result, then publish the release directory under
+   `<url-base>/<release-id>/` and the manifest also as
+   `<url-base>/latest/release-manifest.json`:
+
+   ```sh
+   postfiat-node release-manifest-verify --manifest-file release-manifest.json --keyset-file release-keyset.json \
+     --runtime-binary-file release/postfiat-node-linux-x86_64 --arch linux-x86_64
+   ```
+
+An operator then runs `postfiat-node upgrade --check` and `postfiat-node
+upgrade`. A manifest with a lower `release_sequence` than the installed release
+is refused.
+
+**Replacing a key.** Two signers of the current keyset sign the new keyset
+(`release-keyset-rotation-sign`), and operators apply it with `postfiat-node
+upgrade --rotate-keyset`. A manifest signed under the new keyset is refused
+until then.
+
+`python/tests/test_release_flow.py` runs these commands end to end.
+
 ## Protected-branch requirements
 
 The public `main` branch must reject force-pushes and deletion, require review
