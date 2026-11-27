@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Prove that the rust-ci test jobs together run every listed test exactly once.
+
+Reads the `cargo test` commands of the `test` and `test-pq` jobs in
+.github/workflows/rust-ci.yml, applies libtest's filter rules (positional
+filters, --skip, --exact) to the listing of
+`cargo test --workspace --locked -- --list`, and fails when any listed test is
+selected by no command or by more than one. Commands with --ignored only add
+#[ignore] tests on top and are not part of the split.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import shlex
+import sys
+from pathlib import Path
+
+import yaml
+
+JOBS = ("test", "test-pq")
+# Cargo options that change how tests are built or reported, not which run.
+NOT_SELECTING = ("--no-fail-fast", "--release")
+WORKSPACE = ("--workspace", "--locked")
+# A command for one package's binary, and the listing prefix of that binary.
+ONE_BINARY = {
+    ("--locked", "-p", "postfiat-node", "--bin", "postfiat-node"): "src/main.rs (postfiat_node-",
+    ("--locked", "-p", "postfiat-privacy-binius", "--lib"): "src/lib.rs (postfiat_privacy_binius-",
+}
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+RUNNING_RE = re.compile(r"^\s*Running (?:unittests )?(\S+) \((\S+)\)$")
+DOC_RE = re.compile(r"^\s*Doc-tests (\S+)$")
+TEST_RE = re.compile(r"^(.+): (?:test|bench)$")
+
+
+def read_listing(path: Path) -> dict[str, list[str]]:
+    """Map each test binary (or doc-test crate) to the tests it lists."""
+    binaries: dict[str, list[str]] = {}
+    current = None
+    for raw in path.read_text(errors="replace").splitlines():
+        line = ANSI_RE.sub("", raw).rstrip()
+        if match := RUNNING_RE.match(line):
+            current = f"{match.group(1)} ({Path(match.group(2)).name})"
+            binaries[current] = []
+        elif match := DOC_RE.match(line):
+            current = f"doc-tests {match.group(1)}"
+            binaries[current] = []
+        elif (match := TEST_RE.match(line)) and current is not None:
+            binaries[current].append(match.group(1))
+    return binaries
+
+
+def cargo_test_commands(workflow: Path) -> list[tuple[str, list[str]]]:
+    jobs = yaml.safe_load(workflow.read_text())["jobs"]
+    commands = []
+    for job in JOBS:
+        if job not in jobs:
+            sys.exit(f"{workflow}: job `{job}` is missing")
+        for step in jobs[job]["steps"]:
+            for line in step.get("run", "").replace("\\\n", " ").splitlines():
+                # The listing that feeds this check is not a test run.
+                if line.strip().startswith("cargo test") and "--list" not in line.split():
+                    commands.append((job, shlex.split(line)))
+    return commands
+
+
+def selection(tokens: list[str]) -> tuple[tuple[str, ...], list[str], list[str], bool, bool]:
+    cut = tokens.index("--") if "--" in tokens else len(tokens)
+    cargo_args = tuple(arg for arg in tokens[2:cut] if arg not in NOT_SELECTING)
+    libtest_args = tokens[cut + 1 :]
+    filters, skips, exact, ignored = [], [], False, False
+    args = iter(libtest_args)
+    for arg in args:
+        if arg == "--skip":
+            skips.append(next(args))
+        elif arg == "--exact":
+            exact = True
+        elif arg in ("--ignored", "--include-ignored"):
+            ignored = True
+        elif arg == "--test-threads":
+            next(args)
+        elif arg.startswith("--test-threads=") or arg == "--nocapture":
+            pass
+        elif arg.startswith("-"):
+            sys.exit(f"unhandled libtest option {arg!r} in: {shlex.join(tokens)}")
+        else:
+            filters.append(arg)
+    return cargo_args, filters, skips, exact, ignored
+
+
+def selects(name: str, filters: list[str], skips: list[str], exact: bool) -> bool:
+    def hit(pattern: str) -> bool:
+        return name == pattern if exact else pattern in name
+
+    return (not filters or any(map(hit, filters))) and not any(map(hit, skips))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--listing", type=Path, required=True)
+    parser.add_argument("--workflow", type=Path, default=Path(".github/workflows/rust-ci.yml"))
+    options = parser.parse_args()
+
+    binaries = read_listing(options.listing)
+    one_binary = {form: [b for b in binaries if b.startswith(prefix)] for form, prefix in ONE_BINARY.items()}
+    if len(binaries) < 2 or any(len(found) != 1 for found in one_binary.values()):
+        sys.exit(f"{options.listing}: not a complete `cargo test --workspace -- --list` listing")
+    counts = {(binary, test): 0 for binary, tests in binaries.items() for test in tests}
+
+    for job, tokens in cargo_test_commands(options.workflow):
+        cargo_args, filters, skips, exact, ignored = selection(tokens)
+        if ignored or "--manifest-path" in cargo_args:
+            print(f"{job}: outside the split: {shlex.join(tokens)}")
+            continue
+        if cargo_args == WORKSPACE:
+            covered = list(binaries)
+        elif cargo_args in one_binary:
+            covered = one_binary[cargo_args]
+        else:
+            sys.exit(f"{job}: unknown cargo test form, extend this check: {shlex.join(tokens)}")
+        selected = 0
+        for binary in covered:
+            for test in binaries[binary]:
+                if selects(test, filters, skips, exact):
+                    counts[(binary, test)] += 1
+                    selected += 1
+        print(f"{job}: {selected} tests: {shlex.join(tokens)}")
+
+    lost = sorted(key for key, count in counts.items() if count == 0)
+    repeated = sorted(key for key, count in counts.items() if count > 1)
+    print(f"listed {len(counts)} tests in {len(binaries)} binaries; "
+          f"{len(lost)} run nowhere, {len(repeated)} run more than once")
+    for label, keys in (("run nowhere", lost), ("run more than once", repeated)):
+        for binary, test in keys[:50]:
+            print(f"  {label}: {test}  [{binary}]")
+    return 1 if lost or repeated else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
