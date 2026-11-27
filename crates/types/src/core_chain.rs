@@ -91,6 +91,9 @@ pub const NFT_TRANSFER_TRANSACTION_KIND: &str = "nft_transfer";
 pub const NFT_BURN_TRANSACTION_KIND: &str = "nft_burn";
 pub const OFFER_CREATE_TRANSACTION_KIND: &str = "offer_create";
 pub const OFFER_CANCEL_TRANSACTION_KIND: &str = "offer_cancel";
+pub const OFFER_PRUNE_INELIGIBLE_TRANSACTION_KIND: &str = "offer_prune_ineligible";
+pub const BRIDGE_HOLD_CLAIM_TRANSACTION_KIND: &str = "bridge_hold_claim";
+pub const BRIDGE_HOLD_RETURN_TRANSACTION_KIND: &str = "bridge_hold_return";
 pub const ESCROW_ID_DOMAIN: &str = "postfiat.escrow_id.v1";
 pub const ESCROW_CONDITION_HASH_DOMAIN: &str = "postfiat.escrow_condition_hash.v1";
 pub const ATOMIC_SETTLEMENT_TEMPLATE_ID_DOMAIN: &str = "postfiat.atomic_settlement_template_id.v1";
@@ -265,6 +268,9 @@ pub const MAX_YOLO_TARGET_RECEIPTS: usize = 4096;
 pub const MAX_ESCROW_CONDITION_BYTES: usize = 128;
 pub const MAX_ESCROW_FULFILLMENT_BYTES: usize = 128;
 pub const MAX_DEX_CROSSES_PER_TRANSACTION: usize = 64;
+pub const MAX_DEX_INELIGIBLE_SKIPS_PER_TRANSACTION: usize = 64;
+pub const MAX_OFFER_PRUNE_BATCH: usize = 64;
+pub const MAX_CLAWBACK_LOCKED_TARGETS: usize = 64;
 pub const OFFER_OBJECT_RESERVE: u64 = 10;
 pub const OFFER_TX_ROLE_TAKER: &str = "offer_taker";
 pub const OFFER_TX_ROLE_MAKER: &str = "offer_maker";
@@ -280,12 +286,31 @@ pub const MAX_PAYMENT_MEMO_TOTAL_BYTES: usize = 512;
 pub const MAX_OWNED_INPUTS_PER_TRANSFER: usize = 2048;
 pub const MAX_OWNED_OUTPUTS_PER_TRANSFER: usize = 8;
 pub const MAX_OWNED_OBJECTS: usize = 100_000;
+/// Sui-inspired FastPay fee constants (active at `fastpay_fee_v1_activation_height`).
+pub const FASTPAY_MIN_BASE_FEE_ATOMS: u64 = 25;
+pub const FASTPAY_FEE_BYTE_QUANTUM: usize = 512;
+pub const FASTPAY_FEE_PER_BYTE_QUANTUM_ATOMS: u64 = 1;
+pub const FASTPAY_FEE_PER_NEW_OBJECT_ATOMS: u64 = 1_000;
+pub const FASTPAY_FEE_PER_INPUT_ATOMS: u64 = 1;
+/// Owned-object limits (active at `fastpay_fee_v1_activation_height`).
+/// Legacy `MAX_OWNED_OBJECTS = 100_000` remains used strictly pre-activation.
+pub const MAX_OWNED_OBJECTS_GLOBAL_V2: usize = 10_000_000;
+pub const MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP: usize = 4_096;
 pub const ISSUED_ASSET_ID_DOMAIN: &str = "postfiat.issued_asset_id.v1";
 pub const TRUSTLINE_ID_DOMAIN: &str = "postfiat.trustline_id.v1";
 pub const NFT_ID_DOMAIN: &str = "postfiat.nft_id.v1";
+pub const NFT_COLLECTION_POLICY_KEY_DOMAIN: &str = "postfiat.nft_collection_policy_key.v1";
+pub const ASSET_BRIDGE_HOLD_KEY_DOMAIN: &str = "postfiat.asset_bridge_hold_key.v1";
 pub const ISSUED_ASSET_ID_HEX_LEN: usize = 96;
 pub const TRUSTLINE_ID_HEX_LEN: usize = 96;
 pub const NFT_ID_HEX_LEN: usize = 96;
+/// High-bit partition for migrated historical NFT serials (locked in Pillar 4):
+/// - `serial & NFT_MIGRATED_SERIAL_BIT != 0`: deterministic hash-derived migrated serial
+/// - `serial & NFT_MIGRATED_SERIAL_BIT == 0` (and `serial > 0`): sequential fresh mint
+pub const NFT_MIGRATED_SERIAL_BIT: u64 = 1_u64 << 63;
+/// Default and maximum page sizes for paginated NFT RPCs.
+pub const DEFAULT_NFT_RPC_PAGE_LIMIT: usize = 100;
+pub const MAX_NFT_RPC_PAGE_LIMIT: usize = 500;
 pub const MAX_ISSUED_ASSET_CODE_BYTES: usize = 32;
 pub const MAX_ISSUED_ASSET_DISPLAY_NAME_BYTES: usize = 64;
 pub const MAX_ISSUED_ASSET_PRECISION: u8 = 18;

@@ -2084,6 +2084,7 @@ pub(super) fn verify_replayed_blocks_with_exports(
             &mut ledger,
             &shielded,
             &block.fastpay_pre_state_effects,
+            governance.fastpay_fee_v1_activation_height(),
         )
         .map_err(|error| {
             io::Error::new(
@@ -2497,6 +2498,7 @@ pub(super) fn verify_replayed_blocks_with_exports(
         &mut ledger,
         &shielded,
         &tip_fastpay_effects,
+        governance.fastpay_fee_v1_activation_height(),
     )?;
     replay_state_root = archived_replay_state_root(
         genesis,
@@ -2515,6 +2517,7 @@ pub(super) fn replay_confirmed_fastpay_fence(
     ledger: &mut LedgerState,
     shielded: &ShieldedState,
     expected_fence: &postfiat_types::FastPayVersionFenceV1,
+    fastpay_fee_v1_activation_height: Option<u64>,
 ) -> io::Result<()> {
     expected_fence.validate_shape().map_err(|error| {
         io::Error::new(
@@ -2577,13 +2580,16 @@ pub(super) fn replay_confirmed_fastpay_fence(
         quorum: committee.quorum,
     };
     let supply_before = native_pft_live_total(ledger, shielded)?;
+    let fee_v1_active = fastpay_fee_v1_activation_height
+        .is_some_and(|activation| activation > 0 && expected_fence.decided_at_height >= activation);
     let fee = match certificate {
         postfiat_types::FastPayCertificateV1::Transfer(certificate) => {
-            postfiat_execution::apply_owned_transfer_certificate_v3(
+            postfiat_execution::apply_owned_transfer_certificate_v3_with_fee_v1(
                 ledger,
                 certificate,
                 context,
                 expected_fence.decided_at_height,
+                fee_v1_active,
             )
             .map_err(|error| {
                 io::Error::new(
@@ -2594,11 +2600,12 @@ pub(super) fn replay_confirmed_fastpay_fence(
             certificate.order.fee
         }
         postfiat_types::FastPayCertificateV1::Unwrap(certificate) => {
-            postfiat_execution::apply_owned_unwrap_certificate_v3(
+            postfiat_execution::apply_owned_unwrap_certificate_v3_with_fee_v1(
                 ledger,
                 certificate,
                 context,
                 expected_fence.decided_at_height,
+                fee_v1_active,
             )
             .map_err(|error| {
                 io::Error::new(
@@ -2633,6 +2640,7 @@ pub(super) fn replay_confirmed_fastpay_fences_dependency_ordered(
     ledger: &mut LedgerState,
     shielded: &ShieldedState,
     effects: &[postfiat_types::FastPayVersionFenceV1],
+    fastpay_fee_v1_activation_height: Option<u64>,
 ) -> io::Result<()> {
     if effects.is_empty() {
         return Ok(());
@@ -2645,7 +2653,13 @@ pub(super) fn replay_confirmed_fastpay_fences_dependency_ordered(
         let ready = next_replayable_fastpay_effect_index(&next, &pending);
         let Some(ready) = ready else {
             let blocked = pending[0];
-            return replay_confirmed_fastpay_fence(&mut next, shielded, blocked).map_err(|error| {
+            return replay_confirmed_fastpay_fence(
+                &mut next,
+                shielded,
+                blocked,
+                fastpay_fee_v1_activation_height,
+            )
+            .map_err(|error| {
                 io::Error::new(
                     error.kind(),
                     format!(
@@ -2656,7 +2670,13 @@ pub(super) fn replay_confirmed_fastpay_fences_dependency_ordered(
             });
         };
         let effect = pending.remove(ready);
-        replay_confirmed_fastpay_fence(&mut next, shielded, effect).map_err(|error| {
+        replay_confirmed_fastpay_fence(
+            &mut next,
+            shielded,
+            effect,
+            fastpay_fee_v1_activation_height,
+        )
+        .map_err(|error| {
             io::Error::new(
                 error.kind(),
                 format!("FastPay effect `{}` replay failed: {error}", effect.lock_id),
@@ -2817,7 +2837,13 @@ pub(super) fn reconcile_fastpay_pre_state_effects(
             ));
         }
     }
-    replay_confirmed_fastpay_fences_dependency_ordered(ledger, shielded, supplied)?;
+    let fastpay_fee_v1_activation = store.read_governance()?.fastpay_fee_v1_activation_height();
+    replay_confirmed_fastpay_fences_dependency_ordered(
+        ledger,
+        shielded,
+        supplied,
+        fastpay_fee_v1_activation,
+    )?;
     let reconciled = fastpay_pre_state_effects_for_next_block(store, ledger)?;
     if reconciled != supplied {
         return Err(io::Error::new(
@@ -2939,6 +2965,11 @@ pub fn native_pft_supply_breakdown(
         trustlines: _,
         escrows,
         nfts: _,
+        nfts_by_id: _,
+        used_nft_serials: _,
+        nft_collection_policies: _,
+        asset_bridge_holds: _,
+        revoked_fast_lane_holder_permits: _,
         offers,
         nav_assets: _,
         nav_reserve_packets,

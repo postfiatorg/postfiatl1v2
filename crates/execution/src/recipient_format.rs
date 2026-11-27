@@ -137,7 +137,7 @@ fn destination_address_excerpt(value: &str) -> String {
     excerpt
 }
 
-/// Executes an escrow transaction with the governed recipient-format rule.
+/// Executes an escrow transaction with the governed recipient-format and Train A rules.
 pub fn execute_escrow_transaction_with_compatibility(
     genesis: &Genesis,
     ledger: &mut LedgerState,
@@ -152,10 +152,10 @@ pub fn execute_escrow_transaction_with_compatibility(
             return Receipt::rejected(escrow_transaction_tx_id(transaction), code, message);
         }
     }
-    execute_escrow_transaction(genesis, ledger, transaction, block_height)
+    execute_escrow_transaction_inner(genesis, ledger, transaction, block_height, compatibility)
 }
 
-/// Executes an NFT transaction with the governed recipient-format rule.
+/// Executes an NFT transaction with the governed recipient-format and Train A rules.
 pub fn execute_nft_transaction_with_compatibility(
     genesis: &Genesis,
     ledger: &mut LedgerState,
@@ -170,5 +170,5 @@ pub fn execute_nft_transaction_with_compatibility(
             return Receipt::rejected(nft_transaction_tx_id(transaction), code, message);
         }
     }
-    execute_nft_transaction(genesis, ledger, transaction)
+    execute_nft_transaction_inner(genesis, ledger, transaction, block_height, compatibility)
 }

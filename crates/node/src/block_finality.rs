@@ -63,6 +63,11 @@ fn tx_finality_from_store(
     let (receipt, block, receipt_index) = {
         let matching_receipts = &history.matching_receipts;
         if matching_receipts.is_empty() {
+            if let Some(report) =
+                fastpay_order_tx_finality_from_store(store, &genesis, &tx_id, &history)?
+            {
+                return Ok(report);
+            }
             return Err(tx_finality_transaction_not_found(&tx_id));
         }
 
@@ -880,21 +885,24 @@ fn account_tx_rows_for_block(
     archive: &BatchArchive,
     receipt_by_tx: &HashMap<&str, &Receipt>,
 ) -> io::Result<Vec<AccountTxRow>> {
-    if !account_tx_indexes_batch_kind(&block.header.batch_kind) {
-        return Ok(Vec::new());
-    }
-    let archive_entry = archive
-        .find(&block.header.batch_kind, &block.header.batch_id)
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "block {} references missing {} archive batch `{}`",
-                    block.header.height, block.header.batch_kind, block.header.batch_id
-                ),
-            )
-        })?;
-    account_tx_rows_for_archived_block(block, archive_entry, receipt_by_tx)
+    let mut rows = if account_tx_indexes_batch_kind(&block.header.batch_kind) {
+        let archive_entry = archive
+            .find(&block.header.batch_kind, &block.header.batch_id)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "block {} references missing {} archive batch `{}`",
+                        block.header.height, block.header.batch_kind, block.header.batch_id
+                    ),
+                )
+            })?;
+        account_tx_rows_for_archived_block(block, archive_entry, receipt_by_tx)?
+    } else {
+        account_tx_rows_for_fastpay_effects(block)?
+    };
+    let _ = &mut rows;
+    Ok(rows)
 }
 
 fn account_tx_rows_for_archived_block(
@@ -902,15 +910,237 @@ fn account_tx_rows_for_archived_block(
     archive_entry: &BatchArchiveEntry,
     receipt_by_tx: &HashMap<&str, &Receipt>,
 ) -> io::Result<Vec<AccountTxRow>> {
-    match block.header.batch_kind.as_str() {
+    let mut rows = match block.header.batch_kind.as_str() {
         BATCH_KIND_TRANSPARENT => {
-            account_tx_rows_for_transparent_batch(block, archive_entry, receipt_by_tx)
+            account_tx_rows_for_transparent_batch(block, archive_entry, receipt_by_tx)?
         }
         BATCH_KIND_SHIELDED => {
-            account_tx_rows_for_shielded_batch(block, archive_entry, receipt_by_tx)
+            account_tx_rows_for_shielded_batch(block, archive_entry, receipt_by_tx)?
         }
-        _ => Ok(Vec::new()),
+        _ => Vec::new(),
+    };
+    rows.extend(account_tx_rows_for_fastpay_effects(block)?);
+    Ok(rows)
+}
+
+fn fastpay_order_tx_finality_from_store(
+    store: &NodeStore,
+    genesis: &Genesis,
+    order_hash: &str,
+    history: &FinalityHistory,
+) -> io::Result<Option<TxFinalityReport>> {
+    let found = if let Some(entry) = store.read_fastpay_order_index_entry(order_hash)? {
+        let block = store
+            .read_blocks_window(Some(entry.block_height), 1)?
+            .into_iter()
+            .find(|b| b.header.height == entry.block_height);
+        block.and_then(|b| {
+            let effect = b
+                .fastpay_pre_state_effects
+                .get(entry.effect_index as usize)
+                .cloned()?;
+            Some((b, effect, entry.effect_index as u64))
+        })
+    } else {
+        let blocks = store.read_blocks()?;
+        blocks.blocks.into_iter().find_map(|b| {
+            let found = b
+                .fastpay_pre_state_effects
+                .iter()
+                .enumerate()
+                .find(|(_, effect)| {
+                    matches!(
+                        &effect.decision,
+                        postfiat_types::FastPayRecoveryDecisionV1::Confirmed { order_digest, .. }
+                            if order_digest == order_hash
+                    )
+                })
+                .map(|(idx, effect)| (effect.clone(), idx as u64));
+            found.map(|(effect, idx)| (b, effect, idx))
+        })
+    };
+    let Some((block, effect, effect_index)) = found else {
+        return Ok(None);
+    };
+    let transaction_rows = account_tx_rows_for_fastpay_effect(&block, &effect, effect_index)?;
+    let fee = match effect.certificate.as_ref() {
+        Some(postfiat_types::FastPayCertificateV1::Transfer(cert)) => cert.order.fee,
+        Some(postfiat_types::FastPayCertificateV1::Unwrap(cert)) => cert.order.fee,
+        None => 0,
+    };
+    let receipt = Receipt::accepted(order_hash.to_string(), "FastPay v3 order confirmed")
+        .with_fee_policy(fee, fee, 0, 0);
+    let proof_id = tx_finality_proof_id(genesis, &receipt, effect_index, &block)?;
+    Ok(Some(TxFinalityReport {
+        schema: "postfiat-tx-finality-v1".to_string(),
+        proof_id,
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(genesis),
+        protocol_version: genesis.protocol_version,
+        tx_id: order_hash.to_string(),
+        confirmed: true,
+        verification_mode: "fastpay_version_fence_v1".to_string(),
+        receipt,
+        receipt_index: effect_index,
+        receipt_count: block.receipt_ids.len() as u64,
+        block,
+        block_log_verified: false,
+        block_count: history.block_count,
+        tip_hash: history.tip_hash.clone(),
+        tip_state_root: history.tip_state_root.clone(),
+        transaction_rows,
+    }))
+}
+
+fn fastpay_address_from_pubkey_hex(pubkey_hex: &str) -> io::Result<String> {
+    let bytes = hex_to_bytes(pubkey_hex).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("invalid FastPay public key hex: {error}"),
+        )
+    })?;
+    Ok(address_from_public_key(&bytes))
+}
+
+fn account_tx_rows_for_fastpay_effects(block: &BlockRecord) -> io::Result<Vec<AccountTxRow>> {
+    let mut rows = Vec::new();
+    for (effect_index, effect) in block.fastpay_pre_state_effects.iter().enumerate() {
+        rows.extend(account_tx_rows_for_fastpay_effect(
+            block,
+            effect,
+            effect_index as u64,
+        )?);
     }
+    Ok(rows)
+}
+
+fn account_tx_rows_for_fastpay_effect(
+    block: &BlockRecord,
+    effect: &postfiat_types::FastPayVersionFenceV1,
+    effect_index: u64,
+) -> io::Result<Vec<AccountTxRow>> {
+    let postfiat_types::FastPayRecoveryDecisionV1::Confirmed {
+        order_digest,
+        certificate_digest,
+    } = &effect.decision
+    else {
+        return Ok(Vec::new());
+    };
+    let Some(certificate) = effect.certificate.as_ref() else {
+        return Ok(Vec::new());
+    };
+    let mut rows = Vec::new();
+    match certificate {
+        postfiat_types::FastPayCertificateV1::Transfer(cert) => {
+            let from_address = fastpay_address_from_pubkey_hex(&cert.owner_pubkey_hex)?;
+            let memo_hash = payment_memos_hash(&cert.order.memos);
+            let memo_count = Some(cert.order.memos.len() as u64);
+            let memo_bytes = Some(
+                cert.order
+                    .memos
+                    .iter()
+                    .map(|memo| {
+                        (memo.memo_type.len() + memo.memo_format.len() + memo.memo_data.len()) / 2
+                    })
+                    .sum::<usize>() as u64,
+            );
+            let memos = Some(payment_memo_views(&cert.order.memos));
+            for (output_index, output) in cert.order.outputs.iter().enumerate() {
+                let to_address = fastpay_address_from_pubkey_hex(&output.owner_pubkey_hex)?;
+                let tx_role = if from_address == to_address {
+                    "fastpay_self_transfer"
+                } else {
+                    "fastpay_transfer"
+                };
+                rows.push(AccountTxRow {
+                    tx_id: order_digest.clone(),
+                    block_height: block.header.height,
+                    batch_kind: "fastpay".to_string(),
+                    batch_id: effect.lock_id.clone(),
+                    transaction_index: effect_index,
+                    transaction_kind: "owned_transfer_v3".to_string(),
+                    from_address: from_address.clone(),
+                    to_address,
+                    amount: output.value,
+                    fee: if output_index == 0 { cert.order.fee } else { 0 },
+                    sequence: cert.order.nonce,
+                    memo_hash: memo_hash.clone(),
+                    memo_count,
+                    memo_bytes,
+                    memos: memos.clone(),
+                    asset_id: None,
+                    issuer: None,
+                    trustline_authorized: None,
+                    trustline_frozen: None,
+                    nft_id: None,
+                    nft_issuer_transfer_fee: None,
+                    nft_collection_flags: None,
+                    escrow_id: None,
+                    offer_id: None,
+                    tx_role: Some(tx_role.to_string()),
+                    counterparty_offer_id: None,
+                    fill_index: Some(output_index as u64),
+                    condition_hash: None,
+                    order_hash: Some(order_digest.clone()),
+                    certificate_digest: Some(certificate_digest.clone()),
+                    fastpay_lock_id: Some(effect.lock_id.clone()),
+                    accepted: Some(true),
+                    receipt_code: Some("accepted".to_string()),
+                });
+            }
+        }
+        postfiat_types::FastPayCertificateV1::Unwrap(cert) => {
+            let from_address = fastpay_address_from_pubkey_hex(&cert.owner_pubkey_hex)?;
+            let memo_hash = payment_memos_hash(&cert.order.memos);
+            let memo_count = Some(cert.order.memos.len() as u64);
+            let memo_bytes = Some(
+                cert.order
+                    .memos
+                    .iter()
+                    .map(|memo| {
+                        (memo.memo_type.len() + memo.memo_format.len() + memo.memo_data.len()) / 2
+                    })
+                    .sum::<usize>() as u64,
+            );
+            let memos = Some(payment_memo_views(&cert.order.memos));
+            rows.push(AccountTxRow {
+                tx_id: order_digest.clone(),
+                block_height: block.header.height,
+                batch_kind: "fastpay".to_string(),
+                batch_id: effect.lock_id.clone(),
+                transaction_index: effect_index,
+                transaction_kind: "owned_unwrap_v3".to_string(),
+                from_address,
+                to_address: cert.order.to_address.clone(),
+                amount: cert.order.amount,
+                fee: cert.order.fee,
+                sequence: cert.order.nonce,
+                memo_hash,
+                memo_count,
+                memo_bytes,
+                memos,
+                asset_id: None,
+                issuer: None,
+                trustline_authorized: None,
+                trustline_frozen: None,
+                nft_id: None,
+                nft_issuer_transfer_fee: None,
+                nft_collection_flags: None,
+                escrow_id: None,
+                offer_id: None,
+                tx_role: Some("fastpay_unwrap".to_string()),
+                counterparty_offer_id: None,
+                fill_index: None,
+                condition_hash: None,
+                order_hash: Some(order_digest.clone()),
+                certificate_digest: Some(certificate_digest.clone()),
+                fastpay_lock_id: Some(effect.lock_id.clone()),
+                accepted: Some(true),
+                receipt_code: Some("accepted".to_string()),
+            });
+        }
+    }
+    Ok(rows)
 }
 
 /// Minimal view of an archived shielded batch: only the action list, so the
@@ -992,6 +1222,9 @@ fn account_tx_rows_for_shielded_batch(
                 counterparty_offer_id: None,
                 fill_index: None,
                 condition_hash: None,
+                order_hash: None,
+                certificate_digest: None,
+                fastpay_lock_id: None,
                 accepted: receipt.map(|receipt| receipt.accepted),
                 receipt_code: receipt.map(|receipt| receipt.code.clone()),
             };
@@ -1205,6 +1438,9 @@ fn account_tx_rows_for_transparent_batch(
             counterparty_offer_id: None,
             fill_index: None,
             condition_hash: None,
+            order_hash: None,
+            certificate_digest: None,
+            fastpay_lock_id: None,
             accepted: receipt.map(|receipt| receipt.accepted),
             receipt_code: receipt.map(|receipt| receipt.code.clone()),
         });
@@ -1261,6 +1497,9 @@ fn account_tx_rows_for_transparent_batch(
             counterparty_offer_id: None,
             fill_index: None,
             condition_hash: None,
+            order_hash: None,
+            certificate_digest: None,
+            fastpay_lock_id: None,
             accepted: receipt.map(|receipt| receipt.accepted),
             receipt_code: receipt.map(|receipt| receipt.code.clone()),
         });
@@ -1809,6 +2048,24 @@ fn account_tx_rows_for_transparent_batch(
                 None,
                 None,
             ),
+            AssetTransactionOperation::BridgeHoldClaim(operation) => (
+                operation.recipient.clone(),
+                operation.recipient.clone(),
+                operation.amount,
+                Some(operation.asset_id.clone()),
+                None,
+                None,
+                None,
+            ),
+            AssetTransactionOperation::BridgeHoldReturn(operation) => (
+                operation.recipient.clone(),
+                operation.recipient.clone(),
+                operation.amount,
+                Some(operation.asset_id.clone()),
+                None,
+                None,
+                None,
+            ),
         };
         let (memo_hash, memo_count, memo_bytes) = match &unsigned.operation {
             AssetTransactionOperation::IssuedPaymentV2(operation) => (
@@ -1851,6 +2108,9 @@ fn account_tx_rows_for_transparent_batch(
             counterparty_offer_id: None,
             fill_index: None,
             condition_hash: None,
+            order_hash: None,
+            certificate_digest: None,
+            fastpay_lock_id: None,
             accepted: receipt.map(|receipt| receipt.accepted),
             receipt_code: receipt.map(|receipt| receipt.code.clone()),
         });
@@ -1915,6 +2175,9 @@ fn account_tx_rows_for_transparent_batch(
                 counterparty_offer_id: None,
                 fill_index: None,
                 condition_hash: None,
+                order_hash: None,
+                certificate_digest: None,
+                fastpay_lock_id: None,
                 accepted: receipt.map(|receipt| receipt.accepted),
                 receipt_code: receipt.map(|receipt| receipt.code.clone()),
             });
@@ -2031,6 +2294,9 @@ fn account_tx_rows_for_transparent_batch(
             counterparty_offer_id: None,
             fill_index: None,
             condition_hash,
+            order_hash: None,
+            certificate_digest: None,
+            fastpay_lock_id: None,
             accepted: receipt.map(|receipt| receipt.accepted),
             receipt_code: receipt.map(|receipt| receipt.code.clone()),
         });
@@ -2142,6 +2408,9 @@ fn account_tx_rows_for_transparent_batch(
             counterparty_offer_id: None,
             fill_index: None,
             condition_hash: None,
+            order_hash: None,
+            certificate_digest: None,
+            fastpay_lock_id: None,
             accepted: receipt.map(|receipt| receipt.accepted),
             receipt_code: receipt.map(|receipt| receipt.code.clone()),
         });
@@ -2210,6 +2479,18 @@ fn account_tx_rows_for_transparent_batch(
                 operation.offer_id.clone(),
                 OFFER_TX_ROLE_CANCEL.to_string(),
             ),
+            OfferTransactionOperation::OfferPruneIneligible(operation) => (
+                operation.pruner.clone(),
+                operation.pruner.clone(),
+                0,
+                None,
+                operation
+                    .offer_ids
+                    .first()
+                    .cloned()
+                    .unwrap_or_default(),
+                "offer_prune_ineligible".to_string(),
+            ),
         };
         let receipt = receipt_by_tx.get(tx_id.as_str()).copied();
         let taker_offer_id = offer_id.clone();
@@ -2242,6 +2523,9 @@ fn account_tx_rows_for_transparent_batch(
             counterparty_offer_id: None,
             fill_index: None,
             condition_hash: None,
+            order_hash: None,
+            certificate_digest: None,
+            fastpay_lock_id: None,
             accepted: receipt.map(|receipt| receipt.accepted),
             receipt_code: receipt.map(|receipt| receipt.code.clone()),
         });
@@ -2284,6 +2568,9 @@ fn account_tx_rows_for_transparent_batch(
                     counterparty_offer_id: Some(taker_offer_id.clone()),
                     fill_index: Some(fill.fill_index),
                     condition_hash: None,
+                    order_hash: None,
+                    certificate_digest: None,
+                    fastpay_lock_id: None,
                     accepted: Some(receipt.accepted),
                     receipt_code: Some(receipt.code.clone()),
                 });

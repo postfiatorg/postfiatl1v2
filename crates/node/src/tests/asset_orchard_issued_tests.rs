@@ -655,6 +655,8 @@
             &mut duplicate_ledger,
             &mut duplicate_shielded,
             &egress_payload,
+            1,
+            AssetExecutionCompatibility::strict(),
         )
         .expect("duplicate egress apply");
         assert!(!duplicate_receipt.accepted);

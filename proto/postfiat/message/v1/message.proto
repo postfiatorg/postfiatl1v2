@@ -1,0 +1,397 @@
+// Post Fiat L1v2 — Canonical Message Protocol Schema (Pillar 2, Contract C1)
+//
+// Frozen canonical protobuf3 definitions for:
+//   - pf.ptr v5 on-chain transaction memos (<= 256 bytes, lowercase hex on postfiatl1v2)
+//   - pf.message.v1 (alias pf.msg.v1) raw-byte-signed envelopes (CIDv1 raw <= 1 MiB)
+//   - Post-quantum X-Wing (X25519 + ML-KEM-768) + XChaCha20-Poly1305 encryption headers
+//   - Zero-balance new-user message KEM key bindings
+//   - Multi-chunk Manifest records (up to 16 MiB)
+//   - FastPay and consensus-lane payment references (keyed by immutable order_hash / tx_hash)
+//   - x402 v2 machine-native payment headers (PAYMENT-REQUIRED / PAYMENT-SIGNATURE / PAYMENT-RESPONSE)
+//   - Legacy pf.ptr v4 read-only compatibility schema
+//
+// Wire & canonical serialization specification: docs/specs/message-protocol-v1.md
+
+syntax = "proto3";
+
+package postfiat.message.v1;
+
+// Content classification carried in on-chain pf.ptr memos and MessageHeader.
+// Values 0..11 and 99 preserve exact wire compatibility with legacy pf.ptr v4.
+enum ContentKind {
+  CONTENT_KIND_UNSPECIFIED = 0;
+  CONTENT_KIND_TASK = 1;
+  CONTENT_KIND_TASK_UPDATE = 2;
+  CONTENT_KIND_TASK_SUBMISSION = 3;
+  CONTENT_KIND_CHAT = 4;
+  CONTENT_KIND_CONTEXT = 5;
+  CONTENT_KIND_REWARD = 6;
+  CONTENT_KIND_POLICY = 7;
+  CONTENT_KIND_IDENTITY = 8;
+  CONTENT_KIND_ASSET = 9;
+  CONTENT_KIND_DOCUMENT = 10;
+  CONTENT_KIND_SYSTEM = 11;
+  CONTENT_KIND_GOVERNANCE = 12;
+  CONTENT_KIND_NFT = 13;
+  CONTENT_KIND_X402 = 14;
+  CONTENT_KIND_TEST = 99;
+}
+
+// Target object referenced by a pf.ptr v5 memo.
+enum PointerTarget {
+  POINTER_TARGET_UNSPECIFIED = 0;
+  // Single CIDv1 raw block containing a serialized Envelope (<= 1 MiB).
+  POINTER_TARGET_CONTENT_BLOB = 1;
+  // Single CIDv1 raw block containing a signed Envelope whose body is a Manifest (up to 16 MiB).
+  POINTER_TARGET_MANIFEST = 2;
+  // Small public payload embedded directly in Pointer.inline_payload (no IPFS fetch required).
+  POINTER_TARGET_INLINE = 3;
+}
+
+// Bitmask constants for Pointer.flags.
+// Visibility bits (PRIVATE=0x01, PUBLIC=0x02, SEALED=0x20) are mutually exclusive:
+// every valid pf.ptr v5 memo MUST set exactly one visibility bit.
+enum PointerFlag {
+  POINTER_FLAG_UNSPECIFIED = 0;
+  POINTER_FLAG_PRIVATE = 1;    // 0x01 (legacy v4: encrypted)
+  POINTER_FLAG_PUBLIC = 2;     // 0x02 (legacy v4: public)
+  POINTER_FLAG_EPHEMERAL = 4;  // 0x04 (legacy v4: ephemeral)
+  POINTER_FLAG_TOMBSTONE = 8;  // 0x08 (legacy v4: tombstone)
+  POINTER_FLAG_MULTIPART = 16; // 0x10 (legacy v4: multipart / manifest)
+  POINTER_FLAG_SEALED = 32;    // 0x20 (v5: sealed recipient-anonymous private mode)
+}
+
+// Visibility mode enforced consistently between Pointer.flags and MessageHeader.visibility.
+enum Visibility {
+  VISIBILITY_UNSPECIFIED = 0;
+  // Plaintext body; explorer decodes public schemas with XSS/oversize hardening.
+  VISIBILITY_PUBLIC = 1;
+  // Encrypted body; explorer may display schema/sender metadata (e.g. verified "Task reward" badge).
+  VISIBILITY_PRIVATE = 2;
+  // Encrypted body with minimized metadata; RecipientWrap.recipient_account MUST be omitted.
+  VISIBILITY_SEALED = 3;
+}
+
+// Payload encryption suite.
+enum CipherSuite {
+  CIPHER_SUITE_UNSPECIFIED = 0;
+  // Unencrypted plaintext body (valid only with VISIBILITY_PUBLIC).
+  CIPHER_SUITE_NONE = 1;
+  // Default post-quantum hybrid suite: X-Wing (X25519 + ML-KEM-768) + HKDF-SHA256 + XChaCha20-Poly1305.
+  CIPHER_SUITE_XWING_XCHACHA20_POLY1305 = 2;
+  // Read-only legacy compatibility for historical old-chain payloads after seed import.
+  CIPHER_SUITE_LEGACY_X25519_XCHACHA20_POLY1305 = 3;
+}
+
+// Envelope and key-binding signature algorithm.
+enum SignatureAlgorithm {
+  SIGNATURE_ALGORITHM_UNSPECIFIED = 0;
+  // Post-quantum ML-DSA-65 (FIPS 204), matching postfiatl1v2 account keys.
+  SIGNATURE_ALGORITHM_ML_DSA_65 = 1;
+}
+
+// Encoding of the logical message body (before encryption if private/sealed).
+enum BodyEncoding {
+  BODY_ENCODING_UNSPECIFIED = 0;
+  // Canonical deterministic protobuf3 binary encoding (default).
+  BODY_ENCODING_PROTOBUF = 1;
+  // RFC 8785 Canonical JSON (JCS), used for Pillar 1 governance packets and human-readable views.
+  BODY_ENCODING_CANONICAL_JSON = 2;
+  // Plain UTF-8 text / Markdown.
+  BODY_ENCODING_RAW_UTF8 = 3;
+  // Opaque binary payload.
+  BODY_ENCODING_RAW_BYTES = 4;
+}
+
+// Settlement lane for payment references and x402 flows.
+enum PaymentLane {
+  PAYMENT_LANE_UNSPECIFIED = 0;
+  // FastPay owned-object transfer (OwnedTransferOrderV3), ~200ms finality, keyed by immutable order_hash.
+  PAYMENT_LANE_FASTPAY = 1;
+  // Consensus-lane native PFT payment (payment_v2), keyed by tx_hash.
+  PAYMENT_LANE_CONSENSUS_PFT = 2;
+  // Consensus-lane issued-asset payment (issued_payment_v2, e.g. PFUSDC), keyed by tx_hash.
+  PAYMENT_LANE_CONSENSUS_ISSUED = 3;
+}
+
+// x402 v2 settlement scheme supported on Post Fiat.
+enum X402Scheme {
+  X402_SCHEME_UNSPECIFIED = 0;
+  // Client signs a FastPay or consensus-lane transfer and lets the facilitator settle it.
+  X402_SCHEME_EXACT = 1;
+  // Client settles FastPay directly and presents the certified quorum proof.
+  X402_SCHEME_PF_FASTPAY_SETTLED = 2;
+}
+
+// Content-addressed IPFS CIDv1 raw block reference.
+// Canonical raw CID binary format: 0x01 (CIDv1) || 0x55 (raw) || 0x12 (sha2-256) || 0x20 (32) || <32-byte SHA-256>.
+message IpfsCidRef {
+  // Authoritative 36-byte binary CIDv1 raw block identifier.
+  bytes cid_bin = 1;
+  // Exact byte length of the raw IPFS block.
+  uint64 byte_length = 2;
+  // Optional base32lower multibase display string ("b..."). Verifiers MUST validate against cid_bin.
+  string multibase_cid = 3;
+}
+
+// On-chain transaction memo payload for pf.ptr v5.
+// Encoded as lowercase hex in PaymentMemo { memo_type = hex("pf.ptr"), memo_format = hex("v5"), memo_data = hex(Pointer) }.
+// Serialized protobuf bytes MUST be strictly <= 256 bytes (postfiatl1v2 MAX_PAYMENT_MEMO_DATA_BYTES).
+message Pointer {
+  // 36-byte binary CIDv1 raw block pointer (required for CONTENT_BLOB and MANIFEST; empty for INLINE).
+  bytes cid_bin = 1;
+  // Target interpretation of cid_bin / inline_payload.
+  PointerTarget target = 2;
+  // Content classification (preserves legacy v4 1..11 + GOVERNANCE=12, NFT=13, X402=14, TEST=99).
+  ContentKind kind = 3;
+  // Numeric schema registry ID (1 = permissionless custom schema identified by schema_name).
+  uint32 schema = 4;
+  // Optional Task Node task identifier.
+  string task_id = 5;
+  // Optional conversation or governance session identifier (thread_id = session_id for Pillar 1).
+  string thread_id = 6;
+  // Optional context document identifier.
+  string context_id = 7;
+  // Bitmask of PointerFlag values. Exactly one of PRIVATE (0x01), PUBLIC (0x02), or SEALED (0x20) MUST be set.
+  uint32 flags = 8;
+  // Optional inline public payload (required and non-empty iff target == POINTER_TARGET_INLINE).
+  bytes inline_payload = 9;
+  // Optional full schema name when schema == 1 (permissionless custom schema).
+  string schema_name = 10;
+}
+
+// Read-only decode layout for historical old-chain pf.ptr v4 memos (uppercase hex on legacy chain).
+message LegacyPointerV4 {
+  string cid = 1;
+  uint32 target = 2;
+  ContentKind kind = 3;
+  uint32 schema = 4;
+  string task_id = 5;
+  string thread_id = 6;
+  string context_id = 7;
+  uint32 flags = 8;
+}
+
+// Per-recipient X-Wing (X25519 + ML-KEM-768) content-encryption-key (CEK) wrap.
+message RecipientWrap {
+  // 32-byte recipient tag:
+  // - PRIVATE: SHA-256(recipient's 1216-byte X-Wing public key)
+  // - SEALED (blinded default): SHA-256("postfiat-l1-v2/sealed-recipient-tag/v1\x00" || xwing_ss || aad_context)
+  //   eliminating static key-directory linkability on IPFS envelopes.
+  bytes recipient_key_id = 1;
+  // Optional recipient postfiatl1v2 account address (MUST be empty when visibility == VISIBILITY_SEALED).
+  string recipient_account = 2;
+  // 1120-byte X-Wing ciphertext: 1088-byte ML-KEM-768 ciphertext || 32-byte X25519 ephemeral public key.
+  bytes xwing_ciphertext = 3;
+  // 24-byte XChaCha20-Poly1305 nonce used to wrap the 32-byte content encryption key.
+  bytes wrap_nonce = 4;
+  // 48-byte AEAD ciphertext: 32-byte CEK encrypted under KEK + 16-byte Poly1305 authentication tag.
+  bytes wrapped_cek = 5;
+}
+
+// Post-quantum encryption header serialized into Envelope.encryption_header_bytes for PRIVATE and SEALED messages.
+// No plaintext digest is ever included.
+message XWingEncryptionHeader {
+  // Must be CIPHER_SUITE_XWING_XCHACHA20_POLY1305 for v1 encrypted envelopes.
+  CipherSuite cipher_suite = 1;
+  // 24-byte XChaCha20-Poly1305 nonce used to encrypt Envelope.body_bytes.
+  bytes aead_nonce = 2;
+  // 32-byte domain-separated AAD commitment: SHA-256("postfiat-l1-v2/message-aad/v1" || chain_id || header_sha256 || chunk_index_be32).
+  bytes aad_context = 3;
+  // 0 for single-block envelopes; 0-based chunk index for Manifest chunks.
+  uint32 chunk_index = 4;
+  // HKDF-SHA256 info string binding CEK wrap key derivation (canonical default: "postfiat-l1-v2/xwing-wrap/v1").
+  string kdf_info = 5;
+  // Ordered recipient wraps (sorted lexicographically by recipient_key_id in canonical producers).
+  repeated RecipientWrap recipients = 6;
+  // 32-byte key-commitment tag closing multi-recipient non-key-committing AEAD attacks:
+  // SHA-256("postfiat-l1-v2/cek-commit/v1\x00" || cek || aad_context).
+  bytes cek_commitment = 7;
+}
+
+// Signed wallet message KEM key registration enabling encrypted FastPay rewards for zero-balance accounts
+// prior to minting a Pillar 6 on-chain identity.
+message MessageKeyBinding {
+  string chain_id = 1;
+  // postfiatl1v2 account address derived from account_pubkey.
+  string account = 2;
+  // 1216-byte X-Wing public key: 1184-byte ML-KEM-768 encapsulation key || 32-byte X25519 public key.
+  bytes xwing_public_key = 3;
+  // 32-byte SHA-256(xwing_public_key).
+  bytes key_id = 4;
+  uint64 created_at_unix_ms = 5;
+  uint32 key_epoch = 6;
+  SignatureAlgorithm signature_algorithm = 7;
+  // ML-DSA-65 public key (1952 bytes).
+  bytes account_pubkey = 8;
+  // ML-DSA-65 signature over domain "postfiat-l1-v2/message-key-bind/v1" and canonical binding fields.
+  bytes signature = 9;
+}
+
+// Canonical settlement reference for FastPay transfers and consensus-lane payments.
+// Deduplication and account_tx indexing ALWAYS key on immutable order_hash (FastPay) or tx_hash (consensus),
+// never on certificate_digest (which varies with validator signature arrival order).
+message FastPayPaymentRef {
+  PaymentLane lane = 1;
+  string chain_id = 2;
+  // 48-byte immutable SHA3-384 digest of the signed OwnedTransferOrderV3: the raw bytes of the 96-lowercase-hex
+  // fastpay_transfer_order_digest_v3 value (required when lane == PAYMENT_LANE_FASTPAY).
+  bytes order_hash = 3;
+  // Optional 48-byte SHA3-384 validator quorum certificate digest (raw bytes of the 96-lowercase-hex
+  // fastpay_transfer_certificate_digest_v3 value) for audit/display only (never a dedup key).
+  bytes certificate_digest = 4;
+  // 48-byte SHA3-384 consensus-lane transaction id: the raw bytes of the 96-lowercase-hex payment_v2_tx_id or
+  // asset_transaction_tx_id value (required when lane == CONSENSUS_PFT or CONSENSUS_ISSUED).
+  bytes tx_hash = 5;
+  // "PFT" for native PFT or 96-char lowercase hex issued asset id (e.g. PFUSDC).
+  string asset_id = 6;
+  string payer_account = 7;
+  string payee_account = 8;
+  uint64 amount_atoms = 9;
+  uint64 fee_atoms = 10;
+  // Finalized L1 block height (0 when referencing a pre-block FastPay certificate).
+  uint64 finalized_height = 11;
+}
+
+// Structured x402 v2 challenge carried in the HTTP PAYMENT-REQUIRED header (base64url-encoded protobuf or JSON).
+message X402PaymentRequired {
+  uint32 x402_version = 1;
+  X402Scheme scheme = 2;
+  // CAIP-style or Post Fiat network identifier, e.g. "postfiat:devnet-2" or "postfiat:mainnet".
+  string network = 3;
+  PaymentLane lane = 4;
+  string asset_id = 5;
+  uint64 max_amount_atoms = 6;
+  // Payee postfiatl1v2 account address.
+  string pay_to = 7;
+  // 32-byte SHA-256 digest of the canonical HTTP request bound into the payment memo.
+  bytes request_hash = 8;
+  // 16..32-byte challenge nonce preventing cross-request replay.
+  bytes nonce = 9;
+  uint64 expires_at_unix_ms = 10;
+  string resource_uri = 11;
+  string facilitator_url = 12;
+}
+
+// Structured x402 v2 payment authorization carried in the HTTP PAYMENT-SIGNATURE header.
+message X402PaymentSignature {
+  uint32 x402_version = 1;
+  X402Scheme scheme = 2;
+  string network = 3;
+  PaymentLane lane = 4;
+  bytes request_hash = 5;
+  bytes nonce = 6;
+  // Immutable 48-byte FastPay order_hash (as FastPayPaymentRef.order_hash) used as the cross-replica
+  // spent-payment dedup key for FastPay PFT.
+  bytes order_hash = 7;
+  // Immutable 48-byte consensus tx_hash (as FastPayPaymentRef.tx_hash) used as the spent-payment dedup key
+  // for consensus-lane PFUSDC.
+  bytes tx_hash = 8;
+  // Serialized signed transfer payload (SignedOwnedTransferOrderV3 or signed issued_payment_v2).
+  bytes signed_payload = 9;
+  // Optional FastPay quorum certificate bytes (required when scheme == X402_SCHEME_PF_FASTPAY_SETTLED).
+  bytes certificate_payload = 10;
+}
+
+// Structured x402 v2 settlement confirmation carried in the HTTP PAYMENT-RESPONSE header.
+message X402PaymentResponse {
+  uint32 x402_version = 1;
+  bool settled = 2;
+  FastPayPaymentRef payment_ref = 3;
+  uint64 settled_at_unix_ms = 4;
+  string facilitator_id = 5;
+}
+
+// Metadata header encoded into Envelope.header_bytes.
+message MessageHeader {
+  // Protocol version (MUST be 1 for pf.message.v1).
+  uint32 protocol_version = 1;
+  string chain_id = 2;
+  // Canonical schema identifier, e.g. "pf.message.text.v1", "pf.reward.v1", "pf.nft.metadata.v1", "pf.governance.packet.v1".
+  string schema_name = 3;
+  // Numeric schema registry ID (1 = custom schema identified by schema_name).
+  uint32 schema_id = 4;
+  ContentKind kind = 5;
+  Visibility visibility = 6;
+  BodyEncoding body_encoding = 7;
+  CipherSuite cipher_suite = 8;
+  // Sender postfiatl1v2 account address (MUST match account derived from Envelope.sender_pubkey).
+  string sender_account = 9;
+  uint64 created_at_unix_ms = 10;
+  string task_id = 11;
+  string thread_id = 12;
+  string context_id = 13;
+  IpfsCidRef reply_to_cid = 14;
+  FastPayPaymentRef payment_ref = 15;
+  X402PaymentResponse x402_receipt = 16;
+}
+
+// Canonical pf.message.v1 (alias pf.msg.v1) signed envelope stored as a single IPFS CIDv1 raw block (<= 1 MiB).
+//
+// ZERO RE-SERIALIZATION RULE:
+// Verifiers MUST verify the IPFS CIDv1 raw digest and the ML-DSA-65 signature over the exact
+// transmitted raw byte fields (header_bytes, encryption_header_bytes, body_bytes) BEFORE decoding
+// nested messages, and MUST NEVER re-serialize protobuf to verify a signature or hash.
+message Envelope {
+  // Envelope format version (MUST be 1).
+  uint32 version = 1;
+  // Exact raw serialized MessageHeader bytes.
+  bytes header_bytes = 2;
+  // Exact raw serialized XWingEncryptionHeader bytes (MUST be empty when visibility == VISIBILITY_PUBLIC).
+  bytes encryption_header_bytes = 3;
+  // Plaintext body bytes (when PUBLIC) or XChaCha20-Poly1305 ciphertext + 16-byte tag (when PRIVATE or SEALED).
+  bytes body_bytes = 4;
+  // Signature algorithm (MUST be SIGNATURE_ALGORITHM_ML_DSA_65 for v1).
+  SignatureAlgorithm signature_algorithm = 5;
+  // Sender's ML-DSA-65 public key (1952 bytes).
+  bytes sender_pubkey = 6;
+  // ML-DSA-65 signature over the raw-byte signing preimage defined in docs/specs/message-protocol-v1.md.
+  bytes signature = 7;
+}
+
+// Ordered chunk entry inside a multi-chunk Manifest.
+message ManifestChunk {
+  // Strictly ascending 0-based chunk index (0..N-1), bound into chunk AAD to prevent reordering/swapping.
+  uint32 chunk_index = 1;
+  // CIDv1 raw block reference for this chunk (each chunk <= 1 MiB).
+  IpfsCidRef cid = 2;
+  // 24-byte XChaCha20-Poly1305 nonce for encrypted chunks (empty when public).
+  bytes aead_nonce = 3;
+}
+
+// Multi-chunk manifest body for payloads exceeding 1 MiB up to 16 MiB (16,777,216 bytes).
+// Stored as the signed body of an Envelope referenced by a Pointer with target == POINTER_TARGET_MANIFEST
+// and POINTER_FLAG_MULTIPART set.
+message Manifest {
+  uint32 version = 1;
+  // Total unencrypted payload size in bytes (MUST be <= 16,777,216).
+  uint64 total_plaintext_bytes = 2;
+  // Maximum plaintext chunk size in bytes (MUST be <= 1,048,576).
+  uint32 chunk_size_bytes = 3;
+  string media_type = 4;
+  string inner_schema_name = 5;
+  BodyEncoding inner_body_encoding = 6;
+  CipherSuite cipher_suite = 7;
+  repeated ManifestChunk chunks = 8;
+}
+
+// Standard plaintext or encrypted chat/text message body (schema_name = "pf.message.text.v1").
+message TextMessage {
+  string text = 1;
+  // Optional text format hint, e.g. "text/plain" or "text/markdown".
+  string format = 2;
+  repeated IpfsCidRef attachments = 3;
+}
+
+// Encrypted Task Node reward payout payload (schema_name = "pf.reward.v1", visibility = VISIBILITY_PRIVATE).
+// Explorer displays the "Task reward" badge ONLY when Envelope.sender_pubkey matches the pinned official
+// Task Node payout key and matches the on-chain transaction signer.
+message RewardNotice {
+  string reward_id = 1;
+  string task_id = 2;
+  string recipient_account = 3;
+  uint64 amount_atoms = 4;
+  string asset_id = 5;
+  string summary = 6;
+  FastPayPaymentRef payment_ref = 7;
+}

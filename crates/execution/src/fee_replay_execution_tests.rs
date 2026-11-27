@@ -2517,6 +2517,9 @@
                     issuer: issuer.clone(),
                     asset_id: solana_exit::SERIES.into(),
                     amount: 1,
+                    offer_ids: Vec::new(),
+                    escrow_ids: Vec::new(),
+                    include_bridge_hold: false,
                 }),
             ),
         ] {

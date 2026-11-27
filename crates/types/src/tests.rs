@@ -1332,6 +1332,9 @@ fn asset_transaction_validation_covers_all_asset_operations() {
             issuer: issuer.to_string(),
             asset_id: asset_id.clone(),
             amount: 5,
+            offer_ids: Vec::new(),
+            escrow_ids: Vec::new(),
+            include_bridge_hold: false,
         }),
         ..asset_burn.clone()
     };
@@ -1364,6 +1367,9 @@ fn asset_transaction_validation_covers_all_asset_operations() {
             issuer: issuer.to_string(),
             asset_id: "PFT".to_string(),
             amount: 5,
+            offer_ids: Vec::new(),
+            escrow_ids: Vec::new(),
+            include_bridge_hold: false,
         }),
         ..asset_clawback
     };
@@ -1601,6 +1607,7 @@ fn nft_transaction_validation_covers_all_operations() {
         operation: NftTransactionOperation::NftBurn(NftBurnOperation {
             nft_id,
             owner: owner.to_string(),
+            issuer: String::new(),
         }),
         ..mint.clone()
     };
@@ -4216,5 +4223,55 @@ fn solana_exit_first_release_predicates_equal_origin_main() {
         forged,
     ] {
         assert_eq!(matches_bucket(&b, false), solana_exit_first_release::matches_bucket(&b), "{b:?}");
+    }
+}
+
+/// Point 6 (A7): a Train A activation height, once reached, cannot be moved
+/// or unset by a later amendment of the same kind.
+#[test]
+fn train_a_activation_heights_are_one_way() {
+    let amendment = |kind: &str, value: u32| GovernanceAmendment {
+        amendment_id: format!("{kind}-{value}"),
+        chain_id: "postfiat-local".to_string(),
+        genesis_hash: "ce".repeat(48),
+        protocol_version: 1,
+        instance_id: "i".to_string(),
+        proposal_id: "p".to_string(),
+        certificate_id: "c".to_string(),
+        proposer: "validator-0".to_string(),
+        validators: vec!["validator-0".to_string()],
+        quorum: 1,
+        kind: kind.to_string(),
+        value,
+        activation_height: 0,
+        veto_until_height: 0,
+        paused: false,
+        support: vec!["validator-0".to_string()],
+        votes: Vec::new(),
+        signed_authorizations: Vec::new(),
+    };
+    for kind in [
+        GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT,
+        GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT,
+    ] {
+        let read = |governance: &GovernanceState| match kind {
+            GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT => {
+                governance.fastpay_fee_v1_activation_height()
+            }
+            GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT => {
+                governance.nft_scaling_v1_activation_height()
+            }
+            _ => governance.asset_gate_v1_activation_height(),
+        };
+        let mut governance = GovernanceState::new(1);
+        assert_eq!(read(&governance), None);
+        governance.apply(amendment(kind, 500));
+        assert_eq!(read(&governance), Some(500));
+        // Certified at a block after 500: it cannot move the reached height.
+        governance.apply(amendment(kind, 900));
+        assert_eq!(read(&governance), Some(500), "{kind} moved after activation");
+        governance.apply(amendment(kind, 0));
+        assert_eq!(read(&governance), Some(500), "{kind} unset after activation");
     }
 }

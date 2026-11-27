@@ -100,10 +100,16 @@ pub(super) fn read_fastpay_ledger(store: &NodeStore) -> io::Result<LedgerState> 
             .map(|(_, fence)| fence)
             .collect::<Vec<_>>();
         let shielded = store.read_shielded()?;
+        let fastpay_fee_v1_activation = store.read_governance()?.fastpay_fee_v1_activation_height();
         if store.read_chain_tip()? != tip {
             continue;
         }
-        replay_confirmed_fastpay_fences_dependency_ordered(&mut ledger, &shielded, &effects)?;
+        replay_confirmed_fastpay_fences_dependency_ordered(
+            &mut ledger,
+            &shielded,
+            &effects,
+            fastpay_fee_v1_activation,
+        )?;
         if store.read_chain_tip()? == tip {
             return Ok(ledger);
         }
@@ -112,6 +118,30 @@ pub(super) fn read_fastpay_ledger(store: &NodeStore) -> io::Result<LedgerState> 
         io::ErrorKind::WouldBlock,
         "finalized tip changed while reading FastPay state",
     ))
+}
+
+fn format_fastpay_owned_transfer_error(
+    prefix: &str,
+    error: postfiat_execution::OwnedTransferError,
+) -> String {
+    match error {
+        postfiat_execution::OwnedTransferError::InsufficientFee { fee, required } => {
+            format!("fastpay_insufficient_fee: {prefix}: minimum {required}, provided {fee}")
+        }
+        postfiat_execution::OwnedTransferError::AccountOwnedObjectCapExceeded {
+            owner_pubkey_hex,
+            current,
+            limit,
+        } => {
+            format!(
+                "fastpay_account_object_cap_exceeded: {prefix}: owner {owner_pubkey_hex} current {current} cap {limit}"
+            )
+        }
+        postfiat_execution::OwnedTransferError::ResourceLimitExceeded => {
+            format!("fastpay_global_object_cap_exceeded: {prefix}: resource limit exceeded")
+        }
+        other => format!("{prefix}: {other:?}"),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -560,18 +590,23 @@ pub fn owned_sign_v3(
     let committee_epoch = committee.committee_epoch;
     let domain = fastpay_domain_for_committee(&options.data_dir, &committee)?;
     let policy = fastpay_recovery_policy(&ledger)?;
-    postfiat_execution::validate_owned_transfer_v3_admission(
+    let fee_v1_active = store
+        .read_governance()?
+        .fastpay_fee_v1_activation_height()
+        .is_some_and(|activation| activation > 0 && height >= activation);
+    postfiat_execution::validate_owned_transfer_v3_admission_with_fee_v1(
         &ledger,
         &signed,
         &domain,
         committee_epoch,
         &policy,
         height,
+        fee_v1_active,
     )
     .map_err(|error| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("FastPay v3 transfer admission failed: {error:?}"),
+            format_fastpay_owned_transfer_error("FastPay v3 transfer admission failed", error),
         )
     })?;
     let signing_bytes = postfiat_execution::owned_transfer_v3_signing_bytes(&signed.order);
@@ -639,18 +674,23 @@ pub fn owned_unwrap_sign_v3(
     let committee_epoch = committee.committee_epoch;
     let domain = fastpay_domain_for_committee(&options.data_dir, &committee)?;
     let policy = fastpay_recovery_policy(&ledger)?;
-    postfiat_execution::validate_owned_unwrap_v3_admission(
+    let fee_v1_active = store
+        .read_governance()?
+        .fastpay_fee_v1_activation_height()
+        .is_some_and(|activation| activation > 0 && height >= activation);
+    postfiat_execution::validate_owned_unwrap_v3_admission_with_fee_v1(
         &ledger,
         &signed,
         &domain,
         committee_epoch,
         &policy,
         height,
+        fee_v1_active,
     )
     .map_err(|error| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("FastPay v3 unwrap admission failed: {error:?}"),
+            format_fastpay_owned_transfer_error("FastPay v3 unwrap admission failed", error),
         )
     })?;
     let signing_bytes = postfiat_execution::owned_unwrap_v3_signing_bytes(&signed.order);
@@ -1009,14 +1049,22 @@ pub fn owned_apply_v3(
             quorum: committee.quorum,
         };
         let mut next_ledger = ledger.clone();
-        postfiat_execution::apply_owned_transfer_certificate_v3(
+        let fee_v1_active = store
+            .read_governance()?
+            .fastpay_fee_v1_activation_height()
+            .is_some_and(|activation| activation > 0 && height >= activation);
+        postfiat_execution::apply_owned_transfer_certificate_v3_with_fee_v1(
             &mut next_ledger,
             &certificate,
             context,
             height,
+            fee_v1_active,
         )
         .map_err(|error| {
-            io::Error::other(format!("FastPay v3 transfer apply failed: {error:?}"))
+            io::Error::other(format_fastpay_owned_transfer_error(
+                "FastPay v3 transfer apply failed",
+                error,
+            ))
         })?;
         let prior_objects = prior_objects_for_fastpay_inputs(&ledger, &certificate.order.inputs)?;
         let fence = next_ledger
@@ -1093,13 +1141,23 @@ pub fn owned_unwrap_apply_v3(
             quorum: committee.quorum,
         };
         let mut next_ledger = ledger.clone();
-        postfiat_execution::apply_owned_unwrap_certificate_v3(
+        let fee_v1_active = store
+            .read_governance()?
+            .fastpay_fee_v1_activation_height()
+            .is_some_and(|activation| activation > 0 && height >= activation);
+        postfiat_execution::apply_owned_unwrap_certificate_v3_with_fee_v1(
             &mut next_ledger,
             &certificate,
             context,
             height,
+            fee_v1_active,
         )
-        .map_err(|error| io::Error::other(format!("FastPay v3 unwrap apply failed: {error:?}")))?;
+        .map_err(|error| {
+            io::Error::other(format_fastpay_owned_transfer_error(
+                "FastPay v3 unwrap apply failed",
+                error,
+            ))
+        })?;
         let prior_objects = prior_objects_for_fastpay_inputs(&ledger, &certificate.order.inputs)?;
         let prior_unwrap_account = ledger.account(&certificate.order.to_address).cloned();
         let fence = next_ledger

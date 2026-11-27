@@ -1,0 +1,7 @@
+{
+  "schema": "postfiat-nostr-allowlist-v1",
+  "description": "Example registered Post Fiat member pubkey allowlist synced from on-chain identity_set and Task Node.",
+  "registered_pubkeys": [
+    "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0"
+  ]
+}

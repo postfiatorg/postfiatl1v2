@@ -1899,6 +1899,7 @@
             NftTransactionOperation::NftBurn(NftBurnOperation {
                 nft_id: nft_id.clone(),
                 owner: recipient.clone(),
+                issuer: String::new(),
             }),
         );
         let burn_receipt = execute_nft_transaction(&genesis, &mut ledger, &burn);
@@ -2154,6 +2155,7 @@
             NftTransactionOperation::NftBurn(NftBurnOperation {
                 nft_id: nft_id.clone(),
                 owner: owner.clone(),
+                issuer: String::new(),
             }),
         );
         let burn_receipt = execute_nft_transaction(&genesis, &mut ledger, &burn);
@@ -3083,6 +3085,9 @@
                 issuer: issuer.clone(),
                 asset_id: no_clawback_asset_id.clone(),
                 amount: 5,
+                offer_ids: Vec::new(),
+                escrow_ids: Vec::new(),
+                include_bridge_hold: false,
             }),
         );
         let before_reject = ledger.clone();
@@ -3175,6 +3180,9 @@
                 issuer: issuer.clone(),
                 asset_id: clawback_asset_id.clone(),
                 amount: 7,
+                offer_ids: Vec::new(),
+                escrow_ids: Vec::new(),
+                include_bridge_hold: false,
             }),
         );
         let receipt = execute_asset_transaction(&genesis, &mut ledger, &clawback, 1);
@@ -3203,6 +3211,9 @@
                 issuer: issuer.clone(),
                 asset_id: clawback_asset_id,
                 amount: 14,
+                offer_ids: Vec::new(),
+                escrow_ids: Vec::new(),
+                include_bridge_hold: false,
             }),
         );
         let before_reject = ledger.clone();
@@ -3222,6 +3233,9 @@
                 issuer,
                 asset_id: "PFT".to_string(),
                 amount: 1,
+                offer_ids: Vec::new(),
+                escrow_ids: Vec::new(),
+                include_bridge_hold: false,
             }),
         );
         let receipt = execute_asset_transaction(&genesis, &mut ledger, &native_pft_clawback, 1);

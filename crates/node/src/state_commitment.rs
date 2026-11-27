@@ -769,6 +769,11 @@ fn validate_issued_supply_custody_inventory(
         trustlines,
         escrows,
         nfts: _,
+        nfts_by_id: _,
+        used_nft_serials: _,
+        nft_collection_policies: _,
+        asset_bridge_holds,
+        revoked_fast_lane_holder_permits: _,
         offers,
         nav_assets: _,
         nav_reserve_packets: _,
@@ -992,6 +997,18 @@ fn validate_issued_supply_custody_inventory(
                 format!(
                     "PFTL-Uniswap route references unknown issued asset `{}`",
                     route.native_nav_asset_id
+                ),
+            ));
+        }
+    }
+
+    for hold in asset_bridge_holds.values() {
+        if !known(&hold.asset_id) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "asset bridge hold references unknown issued asset `{}`",
+                    hold.asset_id
                 ),
             ));
         }
@@ -1830,6 +1847,115 @@ pub(super) fn append_ledger_state(
         );
     }
 
+    // Train A additive keyed LedgerState maps: only appended when non-empty so
+    // pre-activation state roots remain 100% byte-identical.
+    if !ledger.nfts_by_id.is_empty() {
+        append_canonical_usize(bytes, "ledger.nfts_by_id_count", ledger.nfts_by_id.len());
+        for (nft_id, nft) in &ledger.nfts_by_id {
+            append_canonical_str(bytes, "ledger.nfts_by_id.key", nft_id);
+            append_nft(bytes, "ledger.nfts_by_id.value", nft);
+        }
+    }
+    if !ledger.used_nft_serials.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.used_nft_serials_count",
+            ledger.used_nft_serials.len(),
+        );
+        for (nft_id, burned_height) in &ledger.used_nft_serials {
+            append_canonical_str(bytes, "ledger.used_nft_serials.key", nft_id);
+            append_canonical_u64(bytes, "ledger.used_nft_serials.height", *burned_height);
+        }
+    }
+    if !ledger.nft_collection_policies.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.nft_collection_policies_count",
+            ledger.nft_collection_policies.len(),
+        );
+        for (policy_key, policy) in &ledger.nft_collection_policies {
+            append_canonical_str(bytes, "ledger.nft_collection_policies.key", policy_key);
+            append_canonical_str(
+                bytes,
+                "ledger.nft_collection_policies.issuer",
+                &policy.issuer,
+            );
+            append_canonical_str(
+                bytes,
+                "ledger.nft_collection_policies.collection_id",
+                &policy.collection_id,
+            );
+            append_canonical_u32(
+                bytes,
+                "ledger.nft_collection_policies.collection_flags",
+                policy.collection_flags,
+            );
+            append_canonical_u64(
+                bytes,
+                "ledger.nft_collection_policies.first_minted_height",
+                policy.first_minted_height,
+            );
+        }
+    }
+    if !ledger.asset_bridge_holds.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.asset_bridge_holds_count",
+            ledger.asset_bridge_holds.len(),
+        );
+        for (hold_key, hold) in &ledger.asset_bridge_holds {
+            append_canonical_str(bytes, "ledger.asset_bridge_holds.key", hold_key);
+            append_canonical_str(bytes, "ledger.asset_bridge_holds.hold_key", &hold.hold_key);
+            append_canonical_str(bytes, "ledger.asset_bridge_holds.asset_id", &hold.asset_id);
+            append_canonical_str(bytes, "ledger.asset_bridge_holds.issuer", &hold.issuer);
+            append_canonical_str(
+                bytes,
+                "ledger.asset_bridge_holds.recipient",
+                &hold.recipient,
+            );
+            append_canonical_u64(bytes, "ledger.asset_bridge_holds.amount", hold.amount);
+            append_canonical_u64(
+                bytes,
+                "ledger.asset_bridge_holds.credit_count",
+                hold.credit_count,
+            );
+            append_canonical_u64(
+                bytes,
+                "ledger.asset_bridge_holds.created_at_height",
+                hold.created_at_height,
+            );
+            append_canonical_u64(
+                bytes,
+                "ledger.asset_bridge_holds.last_updated_height",
+                hold.last_updated_height,
+            );
+            append_canonical_str(
+                bytes,
+                "ledger.asset_bridge_holds.last_reason_code",
+                &hold.last_reason_code,
+            );
+        }
+    }
+    if !ledger.revoked_fast_lane_holder_permits.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.revoked_fast_lane_holder_permits_count",
+            ledger.revoked_fast_lane_holder_permits.len(),
+        );
+        for (permit_id, revoked_height) in &ledger.revoked_fast_lane_holder_permits {
+            append_canonical_str(
+                bytes,
+                "ledger.revoked_fast_lane_holder_permits.key",
+                permit_id,
+            );
+            append_canonical_u64(
+                bytes,
+                "ledger.revoked_fast_lane_holder_permits.height",
+                *revoked_height,
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -1842,6 +1968,11 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         trustlines: _,
         escrows: _,
         nfts: _,
+        nfts_by_id: _,
+        used_nft_serials: _,
+        nft_collection_policies: _,
+        asset_bridge_holds: _,
+        revoked_fast_lane_holder_permits: _,
         offers: _,
         nav_assets: _,
         nav_reserve_packets: _,

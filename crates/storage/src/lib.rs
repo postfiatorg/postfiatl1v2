@@ -36,8 +36,8 @@ pub use backend_mode::{
 pub use ordered_history::{OrderedHistoryCommitment, OrderedHistoryIndexReport};
 pub use transactional::{
     CanonicalExportReceiptV1, CanonicalHistoryIndexEntryV1, CommitFinalizedBlock, CommitOutcome,
-    CurrentStateUpdate, PruneOutcome, PruneRetainedHistory, TransactionalStore,
-    TransactionalStoreMetaV1,
+    CurrentStateUpdate, FastPayOrderIndexEntryV1, PruneOutcome, PruneRetainedHistory,
+    TransactionalStore, TransactionalStoreMetaV1, FASTPAY_ORDER_INDEX_SCHEMA_V1,
 };
 
 use integrity::{
@@ -528,6 +528,18 @@ impl NodeStore {
             return Ok(None);
         }
         Ok(Some(self.transactional_store()?.receipts_for_tx_id(tx_id)?))
+    }
+
+    pub fn read_fastpay_order_index_entry(
+        &self,
+        order_hash: &str,
+    ) -> io::Result<Option<FastPayOrderIndexEntryV1>> {
+        if !self.transactional_storage_active()? {
+            return Ok(None);
+        }
+        self.transactional_store()?
+            .fastpay_order_index_entry(order_hash)
+            .map_err(io::Error::from)
     }
 
     pub fn append_receipt(&self, receipt: Receipt) -> io::Result<()> {
@@ -3412,6 +3424,7 @@ mod tests {
             offer_id: None,
             offer_fills: Vec::new(),
             atomic_swap_legs: None,
+            bridge_hold_events: Vec::new(),
         }
     }
 

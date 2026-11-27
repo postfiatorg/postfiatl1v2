@@ -1,0 +1,48 @@
+# First-party Nostr relay stack for relay.postfiat.org (Pillar 6).
+# Configure NOSTR_RELAY_HOST, NOSTR_RELAY_ENV, and allowlist snapshot path via
+# a private .env file; zero hardcoded IPs or secrets appear here.
+services:
+  caddy:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    environment:
+      NOSTR_RELAY_HOST: "${NOSTR_RELAY_HOST:-relay.postfiat.org}"
+      NOSTR_RELAY_TLS_EMAIL: "${NOSTR_RELAY_TLS_EMAIL:-ops@postfiat.org}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - strfry
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  strfry:
+    image: ghcr.io/hoytech/strfry:1.0.4
+    restart: unless-stopped
+    environment:
+      NOSTR_RELAY_ENV: "${NOSTR_RELAY_ENV:-production}"
+      NOSTR_RELAY_ALLOWLIST_PATH: "/etc/strfry/members-allowlist.json"
+      NOSTR_RELAY_RATE_LIMIT_MAX_EVENTS: "${NOSTR_RELAY_RATE_LIMIT_MAX_EVENTS:-20}"
+      NOSTR_RELAY_RATE_LIMIT_WINDOW_SECONDS: "${NOSTR_RELAY_RATE_LIMIT_WINDOW_SECONDS:-60}"
+      NOSTR_RELAY_MIRROR_RATE_LIMIT_MAX_EVENTS: "${NOSTR_RELAY_MIRROR_RATE_LIMIT_MAX_EVENTS:-40}"
+    volumes:
+      - ./strfry.conf:/etc/strfry/strfry.conf:ro
+      - ./write-policy.py:/etc/strfry/write-policy.py:ro
+      - ./mirror-sync.json:/etc/strfry/mirror-sync.json:ro
+      - ${NOSTR_RELAY_ALLOWLIST_HOST_PATH:-./members-allowlist.example.json}:/etc/strfry/members-allowlist.json:ro
+      - strfry_db:/app/strfry-db
+    expose:
+      - "7777"
+    command: ["--config=/etc/strfry/strfry.conf", "relay"]
+
+volumes:
+  caddy_data:
+  caddy_config:
+  strfry_db:

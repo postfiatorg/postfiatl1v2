@@ -2710,6 +2710,7 @@ pub(super) mod release_path {
             terminal_tombstones: Default::default(),
             asset_rules: Default::default(),
             holder_permits: Default::default(),
+            revoked_holder_permits: Default::default(),
             policy_snapshots: Default::default(),
             prepare_fences: Default::default(),
             pending_fee_burns: Default::default(),

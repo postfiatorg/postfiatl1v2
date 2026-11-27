@@ -53,6 +53,10 @@ jobs:
           node scripts/navswap-redaction-check.mjs --repo-only
       - name: Verify P0/P1 closure-table coverage
         run: scripts/test-productionization-closure-table
+      - name: Verify Contract C1 protobuf schemas and deterministic test vectors
+        run: |
+          diff -ru proto/postfiat python/postfiat_rpc/proto/postfiat
+          python3 scripts/test-message-protocol-vectors.py
 
   rust-supply-chain:
     runs-on: ubuntu-latest

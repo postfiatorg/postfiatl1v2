@@ -23,6 +23,7 @@ exclude_docs: |
   !specs/wallet-exchange-custody-model.md
   !specs/wallet-mnemonic-design.md
   !specs/fast-validator-reads-20261124.md
+  !specs/message-protocol-v1.md
   status/**
   !status/README.md
   !status/network-status.md
@@ -270,6 +271,7 @@ nav:
       - Plaintext Key File Boundary: specs/plaintext-key-file-boundary.md
       - Wallet Mnemonic Design: specs/wallet-mnemonic-design.md
       - Fast Validator Reads (2026-11-24): specs/fast-validator-reads-20261124.md
+      - Message Protocol v1 (Contract C1): specs/message-protocol-v1.md
       - Account History Index Runbook: runbooks/account-tx-index.md
       - Evidence:
           - Index: evidence/index.md
