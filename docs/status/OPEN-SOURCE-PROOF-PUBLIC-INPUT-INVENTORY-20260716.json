@@ -102,7 +102,7 @@
     "programs/pfeth-eth-mainnet-ingress/src/main.rs": "67782df70bad2a243115c401088d274874cda3e5fa8a96b85a9577546df71469",
     "programs/pfusdc-egress/src/main.rs": "c1cfd019f37a70d7862226f17659e72730bdae4c861f920dd93aba181ad67945",
     "crates/types/src/pfusdc_tier4_types.rs": "3160d5b33ad4a8684158f3f25ab2c5eb33d28228ba2e68036657290834360bae",
-    "crates/execution/src/nav_vault_asset_execution.rs": "80c92a4654defb9d183c017c53c9fa03ae4d045d879c3981b328710ca64d8e92",
+    "crates/execution/src/nav_vault_asset_execution.rs": "9c44af5eb5ab483699d6b00627121f571fe00f470c97b592ff747139363dfad2",
     "tools/eth-l1-mainnet-fast-lane-p0/src/main.rs": "68996601ff8caf96364400c077af4be9a1b8f74dadb5f7fe88624efdf5a68229",
     "crates/ethereum-contracts/src/WETHBridgeVaultL1.sol": "7d6a25df0f73e832ea15d2743f110974648323fc574ff78e74f548a7d25eeb12",
     "crates/ethereum-contracts/src/PFTLFinalityVerifierV1.sol": "8e0139eeb4cb41030234c34293099bd8722d2ca53998b5be3b42906dafe60da7",

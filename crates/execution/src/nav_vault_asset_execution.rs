@@ -8178,7 +8178,20 @@ pub fn settle_governed_solana_payout_with_compatibility(
     )
     .map_err(|(_, message)| message)?;
     if compatibility.asset_gate_v1_active(block_height) {
-        for asset_id in &lines {
+        let mut candidate_lines: Vec<String> = lines.into_iter().collect();
+        for tl in &staged.trustlines {
+            if tl.account != owner || tl.balance != 0 {
+                continue;
+            }
+            let same_family = staged
+                .asset_definition(&tl.asset_id)
+                .map(|def| def.asset_family_id == red.asset_id)
+                .unwrap_or(false);
+            if same_family && !candidate_lines.contains(&tl.asset_id) {
+                candidate_lines.push(tl.asset_id.clone());
+            }
+        }
+        for asset_id in &candidate_lines {
             auto_prune_empty_implicit_trustline(&mut staged, &owner, asset_id)
                 .map_err(|(_, message)| message)?;
         }

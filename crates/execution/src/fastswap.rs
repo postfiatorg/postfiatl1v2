@@ -76,7 +76,18 @@ pub fn validate_fastswap_admission(
     signed: &SignedFastSwapIntentV1,
     finalized_height: u64,
 ) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
-    validate_fastswap_admission_inner(state, None, signed, finalized_height)
+    validate_fastswap_admission_inner(state, None, signed, finalized_height, false)
+}
+
+/// Recomputes the effects of a FastSwap intent already decided by a quorum-signed
+/// CONFIRM certificate: ignores `prepare_fences` (which only stop new preparation)
+/// and skips live L1 asset-gate admission checks (which governed signing time).
+pub fn validate_fastswap_certified_effects(
+    state: &FastLaneStateV1,
+    signed: &SignedFastSwapIntentV1,
+    finalized_height: u64,
+) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
+    validate_fastswap_admission_inner(state, None, signed, finalized_height, true)
 }
 
 /// Fast-lane intent admission with live L1 ledger enforcement (Train A Pillar 8 M1):
@@ -88,7 +99,7 @@ pub fn validate_fastswap_admission_with_ledger(
     signed: &SignedFastSwapIntentV1,
     finalized_height: u64,
 ) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
-    validate_fastswap_admission_inner(state, Some(ledger), signed, finalized_height)
+    validate_fastswap_admission_inner(state, Some(ledger), signed, finalized_height, false)
 }
 
 fn validate_fastswap_admission_inner(
@@ -96,6 +107,7 @@ fn validate_fastswap_admission_inner(
     ledger: Option<&postfiat_types::LedgerState>,
     signed: &SignedFastSwapIntentV1,
     finalized_height: u64,
+    allow_fenced_certified: bool,
 ) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
     signed.intent.validate_canonical_shape()?;
     if signed.intent.domain != state.committee {
@@ -105,7 +117,7 @@ fn validate_fastswap_admission_inner(
         .policy_snapshots
         .get(&signed.intent.policy_hash)
         .ok_or(FastSwapAdmissionError::PolicyMissing)?;
-    if state.prepare_fences.contains_key(&policy.policy_epoch) {
+    if !allow_fenced_certified && state.prepare_fences.contains_key(&policy.policy_epoch) {
         return Err(FastSwapAdmissionError::PolicyFenced);
     }
     validate_policy(policy, signed, finalized_height)?;

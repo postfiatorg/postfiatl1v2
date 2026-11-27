@@ -599,38 +599,55 @@ impl TransactionalStore {
             return Ok(());
         };
         let counters = &self.fastpay_backfill_counters;
-        let missing = {
+        let (missing, latest_height) = {
             let read = database.begin_read().map_err(database_error)?;
+            let blocks = match read.open_table(BLOCKS_BY_HEIGHT) {
+                Ok(table) => Some(table),
+                Err(redb::TableError::TableDoesNotExist(_)) => None,
+                Err(error) => return Err(database_error(error)),
+            };
+            let latest_height = match &blocks {
+                Some(table) => match table.last().map_err(database_error)? {
+                    Some((key, _)) if key.value().len() == 8 => {
+                        let mut bytes = [0u8; 8];
+                        bytes.copy_from_slice(key.value());
+                        u64::from_be_bytes(bytes)
+                    }
+                    _ => 0,
+                },
+                None => 0,
+            };
             match read.open_table(LOCAL_MIGRATIONS) {
                 Ok(markers) => {
-                    if markers
+                    if let Some(guard) = markers
                         .get(FASTPAY_ORDER_BACKFILL_MARKER)
                         .map_err(database_error)?
-                        .is_some()
                     {
-                        return Ok(());
+                        let raw = guard.value();
+                        if raw.len() == 8 {
+                            let mut bytes = [0u8; 8];
+                            bytes.copy_from_slice(raw);
+                            let marked_height = u64::from_be_bytes(bytes);
+                            if marked_height == latest_height {
+                                return Ok(());
+                            }
+                        }
                     }
                 }
                 Err(redb::TableError::TableDoesNotExist(_)) => {}
                 Err(error) => return Err(database_error(error)),
             }
-            match read.open_table(HISTORY_INDEXES) {
-                Ok(indexes) => {
-                    let blocks = match read.open_table(BLOCKS_BY_HEIGHT) {
-                        Ok(table) => Some(table),
-                        Err(redb::TableError::TableDoesNotExist(_)) => None,
-                        Err(error) => return Err(database_error(error)),
-                    };
-                    fastpay_index::missing_order_entries(
-                        &indexes,
-                        blocks.as_ref(),
-                        &self.integrity_key,
-                        counters,
-                    )?
-                }
+            let missing = match read.open_table(HISTORY_INDEXES) {
+                Ok(indexes) => fastpay_index::missing_order_entries(
+                    &indexes,
+                    blocks.as_ref(),
+                    &self.integrity_key,
+                    counters,
+                )?,
                 Err(redb::TableError::TableDoesNotExist(_)) => Vec::new(),
                 Err(error) => return Err(database_error(error)),
-            }
+            };
+            (missing, latest_height)
         };
         let mut transaction = database.begin_write().map_err(database_error)?;
         transaction
@@ -656,7 +673,10 @@ impl TransactionalStore {
         transaction
             .open_table(LOCAL_MIGRATIONS)
             .map_err(database_error)?
-            .insert(FASTPAY_ORDER_BACKFILL_MARKER, b"complete".as_slice())
+            .insert(
+                FASTPAY_ORDER_BACKFILL_MARKER,
+                latest_height.to_be_bytes().as_slice(),
+            )
             .map_err(database_error)?;
         #[cfg(test)]
         if FAIL_FASTPAY_BACKFILL_BEFORE_COMMIT.with(std::cell::Cell::get) {
@@ -1523,6 +1543,16 @@ impl TransactionalStore {
                 }
             }
         }
+        // Advance the local FastPay order backfill marker with every block written by this
+        // release so an older release appending blocks in between invalidates the marker.
+        transaction
+            .open_table(LOCAL_MIGRATIONS)
+            .map_err(database_error)?
+            .insert(
+                FASTPAY_ORDER_BACKFILL_MARKER,
+                commit.new_tip.height.to_be_bytes().as_slice(),
+            )
+            .map_err(database_error)?;
 
         {
             let mut receipts_table = transaction
