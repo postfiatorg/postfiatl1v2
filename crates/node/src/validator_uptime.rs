@@ -1271,6 +1271,13 @@ mod tests {
     /// implementation. Verifying it here is the cross-language check: same
     /// canonical bytes, same context string, same accept.
     #[test]
+    fn carried_keys_do_not_authorize_a_feed_from_an_old_generation() {
+        let (feed, mut keyset, now) = fixture();
+        keyset.keyset_id = "rotated-test-generation".into();
+        assert!(verify(&feed, &keyset, now).is_err());
+    }
+
+    #[test]
     fn the_python_signed_fixture_verifies_and_reads_the_same() {
         let (feed, keyset, now) = fixture();
         let report = verify(&feed, &keyset, now).expect("the fixture verifies");

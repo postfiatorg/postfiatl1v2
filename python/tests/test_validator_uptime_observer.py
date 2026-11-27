@@ -384,6 +384,23 @@ class ObserverRefusals(unittest.TestCase):
         with self.assertRaisesRegex(observer.ObserverError, "does not follow"):
             observer.poll(json.loads(json.dumps(ahead)), [InProcessSource(forked, True)], "l1-testnet", START + 2 * STEP)
 
+    def test_checkpoint_restores_only_verified_lifecycle_metadata(self) -> None:
+        directory = REPO / "docs/specs/schemas"
+        feed_file = directory / "postfiat-validator-uptime-v1.fixture.json"
+        keyset_file = directory / "postfiat-observer-keyset-v1.fixture.json"
+        feed = json.loads(feed_file.read_text())
+        row = feed["validators"][0]
+        state = {"chain": feed["chain"], "registry": {row["validator_id"]: row["ml_dsa_public_key"]},
+                 "validators": {}, "days": {}}
+        generation = feed["quorum_policy"]["observer_keyset_id"]
+        now = contract.parse_utc(feed["generated_at"])
+        observer.restore_checkpoint(state, str(feed_file), str(keyset_file), generation, node_binary(), now)
+        self.assertEqual(state["validators"][row["validator_id"]]["first_active_date"], row["first_active_date"])
+        self.assertEqual(state["days"], {})
+        self.assertNotIn("days", state["validators"][row["validator_id"]])
+        with self.assertRaises(observer.ObserverError):
+            observer.restore_checkpoint(state, str(feed_file), str(keyset_file), generation, node_binary(), now + dt.timedelta(days=1))
+
     def test_matching_proposer_records_remain_informational(self) -> None:
         chain = Chain()
         source = InProcessSource(chain, True)

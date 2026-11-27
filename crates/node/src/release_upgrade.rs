@@ -1652,6 +1652,19 @@ fn restore_pre_upgrade_backup(
             return Err(format!("rollback swap restored data-dir failed: {error}"));
         }
     }
+    if swap_already_done {
+        for entry in &inventory.data_files {
+            let file = dest_data_dir.join(&entry.relative_path);
+            if !fs::symlink_metadata(&file)
+                .map_err(|e| e.to_string())?
+                .is_file()
+                || sha256_file_and_size(&file).map_err(|e| e.to_string())?
+                    != (entry.sha256.clone(), entry.size_bytes)
+            {
+                return Err("partially restored chain differs from backup inventory".into());
+            }
+        }
+    }
     atomic_install_binary(backup_binary, dest_binary)
         .map_err(|error| format!("rollback binary restore failed: {error}"))?;
     // 3. Carry the excluded entries over. Until every one has moved, the stash stays.
@@ -1678,7 +1691,11 @@ fn restore_pre_upgrade_backup(
     }
     fsync_dir(dest_data_dir).map_err(|error| format!("fsync data-dir failed: {error}"))?;
     fsync_dir(parent).map_err(|error| format!("fsync data-dir parent failed: {error}"))?;
-    let _ = fs::remove_dir_all(&failed_stash);
+    if failed_stash.exists() {
+        fs::remove_dir_all(&failed_stash)
+            .and_then(|_| fsync_dir(parent))
+            .map_err(|error| format!("rollback stash cleanup failed: {error}"))?;
+    }
     Ok(())
 }
 

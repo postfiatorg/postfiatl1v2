@@ -816,6 +816,21 @@ mod tests {
     }
 
     #[test]
+    fn forwarded_ip_requires_the_matching_proxy_credential() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        for (credential, expected) in [("fixture-token", "203.0.113.1"), ("other", "127.0.0.1")] {
+            let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+            let (mut stream, _) = listener.accept().unwrap();
+            write!(client, "GET /healthz HTTP/1.1\r\nX-Postfiat-Proxy-Token: {credential}\r\nX-Forwarded-For: 203.0.113.1\r\n\r\n").unwrap();
+            let request =
+                read_http_request(&mut stream, Duration::from_secs(1), Some("fixture-token"))
+                    .ok()
+                    .unwrap();
+            assert_eq!(request.client, expected);
+        }
+    }
+
+    #[test]
     fn edge_binds_and_forwards_on_loopback_only() {
         let mut public = options(1);
         public.listen_host = "0.0.0.0".to_string();

@@ -480,6 +480,25 @@ def parse_now(raw: str | None) -> dt.datetime:
     return now.replace(microsecond=0)
 
 
+def restore_checkpoint(state: dict, feed_path: str, keyset_path: str, keyset_id: str, node_bin: str, now: dt.datetime) -> None:
+    # Verify exactly the bytes from which we import lifecycle metadata.
+    raw = Path(feed_path).read_bytes()
+    feed = json.loads(raw)
+    if feed["chain"] != state["chain"] or feed["quorum_policy"]["observer_keyset_id"] != keyset_id:
+        raise ObserverError("bootstrap feed differs from observed chain or configured generation")
+    with tempfile.TemporaryDirectory() as tmp:
+        snapshot = Path(tmp) / "checkpoint.json"
+        snapshot.write_bytes(raw)
+        verified = subprocess.run([node_bin, "observer-uptime-verify", "--feed-file", str(snapshot),
+                                  "--keyset-file", keyset_path, "--now-unix", str(int(now.timestamp()))],
+                                  capture_output=True, text=True, check=False)
+    if verified.returncode or json.loads(verified.stdout)["indeterminate"]:
+        raise ObserverError("bootstrap checkpoint failed quorum verification")
+    for row in feed["validators"]:
+        if state["registry"].get(row["validator_id"]) == row["ml_dsa_public_key"]:
+            state["validators"][row["validator_id"]] = {k: row[k] for k in FACT_KEYS if k != "days"}
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     state_file, output = Path(args.state_file), Path(args.output)
     for path in (state_file, output):
@@ -490,22 +509,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if bool(args.bootstrap_feed) != bool(args.bootstrap_keyset):
         raise ObserverError("bootstrap requires a feed and its independently pinned keyset")
     if previous is None and args.bootstrap_feed:
-        # Verify exactly the bytes from which we import lifecycle metadata.
-        raw = Path(args.bootstrap_feed).read_bytes()
-        feed = json.loads(raw)
-        if feed["chain"] != state["chain"] or feed["quorum_policy"]["observer_keyset_id"] != args.keyset_id:
-            raise ObserverError("bootstrap feed differs from observed chain or configured generation")
-        with tempfile.TemporaryDirectory() as tmp:
-            snapshot = Path(tmp) / "checkpoint.json"
-            snapshot.write_bytes(raw)
-            verified = subprocess.run([args.node_bin, "observer-uptime-verify", "--feed-file", str(snapshot),
-                                      "--keyset-file", args.bootstrap_keyset, "--now-unix", str(int(now.timestamp()))],
-                                      capture_output=True, text=True, check=False)
-        if verified.returncode or json.loads(verified.stdout)["indeterminate"]:
-            raise ObserverError("bootstrap checkpoint failed quorum verification")
-        for row in feed["validators"]:
-            if state["registry"].get(row["validator_id"]) == row["ml_dsa_public_key"]:
-                state["validators"][row["validator_id"]] = {k: row[k] for k in FACT_KEYS if k != "days"}
+        restore_checkpoint(state, args.bootstrap_feed, args.bootstrap_keyset, args.keyset_id, args.node_bin, now)
     rows = build_rows(state, now)
     if state["last_height"] > 0:
         envelope = attest(state, rows, args.keyset_id, Path(args.key_file), args.node_bin, now)

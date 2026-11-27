@@ -1050,6 +1050,8 @@ mod rpc_read_cache_tests {
         assert!(cache.get_at_height(8, "validators", "{}", "x").is_none(), "the height moved");
         assert!(cache.get_at_height(6, "validators", "{}", "x").is_none(), "an earlier height");
         assert!(cache.get_at_height(7, "validators", "{\"a\":1}", "x").is_none(), "other params");
+        cache.entries.get_mut(&("validators".into(), "{}".into())).unwrap().inserted_at -= Duration::from_secs(3);
+        assert!(cache.get_at_height(7, "validators", "{}", "expired").is_none());
     }
 
     #[test]
