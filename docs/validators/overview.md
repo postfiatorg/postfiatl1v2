@@ -58,9 +58,11 @@ Since 21 November 2026 `main` is the only long-lived branch and a release is
 built from a commit on `main` only; a short-lived release branch may set an
 activation height and is merged back
 ([Master State](../status/master-state.md),
-[Release Process](../release-process.md)). On 26 November all six validators
-ran `sol-exit-r3`, build `2356caf1`, a commit on `main`, rolled on 25 November
-without a scheduled height; the earlier `04600868` (`release/sol-exit-r2`) was
+[Release Process](../release-process.md)). On 27 November all six validators
+ran `pq-r3`, build `9dcb689e`, a commit of #280's branch and not of `main`;
+`main` holds #280 as the squashed, newer `b121df606`
+([Master State](../status/master-state.md)). Before it they ran `sol-exit-r3`
+(`2356caf1`, a commit on `main`); the earlier `04600868` (`release/sol-exit-r2`) was
 merged into `main` on 25 November (#234; [Network Status](../status/network-status.md)). Releases are rolled one
 validator at a time; see [Safe Validator Rollout](../runbooks/safe-validator-rollout.md).
 

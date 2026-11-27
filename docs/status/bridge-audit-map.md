@@ -6,8 +6,10 @@
     Since then:
 
     - On 25 November the validators ran build `04600868` (second Solana exit release, rules from
-      block 1890), which is on `main` since `26acd4639` (#234). Since the evening of 25 November
-      they run `sol-exit-r3` (`2356caf1`, a commit on `main`); see [Master State](master-state.md).
+      block 1890), which is on `main` since `26acd4639` (#234). From the evening of 25 November
+      they ran `sol-exit-r3` (`2356caf1`, a commit on `main`); since the evening of 26 November
+      they run `pq-r3` (`9dcb689e`, a commit of #280's branch, not of `main`); see
+      [Master State](master-state.md).
     - The Solana egress verifier was initialised on 23 November and upgraded and migrated on
       24 November. A read-only finalized read on 25 November (slot 473711314) found 127,168 bytes of
       code with SHA-256 `3406becc6db7ba7c250f8db55dc43965656093bb4ceb3e330d2f452edd465fdf`, last
