@@ -1,6 +1,6 @@
 # Validator CLI (`upgrade`, `top`), 2-of-3 Release Manifest, and Read-Replica RPC Profiles Specification (`v1`)
 
-**Status:** Frozen Phase 0 Contract C2
+**Status:** Phase 0 Contract C2
 **Related:** [`validator-uptime-feed-v1.md`](validator-uptime-feed-v1.md), [`fast-validator-reads-20261124.md`](fast-validator-reads-20261124.md), [`public-rpc-operator-policy.md`](../runbooks/public-rpc-operator-policy.md), [`signed-deployment-manifest.md`](../runbooks/signed-deployment-manifest.md), [`release-process.md`](../release-process.md), [`validator-doctor.md`](../runbooks/validator-doctor.md)
 
 ## 1. Architectural Invariant: Single Binary (`postfiat-node`)
@@ -64,7 +64,26 @@ Installed at `/etc/postfiat/release-keyset.json` (mode `0644`, owned by `root:ro
 }
 ```
 
-Key rotation requires publishing a successor `postfiat.release_keyset.v1` co-signed by 2-of-3 of the **prior** keyset and documenting the fingerprint transition in the release notes.
+### 2.2.1 Keyset rotation (`postfiat.release_keyset_rotation.v1`)
+
+A new keyset is accepted only when two signers of the keyset it replaces have signed it:
+
+```json
+{
+  "schema": "postfiat.release_keyset_rotation.v1",
+  "prior_keyset_id": "postfiat-release-keyset-2026-v1",
+  "new_keyset": { "schema": "postfiat.release_keyset.v1", "keyset_id": "postfiat-release-keyset-2027-v1", "...": "..." },
+  "signatures": [
+    { "signer_id": "release-lead-1", "algorithm_id": "ML-DSA-65", "signature_hex": "<6618-lowercase-hex>" },
+    { "signer_id": "security-custodian-3", "algorithm_id": "ML-DSA-65", "signature_hex": "<6618-lowercase-hex>" }
+  ]
+}
+```
+
+- The signed bytes are the canonical JSON of `new_keyset`, with context `postfiat-l1-v2/release-keyset-rotation/v1`.
+- `postfiat-node upgrade --rotate-keyset FILE` checks that `prior_keyset_id` is the installed keyset, that two distinct installed signers verify, and that the new `keyset_id` differs. It then replaces `--keyset-file` atomically and keeps the old file beside it as `<keyset-file>.<prior_keyset_id>`.
+- It changes nothing else and never runs as part of a binary upgrade. A manifest signed under the new keyset is refused until the rotation has been applied.
+- The release notes carry the SHA-256 of both keyset files.
 
 ### 2.3 Release Manifest Schema (`postfiat.release_manifest.v3`)
 
@@ -74,6 +93,7 @@ This evolves `postfiat.deployment_manifest.v2` (see [`signed-deployment-manifest
 {
   "schema": "postfiat.release_manifest.v3",
   "release_id": "v0.3.0-testnet",
+  "release_sequence": 7,
   "created_unix": 1795651200,
   "valid_from_unix": 1795651200,
   "valid_until_unix": 1803427200,
@@ -152,6 +172,7 @@ This evolves `postfiat.deployment_manifest.v2` (see [`signed-deployment-manifest
 4. `valid_from_unix <= now_unix <= valid_until_unix` MUST hold.
 5. `rollout.mode` MUST be either `"rolling"` (`activation_height: null`, `halt_if_missed: false`) or `"activation_height"` (`activation_height >= 1`, `advance_warning_blocks >= 1`, `halt_if_missed: true`).
 6. Any missing, duplicate, expired, wrong-chain, or invalid signature is a hard refusal.
+7. **Releases have an order.** `release_sequence` is a positive integer that grows by at least 1 with every release of a chain. After a successful upgrade the node records the installed `release_id` and `release_sequence` in `<backup-dir>/installed-release.json`. A manifest with a lower sequence than the installed one is refused (`exit 3`, `release_downgrade`); an equal sequence with the same `release_id` means up to date; an equal sequence with another `release_id` is refused. There is no flag to skip this. With no record yet, the first verified manifest is accepted.
 
 ---
 
@@ -171,7 +192,9 @@ postfiat-node upgrade [OPTIONS]
 | `--manifest-file PATH` | none | Local path to a `postfiat.release_manifest.v3` JSON file. Mutually exclusive with `--channel-url`. |
 | `--channel-url URL` | `https://releases.postfiat.org/latest/release-manifest.json` | Fixed HTTPS release channel URL (TLS verified, no untrusted redirects, 1 MiB max manifest body). |
 | `--keyset-file PATH` | `/etc/postfiat/release-keyset.json` | Pinned 2-of-3 `postfiat.release_keyset.v1` trust file. |
-| `--data-dir PATH` | `/var/lib/postfiat/validator-0` | Node chain data directory (backed up during upgrade; NEVER contains signer guard state). |
+| `--data-dir PATH` | `/var/lib/postfiat/validator-0` | Node data directory. Its chain state is backed up; its vote record and key files are not (step 6). |
+| `--exclude-path NAME` | none | Further entry of `--data-dir` to leave out of the backup and the rollback. Repeatable. |
+| `--rotate-keyset FILE` | none | Apply a `postfiat.release_keyset_rotation.v1` and exit (2.2.1). |
 | `--signer-guard-dir PATH` | `/var/lib/postfiat/signer-guard` | Immutable double-sign guard directory. Verified disjoint from `--data-dir` and `--backup-dir`; NEVER copied, backed up, or rolled back. |
 | `--binary-path PATH` | `/usr/local/bin/postfiat-node` | Installed binary path to swap atomically. |
 | `--backup-dir PATH` | `/var/lib/postfiat/backups` | Destination directory for pre-upgrade binary and chain-state backups. |
@@ -188,19 +211,49 @@ postfiat-node upgrade [OPTIONS]
 2. **Double-sign guard isolation check (HARD INVARIANT):** Canonicalize `--signer-guard-dir`, `--data-dir`, and `--backup-dir`. Refuse immediately (`exit 3`, error code `guard_path_overlap`) if `--signer-guard-dir` is equal to, nested inside, or an ancestor of `--data-dir` or `--backup-dir`. **The double-sign guard directory (`/var/lib/postfiat/signer-guard/`) is NEVER copied, backed up, modified, or rolled back.**
 3. **Disk-space preflight:** Compute total byte size `D` of `--data-dir` and `B` of the candidate binary. Verify free bytes on `--backup-dir`'s filesystem satisfy `free_bytes >= 2 * D + B + 536870912` (`2x` chain data + binary + 512 MiB headroom). Refuse with `exit 4` (`insufficient_disk_space`) before stopping any service.
 4. **In `--check` mode:** Stop here and emit the report (`exit 0` if already at `release_id`; `exit 10` if upgrade available; `exit 11` if `activation_height` is within `advance_warning_blocks`).
-5. **Graceful service stop:** Stop `--service-units` via systemd so `redb` closes cleanly with zero writes in flight.
-6. **Chain-state-only backup:** Create `<backup-dir>/<release-id>-pre-<unix>/` containing a verified copy of **chain state only** (`--data-dir`, excluding runtime sockets and strictly excluding `--signer-guard-dir`) plus the prior `postfiat-node` binary and a `backup-manifest.json` with SHA-256 digests.
+5. **Journal, then graceful stop:** Write `<backup-dir>/upgrade-journal.json` (target release, the units, the backup path, the step reached) and `fsync` it. Then stop `--service-units` via systemd so `redb` closes cleanly. The journal is updated before each later step and removed at the end.
+6. **Chain-state backup:** Create `<backup-dir>/<release-id>-pre-<unix>/` (mode `0700`, owned by the owner of `--data-dir`) with a copy of the chain state, the prior binary, and a `backup-manifest.json` of SHA-256 digests. The copy keeps every file's owner, group and mode. It leaves out, and the rollback therefore never touches:
+   - `consensus-v2-safety/`, the validator's own record of what it has voted for;
+   - every file a unit passes as `--finality-key-file` or `--finality-proposal-key-file`, and `validator_keys.json`;
+   - `runtime/`, `readiness/`, sockets, and every `--exclude-path`;
+   - `--signer-guard-dir`, which is outside the data directory by step 2.
 7. **Atomic binary swap:** Write staged binary to `<binary-path>.staging.<pid>`, `chmod 0755`, `fsync`, atomically `rename(2)` onto `<binary-path>`, and `fsync` parent directory.
 8. **Start and post-upgrade health gate:** Start `--service-units` and verify within `--health-timeout-ms`:
    - `rpc-probe` returns `ok: true`;
-   - reported `git_revision` equals manifest `git_revision`;
+   - the revision the node reports is a prefix of manifest `git_revision` and at least 8 hex characters long (the node reports a short revision);
    - `block_height >= pre_upgrade_height`;
    - when two-user signer socket mode is configured, `private_readiness` reports `validator_signer = "socket"` and `signer_double_sign_protection = true`.
-9. **Atomic rollback on failure:** If any check in Step 8 fails:
+9. **Rollback on failure:** If any check in Step 8 fails:
    - Stop `--service-units`;
-   - Restore the backed-up prior binary AND pre-upgrade chain-state snapshot together atomically (still **never** touching `/var/lib/postfiat/signer-guard/`, whose monotonic round floors prevent rollback-vs-guard deadlocks and prevent double-signing);
+   - Restore the prior binary and the backed-up chain state, with owner, group and mode as they were;
+   - **Leave `consensus-v2-safety/` as the new binary left it.** If the new binary voted before the health gate failed, the old binary starts with that vote on record and cannot sign a different vote for the same height and round. A vote record is only ever carried forward;
    - Restart `--service-units` and run `rpc-probe`;
-   - Exit `5` (`rolled_back`) if the prior version recovers cleanly, or `6` (`rollback_failed`) for immediate operator intervention.
+   - Exit `5` (`rolled_back`) if the prior version recovers cleanly, or `6` (`rollback_failed`).
+10. **Services are never left stopped silently.** Every exit after step 5 either has the units running or reports the stopped units by name in `units_stopped` with exit `6`.
+11. **Interrupted upgrade:** If `upgrade` starts and finds a journal, the earlier run did not finish. It refuses every other action and completes the rollback of that run from the journal (steps 9 and 10), then exits `5` or `6`. `--check` reports `interrupted_upgrade` and exits `4`.
+
+### 3.2.1 Report (`postfiat-node-upgrade-report-v1`)
+
+With `--json`, one object:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `schema` | string | `postfiat-node-upgrade-report-v1` |
+| `check_only` | bool | `--check` was given |
+| `status` | string | `up_to_date`, `upgrade_available`, `activation_imminent`, `upgraded`, `refused`, `rolled_back`, `rollback_failed` |
+| `exit_code` | integer | as in 3.3 |
+| `error_code`, `message` | string or null | typed reason and one line of text when not successful |
+| `release_id`, `release_sequence`, `target_git_revision` | string, integer, string, or null | from the verified manifest |
+| `installed_release_id`, `installed_release_sequence`, `installed_git_revision` | string, integer, string, or null | what runs now |
+| `architecture` | string or null | `linux-x86_64` or `linux-aarch64` |
+| `rollout_mode`, `activation_height`, `blocks_until_activation`, `halt_if_missed` | string, integer, integer, bool, or null | rollout of the target release |
+| `verified_signers` | array of string | `signer_id`s whose signature verified |
+| `signer_guard_isolated` | bool | step 2 passed |
+| `data_dir_bytes`, `candidate_binary_bytes`, `required_free_bytes`, `available_free_bytes` | integer | step 3 |
+| `disk_headroom_ok` | bool | step 3 passed |
+| `backup_path` | string or null | step 6 |
+| `rolled_back` | bool | step 9 ran |
+| `units_stopped` | array of string | units not running at exit; empty unless exit `6` |
 
 ### 3.3 Exit Codes
 
@@ -208,8 +261,8 @@ postfiat-node upgrade [OPTIONS]
 | --- | --- |
 | `0` | Upgrade applied and healthy (or already up-to-date in `--check` mode). |
 | `2` | Invalid CLI arguments or configuration error. |
-| `3` | Security refusal: invalid 2-of-3 manifest signature, checksum mismatch, chain mismatch, or signer-guard path overlap. |
-| `4` | Preflight failure: insufficient free disk space (`< 2x` chain data) or unhealthy pre-upgrade state. |
+| `3` | Security refusal: invalid 2-of-3 manifest signature, checksum mismatch, chain mismatch, older release (`release_downgrade`), or signer-guard path overlap. |
+| `4` | Preflight failure: insufficient free disk space (`< 2x` chain data), unhealthy pre-upgrade state, or an interrupted earlier upgrade found by `--check`. |
 | `5` | Post-upgrade health check failed; automatic binary + chain-state rollback succeeded. |
 | `6` | Critical: post-upgrade health check failed AND rollback verification failed. |
 | `10` | `--check` mode: newer verified rolling or non-urgent upgrade is available. |
@@ -235,7 +288,7 @@ postfiat-node top [OPTIONS]
 | `--data-dir PATH` | none | Optional local data-dir path for read-only `statvfs`/size inspection (never opens `redb`). |
 | `--uptime-feed-url URL` | none | HTTPS URL of the signed `postfiat-validator-uptime-v1` feed. |
 | `--uptime-feed-file PATH` | none | Local file path to a `postfiat-validator-uptime-v1` JSON feed (for offline testing/rehearsal). |
-| `--observer-keyset-file PATH` | `/etc/postfiat/observer-keyset.json` | Pinned 3-observer ML-DSA-65 public keys used to verify 2-of-3 signatures on the uptime feed locally. |
+| `--observer-keyset-file PATH` | `/etc/postfiat/observer-keyset.json` | Pinned `postfiat.observer_keyset.v1` ([schema](schemas/postfiat-observer-keyset-v1.schema.json)) used to verify the uptime feed locally. |
 | `--release-manifest-url URL` | none | Optional signed `postfiat.release_manifest.v3` URL for upgrade/activation-height alerts. |
 | `--release-keyset-file PATH` | `/etc/postfiat/release-keyset.json` | Pinned 2-of-3 release keyset used to verify the release manifest. |
 | `--refresh-ms MS` | `2000` | Poll interval in milliseconds (`500..=60000`). |
@@ -249,11 +302,26 @@ postfiat-node top [OPTIONS]
 | --- | --- | --- |
 | **1. Node & Release Banner** | `node_id`, `role` (`validator` / `rpc_follower`), `chain_id`, installed `git_revision`, uptime, upgrade alert (`UP TO DATE`, `ROLLING UPGRADE AVAILABLE`, or `ACTIVATION HEIGHT H IN N BLOCKS`) | Local `status` + `server_info` + verified `postfiat.release_manifest.v3` |
 | **2. Height & Sync Lag** | `finalized_height`, 12-char `block_tip_hash`, `state_root` prefix, `committee_epoch`, `height_lag` vs peer/observer median, median block interval | Local `status` + `metrics` + verified uptime feed |
-| **3. Peers & Vote Signing** | `connected_peers / configured_peers`, `quorum_size`, recent vote signing rate (last 100 heights + latest height-day bps + 30d mean bps), `last_voted_height` | Local `status` + `validators` + verified uptime feed |
+| **3. Peers & Vote Signing** | `connected_peers / configured_peers`, `quorum_size`, recent vote signing rate (last 100 heights + latest observed day bps + 30d mean bps), `last_voted_height` | Local `status` + `validators` + verified uptime feed |
 | **4. Signer Guard Health** | `signer_mode` (`socket` / `plaintext_key_file` / `none`), `signer_reachable`, `signer_double_sign_protection`, `signer_key_matches_registry`, `separate_uid_enforced`, `custody_reasons` | Local `private_readiness` |
 | **5. Disk & RPC Latency** | `data_dir_bytes`, `fs_free_bytes`, `upgrade_headroom_ok` (`free >= 2x data`), `rpc_read_p95_ms`, `rss_mib`, `history_retention_mode` | `statvfs` + local `metrics` + `history_status` |
-| **6. Task Node Reward Eligibility** | `access_state` (`pending`/`active`/`lapsed`/`revoked`), `observer_quorum` (`3/3`, `2/3`, `stale`), `feed_age_seconds`, `observed_height_days` (`X/30`), `mean_daily_participation_bps`, `grace_remaining` & `recovery_streak` (`k/3`) if `lapsed`, `finance_hub_access`, `reward_eligible` | Locally verified 2-of-3 `postfiat-validator-uptime-v1` feed |
+| **6. Task Node Reward Eligibility** | `access_state` (`pending`/`active`/`lapsed`/`revoked`), `observer_quorum` (`3/3`, `2/3`, `stale`), `feed_age_seconds`, `access_state_reason`, `observed_days` (`X/30`), `mean_daily_participation_bps`, `grace_remaining_seconds` & `recovery_streak` (`k/3`) if `lapsed`, `finance_hub_access`, `reward_eligible` | Locally verified 2-of-3 `postfiat-validator-uptime-v1` feed |
 | **7. Active Warnings** | Bounded list of typed warning codes (`FEED_STALE`, `FEED_UNAVAILABLE`, `LOW_DISK_FOR_UPGRADE`, `ACTIVATION_IMMINENT`, `PARTICIPATION_BELOW_95`, `SIGNER_SAME_USER`, `HEIGHT_LAG_HIGH`) | Derived deterministically |
+
+### 4.2.1 Snapshot (`postfiat-node-top-snapshot-v1`)
+
+With `--json`, one object per refresh: `schema`, `captured_at_unix`, `rpc_endpoint`, `warnings` (array of `{code, severity, message}`), and one object per panel:
+
+| Object | Fields |
+| --- | --- |
+| `node` | `node_id`, `role`, `chain_id`, `git_revision`, `status`, `upgrade_alert`, `latest_release_id`, `activation_height`, `blocks_until_activation` |
+| `height` | `finalized_height`, `view`, `block_tip_prefix`, `state_root_prefix`, `committee_epoch`, `height_lag` |
+| `peers_votes` | `configured_peers`, `connected_peers`, `quorum_size`, `latest_day_bps`, `mean_daily_participation_bps`, `last_voted_height` |
+| `signer` | `signer_mode`, `signer_reachable`, `signer_double_sign_protection`, `signer_key_matches_registry`, `separate_uid_enforced`, `custody_reasons` |
+| `disk_latency` | `data_dir_bytes`, `fs_free_bytes`, `upgrade_headroom_ok`, `rpc_read_p95_ms`, `last_status_ms`, `rss_mib`, `history_retention_mode`, `mempool_pending` |
+| `reward_eligibility` | `access_state`, `access_state_reason`, `observer_quorum`, `feed_age_seconds`, `observed_days`, `mean_daily_participation_bps`, `grace_remaining_seconds`, `recovery_streak_days`, `finance_hub_access`, `reward_eligible` |
+
+A field the node cannot know is `null`, never a guess. `reward_eligibility` comes only from a feed that passed every step of [`validator-uptime-feed-v1.md`](validator-uptime-feed-v1.md) section 4; otherwise `access_state` is `unknown` and the warning says why.
 
 ### 4.3 Interactive Controls and Security Invariants
 
@@ -277,10 +345,27 @@ Validators opting into public RPC or `--allow-private-action-admission` MUST iso
 A node running under any RPC read-replica profile MUST enforce all of the following at startup:
 
 - `node_role` MUST report `"rpc_follower"` in `status` and `server_info`;
-- `voting_enabled` MUST be `false`;
+- `voting_enabled` MUST be `false`, and this is a fact about the process, not about its flags: a replica profile never loads a consensus key, never opens a signer socket, and never starts the consensus loop;
 - `validator_signer` MUST be `"none"`;
 - Passing `--finality-key-file`, `--finality-proposal-key-file`, or `--finality-signer-socket` to a read-replica profile MUST fail closed immediately (`rpc_replica_signer_forbidden`);
 - Read-replica processes MUST NEVER bind plaintext RPC to a public or wildcard address (`0.0.0.0`, `::`, or public IP); loopback (`127.0.0.1` / `::1`) or a permission-scoped Unix socket is mandatory.
+
+### 5.2.1 Methods a replica serves
+
+The list is the method inventory in [`rpc-method-inventory.json`](../runbooks/rpc-method-inventory.json), by its `posture` field:
+
+| `posture` | `private-replica` | `public-replica` |
+| --- | --- | --- |
+| `read_only_public` | served | served |
+| `private_action_gated` | refused | served only with `--allow-private-action-admission` |
+| `authorized_protocol_mutation_public` (transaction submission and other state-changing calls) | refused | refused |
+| `controlled_write_gated`, `owned_lane_gated`, `privacy_alpha_gated`, `operator_or_local_only` | refused | refused |
+
+A refused method answers `method_not_served_by_profile` before any work is done. A replica orders nothing, so a client submits transactions to a validator's own RPC edge. A method missing from the inventory is refused; a test fails the build when the node dispatches a method the inventory does not list.
+
+### 5.2.2 Replica lag
+
+`--max-replica-lag-blocks N` is enforced. When the replica is more than `N` blocks behind the highest finalized height it has seen from its peers, `ready` turns `false`, the ready file says so, and every read answers `replica_lagging` with the replica's height until it has caught up.
 
 ### 5.3 Packaged Profiles (`private` and `public`)
 
@@ -318,9 +403,9 @@ StartLimitBurst=5
 Type=simple
 User=postfiat-rpc
 Group=postfiat-rpc
-ExecStartPre=/usr/local/bin/postfiat-node deployment-manifest-verify \
+ExecStartPre=/usr/local/bin/postfiat-node release-manifest-verify \
   --manifest-file /etc/postfiat/release-manifest.json \
-  --trusted-publisher-key-file /etc/postfiat/release-keyset.json \
+  --keyset-file /etc/postfiat/release-keyset.json \
   --runtime-binary-file /usr/local/bin/postfiat-node
 ExecStart=/usr/local/bin/postfiat-node rpc-serve \
   --rpc-profile public-replica \
@@ -372,6 +457,8 @@ UMask=0077
 WantedBy=multi-user.target
 ```
 
+`release-manifest-verify` checks a `postfiat.release_manifest.v3` against the 2-of-3 keyset (rules of 2.4, without the ordering rule) and that the running binary's SHA-256 is the manifest's for this architecture. It is a different command from `deployment-manifest-verify`, which checks the single-publisher `postfiat.deployment_manifest.v2` of the Foundation fleet and stays as it is.
+
 ---
 
 ## 6. `< 250ms` Read-Path SLO Targets and Verification Contract
@@ -382,8 +469,8 @@ As measured in [`fast-validator-reads-20261124.md`](fast-validator-reads-2026112
 
 1. **Serve reads off the consensus writer lock:** Read-replica `rpc-serve` serves from non-blocking read snapshots or a resident read-only replica store, never taking the consensus writer's `redb` exclusive lock.
 2. **Use keyed lookups for all history queries:** `blocks` (`blocks_window`), `receipts` (by `tx_id`), `tx` (by `tx_id`), and `pfusdc_egress_witness` MUST use keyed index reads rather than full-history scans.
-3. **Height-stamped in-process response cache:** Every cacheable read method MUST embed its committed `height` in the response payload and only populate the bounded in-process cache when `committed_height_before == committed_height_after`.
-4. **Byte-for-byte equivalence:** Differential tests MUST prove cached and resident/replica replies equal canonical direct store replies byte-for-byte at identical committed heights (`cmp`).
+3. **Height-stamped in-process response cache, on replica profiles only:** The standard validator profile keeps the existing worker path, so shipping the cache changes nothing for a validator. On a replica, a method is cacheable only if its answer is a pure function of committed state at a height; `metrics`, `mempool_status` and every answer that can change between blocks (an account balance after an owned-lane credit) are never cached. Every cached answer carries the committed `height` it was read at, is stored only when `committed_height_before == committed_height_after`, and is dropped after 2 seconds or when the height moves, whichever is first. The in-process path keeps the worker path's limits: at most 8 reads at once, 4 per caller, and the request time limit.
+4. **Byte-for-byte equivalence:** Differential tests MUST prove that a cached reply and an in-process reply each equal the reply of the existing worker path, byte for byte at the same committed height (`cmp`). Comparing the new path with itself proves nothing.
 
 ### 6.2 Frozen Read-Path SLO Targets
 

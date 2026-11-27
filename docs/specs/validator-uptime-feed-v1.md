@@ -1,55 +1,80 @@
-# Signed Multi-Observer Validator Uptime Feed Specification (`postfiat-validator-uptime-v1`)
+# Signed Validator Uptime Feed (`postfiat-validator-uptime-v1`)
 
-**Status:** Frozen Phase 0 Contract C2
-**Schema:** `postfiat-validator-uptime-v1` (version `1`)
+**Status:** Phase 0 Contract C2
 **JSON Schema:** [`schemas/postfiat-validator-uptime-v1.schema.json`](schemas/postfiat-validator-uptime-v1.schema.json)
-**Deterministic Fixture:** [`schemas/postfiat-validator-uptime-v1.fixture.json`](schemas/postfiat-validator-uptime-v1.fixture.json)
-**Validator Test:** [`scripts/test-validator-uptime-schema.py`](../../scripts/test-validator-uptime-schema.py)
+**Pinned keyset schema:** [`schemas/postfiat-observer-keyset-v1.schema.json`](schemas/postfiat-observer-keyset-v1.schema.json)
+**Fixtures:** [`feed`](schemas/postfiat-validator-uptime-v1.fixture.json), [`keyset`](schemas/postfiat-observer-keyset-v1.fixture.json) (signed with public test keys)
+**Reference verifier and test:** [`scripts/test-validator-uptime-schema.py`](../../scripts/test-validator-uptime-schema.py)
 **Related:** [`validator-rpc-profiles-v1.md`](validator-rpc-profiles-v1.md), [`tasknode-l1-validator-binding.md`](../runbooks/tasknode-l1-validator-binding.md), [`validator-registry.md`](../governance/validator-registry.md)
 
-## 1. Purpose and Scope
+## 1. Purpose
 
-This specification freezes the wire schema, cryptographic verification boundary, latency-fair participation metric, 3-observer quorum rule, and `pending -> active -> lapsed (14d grace) -> revoked` access lifecycle for the Post Fiat L1v2 Validator Rewards Program.
+Three independent observers watch the chain, count each validator's votes, and sign what they saw. Task Node, `postfiat-node top` and the public validator directory read the bundle of those three signed statements and act only on what at least two observers agree on.
 
-It replaces the single-host unsigned `postfiat-tasknode-l1-registry-v1` projection documented in [`CONTRACT-l1-validators.md`](../../tools/tasknode-validator-binding/CONTRACT-l1-validators.md) for active-liveness enforcement across:
+The feed decides four things for a validator: Finance Hub access, research API keys, the monthly Task Node credit, and whether a removal proposal may be opened. It replaces the unsigned single-host projection in [`CONTRACT-l1-validators.md`](../../tools/tasknode-validator-binding/CONTRACT-l1-validators.md) and keeps that feed's way of measuring.
 
-- **Task Node** (Finance Hub access, GoodAlexander Research API keys, and `$20/month` per-operator Task Node USD credit);
-- **`postfiat-node top`** (read-only SSH status dashboard eligibility panel; see [`validator-rpc-profiles-v1.md`](validator-rpc-profiles-v1.md));
-- **Public Validator Directory** (live validator state, participation score, operator identity, and optional public RPC URL);
-- **Governance removal proposals** (automatic proposal eligibility after grace expiry; explicit validator ratification remains mandatory).
+Observers only read. They hold no validator key and no governance key.
 
-Observers are strictly read-only. They hold no validator consensus key and no governance key, and they cannot mutate consensus or registry state.
+Where this text and the reference verifier differ, the verifier is right and this text has a bug.
 
-## 2. Cryptographic Format and 3-Observer (2-of-3) Quorum
+## 2. What is measured
 
-### 2.1 Pinned Observer Set
+### 2.1 A day is a UTC day, dated by the observer
 
-- Exactly **3 independent, geographically distributed observers** (`observer_count = 3`) operate across distinct `region` and `operator_group` values (for example `us-east`, `eu-central`, `ap-northeast`).
-- Each observer holds a dedicated offline-provisioned **pure FIPS 204 ML-DSA-65** signing key (public key: 1,952 bytes / `3904` lowercase hex characters; signature: 3,309 bytes / `6618` lowercase hex characters).
-- Consumers pin the 3 trusted observer public keys in a local trust store (`observer_id -> public_key_hex`). No dynamic trust-on-first-use or unpinned redirect is permitted.
+Block headers carry no time, and the chain makes a block only when there is something to order. A window counted in blocks would take a year on a quiet chain and an hour in a burst. So every window in this contract is counted in UTC days, and an observer dates blocks by when it saw them:
 
-### 2.2 Per-Observer Signing Domain and Canonical Payload
+- An observer reads the finalized head at least every `max_observation_gap_seconds = 900`.
+- Blocks that appear between two consecutive reads on the same UTC day belong to that day.
+- If the head moved between two reads that straddle midnight, or two reads are more than 900 seconds apart, the observer cannot date those blocks. It marks the affected days `complete = false`.
+- Dates before the observer started are never inferred.
 
-Each observer signs its own attestation using pure FIPS 204 **ML-DSA-65** (never prehash) with fixed domain-separation context bytes:
+This is `time_basis = "observer_brackets"`. Two honest observers can therefore differ by an incomplete day. Section 4 says how that is settled.
+
+### 2.2 The score counts finalized precommit votes
+
+`metric_version = "precommit-qc-observer-brackets-v1"`. For one validator and one UTC day:
+
+- `committed_blocks`: blocks finalized that day while the validator was in the on-chain registry.
+- `signed_blocks`: those blocks whose `consensus_v2_commit.precommit_qc.votes` holds the validator's vote. Real votes are counted, never committee membership.
+- `participation_bps = floor(signed_blocks * 10000 / committed_blocks)` when the day is complete and `committed_blocks > 0`. Otherwise it is `null`.
+
+A day counts as observed only when it is complete and had at least one block. A day on which the chain made no block says nothing about a validator and is not counted for or against it.
+
+Known limit: a certificate closes once a quorum of votes is in, so a validator that is healthy but far away can be left out of some certificates. A score that credits every vote in the round would need a signed heartbeat, which the chain does not have. If it is added, it ships as a new `metric_version`; consumers refuse a `metric_version` they do not know.
+
+### 2.3 The window
+
+`window_end` is the UTC midnight that starts the evaluation day; `window_start` is 30 days earlier. Over the complete days with blocks in that window (after a recovery, only those on or after `recovery_floor_date`, see 5.4):
+
+- `observed_days`: how many there are.
+- `mean_daily_participation_bps`: `floor(sum of participation_bps / observed_days)`, or `null` when there are none. Every day weighs the same.
+- `consecutive_passing_days`: the length of the run of days at or above 9500 that ends at the most recent one.
+- `liveness_met`: the validator is in the registry, and either `observed_days` is 0 or the mean is at least `liveness_threshold_bps = 9500`.
+
+All arithmetic is in whole basis points. 95% is exactly 9500.
+
+## 3. What an observer signs
+
+Each observer has its own ML-DSA-65 key (pure FIPS 204, never prehash; public key 1,952 bytes, signature 3,309 bytes). It signs with the context string
 
 ```text
 postfiat-l1-v2/validator-uptime-feed/v1
 ```
 
-The message signed by observer `i` is the UTF-8 canonical JSON (sorted object keys, no extraneous whitespace, `,` and `:` separators, RFC 8785 / JCS compatible) of the observer's **claim body**:
+over the canonical JSON (sorted keys, `,` and `:` separators, no whitespace, UTF-8) of this claim body:
 
 ```json
 {
-  "chain_id": "<chain.chain_id>",
-  "finalized_block_hash": "<observer.finalized_block_hash>",
-  "finalized_height": 432000,
-  "genesis_hash": "<chain.genesis_hash>",
-  "network": "<chain.network>",
-  "observed_at": "<observer.observed_at>",
-  "observer_id": "<observer.observer_id>",
-  "operator_group": "<observer.operator_group>",
-  "region": "<observer.region>",
-  "registry_root": "<observer.registry_root>",
+  "chain": { "network": "...", "chain_id": "...", "genesis_hash": "..." },
+  "committee_epoch": 12,
+  "finalized_block_hash": "...",
+  "finalized_height": 6600,
+  "observed_at": "2026-11-27T01:38:00Z",
+  "observer_id": "observer-us-east-1",
+  "operator_group": "...",
+  "quorum_policy": { ... },
+  "region": "us-east",
+  "registry_root": "...",
   "schema": "postfiat-validator-uptime-v1",
   "schema_version": 1,
   "validator_claims": [ ... ],
@@ -57,134 +82,98 @@ The message signed by observer `i` is the UTF-8 canonical JSON (sorted object ke
 }
 ```
 
-- `claim_digest_sha256` MUST equal the lowercase hex SHA-256 of these exact canonical UTF-8 bytes.
-- `signature_hex` MUST verify over those exact canonical UTF-8 bytes under `public_key_hex` with context `postfiat-l1-v2/validator-uptime-feed/v1`.
-- `validator_claims` MUST be sorted strictly ascending by `validator_id` with no duplicate `validator_id` or `ml_dsa_public_key`.
+`claim_digest_sha256` is the SHA-256 of those bytes; it is a convenience for logs and is checked, but the signature is what counts.
 
-### 2.3 2-of-3 Quorum Reconciliation Rule
+Each entry of `validator_claims` is a full validator row: its key, registry status, state, reason, dates, entitlements, and every day of the window. **Every field a consumer acts on is inside the signature.** There is no field that only the party serving the feed controls.
 
-Task Node and `postfiat-node top` MUST NEVER trust the top-level `validators` array without verifying the bundled `observer_attestations`:
+Two things the earlier draft carried are deliberately absent, because an observer cannot know them from the chain: the operator identity and the public RPC URL. Task Node keys "one grant per operator" on its own binding records (section 7), and the directory takes an RPC URL from the operator's own signed binding.
 
-1. Verify at least **2 of the 3** pinned observer attestations pass ML-DSA-65 signature verification, `claim_digest_sha256` verification, and freshness checks.
-2. Verify all agreeing observers have distinct `observer_id`, `region`, `operator_group`, and `public_key_hex`.
-3. Verify all agreeing observers match the top-level `chain` identity (`network`, `chain_id`, `genesis_hash`, `registry_root`, `finalized_height`, `finalized_block_hash`).
-4. For each validator row in `validators`:
-   - `agreeing_observer_ids` MUST contain at least 2 distinct verified observers whose `validator_claims` match `ml_dsa_public_key`, `registry_active`, `liveness_met`, and `access_state`.
-   - `mean_daily_participation_bps` is reconciled deterministically using exact integer basis points (`0..=10000`):
-     - When **3** agreeing observers report non-null scores: take the **median** of the 3 integer values (eliminating any single partitioned or skewed observer).
-     - When **2** agreeing observers report non-null scores: take the **minimum** of the 2 integer values (conservative fail-closed fallback while 1 observer is down).
-   - If fewer than 2 verified observers agree on a validator's `access_state`, that validator has **no quorum** and MUST be treated under the stale/indeterminate rule in Section 2.4.
+### 3.1 The pinned keyset
 
-### 2.4 Freshness and Stale-Feed Safety Invariant
+A consumer installs a `postfiat.observer_keyset.v1` file out of band. It names the chain and exactly three observers, each with `observer_id`, `region`, `operator_group` and `public_key_hex`. An attestation counts only if its `observer_id` is in that file and its key, region and operator group equal the pinned ones byte for byte. A key that arrives inside a feed is never trusted. The three observers have three different regions and three different operator groups.
 
-- **Freshness window:** An observer attestation is fresh iff `0 <= now_utc - observed_at <= 3600` seconds (allowing at most `max_future_skew_seconds = 60` seconds of clock skew, i.e., `observed_at <= now_utc + 60s`).
-- **Stale feed (`age > 3600s` or `< 2` fresh verified observers):**
-  - **MUST block** new Task Node validator bindings (`tasknode-bind` completion);
-  - **MUST block** new `$20/month` Task Node credit grants;
-  - **MUST NEVER revoke** existing Finance Hub access or invalidate active Research API keys.
+## 4. How a consumer reads the feed
 
-This guarantees an observer outage or network partition can never mass-revoke healthy operators.
+A consumer does these steps in order. The top-level `validators` array is a convenience; step 5 is what makes it safe to read.
 
-## 3. Latency-Fair Participation Metric (Zero Wall-Clock Drift)
+1. Validate the feed against the JSON Schema. Refuse a feed for another chain than the pinned keyset, a window that is not 30 whole UTC days, or one observer listed twice.
+2. Check each attestation on its own. It counts only if all of these hold:
+   - the observer is pinned and its key, region and operator group match (3.1);
+   - the digest matches and the ML-DSA-65 signature verifies over the claim body;
+   - `observed_at` is at most 3600 seconds old and at most 60 seconds ahead of the consumer's clock;
+   - `observed_at` is not earlier than the last attestation the consumer accepted from that observer, so an older feed cannot replace a newer one;
+   - `observed_at` falls on the evaluation day, `window_end <= observed_at < window_end + 24h`;
+   - every claim row follows from its own facts (section 5.5).
 
-### 3.1 Why `precommit_qc.votes` Alone Is Rejected
+   An attestation that fails any check is dropped. **One wrong observer does not stop the feed.**
+3. If fewer than two attestations count, the feed is **indeterminate**: the consumer blocks new validator bindings and new credit grants, and changes nothing else. It never revokes access on an indeterminate feed. An observer outage or a partition cannot mass-revoke healthy operators.
+4. For each validator, group the counted claims by `(ml_dsa_public_key, registry_active, liveness_met, access_state)`. A group of two or three is agreement. Without one, that validator has no quorum and is treated as in step 3; other validators are unaffected.
+5. The validator's row is one observer's signed claim, copied whole. With three agreeing observers it is the one with the middle `mean_daily_participation_bps`; with two, the lower one. Ties go to the lower `observer_id`; an unknown score sorts lowest. The top-level row adds `source_observer_id` and `agreeing_observer_ids`. The consumer rebuilds the rows this way and refuses the feed if the served `validators` array differs in any byte.
 
-Counting only `precommit_qc.votes` in finalized block headers systematically penalizes geographically distant validators because low-latency peers assemble a BFT quorum first and omit slower valid votes from the certificate.
+This is the only rule for disagreement. Copying one observer's row whole means a single odd observer can move neither the score nor any date.
 
-### 3.2 Latency-Fair Round-Window Credit Rule
-
-Under `metric_version = "latency-fair-round-window-v1"`, each observer credits validator `v` for block height `h` if the observer receives **at least one valid ML-DSA-65 signed consensus message** attributable to `v`'s active registry key at height `h` within the block-height round window from any of the 4 allowed `credit_sources`:
-
-1. `prepare_vote` (valid signed Consensus v2 prepare vote for height `h`);
-2. `precommit_vote` (valid signed Consensus v2 precommit vote for height `h`, whether or not included in the finalized `precommit_qc.votes`);
-3. `timeout_vote` (valid signed Consensus v2 timeout vote for height `h`);
-4. `consensus_heartbeat` (valid signed validator liveness heartbeat bound to `(chain_id, genesis_hash, committee_epoch, height)`).
-
-`precommit_qc_heights` is retained per height-day strictly as a diagnostic telemetry subset (`0 <= precommit_qc_heights <= credited_heights <= eligible_heights`) and never reduces `participation_bps`.
-
-### 3.3 Deterministic Block-Height Windows (Height-Days)
-
-Chain blocks carry no trusted UTC wall clock. All evaluation windows are partitioned deterministically by finalized block height using the governed chain constant `blocks_per_height_day` (for example `14400` blocks at 6-second nominal block cadence):
-
-- Height-day `d` (`day_index = d`, `d >= 0`) covers the closed interval:
-  - `from_height = d * blocks_per_height_day + 1`
-  - `to_height = (d + 1) * blocks_per_height_day`
-- A height-day is `complete = true` iff the observer holds verified continuous coverage over every height in `[from_height, to_height]`. Incomplete days MUST set `participation_bps = null` and do not count toward `observed_height_days`.
-- For a complete height-day where `eligible_heights > 0` (the number of heights in `[from_height, to_height]` during which `v` was active in the on-chain registry):
-
-```text
-participation_bps = floor((credited_heights * 10000) / eligible_heights)
-```
-
-- Exact integer basis points (`0..=10000`) are mandatory across Rust, Python, and Node.js implementations. `95.00%` is exactly `9500` bps (`liveness_threshold_bps = 9500`).
-- Over the trailing `evaluation_horizon_days = 30` completed height-days (or since `recovery_floor_height` after fast recovery; see Section 4.3), let `D` be the set of complete height-days with `eligible_heights > 0`:
-  - `observed_height_days = |D|`
-  - `mean_daily_participation_bps = floor(sum(d.participation_bps for d in D) / |D|)` if `|D| > 0`, else `null`
-  - `consecutive_passing_days` = number of consecutive trailing days in `D` (ending at the most recent completed height-day) with `participation_bps >= 9500`.
-
-## 4. Access Lifecycle State Machine (`pending -> active -> lapsed -> revoked`)
+## 5. Access lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: Applicant submitted / not yet ratified
-    pending --> active: Ratified into on-chain registry (Day-0 ramp-in)
-    active --> active: registry_active && liveness_met
-    active --> lapsed: !registry_active || !liveness_met (start 14d grace + warning)
-    lapsed --> active: registry_active && consecutive_passing_days >= 3 (fast recovery)
-    lapsed --> revoked: finalized_height >= grace_expires_height (disable FH + invalidate API keys + removal eligible)
-    revoked --> active: Re-ratified (registry_active) && consecutive_passing_days >= 3
+    [*] --> pending
+    pending --> active: ratified into the registry
+    active --> lapsed: removed from the registry, or liveness not met
+    lapsed --> active: in the registry and 3 passing days in a row
+    lapsed --> revoked: 14 days of grace ran out
+    revoked --> active: in the registry and 3 passing days in a row
 ```
 
-### 4.1 State Definitions and Entitlements
+### 5.1 What each state gives
 
-| `access_state` | `registry_active` | `finance_hub_access` | `research_api_keys_active` | `reward_eligible` (`$20/mo`) | `removal_proposal_eligible` |
-| --- | --- | --- | --- | --- | --- |
-| `pending` | `false` | `false` | `false` | `false` | `false` |
-| `active` | `true` | `true` | `true` | `true` | `false` |
-| `lapsed` (14d grace) | `true` or `false` | `true` (grace) | `true` (grace) | `false` (paused) | `false` |
-| `revoked` | `true` or `false` | `false` (disabled) | `false` (**invalidated**) | `false` (paused) | `true` (if still in registry) / `false` (if already removed) |
+| `access_state` | Finance Hub and research API keys | Monthly credit | Removal proposal may be opened |
+| --- | --- | --- | --- |
+| `pending` | no | no | no |
+| `active` | yes | yes, see 5.2 | no |
+| `lapsed` | yes, for the 14 days of grace | no | no |
+| `revoked` | no; existing API keys are invalidated | no | yes while still in the registry |
 
-### 4.2 Day-0 Ramp-In Rule
+A removal proposal is only made possible here. The validators still ratify it explicitly.
 
-Newly ratified validators MUST NOT wait 25 days to unlock access:
+### 5.2 Active
 
-- A validator enters `active` (`access_state_reason = "day0_ramp_in"`) immediately upon inclusion in the on-chain validator registry at `first_active_height`.
-- `ramp_in_active` is `true` while `finalized_height < first_active_height + 30 * blocks_per_height_day`.
-- While `ramp_in_active == true`, the validator is exempt from the `min_observed_days = 25` check: `liveness_met = true` iff `registry_active == true` AND (`observed_height_days == 0` OR `mean_daily_participation_bps >= 9500`).
-- Once `ramp_in_active == false`, steady-state enforcement requires `registry_active == true`, `observed_height_days >= 25`, AND `mean_daily_participation_bps >= 9500` (`access_state_reason = "healthy_liveness"`).
+A validator becomes `active` the day it is ratified; `first_active_date` is that UTC day. It stays active while `liveness_met` holds. The reason says which case applies, in this order:
 
-### 4.3 14-Day Grace, Operator Warning, and 3-Day Fast Recovery
+- `day0_ramp_in`: the first 30 days after `first_active_date`. Credit is paid.
+- `recovered_3day_streak`: the 30 days after a recovery (5.4). Credit is paid.
+- `healthy_liveness`: at least `min_observed_days = 25` observed days. Credit is paid.
+- `insufficient_observed_days`: fewer than 25 observed days, for example because the chain made no block on six days of the window. Access stays; the credit waits. Nobody loses access because the chain was quiet or an observer had gaps.
 
-- **Entering `lapsed`:** When an `active` validator drops out of the registry (`removed_from_registry`), falls below `9500` bps (`below_liveness_threshold`), or has `< 25` observed days outside ramp-in (`insufficient_observed_days`), it transitions to `lapsed`:
-  - `grace_started_height = finalized_height`
-  - `grace_expires_height = grace_started_height + 14 * blocks_per_height_day`
-  - `grace_started_at = observed_at`
-  - `grace_expires_at = grace_started_at + 14 days`
-  - An operator warning is triggered immediately (visible in `postfiat-node top` and Task Node).
-  - Existing Finance Hub access and Research API keys remain active during the 14-day grace window; new monthly `$20` credit grants are paused until the validator returns to `active`.
-- **Fast recovery (`lapsed -> active`):**
-  - If the validator is `registry_active == true` and sustains `participation_bps >= 9500` for **`recovery_consecutive_days = 3` consecutive completed height-days** before `grace_expires_height`, it immediately transitions back to `active` (`access_state_reason = "recovered_3day_streak"`).
-  - To prevent the 30-day rolling mean from immediately re-lapsing a recovered operator (e.g., after a 6-day outage), `recovery_floor_height` is set to the `from_height` of the first day of the 3-day passing streak. For the next 30 height-days after `recovery_floor_height`, `liveness_met` is evaluated over completed height-days at or after `recovery_floor_height` (requiring `mean_daily_participation_bps >= 9500` over those days), after which full 25-of-30 steady-state scoring resumes seamlessly.
-- **Revocation (`lapsed -> revoked`):**
-  - If `finalized_height >= grace_expires_height` without recovery, the validator transitions to `revoked` (`access_state_reason = "grace_expired"`, or `"removed_from_registry"` if already removed).
-  - On `revoked`, Task Node MUST immediately:
-    1. Disable Finance Hub access (`finance_hub_access = false`);
-    2. **Invalidate all active GoodAlexander Research API keys** (`research_api_keys_active = false`);
-    3. Pause the `$20/month` Task Node USD credit (`reward_eligible = false`).
-  - If the validator is still in the on-chain registry (`registry_active == true`), `removal_proposal_eligible` becomes `true`, allowing automated submission of a validator removal proposal that the active validator set MUST still ratify explicitly under Cobalt/old-rule governance.
+### 5.3 Lapsed and revoked
 
-## 5. Task Node Binding and Per-Operator Deduplication Contract
+An active validator becomes `lapsed` when it leaves the registry (`removed_from_registry`) or `liveness_met` fails (`below_liveness_threshold`). `grace_started_at` is the UTC midnight that starts the day the observer first saw it, and `grace_expires_at` is exactly 14 days later. The operator is warned at once in `postfiat-node top` and Task Node.
 
-- **Offline-capable binding (`postfiat-node tasknode-bind`):** Bundled inside the signed `postfiat-node` release (`linux-x86_64`, `linux-aarch64`), signs a single-use challenge binding `(account_id, chain_id, node_id, nonce, expiry)` via the validator signer allow-list using FIPS 204 context `postfiat-l1-v2/tasknode-validator-binding/v1`, and emits the optional Pillar 6 Hive identity validator-link co-signature.
-- **Per-operator reward cap:** Monthly `$20` Task Node credit and research entitlements are granted **per operator (not per node)**, keyed by `operator_identity_id` (Pillar 6 Hive identity once live; verified Task Node account + network-correlation checks before Pillar 6). One grant per operator across old + new chains during migration — no double-dipping.
-- **Independent Finance Hub paths:** Maintaining an `active` validator and ranking as a top-30 Task Node contributor remain independent qualification paths for Finance Hub.
+Grace runs by the clock. When `observed_at >= grace_expires_at` without a recovery, the validator becomes `revoked` (`grace_expired`, or `removed_from_registry` if it is no longer in the registry). A quiet chain does not pause the grace clock and does not count as recovery.
 
-## 6. Verification and Conformance Testing
+### 5.4 Recovery
 
-Run the deterministic schema, fixture, canonical-digest, quorum, and state-machine test suite:
+A lapsed or revoked validator that is in the registry and has `consecutive_passing_days >= 3` becomes `active` at once. `recovery_floor_date` is the date of the first of those three days. For 30 days from that date the score is taken over days on or after it, so the outage that caused the lapse cannot push a recovered operator straight back into grace. After those 30 days the floor is dropped and the full window counts again.
+
+### 5.5 Every row is recomputed
+
+The facts in a row are: the key, `registry_active`, `access_state`, `first_active_date`, `grace_started_at`, `recovery_floor_date` and `days`. Every other field (the counts, the mean, the streak, `liveness_met`, the reason, `grace_expires_at`, and the four entitlements) follows from them and is recomputed by the consumer (`derive_row` and `check_row` in the reference verifier). A signed row whose derived fields are wrong is treated as a wrong observer. `days` lists every UTC day of the window from `first_active_date` on, once and in order.
+
+An observer keeps its own previous row per validator; `next_row` in the reference verifier is the transition it applies.
+
+## 6. Publishing
+
+Any party may bundle the three attestations and serve the feed; it needs no key. It sets `generated_at`, which is unsigned and used for nothing. Attestations with different windows cannot be bundled together, because the window is inside each signature. In the minutes after UTC midnight a bundle may hold fewer than two attestations for the new day; step 3 covers that.
+
+## 7. Task Node binding
+
+- `postfiat-node tasknode-bind`, shipped in the signed release, signs a single-use challenge over `(account_id, chain_id, node_id, nonce, expiry)` with FIPS 204 context `postfiat-l1-v2/tasknode-validator-binding/v1`.
+- The monthly credit and the research entitlements are granted per operator, not per node, and once across the old and the new chain. Task Node decides who the operator is from its own verified account and binding records, and from the Pillar 6 identity once that is live. The feed does not carry it.
+- Running an active validator and ranking in the Task Node top 30 remain two separate ways to qualify for Finance Hub.
+
+## 8. Conformance
 
 ```bash
 python3 scripts/test-validator-uptime-schema.py
 ```
 
-All downstream producers (Rust/Python observer services) and consumers (Task Node, `postfiat-node top`, public validator directory) MUST pass validation against [`schemas/postfiat-validator-uptime-v1.schema.json`](schemas/postfiat-validator-uptime-v1.schema.json) and match the exact state-machine semantics validated by [`scripts/test-validator-uptime-schema.py`](../../scripts/test-validator-uptime-schema.py).
+It needs `jsonschema` and `dilithium-py` from `requirements-test.txt` and runs in the `python-sdk` CI job. It rebuilds the fixture byte for byte, verifies the three ML-DSA-65 signatures against the pinned keyset, and runs the rejection cases (swapped, zeroed, self-signed and invented signers; a changed field in a claim and in a served row; replay; stale; disagreement) and the lifecycle cases. Every producer and consumer, in any language, accepts and rejects the same feeds as this script.

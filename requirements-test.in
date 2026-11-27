@@ -3,3 +3,5 @@ pycryptodome==3.23.0
 websockets==15.0.1
 eth-account==0.13.7
 web3==7.16.0
+jsonschema==4.25.1
+dilithium-py==1.5.1
