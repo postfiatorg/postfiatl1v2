@@ -39,6 +39,8 @@ const DOMAIN_MESSAGE_AAD = Buffer.from('postfiat-l1-v2/message-aad/v1', 'ascii')
 const DOMAIN_XWING_WRAP_INFO = 'postfiat-l1-v2/xwing-wrap/v1';
 const DOMAIN_MESSAGE_KEY_KDF = Buffer.from('postfiat-l1-v2/message-key/v1', 'ascii');
 const DOMAIN_MESSAGE_KEY_BIND = Buffer.from('postfiat-l1-v2/message-key-bind/v1', 'ascii');
+const DOMAIN_CEK_COMMIT = Buffer.from('postfiat-l1-v2/cek-commit/v1', 'ascii');
+const DOMAIN_SEALED_RECIPIENT_TAG = Buffer.from('postfiat-l1-v2/sealed-recipient-tag/v1', 'ascii');
 
 // Account address derivation of the chain (crates/crypto_provider/src/address.rs).
 const ACCOUNT_ADDRESS_PREFIX = 'pf';
@@ -813,6 +815,9 @@ function encodeXWingEncryptionHeader(hdr) {
   for (const r of hdr.recipients || []) {
     parts.push(pbBytes(6, encodeRecipientWrap(r)));
   }
+  if (hdr.cek_commitment && hdr.cek_commitment.length > 0) {
+    parts.push(pbBytes(7, hdr.cek_commitment));
+  }
   return Buffer.concat(parts);
 }
 
@@ -824,6 +829,7 @@ function decodeXWingEncryptionHeader(bytes, opts = {}) {
     chunk_index: 0,
     kdf_info: '',
     recipients: [],
+    cek_commitment: Buffer.alloc(0),
   };
   for (const f of decodeWireFields(bytes, opts)) {
     if (f.fieldNum === 1) { expectWt(f, 0); out.cipher_suite = Number(f.value); }
@@ -832,6 +838,7 @@ function decodeXWingEncryptionHeader(bytes, opts = {}) {
     else if (f.fieldNum === 4) { expectWt(f, 0); out.chunk_index = Number(f.value); }
     else if (f.fieldNum === 5) { expectWt(f, 2); out.kdf_info = f.value.toString('utf8'); }
     else if (f.fieldNum === 6) { expectWt(f, 2); out.recipients.push(decodeRecipientWrap(f.value, opts)); }
+    else if (f.fieldNum === 7) { expectWt(f, 2); out.cek_commitment = Buffer.from(f.value); }
   }
   return out;
 }
@@ -1378,7 +1385,72 @@ async function signMessageKeyBinding({
   return { binding, bytes: encodeMessageKeyBinding(binding) };
 }
 
-async function verifyMessageKeyBinding(bindingOrBytes) {
+function computeCekCommitment(cek, aadContext) {
+  const cekBuf = asBuf(cek);
+  const aadBuf = asBuf(aadContext);
+  if (cekBuf.length !== AEAD_KEY_BYTES) {
+    throw new MessageProtocolError(`cek must be ${AEAD_KEY_BYTES} bytes, got ${cekBuf.length}`);
+  }
+  if (aadBuf.length !== 32) {
+    throw new MessageProtocolError(`aadContext must be 32 bytes, got ${aadBuf.length}`);
+  }
+  return sha256(Buffer.concat([DOMAIN_CEK_COMMIT, Buffer.from([0x00]), cekBuf, aadBuf]));
+}
+
+function computeSealedRecipientTag(xwingSharedSecret, aadContext) {
+  const ssBuf = asBuf(xwingSharedSecret);
+  const aadBuf = asBuf(aadContext);
+  if (ssBuf.length !== 32) {
+    throw new MessageProtocolError(`xwingSharedSecret must be 32 bytes, got ${ssBuf.length}`);
+  }
+  if (aadBuf.length !== 32) {
+    throw new MessageProtocolError(`aadContext must be 32 bytes, got ${aadBuf.length}`);
+  }
+  return sha256(Buffer.concat([DOMAIN_SEALED_RECIPIENT_TAG, Buffer.from([0x00]), ssBuf, aadBuf]));
+}
+
+async function generateRotatableXWingKeypair() {
+  const { xwing } = await loadPqModules();
+  const seed = crypto.randomBytes(32);
+  const kp = xwing.keygen(seed);
+  const publicKey = Buffer.from(kp.publicKey);
+  const secretKey = Buffer.from(kp.secretKey);
+  return { seed, publicKey, secretKey, keyId: computeRecipientKeyId(publicKey) };
+}
+
+async function rotateMessageKeyBinding({
+  chain_id,
+  account,
+  new_xwing_public_key,
+  previous_key_epoch,
+  new_key_epoch = null,
+  created_at_unix_ms,
+  account_pubkey,
+  account_secret_key,
+}) {
+  const targetEpoch = new_key_epoch === null || new_key_epoch === undefined
+    ? previous_key_epoch + 1
+    : new_key_epoch;
+  if (!Number.isInteger(targetEpoch) || targetEpoch < 1 || targetEpoch <= previous_key_epoch) {
+    throw new MessageProtocolError(
+      `rotated key_epoch (${targetEpoch}) must be >= 1 and strictly greater than previous_key_epoch (${previous_key_epoch})`
+    );
+  }
+  return signMessageKeyBinding({
+    chain_id,
+    account,
+    xwing_public_key: new_xwing_public_key,
+    created_at_unix_ms,
+    key_epoch: targetEpoch,
+    account_pubkey,
+    account_secret_key,
+  });
+}
+
+async function verifyMessageKeyBinding(
+  bindingOrBytes,
+  { expectedChainId = null, expectedAccount = null, minKnownEpoch = 0 } = {}
+) {
   const binding = Buffer.isBuffer(bindingOrBytes) || bindingOrBytes instanceof Uint8Array
     ? decodeMessageKeyBinding(bindingOrBytes)
     : bindingOrBytes;
@@ -1393,6 +1465,21 @@ async function verifyMessageKeyBinding(bindingOrBytes) {
   // bind an encryption key of their own to somebody else's account.
   if (binding.account !== deriveAccountAddress(binding.account_pubkey)) {
     throw new MessageProtocolError('MessageKeyBinding account_pubkey is not the key of the named account');
+  }
+  if (expectedChainId !== null && expectedChainId !== undefined && binding.chain_id !== expectedChainId) {
+    throw new MessageProtocolError(
+      `MessageKeyBinding chain_id mismatch: got ${JSON.stringify(binding.chain_id)}, expected ${JSON.stringify(expectedChainId)}`
+    );
+  }
+  if (expectedAccount !== null && expectedAccount !== undefined && binding.account !== expectedAccount) {
+    throw new MessageProtocolError(
+      `MessageKeyBinding account mismatch: got ${JSON.stringify(binding.account)}, expected ${JSON.stringify(expectedAccount)}`
+    );
+  }
+  if (binding.key_epoch < minKnownEpoch) {
+    throw new MessageProtocolError(
+      `MessageKeyBinding key_epoch rollback rejected: got ${binding.key_epoch} < minKnownEpoch ${minKnownEpoch}`
+    );
   }
   const { mlDsa65 } = await loadPqModules();
   const preimage = computeKeyBindingPreimage(binding);
@@ -1415,6 +1502,8 @@ async function sealEnvelope({
   extraPointerFlags = 0,
   cek = null,
   aeadNonce = null,
+  blindSealedRecipients = true,
+  emitCekCommitment = true,
 }) {
   if (header.protocol_version !== 1) {
     throw new MessageProtocolError('MessageHeader.protocol_version must be 1');
@@ -1444,14 +1533,15 @@ async function sealEnvelope({
     const contentKey = cek ? asBuf(cek) : crypto.randomBytes(AEAD_KEY_BYTES);
     const bodyNonce = aeadNonce ? asBuf(aeadNonce) : crypto.randomBytes(AEAD_NONCE_BYTES);
     const aadContext = computeAadContext(header.chain_id, headerBytes, chunkIndex);
+    const cekCommitment = emitCekCommitment ? computeCekCommitment(contentKey, aadContext) : Buffer.alloc(0);
     bodyBytes = await xchacha20Poly1305Encrypt(contentKey, bodyNonce, bodyBuf, aadContext);
 
     const wraps = [];
     const seenIds = new Set();
     for (const recipient of recipients) {
       const xwingPk = asBuf(recipient.xwingPublicKey || recipient.xwing_public_key);
-      const keyId = computeRecipientKeyId(xwingPk);
-      const keyHex = keyId.toString('hex');
+      const staticKeyId = computeRecipientKeyId(xwingPk);
+      const keyHex = staticKeyId.toString('hex');
       if (seenIds.has(keyHex)) throw new MessageProtocolError('duplicate recipient_key_id');
       seenIds.add(keyHex);
 
@@ -1460,11 +1550,15 @@ async function sealEnvelope({
         : xwing.encapsulate(xwingPk);
       const xwingCt = Buffer.from(encap.cipherText);
       const sharedSecret = Buffer.from(encap.sharedSecret);
-      const kek = deriveXWingWrapKek(sharedSecret, aadContext, keyId);
+      const wireTag =
+        header.visibility === Visibility.SEALED && blindSealedRecipients
+          ? computeSealedRecipientTag(sharedSecret, aadContext)
+          : staticKeyId;
+      const kek = deriveXWingWrapKek(sharedSecret, aadContext, wireTag);
       const wrapNonce = crypto.randomBytes(AEAD_NONCE_BYTES);
       const wrappedCek = await xchacha20Poly1305Encrypt(kek, wrapNonce, contentKey, aadContext);
       wraps.push({
-        recipient_key_id: keyId,
+        recipient_key_id: wireTag,
         recipient_account: header.visibility === Visibility.SEALED ? '' : String(recipient.account || ''),
         xwing_ciphertext: xwingCt,
         wrap_nonce: wrapNonce,
@@ -1479,6 +1573,7 @@ async function sealEnvelope({
       chunk_index: chunkIndex,
       kdf_info: DOMAIN_XWING_WRAP_INFO,
       recipients: wraps,
+      cek_commitment: cekCommitment,
     });
     visFlag = header.visibility === Visibility.SEALED ? PointerFlag.SEALED : PointerFlag.PRIVATE;
   } else {
@@ -1533,6 +1628,7 @@ async function openEnvelope(
     recipientXWingSecretKey = null,
     xwingDecapFn = null,
     enforceCanonicalOrder = false,
+    requireCekCommitment = false,
   } = {}
 ) {
   const raw = asBuf(envelopeBytes);
@@ -1618,18 +1714,51 @@ async function openEnvelope(
     throw new MessageProtocolError('XWingEncryptionHeader.aad_context mismatch');
   }
 
-  if (!recipientKeyId || (!recipientXWingSecretKey && !xwingDecapFn)) {
-    throw new MessageProtocolError('recipientKeyId and recipientXWingSecretKey (or xwingDecapFn) are required');
+  if (!recipientXWingSecretKey && !xwingDecapFn) {
+    throw new MessageProtocolError('recipientXWingSecretKey (or xwingDecapFn) is required');
   }
-  const targetId = asBuf(recipientKeyId);
-  const wrap = encryptionHeader.recipients.find(
-    (w) => w.recipient_key_id.length === targetId.length && crypto.timingSafeEqual(w.recipient_key_id, targetId)
-  );
-  if (!wrap) throw new MessageProtocolError('no matching RecipientWrap for recipientKeyId');
+  const decapWrap = async (ct) =>
+    xwingDecapFn
+      ? asBuf(await xwingDecapFn(ct))
+      : Buffer.from(xwing.decapsulate(ct, asBuf(recipientXWingSecretKey)));
 
-  const sharedSecret = xwingDecapFn
-    ? asBuf(await xwingDecapFn(wrap.xwing_ciphertext))
-    : Buffer.from(xwing.decapsulate(wrap.xwing_ciphertext, asBuf(recipientXWingSecretKey)));
+  let wrap = null;
+  let sharedSecret = null;
+  if (recipientKeyId) {
+    const targetId = asBuf(recipientKeyId);
+    wrap = encryptionHeader.recipients.find(
+      (w) => w.recipient_key_id.length === targetId.length && crypto.timingSafeEqual(w.recipient_key_id, targetId)
+    ) || null;
+  }
+  if (wrap) {
+    sharedSecret = await decapWrap(wrap.xwing_ciphertext);
+  } else if (header.visibility === Visibility.SEALED) {
+    // Blinded SEALED mode: trial-decapsulate wraps and match per-message unlinkable tag.
+    for (const candidate of encryptionHeader.recipients) {
+      if (candidate.recipient_key_id.length !== 32) continue;
+      let ss;
+      try {
+        ss = await decapWrap(candidate.xwing_ciphertext);
+      } catch {
+        continue;
+      }
+      if (ss.length === 32) {
+        const expectedTag = computeSealedRecipientTag(ss, expectedAad);
+        if (crypto.timingSafeEqual(expectedTag, candidate.recipient_key_id)) {
+          wrap = candidate;
+          sharedSecret = ss;
+          break;
+        }
+      }
+    }
+    if (!wrap || !sharedSecret) throw new MessageProtocolError('no matching RecipientWrap for recipientKeyId');
+  } else {
+    if (!recipientKeyId) {
+      throw new MessageProtocolError('recipientKeyId and recipientXWingSecretKey (or xwingDecapFn) are required');
+    }
+    throw new MessageProtocolError('no matching RecipientWrap for recipientKeyId');
+  }
+
   const kek = deriveXWingWrapKek(
     sharedSecret,
     expectedAad,
@@ -1637,6 +1766,17 @@ async function openEnvelope(
     encryptionHeader.kdf_info || DOMAIN_XWING_WRAP_INFO
   );
   const cek = await xchacha20Poly1305Decrypt(kek, wrap.wrap_nonce, wrap.wrapped_cek, expectedAad);
+  if (encryptionHeader.cek_commitment && encryptionHeader.cek_commitment.length > 0) {
+    const expectedCommit = computeCekCommitment(cek, expectedAad);
+    if (
+      encryptionHeader.cek_commitment.length !== 32 ||
+      !crypto.timingSafeEqual(encryptionHeader.cek_commitment, expectedCommit)
+    ) {
+      throw new MessageProtocolError('XWingEncryptionHeader.cek_commitment mismatch');
+    }
+  } else if (requireCekCommitment) {
+    throw new MessageProtocolError('XWingEncryptionHeader.cek_commitment missing');
+  }
   const plaintextBody = await xchacha20Poly1305Decrypt(cek, encryptionHeader.aead_nonce, envelope.body_bytes, expectedAad);
   return {
     envelope,
@@ -1771,6 +1911,8 @@ module.exports = {
   DOMAIN_XWING_WRAP_INFO,
   DOMAIN_MESSAGE_KEY_KDF,
   DOMAIN_MESSAGE_KEY_BIND,
+  DOMAIN_CEK_COMMIT,
+  DOMAIN_SEALED_RECIPIENT_TAG,
   MEMO_TYPE_PF_PTR_HEX,
   MEMO_FORMAT_V5_HEX,
   MEMO_FORMAT_V4_HEX,
@@ -1806,7 +1948,10 @@ module.exports = {
   deriveMessageKemSeed,
   deriveMessageKemKeypair,
   computeRecipientKeyId,
+  computeCekCommitment,
+  computeSealedRecipientTag,
   deriveXWingWrapKek,
+  generateRotatableXWingKeypair,
   deriveAccountAddress,
   computeKeyBindingPreimage,
   xchacha20Poly1305Encrypt,
@@ -1854,6 +1999,7 @@ module.exports = {
   decodeX402Header,
   // High-level PQ envelope & manifest API
   signMessageKeyBinding,
+  rotateMessageKeyBinding,
   verifyMessageKeyBinding,
   sealEnvelope,
   openEnvelope,

@@ -261,6 +261,51 @@ where
     Ok(valid)
 }
 
+fn validate_fastpay_transfer_v3_fee_v1(
+    order: &postfiat_types::OwnedTransferOrderV3,
+    signing_bytes_len: usize,
+) -> Result<(), OwnedTransferError> {
+    let required = fastpay_minimum_fee_atoms(
+        signing_bytes_len,
+        order.inputs.len(),
+        order.outputs.len(),
+    )?;
+    if order.fee < required {
+        return Err(OwnedTransferError::InsufficientFee {
+            fee: order.fee,
+            required,
+        });
+    }
+    Ok(())
+}
+
+fn validate_fastpay_unwrap_v3_fee_v1(
+    order: &postfiat_types::OwnedUnwrapOrderV3,
+    signing_bytes_len: usize,
+    input_value: u64,
+) -> Result<(), OwnedTransferError> {
+    let required_spend = order
+        .amount
+        .checked_add(order.fee)
+        .ok_or(OwnedTransferError::Overflow)?;
+    let change = input_value
+        .checked_sub(required_spend)
+        .ok_or(OwnedTransferError::NotConserved)?;
+    let outputs_created = usize::from(change > 0);
+    let required = fastpay_minimum_fee_atoms(
+        signing_bytes_len,
+        order.inputs.len(),
+        outputs_created,
+    )?;
+    if order.fee < required {
+        return Err(OwnedTransferError::InsufficientFee {
+            fee: order.fee,
+            required,
+        });
+    }
+    Ok(())
+}
+
 pub fn validate_owned_transfer_v3_admission(
     ledger: &LedgerState,
     signed: &postfiat_types::SignedOwnedTransferOrderV3,
@@ -268,6 +313,26 @@ pub fn validate_owned_transfer_v3_admission(
     expected_committee_epoch: u64,
     policy: &postfiat_types::FastPayRecoveryPolicyV1,
     current_height: u64,
+) -> Result<(), OwnedTransferError> {
+    validate_owned_transfer_v3_admission_with_fee_v1(
+        ledger,
+        signed,
+        expected_domain,
+        expected_committee_epoch,
+        policy,
+        current_height,
+        false,
+    )
+}
+
+pub fn validate_owned_transfer_v3_admission_with_fee_v1(
+    ledger: &LedgerState,
+    signed: &postfiat_types::SignedOwnedTransferOrderV3,
+    expected_domain: &postfiat_types::OwnedCertificateDomain,
+    expected_committee_epoch: u64,
+    policy: &postfiat_types::FastPayRecoveryPolicyV1,
+    current_height: u64,
+    fee_v1_active: bool,
 ) -> Result<(), OwnedTransferError> {
     let expected_lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&signed.order);
     validate_fastpay_v3_recovery(
@@ -288,10 +353,14 @@ pub fn validate_owned_transfer_v3_admission(
     ) {
         return Err(OwnedTransferError::OwnerAuthFailed);
     }
-    prepare_owned_transfer(
+    if fee_v1_active {
+        validate_fastpay_transfer_v3_fee_v1(&signed.order, signing_bytes.len())?;
+    }
+    prepare_owned_transfer_with_cap_v2(
         ledger,
         &transfer_v3_semantic_order(&signed.order),
         &signed.owner_pubkey_hex,
+        fee_v1_active,
     )
     .map(|_| ())
 }
@@ -303,6 +372,26 @@ pub fn validate_owned_unwrap_v3_admission(
     expected_committee_epoch: u64,
     policy: &postfiat_types::FastPayRecoveryPolicyV1,
     current_height: u64,
+) -> Result<(), OwnedTransferError> {
+    validate_owned_unwrap_v3_admission_with_fee_v1(
+        ledger,
+        signed,
+        expected_domain,
+        expected_committee_epoch,
+        policy,
+        current_height,
+        false,
+    )
+}
+
+pub fn validate_owned_unwrap_v3_admission_with_fee_v1(
+    ledger: &LedgerState,
+    signed: &postfiat_types::SignedOwnedUnwrapOrderV3,
+    expected_domain: &postfiat_types::OwnedCertificateDomain,
+    expected_committee_epoch: u64,
+    policy: &postfiat_types::FastPayRecoveryPolicyV1,
+    current_height: u64,
+    fee_v1_active: bool,
 ) -> Result<(), OwnedTransferError> {
     let expected_lock_id = postfiat_types::fastpay_unwrap_lock_id_v1(&signed.order);
     validate_fastpay_v3_recovery(
@@ -323,12 +412,15 @@ pub fn validate_owned_unwrap_v3_admission(
     ) {
         return Err(OwnedTransferError::OwnerAuthFailed);
     }
-    prepare_owned_unwrap(
+    let (_, input_value) = prepare_owned_unwrap(
         ledger,
         &unwrap_v3_semantic_order(&signed.order),
         &signed.owner_pubkey_hex,
-    )
-    .map(|_| ())
+    )?;
+    if fee_v1_active {
+        validate_fastpay_unwrap_v3_fee_v1(&signed.order, signing_bytes.len(), input_value)?;
+    }
+    Ok(())
 }
 
 pub fn verify_owned_transfer_certificate_v3(
@@ -439,6 +531,22 @@ pub fn apply_owned_transfer_certificate_v3(
     context: FastPayRecoveryVerificationContext<'_>,
     verification_height: u64,
 ) -> Result<OwnedTransferOutcome, OwnedTransferError> {
+    apply_owned_transfer_certificate_v3_with_fee_v1(
+        ledger,
+        certificate,
+        context,
+        verification_height,
+        false,
+    )
+}
+
+pub fn apply_owned_transfer_certificate_v3_with_fee_v1(
+    ledger: &mut LedgerState,
+    certificate: &postfiat_types::OwnedTransferCertificateV3,
+    context: FastPayRecoveryVerificationContext<'_>,
+    verification_height: u64,
+    fee_v1_active: bool,
+) -> Result<OwnedTransferOutcome, OwnedTransferError> {
     apply_owned_transfer_certificate_v3_at_decision(
         ledger,
         certificate,
@@ -446,6 +554,7 @@ pub fn apply_owned_transfer_certificate_v3(
         verification_height,
         certificate.order.recovery.valid_from_height,
         postfiat_types::FastPayFenceOriginV1::Consensusless,
+        fee_v1_active,
     )
 }
 
@@ -456,6 +565,7 @@ fn apply_owned_transfer_certificate_v3_at_decision(
     verification_height: u64,
     decision_height: u64,
     origin: postfiat_types::FastPayFenceOriginV1,
+    fee_v1_active: bool,
 ) -> Result<OwnedTransferOutcome, OwnedTransferError> {
     verify_owned_transfer_certificate_v3(
         certificate,
@@ -466,13 +576,18 @@ fn apply_owned_transfer_certificate_v3_at_decision(
         verification_height,
         context.quorum,
     )?;
+    if fee_v1_active {
+        let signing_bytes_len = owned_transfer_v3_signing_bytes(&certificate.order).len();
+        validate_fastpay_transfer_v3_fee_v1(&certificate.order, signing_bytes_len)?;
+    }
     ensure_fastpay_inputs_unfenced(ledger, &certificate.order.inputs)?;
     let fence = transfer_confirmed_fence(certificate, decision_height, origin)?;
     ensure_fastpay_fence_capacity(ledger)?;
-    let outcome = apply_owned_transfer(
+    let outcome = apply_owned_transfer_with_cap_v2(
         ledger,
         &transfer_v3_semantic_order(&certificate.order),
         &certificate.owner_pubkey_hex,
+        fee_v1_active,
     )?;
     ledger.fastpay_version_fences.push(fence);
     Ok(outcome)
@@ -484,6 +599,22 @@ pub fn apply_owned_unwrap_certificate_v3(
     context: FastPayRecoveryVerificationContext<'_>,
     verification_height: u64,
 ) -> Result<OwnedUnwrapOutcome, OwnedTransferError> {
+    apply_owned_unwrap_certificate_v3_with_fee_v1(
+        ledger,
+        certificate,
+        context,
+        verification_height,
+        false,
+    )
+}
+
+pub fn apply_owned_unwrap_certificate_v3_with_fee_v1(
+    ledger: &mut LedgerState,
+    certificate: &postfiat_types::OwnedUnwrapCertificateV3,
+    context: FastPayRecoveryVerificationContext<'_>,
+    verification_height: u64,
+    fee_v1_active: bool,
+) -> Result<OwnedUnwrapOutcome, OwnedTransferError> {
     apply_owned_unwrap_certificate_v3_at_decision(
         ledger,
         certificate,
@@ -491,6 +622,7 @@ pub fn apply_owned_unwrap_certificate_v3(
         verification_height,
         certificate.order.recovery.valid_from_height,
         postfiat_types::FastPayFenceOriginV1::Consensusless,
+        fee_v1_active,
     )
 }
 
@@ -501,6 +633,7 @@ fn apply_owned_unwrap_certificate_v3_at_decision(
     verification_height: u64,
     decision_height: u64,
     origin: postfiat_types::FastPayFenceOriginV1,
+    fee_v1_active: bool,
 ) -> Result<OwnedUnwrapOutcome, OwnedTransferError> {
     verify_owned_unwrap_certificate_v3(
         certificate,
@@ -511,13 +644,23 @@ fn apply_owned_unwrap_certificate_v3_at_decision(
         verification_height,
         context.quorum,
     )?;
+    if fee_v1_active {
+        let (_, input_value) = prepare_owned_unwrap(
+            ledger,
+            &unwrap_v3_semantic_order(&certificate.order),
+            &certificate.owner_pubkey_hex,
+        )?;
+        let signing_bytes_len = owned_unwrap_v3_signing_bytes(&certificate.order).len();
+        validate_fastpay_unwrap_v3_fee_v1(&certificate.order, signing_bytes_len, input_value)?;
+    }
     ensure_fastpay_inputs_unfenced(ledger, &certificate.order.inputs)?;
     let fence = unwrap_confirmed_fence(certificate, decision_height, origin)?;
     ensure_fastpay_fence_capacity(ledger)?;
-    let outcome = apply_owned_unwrap(
+    let outcome = apply_owned_unwrap_with_cap_v2(
         ledger,
         &unwrap_v3_semantic_order(&certificate.order),
         &certificate.owner_pubkey_hex,
+        fee_v1_active,
     )?;
     ledger.fastpay_version_fences.push(fence);
     Ok(outcome)
@@ -804,6 +947,7 @@ pub fn execute_fastpay_recovery_decision_v1(
                     verification_height,
                     current_height,
                     postfiat_types::FastPayFenceOriginV1::OrderedRecovery,
+                    false,
                 )?;
             }
             postfiat_types::FastPayCertificateV1::Unwrap(value) => {
@@ -814,6 +958,7 @@ pub fn execute_fastpay_recovery_decision_v1(
                     verification_height,
                     current_height,
                     postfiat_types::FastPayFenceOriginV1::OrderedRecovery,
+                    false,
                 )?;
             }
         }

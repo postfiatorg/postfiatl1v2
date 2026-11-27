@@ -198,6 +198,7 @@ fn signer_committee_rotation_dry_run_six_validators() {
         terminal_tombstones: std::collections::BTreeMap::new(),
         asset_rules: std::collections::BTreeMap::new(),
         holder_permits: std::collections::BTreeMap::new(),
+        revoked_holder_permits: std::collections::BTreeMap::new(),
         policy_snapshots: std::collections::BTreeMap::new(),
         prepare_fences: std::collections::BTreeMap::new(),
         pending_fee_burns: std::collections::BTreeMap::new(),

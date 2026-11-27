@@ -4,6 +4,8 @@
   "asset_burn": "AssetBurnOperation",
   "asset_clawback": "AssetClawbackOperation",
   "asset_create": "AssetCreateOperation",
+  "bridge_hold_claim": "BridgeHoldClaimOperation",
+  "bridge_hold_return": "BridgeHoldReturnOperation",
   "escrow_cancel": "EscrowCancelOperation",
   "escrow_create": "EscrowCreateOperation",
   "escrow_finish": "EscrowFinishOperation",
@@ -33,6 +35,7 @@
   "nft_transfer": "NftTransferOperation",
   "offer_cancel": "OfferCancelOperation",
   "offer_create": "OfferCreateOperation",
+  "offer_prune_ineligible": "OfferPruneIneligibleOperation",
   "pftl_uniswap_destination_consume": "PftlUniswapDestinationConsumeOperation",
   "pftl_uniswap_export_debit": "PftlUniswapExportDebitOperation",
   "pftl_uniswap_order_release": "PftlUniswapOrderReleaseOperation",
@@ -82,7 +85,10 @@
    "owner": "required",
    "issuer": "required",
    "asset_id": "required",
-   "amount": "required"
+   "amount": "required",
+   "offer_ids": "vec",
+   "escrow_ids": "vec",
+   "include_bridge_hold": "bool"
   },
   "AssetCreateOperation": {
    "issuer": "required",
@@ -94,6 +100,17 @@
    "requires_authorization": "bool",
    "freeze_enabled": "bool",
    "clawback_enabled": "bool"
+  },
+  "BridgeHoldClaimOperation": {
+   "recipient": "required",
+   "asset_id": "required",
+   "amount": "required"
+  },
+  "BridgeHoldReturnOperation": {
+   "recipient": "required",
+   "asset_id": "required",
+   "amount": "required",
+   "burn": "bool"
   },
   "EscrowCancelOperation": {
    "escrow_id": "required",
@@ -492,7 +509,8 @@
   },
   "NftBurnOperation": {
    "nft_id": "required",
-   "owner": "required"
+   "owner": "required",
+   "issuer": "str"
   },
   "NftMintOperation": {
    "issuer": "required",
@@ -523,6 +541,10 @@
    "taker_pays_asset_id": "required",
    "taker_pays_amount": "required",
    "expiration_height": "int"
+  },
+  "OfferPruneIneligibleOperation": {
+   "pruner": "required",
+   "offer_ids": "required"
   },
   "PaymentMemo": {
    "memo_type": "str",

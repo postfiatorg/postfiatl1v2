@@ -44,4 +44,7 @@ mod tests {
 #[cfg(test)]
 mod lock_minimum_binding_tests;
 
+#[cfg(test)]
+mod train_a_regression_tests;
+
 include!("pftl_source_settlement.rs");

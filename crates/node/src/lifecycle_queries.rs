@@ -1709,12 +1709,17 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
     };
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
-    // An export is quoted and checked on the ledger asset admission executes
-    // it on (`apply_pending_before_new_asset_transaction`), its source's
-    // existence, balance and sequence included: a pending release or transfer
-    // may create the source. Every other kind keeps the ledger after the
-    // executable mempool.
-    let quote_ledger = if is_export {
+    // An export, and every kind once `asset_gate_v1` is active, is quoted on
+    // the ledger asset admission executes it on
+    // (`apply_pending_before_new_asset_transaction`): the later families
+    // (atomic swaps, FastLane, escrow, NFT, offers) run after it, so a line
+    // one of them creates does not lower the quote. An export's source's
+    // existence, balance and sequence are read there too: a pending release
+    // or transfer may create the source. Before the gate every other kind
+    // keeps the ledger after the executable mempool.
+    let admission_view =
+        is_export || asset_execution_compatibility.asset_gate_v1_active(block_height);
+    let quote_ledger = if admission_view {
         let shielded = store.read_shielded()?;
         let orchard_balances = shielded
             .orchard
@@ -1783,7 +1788,12 @@ pub fn asset_fee_quote(options: AssetFeeQuoteOptions) -> io::Result<AssetFeeQuot
             operation.clone(),
         )?;
         let base_asset_fee = minimum_asset_transaction_fee(&signed);
-        let state_expansion_fee = asset_transaction_state_expansion_fee(&quote_ledger, &signed);
+        let state_expansion_fee = asset_transaction_state_expansion_fee_with_compatibility(
+            &quote_ledger,
+            &signed,
+            block_height,
+            asset_execution_compatibility,
+        );
         let minimum_fee = base_asset_fee.saturating_add(state_expansion_fee);
         if fee >= minimum_fee {
             break (
@@ -3727,47 +3737,56 @@ pub fn nft_info(options: NftInfoOptions) -> io::Result<NftInfoReport> {
     })
 }
 
+fn validate_nft_cursor_hex(cursor: &str) -> io::Result<()> {
+    if cursor.len() != 96
+        || !cursor
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid_nft_cursor: cursor must be a 96-character lowercase hex NFT id",
+        ));
+    }
+    Ok(())
+}
+
+fn bounded_nft_page_limit(limit: Option<usize>) -> io::Result<usize> {
+    let effective = limit.unwrap_or(postfiat_types::DEFAULT_NFT_RPC_PAGE_LIMIT);
+    if effective == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "limit must be greater than zero",
+        ));
+    }
+    Ok(effective.min(postfiat_types::MAX_NFT_RPC_PAGE_LIMIT))
+}
+
 pub fn account_nfts(options: AccountNftsOptions) -> io::Result<AccountNftsReport> {
     validate_query_text_field("account", &options.account)?;
-    let limit = bounded_read_query_limit(options.limit, "account_nfts")?;
+    if let Some(cursor) = options.cursor.as_deref() {
+        validate_nft_cursor_hex(cursor)?;
+    }
+    let limit = bounded_nft_page_limit(options.limit)?;
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
     let ledger = store.read_ledger()?;
-    let indexes = ledger
-        .nft_indexes(&genesis.chain_id)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    let mut nfts = if options.include_burned {
-        ledger
-            .nfts
-            .iter()
-            .filter(|nft| nft.owner == options.account)
-            .map(nft_report)
-            .collect::<Vec<_>>()
+    let mut matching = ledger
+        .all_nfts()
+        .filter(|nft| nft.owner == options.account && (options.include_burned || !nft.burned))
+        .map(nft_report)
+        .collect::<Vec<_>>();
+    matching.sort_by(|left, right| left.nft_id.cmp(&right.nft_id));
+    let total_count = Some(matching.len() as u64);
+    if let Some(cursor) = options.cursor.as_deref() {
+        matching.retain(|nft| nft.nft_id.as_str() > cursor);
+    }
+    let truncated = truncate_reports(&mut matching, limit);
+    let next_cursor = if truncated {
+        matching.last().map(|nft| nft.nft_id.clone())
     } else {
-        indexes
-            .by_owner
-            .get(&options.account)
-            .into_iter()
-            .flat_map(|nft_ids| nft_ids.iter())
-            .filter_map(|nft_id| ledger.nft(nft_id))
-            .map(nft_report)
-            .collect::<Vec<_>>()
+        None
     };
-    nfts.sort_by(|left, right| {
-        (
-            left.collection_id.as_str(),
-            left.serial,
-            left.nft_id.as_str(),
-            left.issuer.as_str(),
-        )
-            .cmp(&(
-                right.collection_id.as_str(),
-                right.serial,
-                right.nft_id.as_str(),
-                right.issuer.as_str(),
-            ))
-    });
-    let truncated = truncate_reports(&mut nfts, limit);
     Ok(AccountNftsReport {
         schema: "postfiat-account-nfts-v1".to_string(),
         chain_id: genesis.chain_id.clone(),
@@ -3777,8 +3796,10 @@ pub fn account_nfts(options: AccountNftsOptions) -> io::Result<AccountNftsReport
         include_burned: options.include_burned,
         limit: limit as u64,
         truncated,
-        nft_count: nfts.len() as u64,
-        nfts,
+        next_cursor,
+        total_count,
+        nft_count: matching.len() as u64,
+        nfts: matching,
     })
 }
 
@@ -3787,16 +3808,15 @@ pub fn issuer_nfts(options: IssuerNftsOptions) -> io::Result<IssuerNftsReport> {
     if let Some(collection_id) = options.collection_id.as_ref() {
         validate_nft_collection_query_id(collection_id)?;
     }
-    let limit = bounded_read_query_limit(options.limit, "issuer_nfts")?;
+    if let Some(cursor) = options.cursor.as_deref() {
+        validate_nft_cursor_hex(cursor)?;
+    }
+    let limit = bounded_nft_page_limit(options.limit)?;
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
     let ledger = store.read_ledger()?;
-    ledger
-        .nft_indexes(&genesis.chain_id)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    let mut nfts = ledger
-        .nfts
-        .iter()
+    let mut matching = ledger
+        .all_nfts()
         .filter(|nft| {
             nft.issuer == options.issuer
                 && options
@@ -3807,21 +3827,17 @@ pub fn issuer_nfts(options: IssuerNftsOptions) -> io::Result<IssuerNftsReport> {
         })
         .map(nft_report)
         .collect::<Vec<_>>();
-    nfts.sort_by(|left, right| {
-        (
-            left.collection_id.as_str(),
-            left.serial,
-            left.nft_id.as_str(),
-            left.owner.as_str(),
-        )
-            .cmp(&(
-                right.collection_id.as_str(),
-                right.serial,
-                right.nft_id.as_str(),
-                right.owner.as_str(),
-            ))
-    });
-    let truncated = truncate_reports(&mut nfts, limit);
+    matching.sort_by(|left, right| left.nft_id.cmp(&right.nft_id));
+    let total_count = Some(matching.len() as u64);
+    if let Some(cursor) = options.cursor.as_deref() {
+        matching.retain(|nft| nft.nft_id.as_str() > cursor);
+    }
+    let truncated = truncate_reports(&mut matching, limit);
+    let next_cursor = if truncated {
+        matching.last().map(|nft| nft.nft_id.clone())
+    } else {
+        None
+    };
     Ok(IssuerNftsReport {
         schema: "postfiat-issuer-nfts-v1".to_string(),
         chain_id: genesis.chain_id.clone(),
@@ -3832,8 +3848,191 @@ pub fn issuer_nfts(options: IssuerNftsOptions) -> io::Result<IssuerNftsReport> {
         include_burned: options.include_burned,
         limit: limit as u64,
         truncated,
-        nft_count: nfts.len() as u64,
-        nfts,
+        next_cursor,
+        total_count,
+        nft_count: matching.len() as u64,
+        nfts: matching,
+    })
+}
+
+pub fn fastpay_fee_quote(options: FastPayFeeQuoteOptions) -> io::Result<FastPayFeeQuoteReport> {
+    let operation = options.operation.trim().to_ascii_lowercase();
+    if operation != "transfer" && operation != "unwrap" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "operation must be `transfer` or `unwrap`",
+        ));
+    }
+    if options.inputs_count == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "inputs_count must be greater than zero",
+        ));
+    }
+    let effective_outputs = if operation == "unwrap" {
+        0
+    } else {
+        options.outputs_count
+    };
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let ledger = store.read_ledger()?;
+    let tip_height = store.read_chain_tip().map(|tip| tip.height).unwrap_or(0);
+    let fee_v1_active = governance
+        .fastpay_fee_v1_activation_height()
+        .is_some_and(|activation| activation > 0 && tip_height >= activation);
+
+    // Conservative upper bound when estimated_weight_bytes is omitted.
+    let weight_bytes = options.estimated_weight_bytes.unwrap_or_else(|| {
+        256_usize
+            .saturating_add(options.inputs_count.saturating_mul(128))
+            .saturating_add(effective_outputs.saturating_mul(160))
+            .saturating_add(options.memo_bytes.saturating_mul(2))
+    });
+    let (base_fee, byte_fee, new_object_fee, input_fee, minimum_fee) = if fee_v1_active {
+        let base = postfiat_types::FASTPAY_MIN_BASE_FEE_ATOMS;
+        let quanta =
+            (weight_bytes as u64).div_ceil(postfiat_types::FASTPAY_FEE_BYTE_QUANTUM as u64);
+        let byte_f = quanta.saturating_mul(postfiat_types::FASTPAY_FEE_PER_BYTE_QUANTUM_ATOMS);
+        let net_new = effective_outputs.saturating_sub(options.inputs_count) as u64;
+        let new_obj_f = net_new.saturating_mul(postfiat_types::FASTPAY_FEE_PER_NEW_OBJECT_ATOMS);
+        let input_f = (options.inputs_count as u64)
+            .saturating_mul(postfiat_types::FASTPAY_FEE_PER_INPUT_ATOMS);
+        let total =
+            fastpay_minimum_fee_atoms(weight_bytes, options.inputs_count, effective_outputs)
+                .map_err(|error| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("fastpay fee calculation overflow: {error:?}"),
+                    )
+                })?;
+        (base, byte_f, new_obj_f, input_f, total)
+    } else {
+        (0, 0, 0, 0, 0)
+    };
+    let owner_current_object_count = match options.owner_pubkey_hex.as_deref() {
+        Some(pubkey_hex) => ledger
+            .owned_objects
+            .iter()
+            .filter(|object| object.owner_pubkey_hex == pubkey_hex)
+            .count() as u64,
+        None => 0,
+    };
+    let global_current_object_count = ledger.owned_objects.len() as u64;
+    Ok(FastPayFeeQuoteReport {
+        schema: "postfiat-fastpay-fee-quote-v1".to_string(),
+        chain_id: genesis.chain_id,
+        block_height: tip_height,
+        fee_v1_active,
+        operation,
+        weight_bytes,
+        inputs_count: options.inputs_count,
+        outputs_count: effective_outputs,
+        base_fee,
+        byte_fee,
+        new_object_fee,
+        input_fee,
+        minimum_fee,
+        owner_current_object_count,
+        owner_soft_cap: postfiat_types::MAX_OWNED_OBJECTS_PER_ACCOUNT_SOFT_CAP as u64,
+        global_current_object_count,
+        global_hard_cap: postfiat_types::MAX_OWNED_OBJECTS_GLOBAL_V2 as u64,
+    })
+}
+
+pub fn account_bridge_holds(
+    options: AccountBridgeHoldsOptions,
+) -> io::Result<AccountBridgeHoldsReport> {
+    validate_query_text_field("recipient", &options.recipient)?;
+    if let Some(asset_id) = options.asset_id.as_deref() {
+        validate_query_text_field("asset_id", asset_id)?;
+    }
+    let limit = bounded_read_query_limit(options.limit, "account_bridge_holds")?;
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let mut holds = ledger
+        .asset_bridge_holds
+        .iter()
+        .filter(|(_, hold)| {
+            hold.recipient == options.recipient
+                && options
+                    .asset_id
+                    .as_ref()
+                    .is_none_or(|asset_id| &hold.asset_id == asset_id)
+        })
+        .map(|(hold_key, hold)| BridgeHoldReport {
+            hold_key: hold_key.clone(),
+            asset_id: hold.asset_id.clone(),
+            issuer: hold.issuer.clone(),
+            recipient: hold.recipient.clone(),
+            amount: hold.amount,
+            credit_count: hold.credit_count,
+            created_at_height: hold.created_at_height,
+            last_updated_height: hold.last_updated_height,
+            last_reason_code: hold.last_reason_code.clone(),
+        })
+        .collect::<Vec<_>>();
+    holds.sort_by(|left, right| left.hold_key.cmp(&right.hold_key));
+    let truncated = truncate_reports(&mut holds, limit);
+    Ok(AccountBridgeHoldsReport {
+        schema: "postfiat-account-bridge-holds-v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        recipient: options.recipient,
+        hold_count: holds.len() as u64,
+        truncated,
+        holds,
+    })
+}
+
+pub fn asset_bridge_holds(options: AssetBridgeHoldsOptions) -> io::Result<AssetBridgeHoldsReport> {
+    validate_query_text_field("asset_id", &options.asset_id)?;
+    if let Some(cursor) = options.cursor.as_deref() {
+        validate_query_text_field("cursor", cursor)?;
+    }
+    let limit = bounded_read_query_limit(options.limit, "asset_bridge_holds")?;
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let mut total_held_atoms = 0_u64;
+    let mut matching = Vec::new();
+    for (hold_key, hold) in &ledger.asset_bridge_holds {
+        if hold.asset_id == options.asset_id {
+            total_held_atoms = total_held_atoms.saturating_add(hold.amount);
+            if options
+                .cursor
+                .as_deref()
+                .is_none_or(|cursor| hold_key.as_str() > cursor)
+            {
+                matching.push((hold_key.clone(), hold.clone()));
+            }
+        }
+    }
+    let truncated = matching.len() > limit;
+    matching.truncate(limit);
+    let next_cursor = if truncated {
+        matching.last().map(|(key, _)| key.clone())
+    } else {
+        None
+    };
+    let holds = matching
+        .into_iter()
+        .map(|(_, hold)| hold)
+        .collect::<Vec<_>>();
+    Ok(AssetBridgeHoldsReport {
+        schema: "postfiat-asset-bridge-holds-v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        asset_id: options.asset_id,
+        total_held_atoms,
+        hold_count: holds.len() as u64,
+        truncated,
+        next_cursor,
+        holds,
     })
 }
 

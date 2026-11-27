@@ -276,13 +276,16 @@ pub(super) fn apply_decision(
     {
         return Err("Solana payout in this transaction already settled".into());
     }
-    postfiat_execution::settle_governed_solana_payout(
+    // Once the asset gate is active, settlement also prunes the burner's
+    // emptied implicit line; before it, settlement is unchanged.
+    postfiat_execution::settle_governed_solana_payout_with_compatibility(
         ledger.ok_or("Solana settlement requires canonical ledger")?,
         &genesis.chain_id,
         payout.packet_hash,
         &amendment.amendment_id,
         height,
         second_release(genesis, height),
+        asset_execution_compatibility_for_genesis_and_governance(genesis, governance),
     )
 }
 

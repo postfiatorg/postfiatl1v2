@@ -26,7 +26,7 @@ function createFacilitatorFromEnv(env = process.env, { settlementAdapter = null 
   }
   let resolvedAdapter = settlementAdapter;
   const rpcUrlsRaw = String(env.X402_RPC_URLS || '').trim();
-  if (!resolvedAdapter && rpcUrlsRaw) {
+  if (mode === MODE_PROTOTYPE && !resolvedAdapter && rpcUrlsRaw) {
     const quorum = env.X402_QUORUM_THRESHOLD ? Number(env.X402_QUORUM_THRESHOLD) : null;
     resolvedAdapter = createChainSettlementAdapter({
       rpcUrls: rpcUrlsRaw,
@@ -37,7 +37,7 @@ function createFacilitatorFromEnv(env = process.env, { settlementAdapter = null 
   }
   if (mode === MODE_PRODUCTION && !isSettlementAdapter(resolvedAdapter)) {
     throw new Error(
-      `X402_MODE=${MODE_PRODUCTION} requires a settlement adapter (set X402_RPC_URLS or inject settlementAdapter) ` +
+      `X402_MODE=${MODE_PRODUCTION} requires an injected settlement adapter with verified chain certificates ` +
         'backed by postfiatl1v2 validator JSON-RPC endpoints'
     );
   }

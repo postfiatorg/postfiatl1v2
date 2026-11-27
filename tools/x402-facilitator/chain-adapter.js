@@ -56,13 +56,15 @@ async function defaultJsonRpcCall(url, method, params, { timeoutMs = DEFAULT_RPC
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const id = crypto.randomUUID();
+  const version = 'postfiat-local-rpc-v1';
   try {
     const res = await fetchFn(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: crypto.randomUUID(),
+        version,
+        id,
         method,
         params,
       }),
@@ -72,8 +74,9 @@ async function defaultJsonRpcCall(url, method, params, { timeoutMs = DEFAULT_RPC
       throw new Error(`RPC HTTP ${res.status} from ${url} (${method})`);
     }
     const payload = await res.json();
-    if (payload && payload.error) {
-      const msg = payload.error.message || JSON.stringify(payload.error);
+    if (payload?.version !== version || payload.id !== id) throw new Error('RPC response identity mismatch');
+    if (payload.ok !== true || payload.error) {
+      const msg = payload.error?.message || 'request refused';
       throw new Error(`RPC error on ${method}: ${msg}`);
     }
     if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'result')) {
@@ -89,23 +92,29 @@ function defaultQuorumThreshold(count) {
   return Math.floor((2 * count) / 3) + 1;
 }
 
-function verifyOnChainTxMatchesPayment(txResult, verified) {
-  if (!txResult || txResult.accepted !== true) {
+function verifyOnChainTxMatchesPayment(txResult, verified, txId) {
+  if (txResult?.confirmed !== true || txResult.receipt?.accepted !== true) {
     return { ok: false, reason: 'onchain_tx_not_accepted' };
   }
-  const blockHeight = Number(txResult.block_height || txResult.finalized_height || 0);
+  if (!/^[0-9a-f]{96}$/.test(txId) || txResult.tx_id !== txId || txResult.receipt.tx_id !== txId ||
+      txResult.chain_id !== verified.signedTx.chain_id) {
+    return { ok: false, reason: 'onchain_tx_identity_mismatch' };
+  }
+  const blockHeight = txResult.block?.header?.height;
   if (!Number.isSafeInteger(blockHeight) || blockHeight <= 0) {
     return { ok: false, reason: 'onchain_tx_not_finalized' };
   }
-  const to = String(txResult.to || txResult.recipient || txResult.destination || '').toLowerCase();
-  if (to !== String(verified.payeeAccount || '').toLowerCase()) {
-    return { ok: false, reason: `onchain_recipient_mismatch:${to}` };
+  const rows = txResult.transaction_rows;
+  const row = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+  // Only payment_v2 archives contain signed memo bytes. Issued-asset rows cannot
+  // attest to the x402 request hash under this version of the node RPC.
+  if (verified.lane !== mp.PaymentLane.CONSENSUS_PFT || verified.assetId !== 'PFT' ||
+      row?.transaction_kind !== 'payment_v2' || row.tx_id !== txId || row.block_height !== blockHeight ||
+      row.from !== verified.payerAccount || row.to !== verified.payeeAccount ||
+      !Number.isSafeInteger(row.amount) || row.amount !== verified.amountAtoms) {
+    return { ok: false, reason: 'onchain_payment_row_mismatch' };
   }
-  const amount = Number(txResult.amount ?? txResult.amount_atoms ?? 0);
-  if (!Number.isSafeInteger(amount) || amount < Number(verified.amountAtoms)) {
-    return { ok: false, reason: `onchain_amount_insufficient:${amount}` };
-  }
-  const memos = Array.isArray(txResult.memos) ? txResult.memos : [];
+  const memos = row.memos;
   let memoHash;
   try {
     memoHash = extractX402RequestHashFromMemos(memos);
@@ -199,7 +208,8 @@ function createChainSettlementAdapter({
       if (ack.accepted === true || ack.applied === true || ack.status === 'applied') {
         acceptedCount += 1;
         if (!certificateDigestHex) {
-          certificateDigestHex = String(ack.certificate_digest || ack.certificateDigest || '').toLowerCase();
+          const digest = String(ack.certificate_digest || ack.certificateDigest || '').toLowerCase();
+          if (/^[0-9a-f]{96}$/.test(digest)) certificateDigestHex = digest;
         }
         const h = Number(ack.block_height || ack.finalized_height || ack.height || 0);
         if (Number.isSafeInteger(h) && h > finalizedHeight) finalizedHeight = h;
@@ -210,7 +220,7 @@ function createChainSettlementAdapter({
       return { accepted: false, reason: 'fastpay_apply_rejected_by_all_validators' };
     }
     if (!certificateDigestHex) {
-      certificateDigestHex = mp.sha256(mp.canonicalJsonBytes(cert)).toString('hex');
+      return { accepted: false, reason: 'missing_chain_certificate_digest' };
     }
     return {
       accepted: true,
@@ -224,6 +234,7 @@ function createChainSettlementAdapter({
   async function settleConsensus(verified) {
     const primary = endpoints[0];
     const signedTx = verified?.signedTx || {};
+    if (verified.lane !== mp.PaymentLane.CONSENSUS_PFT) return { accepted: false, reason: 'unsupported_settlement_lane' };
     let txId = String(signedTx.tx_id || signedTx.onchain_tx_id || '').trim().toLowerCase();
 
     // 1. Submit signed transaction if raw chain payload is provided and not already finalized.
@@ -242,12 +253,12 @@ function createChainSettlementAdapter({
           ? signedTx.signed_asset_tx_json
           : JSON.stringify(signedTx.signed_asset_tx);
       const submitRes = await rpc(primary.url, 'mempool_submit_signed_asset_transaction', {
-        signed_asset_tx_json: signedAssetTxJson,
+        signed_asset_transaction_json: signedAssetTxJson,
       });
       txId = String(submitRes?.tx_id || txId).trim().toLowerCase();
     }
 
-    if (!txId) {
+    if (!/^[0-9a-f]{96}$/.test(txId)) {
       return { accepted: false, reason: 'missing_onchain_tx_id_or_signed_tx_payload' };
     }
 
@@ -257,8 +268,8 @@ function createChainSettlementAdapter({
     while (true) {
       try {
         const txRes = await rpc(primary.url, 'tx', { tx_id: txId });
-        if (txRes && txRes.accepted === true && Number(txRes.block_height || txRes.finalized_height || 0) > 0) {
-          const check = verifyOnChainTxMatchesPayment(txRes, verified);
+        if (txRes?.confirmed === true) {
+          const check = verifyOnChainTxMatchesPayment(txRes, verified, txId);
           if (!check.ok) {
             return { accepted: false, reason: check.reason };
           }

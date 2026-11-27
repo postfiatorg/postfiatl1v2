@@ -33,6 +33,8 @@ pub enum FastSwapAdmissionError {
     OwnerAddressMismatch(u8),
     NotReciprocal,
     UnsupportedHolderPermit,
+    HolderPermitRevoked,
+    AssetGateRejected,
     InputMissing(FastObjectKeyV1),
     InputFrozen(FastObjectKeyV1),
     InputOwnerMismatch(FastObjectKeyV1),
@@ -74,6 +76,39 @@ pub fn validate_fastswap_admission(
     signed: &SignedFastSwapIntentV1,
     finalized_height: u64,
 ) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
+    validate_fastswap_admission_inner(state, None, signed, finalized_height, false)
+}
+
+/// Recomputes the effects of a FastSwap intent already decided by a quorum-signed
+/// CONFIRM certificate: ignores `prepare_fences` (which only stop new preparation)
+/// and skips live L1 asset-gate admission checks (which governed signing time).
+pub fn validate_fastswap_certified_effects(
+    state: &FastLaneStateV1,
+    signed: &SignedFastSwapIntentV1,
+    finalized_height: u64,
+) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
+    validate_fastswap_admission_inner(state, None, signed, finalized_height, true)
+}
+
+/// Fast-lane intent admission with live L1 ledger enforcement (Train A Pillar 8 M1):
+/// checks `ledger.revoked_fast_lane_holder_permits` and `asset_gate(...)` for every gated
+/// asset leg at `finalized_height`.
+pub fn validate_fastswap_admission_with_ledger(
+    state: &FastLaneStateV1,
+    ledger: &postfiat_types::LedgerState,
+    signed: &SignedFastSwapIntentV1,
+    finalized_height: u64,
+) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
+    validate_fastswap_admission_inner(state, Some(ledger), signed, finalized_height, false)
+}
+
+fn validate_fastswap_admission_inner(
+    state: &FastLaneStateV1,
+    ledger: Option<&postfiat_types::LedgerState>,
+    signed: &SignedFastSwapIntentV1,
+    finalized_height: u64,
+    allow_fenced_certified: bool,
+) -> Result<PreparedFastSwapV1, FastSwapAdmissionError> {
     signed.intent.validate_canonical_shape()?;
     if signed.intent.domain != state.committee {
         return Err(FastSwapAdmissionError::DomainMismatch);
@@ -82,11 +117,14 @@ pub fn validate_fastswap_admission(
         .policy_snapshots
         .get(&signed.intent.policy_hash)
         .ok_or(FastSwapAdmissionError::PolicyMissing)?;
-    if state.prepare_fences.contains_key(&policy.policy_epoch) {
+    if !allow_fenced_certified && state.prepare_fences.contains_key(&policy.policy_epoch) {
         return Err(FastSwapAdmissionError::PolicyFenced);
     }
     validate_policy(policy, signed, finalized_height)?;
     validate_asset_rules(state, signed, finalized_height)?;
+    if let Some(ledger) = ledger {
+        validate_fastswap_ledger_asset_gate(ledger, signed, finalized_height)?;
+    }
     validate_reciprocal(signed)?;
     validate_authorization(signed, 0)?;
     validate_authorization(signed, 1)?;
@@ -269,6 +307,13 @@ fn validate_asset_rules(
             (false, None) => {}
             (false, Some(_)) => return Err(FastSwapAdmissionError::UnsupportedHolderPermit),
             (true, Some(permit_id)) => {
+                if state
+                    .revoked_holder_permits
+                    .get(&permit_id)
+                    .is_some_and(|revoked_at| finalized_height >= *revoked_at)
+                {
+                    return Err(FastSwapAdmissionError::HolderPermitRevoked);
+                }
                 let permit = state
                     .holder_permits
                     .get(&permit_id)
@@ -282,6 +327,50 @@ fn validate_asset_rules(
                 }
             }
             (true, None) => return Err(FastSwapAdmissionError::UnsupportedHolderPermit),
+        }
+    }
+    Ok(())
+}
+
+fn validate_fastswap_ledger_asset_gate(
+    ledger: &postfiat_types::LedgerState,
+    signed: &SignedFastSwapIntentV1,
+    finalized_height: u64,
+) -> Result<(), FastSwapAdmissionError> {
+    let pairs = [
+        (&signed.intent.party_0, &signed.intent.party_1),
+        (&signed.intent.party_1, &signed.intent.party_0),
+    ];
+    for (sender, receiver) in pairs {
+        if let Some(permit_id) = receiver.receives_holder_permit_id {
+            let permit_hex = postfiat_crypto_provider::bytes_to_hex(&permit_id.0);
+            if ledger
+                .revoked_fast_lane_holder_permits
+                .get(&permit_hex)
+                .is_some_and(|revoked_at| finalized_height >= *revoked_at)
+            {
+                return Err(FastSwapAdmissionError::HolderPermitRevoked);
+            }
+        }
+        if sender.offered_asset_id == FastAssetIdV1::native_pft() {
+            continue;
+        }
+        let asset_hex = postfiat_crypto_provider::bytes_to_hex(&sender.offered_asset_id.0);
+        let Some(asset) = ledger.asset_definition(&asset_hex) else {
+            return Err(FastSwapAdmissionError::AssetGateRejected);
+        };
+        if !matches!(
+            crate::asset_gate(
+                ledger,
+                asset,
+                Some(&sender.owner_address),
+                Some(&receiver.owner_address),
+                crate::AssetMovementOpKind::FastLaneIntent,
+                finalized_height,
+            ),
+            crate::AssetGateOutcome::Allow
+        ) {
+            return Err(FastSwapAdmissionError::AssetGateRejected);
         }
     }
     Ok(())
@@ -742,6 +831,7 @@ mod tests {
             terminal_tombstones: BTreeMap::new(),
             asset_rules: BTreeMap::from([(rule_0, asset_rule_0), (rule_1, asset_rule_1)]),
             holder_permits: BTreeMap::new(),
+            revoked_holder_permits: BTreeMap::new(),
             policy_snapshots: BTreeMap::from([(policy_hash, policy)]),
             prepare_fences: BTreeMap::new(),
             pending_fee_burns: BTreeMap::new(),

@@ -912,6 +912,8 @@ function createFacilitatorCore({
       throw new X402Error(429, 'rate_limited_payer', `payer rate limit exceeded; retry after ${payerRate.retryAfterMs}ms`);
     }
 
+    let settledTxHash = verified.txHash;
+    let spentKey = verified.dedupKey;
     let certificateDigest = Buffer.alloc(0);
     let finalizedHeight = 0;
 
@@ -947,13 +949,20 @@ function createFacilitatorCore({
       if (!receipt?.accepted || !Number.isSafeInteger(receipt.finalizedHeight) || receipt.finalizedHeight <= 0) {
         throw new X402Error(502, 'consensus_finality_not_accepted', receipt?.reason || 'consensus finality receipt rejected');
       }
+      if (receipt.txId !== undefined) {
+        if (typeof receipt.txId !== 'string' || !/^[0-9a-f]{96}$/.test(receipt.txId)) {
+          throw new X402Error(502, 'invalid_chain_tx_id', 'invalid settled transaction ID');
+        }
+        settledTxHash = Buffer.from(receipt.txId, 'hex');
+        spentKey = `consensus:${receipt.txId}`;
+      }
       finalizedHeight = receipt.finalizedHeight;
     }
 
     // The record is on disk (for a file store) before this function returns, so before a gate serves.
     const settledAtMs = now();
     const inserted = withSpentStore(() =>
-      spentStore.markSpent(verified.dedupKey, {
+      spentStore.markSpent(spentKey, {
         dedup_key: verified.dedupKey,
         lane: verified.lane,
         amount_atoms: verified.amountAtoms,
@@ -970,7 +979,7 @@ function createFacilitatorCore({
       chain_id: chainId,
       order_hash: verified.orderHash,
       certificate_digest: certificateDigest,
-      tx_hash: verified.txHash,
+      tx_hash: settledTxHash,
       asset_id: verified.assetId,
       payer_account: verified.payerAccount,
       payee_account: verified.payeeAccount,
@@ -989,7 +998,7 @@ function createFacilitatorCore({
     return {
       response: responseMsg,
       responseHeaderValue,
-      dedupKey: verified.dedupKey,
+      dedupKey: spentKey,
       requestHash: verified.requestHash,
     };
   }

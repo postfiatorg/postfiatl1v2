@@ -2091,3 +2091,98 @@ fn atomic_swap_delta_journal_recovery_never_exposes_a_half_swap() {
     }
     fs::remove_dir_all(seed_data_dir).expect("remove atomic journal seed directory");
 }
+
+/// Once the asset gate is active, the asset fee quote prices a new asset
+/// transaction on the ledger admission executes it on: a pending atomic swap
+/// that later creates the recipient's line does not lower the quote.
+#[test]
+fn asset_fee_quote_prices_on_the_asset_admission_prefix_after_the_asset_gate() {
+    let mut fixture = atomic_node_fixture();
+    let leg = fixture.transaction.unsigned.leg_0.clone();
+    let asset = fixture
+        .ledger
+        .asset_definition(&leg.asset_id)
+        .expect("leg asset")
+        .clone();
+    let bystander = address_from_public_key(&fixture.bystander_key.public_key);
+    fixture
+        .ledger
+        .trustlines
+        .push(atomic_node_balance_row(&bystander, &asset, 1));
+    fixture
+        .ledger
+        .nav_assets
+        .iter_mut()
+        .find(|nav| nav.asset_id == asset.asset_id)
+        .expect("nav asset")
+        .circulating_supply += 1;
+    let (data_dir, store) = active_atomic_node_store(&fixture, "quote-admission-prefix");
+    store
+        .write_shielded(&ShieldedState::empty())
+        .expect("write shielded");
+    let mut governance = store.read_governance().expect("read governance");
+    let mut gate = atomic_node_activation_amendment(1);
+    gate.kind = postfiat_types::GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT.to_string();
+    gate.amendment_id = "asset-gate-quote-prefix".to_string();
+    governance.apply(gate);
+    store.write_governance(&governance).expect("write governance");
+    let compatibility =
+        asset_execution_compatibility_for_genesis_and_governance(&fixture.genesis, &governance);
+    submit_signed_atomic_swap_transaction_json_to_mempool(
+        SignedAtomicSwapTransactionJsonSubmitOptions {
+            data_dir: data_dir.clone(),
+            signed_atomic_swap_transaction_json: serde_json::to_string(&fixture.transaction)
+                .expect("encode swap"),
+        },
+    )
+    .expect("pending atomic swap admitted");
+    assert!(fixture
+        .ledger
+        .trustline_for_account_asset(&leg.recipient, &asset.asset_id)
+        .is_none());
+    let operation = AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
+        from: bystander.clone(),
+        to: leg.recipient.clone(),
+        asset_id: asset.asset_id.clone(),
+        issuer: asset.issuer.clone(),
+        amount: 1,
+    });
+    let quote = asset_fee_quote(AssetFeeQuoteOptions {
+        data_dir: data_dir.clone(),
+        source: bystander.clone(),
+        operation_json: serde_json::to_string(&operation).expect("encode operation"),
+        sequence: None,
+    })
+    .expect("quote");
+    let mut signed = quote_signed_asset_transaction(
+        &fixture.genesis,
+        bystander,
+        quote.minimum_fee,
+        quote.sequence,
+        operation,
+    )
+    .expect("quoted transaction");
+    signed.public_key_hex = bytes_to_hex(&fixture.bystander_key.public_key);
+    signed.signature_hex = bytes_to_hex(
+        &ml_dsa_65_sign(
+            &fixture.bystander_key.private_key,
+            &signed.unsigned.signing_bytes(),
+        )
+        .expect("sign"),
+    );
+    let execution_minimum =
+        postfiat_execution::minimum_asset_transaction_fee_for_ledger_with_compatibility(
+            &fixture.ledger,
+            &signed,
+            1,
+            compatibility,
+        );
+    assert_eq!(quote.state_expansion_fee, TRUSTLINE_STATE_EXPANSION_FEE);
+    assert_eq!(quote.minimum_fee, execution_minimum);
+    submit_signed_asset_transaction_json_to_mempool(SignedAssetTransactionJsonSubmitOptions {
+        data_dir: data_dir.clone(),
+        signed_asset_transaction_json: serde_json::to_string(&signed).expect("encode payment"),
+    })
+    .expect("the quoted fee is admitted");
+    fs::remove_dir_all(data_dir).expect("cleanup");
+}
