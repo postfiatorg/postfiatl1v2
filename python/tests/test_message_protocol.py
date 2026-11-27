@@ -104,6 +104,15 @@ def _toy_xwing_kem(seed_secret: bytes):
 
 
 class MessageProtocolVectorTests(unittest.TestCase):
+    def test_pointer_reader_contract(self) -> None:
+        ptr = mp.Pointer(target=mp.PointerTarget.INLINE, flags=int(mp.PointerFlag.PUBLIC), inline_payload=b"x")
+        canonical = ptr.encode()
+        self.assertEqual(mp.Pointer.decode(canonical, enforce_canonical_order=True), ptr)
+        with self.assertRaises(mp.MessageProtocolError):
+            mp.Pointer.decode(canonical + bytes([88, 1]))
+        with self.assertRaises(mp.MessageProtocolError):
+            mp.Pointer.decode(canonical + canonical[-3:], enforce_canonical_order=True)
+
     def test_bundled_proto_files_and_protoc_roundtrip(self) -> None:
         proto_files = (
             "postfiat/message/v1/message.proto",

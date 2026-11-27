@@ -92,6 +92,10 @@ function testCanonicalVectors() {
   assert.equal(mp.encodePointer(mp.decodePointerV5Memo(memo1, { enforceCanonicalOrder: true })).toString('hex'), C1.V1.memo_data_hex);
 
   // V2A worst-case 256-byte budget + V2B inline x402
+  const rawPointer = Buffer.from(C1.V1.memo_data_hex, 'hex');
+  assert.throws(() => mp.decodePointer(Buffer.concat([rawPointer, Buffer.from([88, 1])])));
+  assert.throws(() => mp.decodePointer(Buffer.concat([rawPointer, rawPointer]), { enforceCanonicalOrder: true }));
+
   const ptr2a = mp.decodePointer(Buffer.from(C1.V2A.memo_data_hex, 'hex'), { enforceCanonicalOrder: true });
   assert.equal(mp.encodePointer(ptr2a).toString('hex'), C1.V2A.memo_data_hex);
   assert.equal(ptr2a.schema_name, 'org.example.custom.packet.v1');

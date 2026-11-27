@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import collections
 import json
+import math
 import os
 import re
 import sys
@@ -160,7 +161,11 @@ class WritePolicyEngine:
             ):
                 return reject("invalid: malformed tag element", shadow_if_mirror=True)
 
-        now_s = float(request.get("receivedAt") or self._now())
+        now_s = request.get("receivedAt", None)
+        if now_s is None:
+            now_s = self._now()
+        if type(now_s) not in (float, int) or not 0 <= now_s <= 2**53 or not math.isfinite(now_s):
+            return reject("invalid: receivedAt must be a finite timestamp", shadow_if_mirror=True)
         if not isinstance(created_at, int) or isinstance(created_at, bool):
             return reject("invalid: created_at must be integer", shadow_if_mirror=True)
         if kind != NIP17_GIFT_WRAP_KIND:
@@ -231,9 +236,12 @@ def main() -> int:
         except json.JSONDecodeError:
             resp = {"id": "", "action": "reject", "msg": "invalid: malformed JSON input"}
         else:
-            if req.get("type") != "new":
+            if not isinstance(req, dict):
+                resp = {"id": "", "action": "reject", "msg": "invalid: expected request object"}
+            elif req.get("type") != "new":
                 continue
-            resp = engine.evaluate(req)
+            else:
+                resp = engine.evaluate(req)
         sys.stdout.write(json.dumps(resp, separators=(",", ":")) + "\n")
         sys.stdout.flush()
     return 0

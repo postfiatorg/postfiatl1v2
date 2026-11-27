@@ -729,8 +729,10 @@ function decodePointer(bytes, opts = {}) {
     else if (f.fieldNum === 8) { expectWt(f, 0); out.flags = Number(f.value); }
     else if (f.fieldNum === 9) { expectWt(f, 2); out.inline_payload = Buffer.from(f.value); }
     else if (f.fieldNum === 10) { expectWt(f, 2); out.schema_name = f.value.toString('utf8'); }
+    else throw new MessageProtocolError(`unknown Pointer field ${f.fieldNum}`);
   }
   validatePointer(out);
+  if (opts.enforceCanonicalOrder && !encodePointer(out).equals(buf)) throw new MessageProtocolError('non-canonical Pointer encoding');
   return out;
 }
 

@@ -678,8 +678,12 @@ class Pointer:
             elif fn == 10:
                 _expect_wt(fn, wt, 2)
                 vals["schema_name"] = _decode_utf8(val, "Pointer.schema_name")
+            else:
+                raise MessageProtocolError(f"unknown Pointer field {fn}")
         ptr = cls(**vals)
         ptr.validate()
+        if enforce_canonical_order and ptr.encode() != data:
+            raise MessageProtocolError("non-canonical Pointer encoding")
         return ptr
 
 
