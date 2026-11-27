@@ -1,5 +1,7 @@
 # Post Fiat — The Big Milestone
 
+> **Live Execution Progress:** See **[PROGRESS.md](PROGRESS.md)** for the real-time breakdown of what is merged on `main`, which PRs are open & CI-green, what is actively running, and what still needs review or UAT.
+
 > **What this is:** The master execution spec and milestone tracker for taking Post Fiat from zero to production. Every open founder decision across all 10 pillars has been resolved and locked in — **zero open questions remain**. Every pillar has concrete `[ ]` build milestones plus the four mandatory ship gates: **1) Executed, 2) Tested by user, 3) Added to docs, 4) Public blog post document**.
 
 ## The goal
