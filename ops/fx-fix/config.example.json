@@ -1,0 +1,33 @@
+{
+  "chain_id": "postfiat-wan-devnet-2",
+  "operator": "pf1111111111111111111111111111111111111111",
+  "base_asset_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "quote_asset_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "base_precision": 6,
+  "quote_precision": 6,
+  "band_bps": 25,
+  "fee_bps": 10,
+  "minimum_base_atoms": 1000000,
+  "capacity_base_atoms": 50000000000,
+  "capacity_quote_atoms": 60000000000,
+  "max_fills": 64,
+  "source_label": "london_1600_wm_fix",
+  "governance_policy_hash": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+  "window_validity_blocks": 900,
+  "nav_tracked": true,
+  "nav_fix_fee_cap_bps": 25,
+  "max_observation_age_seconds": 120,
+  "max_venue_spread_bps": 100,
+  "max_dispersion_bps": 100,
+  "min_venues": 2,
+  "rpc_url": "http://127.0.0.1:8788",
+  "schedule": {
+    "timezone_name": "Europe/London",
+    "fix_hour": 16,
+    "fix_minute": 0,
+    "cutoff_seconds_before_fix": 60,
+    "max_lateness_seconds": 120,
+    "weekdays_only": true,
+    "holiday_dates_iso": []
+  }
+}
