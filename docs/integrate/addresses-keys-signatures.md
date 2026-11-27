@@ -47,7 +47,7 @@ RPC submission, mempool admission and the wallet SDK reject noncanonical
 recipient fields. Execution enforces the same rule only after governance
 activates `recipient_format_v2_activation_height`; historical execution stays
 unchanged before that height. This source is in the running build
-(`2356caf1`, `sol-exit-r3`, on 26 November; it was in `04600868` before it);
+(`9dcb689e`, `pq-r3`, on 27 November; it was in `2356caf1` and `04600868` before it);
 whether governance has set the height on the devnet is not recorded here.
 
 Use the published parser and checksum rather than lowercasing arbitrary input:
