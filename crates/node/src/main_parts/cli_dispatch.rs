@@ -807,6 +807,8 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "tasknode-bind"
         | "release-manifest-verify"
         | "release-key-create"
+        | "release-build-info"
+        | "release-manifest-create"
         | "release-manifest-sign"
         | "release-keyset-rotation-sign"
         | "observer-key-create"
