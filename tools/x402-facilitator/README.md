@@ -59,6 +59,20 @@ gave out before is unknown, and a payer who already settled a
    ML-DSA-65 signatures are all verified locally before contacting validators.
 3. **Committee rotation:** `pf-fastpay-settled` quorum certificates verify
    against epoch-tagged ML-DSA-65 validator committees and reject stale epochs.
+4. **Limits that cannot be turned against a payer:** asking for a challenge
+   and presenting a payment are each limited per address, in separate counts.
+   The per-payer limit counts only a payment that passed every local check and
+   is not used yet, so junk that names a payer's key, or an old payment of that
+   payer sent again, does not use up the payer's allowance. Every issuer of
+   challenges (each gate, and `POST /v1/challenge`) holds at most
+   `maxOpenChallenges` (default 10,000) and refuses new ones with
+   `503 challenge_store_full` until older ones expire; it never drops a
+   challenge a payer may already have paid for. A challenge lives at most 15
+   minutes. A limiter holds at most `maxRateLimitBuckets` (default 50,000)
+   counters and forgets a counter when its window is over. A full limiter
+   forgets its oldest counter instead of refusing a new key, so a flood of
+   throwaway keys cannot lock other callers out. Payers are counted in a table
+   of their own, so made-up API keys cannot push a payer's counter out of it.
 
 ## Paying Client
 
@@ -90,7 +104,7 @@ once per call and retry.
 # Run automated end-to-end smoke + replay + committee-rotation + MCP tests:
 node tools/x402-facilitator/test_x402_e2e.js
 
-# Run the refusal tests (gate terms, used payments, daemon start, client budget):
+# Run the refusal tests (gate terms, used payments, daemon start, client budget, limits):
 node tools/x402-facilitator/test_x402_refusals.js
 
 # Run standalone facilitator daemon (binds 127.0.0.1:4020 by default).

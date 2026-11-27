@@ -29,6 +29,10 @@ const DOMAIN_CONSENSUS_TX_HASH = Buffer.from('postfiat-l1-v2/consensus-tx-hash/v
 
 const MAX_BODY_BYTES = 256 * 1024;
 const DEFAULT_CHALLENGE_TTL_MS = 5 * 60_000;
+const MAX_CHALLENGE_TTL_MS = 15 * 60_000;
+const DEFAULT_MAX_OPEN_CHALLENGES = 10_000;
+const CHALLENGE_SWEEP_INTERVAL_MS = 60_000;
+const DEFAULT_MAX_RATE_LIMIT_BUCKETS = 50_000;
 
 const SPENT_FILE_MODE = 0o600;
 const SPENT_WRITER_TOKEN_BYTES = 16;
@@ -305,18 +309,29 @@ function syncDirectory(dir) {
 // ---------------------------------------------------------------------------
 
 class SlidingWindowRateLimiter {
-  constructor({ limit = 60, windowMs = 60_000, now = Date.now } = {}) {
+  constructor({ limit = 60, windowMs = 60_000, now = Date.now, maxBuckets = DEFAULT_MAX_RATE_LIMIT_BUCKETS } = {}) {
     this._limit = limit;
     this._windowMs = windowMs;
     this._now = now;
-    this._buckets = new Map();
+    this._maxBuckets = maxBuckets;
+    this._buckets = new Map(); // kept in the order the windows started, oldest first
   }
 
   admit(bucketKey) {
     const nowMs = this._now();
     const key = String(bucketKey || 'unknown');
+    this._dropExpiredBuckets(nowMs);
     let entry = this._buckets.get(key);
-    if (!entry || nowMs - entry.startedAtMs >= this._windowMs) {
+    if (entry && nowMs - entry.startedAtMs >= this._windowMs) {
+      this._buckets.delete(key);
+      entry = undefined;
+    }
+    if (!entry) {
+      // A full table forgets its oldest counter instead of refusing the new key: refusing would
+      // let a flood of throwaway keys lock everybody else out for a whole window.
+      if (this._buckets.size >= this._maxBuckets) {
+        this._buckets.delete(this._buckets.keys().next().value);
+      }
       entry = { startedAtMs: nowMs, count: 0 };
       this._buckets.set(key, entry);
     }
@@ -329,6 +344,17 @@ class SlidingWindowRateLimiter {
     entry.count += 1;
     return { allowed: true, retryAfterMs: 0 };
   }
+
+  size() {
+    return this._buckets.size;
+  }
+
+  _dropExpiredBuckets(nowMs) {
+    for (const [key, entry] of this._buckets) {
+      if (nowMs - entry.startedAtMs < this._windowMs) break;
+      this._buckets.delete(key);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -338,12 +364,28 @@ class SlidingWindowRateLimiter {
 // Each gate keeps its own store, and the public POST /v1/challenge writes to another one, so a
 // gate only ever answers a challenge it issued itself.
 class ChallengeStore {
-  constructor() {
+  constructor({ maxEntries = DEFAULT_MAX_OPEN_CHALLENGES } = {}) {
+    this._maxEntries = maxEntries;
     this._entries = new Map(); // nonceHex -> { required, claimed }
+    this._sweptAtMs = 0;
   }
 
-  add(required) {
+  // A full store refuses the new challenge instead of dropping an older one: a payer may
+  // already have paid for the older one.
+  add(required, nowMs) {
+    const full = this._entries.size >= this._maxEntries;
+    if (full || nowMs - this._sweptAtMs >= CHALLENGE_SWEEP_INTERVAL_MS) this._dropExpired(nowMs);
+    if (this._entries.size >= this._maxEntries) {
+      throw new X402Error(503, 'challenge_store_full', 'too many open payment challenges; retry later');
+    }
     this._entries.set(required.nonce.toString('hex'), { required, claimed: false });
+  }
+
+  _dropExpired(nowMs) {
+    for (const [nonceHex, entry] of this._entries) {
+      if (nowMs > entry.required.expires_at_unix_ms && !entry.claimed) this._entries.delete(nonceHex);
+    }
+    this._sweptAtMs = nowMs;
   }
 
   find(nonce) {
@@ -368,9 +410,6 @@ class ChallengeStore {
     this._entries.delete(nonce.toString('hex'));
   }
 
-  size() {
-    return this._entries.size;
-  }
 }
 
 function sameBytes(a, b) {
@@ -486,11 +525,15 @@ function createFacilitatorCore({
   keyRateLimit = 60,
   rateWindowMs = 60_000,
   challengeTtlMs = DEFAULT_CHALLENGE_TTL_MS,
+  maxOpenChallenges = DEFAULT_MAX_OPEN_CHALLENGES,
+  maxRateLimitBuckets = DEFAULT_MAX_RATE_LIMIT_BUCKETS,
   now = Date.now,
 } = {}) {
-  const ipLimiter = new SlidingWindowRateLimiter({ limit: ipRateLimit, windowMs: rateWindowMs, now });
-  const keyLimiter = new SlidingWindowRateLimiter({ limit: keyRateLimit, windowMs: rateWindowMs, now });
-  const publicChallenges = new ChallengeStore();
+  const limiterOptions = { windowMs: rateWindowMs, maxBuckets: maxRateLimitBuckets, now };
+  const ipLimiter = new SlidingWindowRateLimiter({ limit: ipRateLimit, ...limiterOptions });
+  const keyLimiter = new SlidingWindowRateLimiter({ limit: keyRateLimit, ...limiterOptions });
+  const payerLimiter = new SlidingWindowRateLimiter({ limit: keyRateLimit, ...limiterOptions });
+  const publicChallenges = new ChallengeStore({ maxEntries: maxOpenChallenges });
 
   function checkRateLimits({ remoteIp = 'unknown', apiKey = '' } = {}) {
     const ipRes = ipLimiter.admit(`ip:${remoteIp}`);
@@ -516,7 +559,19 @@ function createFacilitatorCore({
     ttlMs = challengeTtlMs,
     nonce = null,
     challengeStore = publicChallenges,
+    remoteIp = null,
   }) {
+    // Asking for a challenge is counted apart from paying, so a caller who used up its
+    // challenges can still pay the ones it holds.
+    if (remoteIp !== null) {
+      const askRate = ipLimiter.admit(`challenge-ip:${remoteIp}`);
+      if (!askRate.allowed) {
+        throw new X402Error(429, 'rate_limited_ip', `IP rate limit exceeded; retry after ${askRate.retryAfterMs}ms`);
+      }
+    }
+    if (!Number.isSafeInteger(ttlMs) || ttlMs <= 0 || ttlMs > MAX_CHALLENGE_TTL_MS) {
+      throw new X402Error(400, 'invalid_ttl', `ttlMs must be between 1 and ${MAX_CHALLENGE_TTL_MS}`);
+    }
     const hashBuf = Buffer.isBuffer(requestHash) ? requestHash : Buffer.from(String(requestHash || ''), 'hex');
     if (hashBuf.length !== 32) {
       throw new X402Error(400, 'invalid_request_hash', 'requestHash must be 32 bytes');
@@ -546,7 +601,7 @@ function createFacilitatorCore({
       resource_uri: resourceUri,
       facilitator_url: facilitatorUrl,
     };
-    challengeStore.add(required);
+    challengeStore.add(required, nowMs);
     const raw = mp.encodeX402PaymentRequired(required);
     return {
       required,
@@ -662,12 +717,7 @@ function createFacilitatorCore({
       throw new X402Error(401, 'invalid_payer_signature_format', 'signed_payload requires ML-DSA-65 pubkey & signature');
     }
 
-    // Secondary rate-limit keyed on payer pubkey fingerprint to prevent Sybil spam
     const payerKeyFingerprint = mp.sha256(payerPubkeyBuf).toString('hex').slice(0, 16);
-    const payerRate = keyLimiter.admit(`payer:${payerKeyFingerprint}`);
-    if (!payerRate.allowed) {
-      throw new X402Error(429, 'rate_limited_payer', `payer rate limit exceeded; retry after ${payerRate.retryAfterMs}ms`);
-    }
 
     if (sigMsg.lane === mp.PaymentLane.FASTPAY) {
       const order = parsedPayload.order;
@@ -716,6 +766,7 @@ function createFacilitatorCore({
         required: req,
         signature: sigMsg,
         requestHash: memoHash,
+        payerKeyFingerprint,
         orderHash: computedOrderHash,
         txHash: Buffer.alloc(0),
         payerAccount: String(order.payer_account || ''),
@@ -772,6 +823,7 @@ function createFacilitatorCore({
         required: req,
         signature: sigMsg,
         requestHash: memoHash,
+        payerKeyFingerprint,
         orderHash: Buffer.alloc(0),
         txHash: computedTxHash,
         payerAccount: String(tx.payer_account || ''),
@@ -835,6 +887,15 @@ function createFacilitatorCore({
         'payment_already_spent',
         `payment ${verified.dedupKey} has already been settled`
       );
+    }
+
+    // Per-payer limit. Counted only here, for a payment that passed every local check and is
+    // not used yet: junk that names a payer's key, or an old payment of that payer sent again,
+    // cannot use up the payer's allowance. Payers have a table of their own, so made-up API keys
+    // cannot push a payer's counter out of it.
+    const payerRate = payerLimiter.admit(verified.payerKeyFingerprint);
+    if (!payerRate.allowed) {
+      throw new X402Error(429, 'rate_limited_payer', `payer rate limit exceeded; retry after ${payerRate.retryAfterMs}ms`);
     }
 
     let certificateDigest = Buffer.alloc(0);
@@ -999,6 +1060,7 @@ function createFacilitatorServer(core, { maxHeaderSize = 65_536 } = {}) {
           requestHash: body.request_hash_hex,
           resourceUri: body.resource_uri || '',
           ttlMs: body.ttl_ms,
+          remoteIp,
         });
         sendJson(
           res,
@@ -1080,8 +1142,9 @@ function createX402Gate({
   lane = mp.PaymentLane.FASTPAY,
   scheme = mp.X402Scheme.EXACT,
   resourceOrigin = 'http://127.0.0.1',
+  maxOpenChallenges = DEFAULT_MAX_OPEN_CHALLENGES,
 }) {
-  const issuedChallenges = new ChallengeStore();
+  const issuedChallenges = new ChallengeStore({ maxEntries: maxOpenChallenges });
 
   return async function enforceX402(req, res, rawBody) {
     const requestHash = computeHttpRequestHash({
@@ -1091,17 +1154,26 @@ function createX402Gate({
       body: rawBody,
     });
     const sigHeader = req.headers[HEADER_PAYMENT_SIGNATURE];
+    const remoteIp = String(req.socket?.remoteAddress || 'unknown');
     if (!sigHeader) {
-      const challenge = facilitatorCore.issueChallenge({
-        scheme,
-        lane,
-        assetId,
-        maxAmountAtoms: priceAtoms,
-        payTo,
-        requestHash,
-        resourceUri: `${resourceOrigin}${req.url}`,
-        challengeStore: issuedChallenges,
-      });
+      let challenge;
+      try {
+        challenge = facilitatorCore.issueChallenge({
+          scheme,
+          lane,
+          assetId,
+          maxAmountAtoms: priceAtoms,
+          payTo,
+          requestHash,
+          resourceUri: `${resourceOrigin}${req.url}`,
+          challengeStore: issuedChallenges,
+          remoteIp,
+        });
+      } catch (err) {
+        if (!(err instanceof X402Error)) throw err;
+        sendJson(res, err.statusCode, { ok: false, code: err.code, error: err.message });
+        return null;
+      }
       sendJson(
         res,
         402,
@@ -1122,7 +1194,7 @@ function createX402Gate({
       const settled = await facilitatorCore.settlePayment(String(sigHeader), {
         expectedTerms: { scheme, lane, assetId, payTo, priceAtoms, requestHash },
         challengeStore: issuedChallenges,
-        remoteIp: String(req.socket?.remoteAddress || 'unknown'),
+        remoteIp,
         apiKey: String(req.headers['x-facilitator-key'] || ''),
       });
       if (!Buffer.isBuffer(settled.requestHash) || !sameBytes(settled.requestHash, requestHash)) {

@@ -18,6 +18,7 @@ const {
   CommitteeRegistry,
   FileSpentStore,
   MemorySpentStore,
+  SlidingWindowRateLimiter,
   X402Error,
   buildX402InlineMemo,
   computeHttpRequestHash,
@@ -40,6 +41,8 @@ const START_CLOCK_MS = 1764202000000;
 const FASTPAY_FEE_ATOMS = 2_000;
 const CONSENSUS_FEE_ATOMS = 25;
 const SLOW_SETTLEMENT_MS = 150;
+const CHALLENGE_TTL_MS = 5 * 60_000;
+const FAR_FUTURE_TTL_MS = 10 ** 12;
 const FACILITATOR_PATH = path.join(__dirname, 'facilitator.js');
 const DAEMON_PATH = path.join(__dirname, 'server.js');
 const DAEMON_START_TIMEOUT_MS = 5_000;
@@ -154,7 +157,7 @@ function runNode(args) {
 
 // One facilitator core, its public HTTP server, and a resource server with one gate per path.
 // `beforeServe` runs with the settlement result right before the resource is sent.
-async function startStack({ settlementAdapter = null, coreOptions = {}, beforeServe = () => {} } = {}) {
+async function startStack({ settlementAdapter = null, coreOptions = {}, gateOptions = {}, beforeServe = () => {} } = {}) {
   const clock = { nowMs: START_CLOCK_MS };
   const backendCalls = { fastpay: 0, consensus: 0 };
   const adapter = settlementAdapter || {
@@ -180,7 +183,7 @@ async function startStack({ settlementAdapter = null, coreOptions = {}, beforeSe
   });
   const gates = {};
   for (const [urlPath, terms] of Object.entries(GATE_TERMS_BY_PATH)) {
-    gates[urlPath] = createX402Gate({ facilitatorCore: core, ...terms });
+    gates[urlPath] = createX402Gate({ facilitatorCore: core, ...terms, ...gateOptions });
   }
   const servedBodies = [];
   const resourceServer = http.createServer({ maxHeaderSize: 65_536 }, async (req, res) => {
@@ -845,6 +848,165 @@ async function clientRefusesTermsTheCallerDidNotAgreeTo({ payerKeys }) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Limits: not usable against a payer, and bounded
+// ---------------------------------------------------------------------------
+
+function junkPaymentNaming(payerPublicKey, required, requestHash) {
+  const signedPayload = Buffer.from(
+    JSON.stringify({
+      order: { chain_id: 'x' },
+      payer_pubkey_b64: Buffer.from(payerPublicKey).toString('base64url'),
+      signature_b64: Buffer.alloc(mp.ML_DSA_65_SIGNATURE_BYTES).toString('base64url'),
+    })
+  );
+  return wrapPayment(required, requestHash, { order_hash: Buffer.alloc(32), signed_payload: signedPayload });
+}
+
+// Unsigned payloads that name a payer's key, sent from several addresses, must not get that
+// payer's valid payment refused with 429.
+async function junkAndOldPaymentsDoNotCountAgainstAPayer({ payerKeys }) {
+  const payerLimit = 2;
+  const stack = await startStack({ coreOptions: { keyRateLimit: payerLimit } });
+  try {
+    const requestHash = requestHashFor('/cheap', '{"prompt":"limits"}');
+    const freshPayment = async () => {
+      const { required } = stack.core.issueChallenge({ ...CHEAP_TERMS, maxAmountAtoms: CHEAP_TERMS.priceAtoms, requestHash });
+      return { required, payment: await payFor(required, requestHash, payerKeys) };
+    };
+    const rejectionOf = (run) => run().then(() => 'settled', (err) => err.code);
+
+    for (let i = 0; i < payerLimit + 3; i += 1) {
+      const { required } = stack.core.issueChallenge({ ...CHEAP_TERMS, maxAmountAtoms: CHEAP_TERMS.priceAtoms, requestHash });
+      const junk = junkPaymentNaming(payerKeys.publicKey, required, requestHash);
+      const remoteIp = `10.0.0.${i}`;
+      assert.equal(await rejectionOf(() => stack.core.verifyPaymentLocally(junk, { remoteIp })), 'chain_id_mismatch');
+      assert.equal(await rejectionOf(() => stack.core.settlePayment(junk, { remoteIp })), 'chain_id_mismatch');
+    }
+
+    const first = await freshPayment();
+    assert.equal(await rejectionOf(() => stack.core.settlePayment(first.payment)), 'settled');
+
+    // The payer's own payment, already used, sent again by somebody who saw it.
+    for (let i = 0; i < payerLimit + 3; i += 1) {
+      const replay = () => stack.core.settlePayment(first.payment, { expectedRequired: first.required, remoteIp: `10.0.1.${i}` });
+      assert.equal(await rejectionOf(replay), 'payment_already_spent');
+    }
+
+    const second = await freshPayment();
+    assert.equal(await rejectionOf(() => stack.core.settlePayment(second.payment)), 'settled');
+
+    // The limit still holds for what the payer really pays.
+    const third = await freshPayment();
+    assert.equal(await rejectionOf(() => stack.core.settlePayment(third.payment)), 'rate_limited_payer');
+    assert.equal(stack.backendCalls.fastpay, payerLimit);
+  } finally {
+    await stack.close();
+  }
+}
+
+async function openChallengesHaveABoundAndAnExpiry({ payerKeys }) {
+  const maxOpenChallenges = 3;
+  const stack = await startStack({ coreOptions: { maxOpenChallenges }, gateOptions: { maxOpenChallenges } });
+  try {
+    const body = '{"prompt":"bounded"}';
+    const requestHash = requestHashFor('/cheap', body);
+    const issue = (extra = {}) =>
+      stack.core.issueChallenge({ ...CHEAP_TERMS, maxAmountAtoms: CHEAP_TERMS.priceAtoms, requestHash, ...extra });
+    const isFull = (err) => err instanceof X402Error && err.statusCode === 503 && err.code === 'challenge_store_full';
+
+    // The public store: full after three, free again once they expired, and no challenge may
+    // ask to live longer than the limit.
+    for (let i = 0; i < maxOpenChallenges; i += 1) issue();
+    assert.throws(() => issue(), isFull);
+    stack.clock.nowMs += CHALLENGE_TTL_MS + 1;
+    for (let i = 0; i < maxOpenChallenges; i += 1) issue();
+    assert.throws(() => issue(), isFull);
+    assert.throws(() => issue({ ttlMs: FAR_FUTURE_TTL_MS }), (err) => err instanceof X402Error && err.code === 'invalid_ttl');
+    const overHttp = await post(stack.facilitatorPort, '/v1/challenge', {
+      body: JSON.stringify({ max_amount_atoms: 1, pay_to: PAYEE, request_hash_hex: requestHash.toString('hex'), ttl_ms: FAR_FUTURE_TTL_MS }),
+    });
+    assertRefused(overHttp, 400, 'invalid_ttl');
+
+    // A gate's store: a full store refuses new challenges and keeps the ones it gave out.
+    const firstChallenge = await challengeAt(stack, '/cheap', body);
+    for (let i = 1; i < maxOpenChallenges; i += 1) await challengeAt(stack, '/cheap', body);
+    assertRefused(await post(stack.resourcePort, '/cheap', { body }), 503, 'challenge_store_full');
+    const payment = await payFor(firstChallenge, requestHash, payerKeys);
+    const paid = await presentAt(stack, '/cheap', body, payment);
+    assert.equal(paid.statusCode, 200, JSON.stringify(paid.body));
+
+    stack.clock.nowMs += CHALLENGE_TTL_MS + 1;
+    for (let i = 0; i < maxOpenChallenges; i += 1) await challengeAt(stack, '/cheap', body);
+    assertRefused(await post(stack.resourcePort, '/cheap', { body }), 503, 'challenge_store_full');
+  } finally {
+    await stack.close();
+  }
+}
+
+function limiterCountersHaveABoundAndAnExpiry() {
+  const windowMs = 1_000;
+  const maxBuckets = 3;
+  let nowMs = START_CLOCK_MS;
+  const limiter = new SlidingWindowRateLimiter({ limit: 1, windowMs, maxBuckets, now: () => nowMs });
+
+  assert.equal(limiter.admit('a').allowed, true);
+  assert.equal(limiter.admit('a').allowed, false, 'one request per window');
+  for (const key of ['b', 'c', 'd']) {
+    nowMs += 1;
+    assert.equal(limiter.admit(key).allowed, true, 'a new key is never locked out by a full table');
+  }
+  assert.equal(limiter.admit('a').allowed, true, 'a full table forgets its oldest counter');
+  assert.equal(limiter.admit('d').allowed, false, 'and keeps the newer ones');
+  assert.equal(limiter.size(), maxBuckets);
+
+  nowMs += windowMs;
+  assert.equal(limiter.admit('d').allowed, true);
+  assert.equal(limiter.size(), 1, 'counters of a finished window are gone');
+}
+
+// Made-up API keys fill a table of their own. They must not push a payer's counter out of the
+// payer table, which would reset that payer's count.
+async function madeUpApiKeysDoNotResetAPayersCount({ payerKeys }) {
+  const maxRateLimitBuckets = 4;
+  const stack = await startStack({ coreOptions: { maxRateLimitBuckets, keyRateLimit: 1 } });
+  try {
+    const requestHash = requestHashFor('/cheap', '{"prompt":"api keys"}');
+    const settleFresh = async (options) => {
+      const { required } = stack.core.issueChallenge({ ...CHEAP_TERMS, maxAmountAtoms: CHEAP_TERMS.priceAtoms, requestHash });
+      const payment = await payFor(required, requestHash, payerKeys);
+      return stack.core.settlePayment(payment, options).then(() => 'settled', (err) => err.code);
+    };
+
+    assert.equal(await settleFresh(), 'settled');
+    for (let i = 0; i < maxRateLimitBuckets * 2; i += 1) {
+      const junk = () => stack.core.verifyPaymentLocally('junk', { apiKey: `made-up-${i}` });
+      await assert.rejects(junk, (err) => err.code === 'invalid_payment_signature_header');
+    }
+    assert.equal(await settleFresh(), 'rate_limited_payer', 'the payer is still counted after the flood of keys');
+  } finally {
+    await stack.close();
+  }
+}
+
+async function unpaidRequestsAreLimitedPerAddress({ payerKeys }) {
+  const ipRateLimit = 3;
+  const stack = await startStack({ coreOptions: { ipRateLimit } });
+  try {
+    const body = '{"prompt":"unpaid"}';
+    const firstChallenge = await challengeAt(stack, '/cheap', body);
+    for (let i = 1; i < ipRateLimit; i += 1) await challengeAt(stack, '/cheap', body);
+    assertRefused(await post(stack.resourcePort, '/cheap', { body }), 429, 'rate_limited_ip');
+
+    // Asking and paying are counted apart, so the challenges already given out can be paid.
+    const payment = await payFor(firstChallenge, requestHashFor('/cheap', body), payerKeys);
+    const paid = await presentAt(stack, '/cheap', body, payment);
+    assert.equal(paid.statusCode, 200, JSON.stringify(paid.body));
+  } finally {
+    await stack.close();
+  }
+}
+
 const CASES = [
   ['a gate serves a payment for its own challenge once', gateServesItsOwnChallengeOnce],
   ['a gate refuses a payment made for another gate', gateRefusesPaymentMadeForAnotherGate],
@@ -865,6 +1027,11 @@ const CASES = [
   ['the daemon refuses to start without a durable store', daemonRefusesToStartWithoutADurableStore],
   ['the client budget is a total across calls', clientBudgetIsATotalAcrossCalls],
   ['the client refuses terms the caller did not agree to', clientRefusesTermsTheCallerDidNotAgreeTo],
+  ['junk and old payments do not count against a payer', junkAndOldPaymentsDoNotCountAgainstAPayer],
+  ['open challenges have a bound and an expiry', openChallengesHaveABoundAndAnExpiry],
+  ['limiter counters have a bound and an expiry', limiterCountersHaveABoundAndAnExpiry],
+  ['made-up API keys do not reset the count of a payer', madeUpApiKeysDoNotResetAPayersCount],
+  ['unpaid requests are limited per address', unpaidRequestsAreLimitedPerAddress],
 ];
 
 async function main() {
