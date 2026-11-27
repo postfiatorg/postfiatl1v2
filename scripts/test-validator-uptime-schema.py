@@ -489,6 +489,13 @@ def run_feed_tests(schema: Draft202012Validator, feed: dict[str, Any], keyset: d
     result = check(split)
     assert no_quorum == ["validator-3"] == result["validators_without_quorum"] and len(result["validators"]) == 5
     cases += 1
+    abstained = copy.deepcopy(feed)
+    for att in abstained["observer_attestations"]:
+        att["validator_claims"] = []
+    abstained["validators"] = []
+    resign_all(abstained)
+    assert check(abstained)["validators"] == []
+    cases += 1
     # Middle score of three, lower score of two.
     scores = copy.deepcopy(feed)
     for index, signed in enumerate((199, 197, 198)):
