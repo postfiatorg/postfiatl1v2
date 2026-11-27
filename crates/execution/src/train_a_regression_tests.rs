@@ -1662,3 +1662,67 @@ fn pillar2_fastpay_fee_v1_formula_admission_and_account_soft_cap() {
     .unwrap_err();
     assert!(matches!(err, OwnedTransferError::InsufficientFee { .. }));
 }
+
+/// Point 4 (A9, B01): before NFT scaling is active, `nft_burn` keeps main's
+/// check order (burned, owner, burn-locked); the new order applies only after.
+#[test]
+fn nft_burn_keeps_the_old_check_order_until_nft_scaling_is_active() {
+    let genesis = test_genesis();
+    let issuer = test_key(71);
+    let owner = test_key(72);
+    let other = test_key(73);
+    let mut ledger = LedgerState::new(vec![
+        funded_account(&issuer, 10_000_000),
+        funded_account(&owner, 10_000_000),
+        funded_account(&other, 10_000_000),
+    ]);
+    let mint = sign_nft_tx(
+        &genesis,
+        &issuer,
+        1,
+        50_000,
+        NFT_MINT_TRANSACTION_KIND,
+        NftTransactionOperation::NftMint(NftMintOperation {
+            issuer: issuer.address.clone(),
+            collection_id: "COL".to_string(),
+            serial: 1,
+            owner: owner.address.clone(),
+            metadata_hash: "11".repeat(48),
+            metadata_uri: "ipfs://x".to_string(),
+            flags: NFT_FLAG_TRANSFERABLE,
+            collection_flags: NFT_COLLECTION_FLAG_BURN_LOCKED,
+            issuer_transfer_fee: 0,
+        }),
+    );
+    let strict = AssetExecutionCompatibility::strict();
+    let minted =
+        execute_nft_transaction_with_compatibility(&genesis, &mut ledger, &mint, 5, strict);
+    assert!(minted.accepted, "{minted:?}");
+    let id = nft_id(&genesis.chain_id, &issuer.address, "COL", 1).expect("nft id");
+    let burn = sign_nft_tx(
+        &genesis,
+        &other,
+        1,
+        50_000,
+        NFT_BURN_TRANSACTION_KIND,
+        NftTransactionOperation::NftBurn(NftBurnOperation {
+            nft_id: id,
+            owner: other.address.clone(),
+            issuer: String::new(),
+        }),
+    );
+    let scheduled = strict.with_nft_scaling_v1_activation_height(Some(10));
+    for (height, compatibility) in [(6, strict), (6, scheduled), (9, scheduled)] {
+        let receipt = execute_nft_transaction_with_compatibility(
+            &genesis,
+            &mut ledger.clone(),
+            &burn,
+            height,
+            compatibility,
+        );
+        assert_eq!(receipt.code, "nft_owner_mismatch", "{receipt:?}");
+    }
+    let receipt =
+        execute_nft_transaction_with_compatibility(&genesis, &mut ledger, &burn, 10, scheduled);
+    assert_eq!(receipt.code, "nft_collection_burn_locked", "{receipt:?}");
+}
