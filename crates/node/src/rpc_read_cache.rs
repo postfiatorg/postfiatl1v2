@@ -135,7 +135,10 @@ fn rpc_replica_lag(
             }
         }
     };
-    let age = now_unix.saturating_sub(record.checked_at_unix);
+    if record.checked_at_unix > now_unix || local_height > record.source_height {
+        return RpcReplicaLag::Unknown { reason: "source height or timestamp inconsistent with local replica".into() };
+    }
+    let age = now_unix - record.checked_at_unix;
     if age > RPC_REPLICA_SOURCE_TIP_MAX_AGE_SECS {
         return RpcReplicaLag::Unknown {
             reason: format!("the source tip record is {age}s old; the catch-up job is not running"),
@@ -161,9 +164,10 @@ fn rpc_replica_lag_refusal(
     if !context.rpc_profile.is_replica() {
         return None;
     }
-    let local_height = rpc_serve_cached_status(&context.data_dir, &context.health_cache)
-        .ok()
-        .map(|(report, _)| report.block_height)?;
+    let local_height = match postfiat_storage::NodeStore::new(&context.data_dir).read_chain_tip() {
+        Ok(tip) => tip.height,
+        Err(_) => return Some(rpc_serve_error_response(request_id, "replica_lagging", "cannot read local replica tip")),
+    };
     match rpc_replica_lag(
         &context.data_dir,
         local_height,
@@ -192,6 +196,7 @@ fn rpc_replica_lag_refusal(
 
 #[derive(Debug, Clone)]
 struct RpcCachedReadEntry {
+    inserted_at: std::time::Instant,
     height: u64,
     approx_bytes: usize,
     response: RpcResponse,
@@ -217,7 +222,7 @@ impl RpcServeReadCache {
     ) -> Option<RpcResponse> {
         let key = (method.to_string(), canonical_params.to_string());
         if let Some(entry) = self.entries.get(&key) {
-            if entry.height == height {
+            if entry.height == height && entry.inserted_at.elapsed() < Duration::from_secs(2) {
                 self.hits = self.hits.saturating_add(1);
                 let mut response = entry.response.clone();
                 response.id = request_id.to_string();
@@ -257,6 +262,7 @@ impl RpcServeReadCache {
         self.entries.insert(
             key,
             RpcCachedReadEntry {
+                inserted_at: std::time::Instant::now(),
                 height,
                 approx_bytes,
                 response,
@@ -411,20 +417,9 @@ fn rpc_replica_lag_refusal_for(
     rpc_replica_lag_refusal(request_id, context)
 }
 
-/// What a replica may answer from its cache.
-///
-/// A replica's store has one writer, the catch-up job, and it writes only by
-/// applying a certified block. Nothing changes between two blocks: owned-lane
-/// effects and pending transactions live on validators and reach a replica
-/// only inside a block. So every read of committed state is a pure function
-/// of the committed height, and an answer read at a height stays exact until
-/// the height moves. (This is not true of a validator, which is why the
-/// standard profile never comes here.)
-///
-/// `metrics` carries the clock and the server's own counters and is always
-/// read fresh. `receipts` takes its own lease and is not cached.
+/// Cache only queries derived solely from committed ledger state.
 fn is_height_pure_read(request: &RpcRequest) -> bool {
-    !matches!(request.method.as_str(), "metrics" | "receipts")
+    matches!(request.method.as_str(), "validators" | "manifests" | "vault_bridge_route" | "blocks")
         && is_in_process_standard_read_method(request)
 }
 
@@ -816,9 +811,7 @@ fn run_rpc_serve_in_process_read(
         .unwrap_or_else(|| request.params.to_string());
 
     let height_before = if cacheable {
-        rpc_serve_cached_status(&context.data_dir, &context.health_cache)
-            .ok()
-            .map(|(report, _)| report.block_height)
+        postfiat_storage::NodeStore::new(&context.data_dir).read_chain_tip().ok().map(|tip| tip.height)
     } else {
         None
     };
@@ -1013,7 +1006,7 @@ mod rpc_read_cache_tests {
             RpcReplicaLag::Lagging { lag_blocks: 6, local_height: 100 }
         );
         // A replica ahead of the last record is not behind.
-        assert_eq!(rpc_replica_lag(&dir, 200, 5, now), RpcReplicaLag::Within { lag_blocks: 0 });
+        assert!(matches!(rpc_replica_lag(&dir, 200, 5, now), RpcReplicaLag::Unknown { .. }));
         // The catch-up job stopped: the replica no longer knows.
         write(100, now - RPC_REPLICA_SOURCE_TIP_MAX_AGE_SECS - 1);
         assert!(matches!(rpc_replica_lag(&dir, 100, 5, now), RpcReplicaLag::Unknown { .. }));
@@ -1032,11 +1025,12 @@ mod rpc_read_cache_tests {
     fn cache_serves_a_read_only_at_the_height_it_was_read_at() {
         let request = |method: &str, params: serde_json::Value| RpcRequest::new("id", method, params);
         for method in [
-            "validators", "manifests", "vault_bridge_route", "blocks", "account", "account_assets",
-            "account_lines", "account_tx", "fee", "ledger", "tx", "bridge_status", "vault_bridge_status",
-            "block_vote_records",
+            "validators", "manifests", "vault_bridge_route", "blocks",
         ] {
             assert!(is_height_pure_read(&request(method, serde_json::json!({}))), "{method}");
+        }
+        for method in ["block_vote_records", "account_tx_index_status", "account_tx", "bridge_status"] {
+            assert!(!is_height_pure_read(&request(method, serde_json::json!({}))), "{method}");
         }
         // The clock and the server's own counters; a read with its own lease; a full-history audit;
         // and anything that is not a read of this path.
@@ -1056,6 +1050,8 @@ mod rpc_read_cache_tests {
         assert!(cache.get_at_height(8, "validators", "{}", "x").is_none(), "the height moved");
         assert!(cache.get_at_height(6, "validators", "{}", "x").is_none(), "an earlier height");
         assert!(cache.get_at_height(7, "validators", "{\"a\":1}", "x").is_none(), "other params");
+        cache.entries.get_mut(&("validators".into(), "{}".into())).unwrap().inserted_at -= Duration::from_secs(3);
+        assert!(cache.get_at_height(7, "validators", "{}", "expired").is_none());
     }
 
     #[test]

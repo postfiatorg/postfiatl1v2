@@ -18,8 +18,8 @@ head moved between two reads that straddle midnight, or two reads are more than
 incomplete. Nothing is inferred for the time before the observer started.
 
 How a vote is counted: a validator is credited for a block when its vote is in
-the block's precommit or prepare certificate, or when the proposer's vote
-record for that block lists it as accepted (also after the quorum closed).
+the block's precommit or prepare certificate. Unsigned late-vote reports are
+kept for diagnostics. A certificate shortfall alone cannot authorize a penalty.
 
 Signing and verifying are done by `postfiat-node` (observer-uptime-sign,
 observer-uptime-bundle, observer-uptime-verify).
@@ -42,7 +42,7 @@ import urllib.request
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validator_uptime_contract as contract  # noqa: E402
 
-STATE_SCHEMA = "postfiat-validator-uptime-observer-state-v1"
+STATE_SCHEMA = "postfiat-validator-uptime-observer-state-v2"
 RPC_VERSION = "postfiat-local-rpc-v1"
 MAX_OBSERVATION_GAP_SECONDS = 900
 BLOCKS_PAGE = 8
@@ -63,8 +63,8 @@ QUORUM_POLICY = {
     "indeterminate_behavior": "block_new_bindings_and_credits_preserve_existing_access",
 }
 WINDOW_SPEC = {
-    "metric_version": "accepted-votes-observer-brackets-v1",
-    "credit_sources": ["precommit_certificate", "prepare_certificate", "proposer_vote_record"],
+    "metric_version": "certificate-votes-observer-brackets-v2",
+    "credit_sources": ["precommit_certificate", "prepare_certificate"],
     "time_basis": "observer_brackets",
     "max_observation_gap_seconds": MAX_OBSERVATION_GAP_SECONDS,
     "evaluation_horizon_days": contract.EVALUATION_HORIZON_DAYS,
@@ -176,6 +176,9 @@ def load_state(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
     state = json.loads(path.read_text(encoding="utf-8"))
+    if state.get("schema") == "postfiat-validator-uptime-observer-state-v1":
+        # Legacy cached counts combine unsigned and certificate votes inseparably.
+        return None
     if state.get("schema") != STATE_SCHEMA:
         raise ObserverError(f"{path} is not an observer state file")
     return state
@@ -228,6 +231,7 @@ def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now:
             "started_at": contract.format_utc(now),
             "days": {},
             "validators": {},
+            "absent_since": {},
         }
         day_entry(state, today)["complete"] = False
     else:
@@ -248,7 +252,7 @@ def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now:
                 if header["parent_hash"] != parent:
                     raise ObserverError(f"block {header['height']} does not follow the block this observer saw last")
                 parent = header["block_hash"]
-            if last_poll.date() != today:
+            if last_poll.date() != today or state["registry_root"] != registry_reply["registry_root"] or state["registry"] != registry:
                 # The head moved across midnight: these blocks cannot be dated.
                 mark_incomplete(state, last_poll.date(), today)
             elif not gap_too_long:
@@ -279,7 +283,7 @@ def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now:
 
 
 def read_vote_records(state: dict[str, Any], sources: list[Source], today: dt.date) -> None:
-    """Add the votes the certificates left out. A source holds records only for the blocks it proposed."""
+    """Collect diagnostic claims about late votes without changing certificate counts."""
     wanted: dict[int, dict[str, Any]] = {}
     for date_text, day in state["days"].items():
         if (today - contract.parse_date(date_text)).days > VOTE_RECORD_RETRY_DAYS:
@@ -311,7 +315,7 @@ def read_vote_records(state: dict[str, Any], sources: list[Source], today: dt.da
                     for entry in record.get("entries", [])
                     if entry.get("outcome") in CREDITED_OUTCOMES and entry.get("validator") in block["registry"]
                 }
-                block["credited"] = sorted(set(block["credited"]) | voted)
+                block["reported_voters"] = sorted(voted)
                 block["record"] = True
             while index < len(heights) and heights[index] < start + VOTE_RECORDS_PAGE:
                 index += 1
@@ -391,18 +395,36 @@ def build_rows(state: dict[str, Any], now: dt.datetime) -> list[dict[str, Any]]:
             # A validator id under a new key is a new validator.
             previous = None
         first_text = previous["first_active_date"] if previous else None
-        first = contract.parse_date(first_text) if first_text else today
+        # The current registry does not carry ratification dates. A first sighting
+        # cannot create a ramp. Score a full observation window for unknown dates.
+        first = contract.parse_date(first_text) if first_text else today - contract.EVALUATION_HORIZON_DAYS * contract.DAY
+        if not previous and vid in state["registry"]:
+            previous = dict(access_state="active", first_active_date=None, grace_started_at=None, recovery_floor_date=None)
+        absent = state.setdefault("absent_since", {})
+        if vid in state["registry"]:
+            absent.pop(vid, None)
+        else:
+            removed = contract.parse_date(absent.setdefault(vid, today.isoformat()))
+            if previous["access_state"] == "revoked" and (today - removed).days >= contract.EVALUATION_HORIZON_DAYS:
+                state["validators"].pop(vid, None)
+                absent.pop(vid, None)
+                continue
         row = contract.next_row(
             previous,
             validator_id=vid,
             ml_dsa_public_key=key,
             registry_active=vid in state["registry"],
-            days=days_for(state, vid, first, today) if first_text else [],
+            days=days_for(state, vid, first, today),
             window_end=today,
             observed_at=now,
         )
         window_start = today - contract.EVALUATION_HORIZON_DAYS * contract.DAY
         contract.check_row(row, window_start, today)
+        # A missing certificate signature is inconclusive: an authenticated late
+        # vote could change a failing score. Preserve the last lifecycle state.
+        if vid in state["registry"] and any(day["complete"] and day["participation_bps"] is not None
+                and day["participation_bps"] < contract.LIVENESS_THRESHOLD_BPS for day in row["days"]):
+            continue
         rows.append(row)
         state["validators"][vid] = {k: row[k] for k in FACT_KEYS if k != "days"}
     return rows
@@ -458,14 +480,38 @@ def parse_now(raw: str | None) -> dt.datetime:
     return now.replace(microsecond=0)
 
 
+def restore_checkpoint(state: dict, feed_path: str, keyset_path: str, keyset_id: str, node_bin: str, now: dt.datetime) -> None:
+    # Verify exactly the bytes from which we import lifecycle metadata.
+    raw = Path(feed_path).read_bytes()
+    feed = json.loads(raw)
+    if feed["chain"] != state["chain"] or feed["quorum_policy"]["observer_keyset_id"] != keyset_id:
+        raise ObserverError("bootstrap feed differs from observed chain or configured generation")
+    with tempfile.TemporaryDirectory() as tmp:
+        snapshot = Path(tmp) / "checkpoint.json"
+        snapshot.write_bytes(raw)
+        verified = subprocess.run([node_bin, "observer-uptime-verify", "--feed-file", str(snapshot),
+                                  "--keyset-file", keyset_path, "--now-unix", str(int(now.timestamp()))],
+                                  capture_output=True, text=True, check=False)
+    if verified.returncode or json.loads(verified.stdout)["indeterminate"]:
+        raise ObserverError("bootstrap checkpoint failed quorum verification")
+    for row in feed["validators"]:
+        if state["registry"].get(row["validator_id"]) == row["ml_dsa_public_key"]:
+            state["validators"][row["validator_id"]] = {k: row[k] for k in FACT_KEYS if k != "days"}
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     state_file, output = Path(args.state_file), Path(args.output)
     for path in (state_file, output):
         refuse_validator_data_dir(path.parent)
     now = parse_now(args.now)
-    state = poll(load_state(state_file), [Source(spec) for spec in args.source], args.network, now)
+    previous = load_state(state_file)
+    state = poll(previous, [Source(spec) for spec in args.source], args.network, now)
+    if bool(args.bootstrap_feed) != bool(args.bootstrap_keyset):
+        raise ObserverError("bootstrap requires a feed and its independently pinned keyset")
+    if previous is None and args.bootstrap_feed:
+        restore_checkpoint(state, args.bootstrap_feed, args.bootstrap_keyset, args.keyset_id, args.node_bin, now)
     rows = build_rows(state, now)
-    if rows:
+    if state["last_height"] > 0:
         envelope = attest(state, rows, args.keyset_id, Path(args.key_file), args.node_bin, now)
         atomic_write_json(output, envelope)
     # The state is written last: a run that failed above is repeated from the same state.
@@ -518,12 +564,14 @@ def main(argv: list[str] | None = None) -> int:
 
     run = sub.add_parser("run", help="read the chain once and write one signed attestation")
     run.add_argument("--source", action="append", required=True,
-                     help="read-only RPC: tcp://host:port or https://host/rpc. Repeat for every validator whose vote records should count; the one furthest ahead gives the blocks")
+                     help="read-only RPC: tcp://host:port or https://host/rpc. Repeat for sources of diagnostic vote records; the one furthest ahead gives the blocks")
     run.add_argument("--network", required=True, choices=["l1-devnet", "l1-testnet", "l1-mainnet"])
     run.add_argument("--keyset-id", required=True, help="keyset_id of the pinned observer keyset this observer is in")
     run.add_argument("--key-file", required=True, help="this observer's key file (observer-key-create)")
     run.add_argument("--state-file", required=True)
     run.add_argument("--output", required=True, help="where the signed attestation is written")
+    run.add_argument("--bootstrap-feed", help="fresh quorum-signed checkpoint for a first run")
+    run.add_argument("--bootstrap-keyset", help="independently pinned keyset for the bootstrap checkpoint")
     run.add_argument("--node-bin", default="postfiat-node")
     run.add_argument("--now", help=argparse.SUPPRESS)  # tests
     run.set_defaults(handler=cmd_run)

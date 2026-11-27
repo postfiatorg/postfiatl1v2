@@ -2264,7 +2264,13 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 max_blocks,
                 timeout_ms,
             };
-            let report = if command == "rpc-catch-up-certified-delta" {
+            let tip_path = flag_value(flags, "--source-tip-file").map(Path::new);
+            let audit_stamp = tip_path.map(|tip| tip.with_extension("full-audit"));
+            let audit_due = audit_stamp.as_ref().is_some_and(|stamp| {
+                !std::fs::metadata(stamp).and_then(|m| m.modified()).ok()
+                    .and_then(|t| t.elapsed().ok()).is_some_and(|age| age.as_secs() < 86400)
+            });
+            let result = if command == "rpc-catch-up-certified-delta" {
                 let expected_height = flag_value(flags, "--expected-height")
                     .ok_or("missing --expected-height")?
                     .parse::<u64>()
@@ -2280,11 +2286,23 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                     expected_height,
                     expected_block_hash,
                     expected_state_root,
-                )?
-            } else if flag_present(flags, "--follow") {
-                rpc_catch_up_follow(options)?
+                )
+            } else if flag_present(flags, "--follow") && !audit_due {
+                rpc_catch_up_follow(options)
             } else {
-                rpc_catch_up(options)?
+                rpc_catch_up(options)
+            };
+            let report = match result {
+                Ok(report) => report,
+                Err(error) => {
+                    if let Some(path) = tip_path {
+                        match std::fs::remove_file(path) {
+                            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(format!("{error}; invalidating readiness failed: {e}")),
+                            _ => {}
+                        }
+                    }
+                    return Err(error);
+                }
             };
             // A replica's `rpc-serve` reads this record to know how far behind it is.
             if let Some(tip_file) = flag_value(flags, "--source-tip-file") {
@@ -2295,6 +2313,9 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                     .as_u64()
                     .ok_or("rpc catch-up report has no local_height_after")?;
                 write_rpc_replica_source_tip(Path::new(tip_file), source_height, local_height)?;
+                if report["audit_mode"] == "full" && report["full_verification_count"].as_u64().unwrap_or(0) > 0 {
+                    if let Some(stamp) = audit_stamp { std::fs::write(stamp, b"audited\n").map_err(|e| e.to_string())?; }
+                }
             }
             let json = serde_json::to_string_pretty(&report)
                 .map_err(|error| format!("rpc catch-up serialization failed: {error}"))?;

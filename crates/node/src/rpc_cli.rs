@@ -5175,6 +5175,17 @@ fn rpc_catch_up_certified_delta(
     )
 }
 
+fn validate_source_progress(local_height: u64, local_hash: &str, local_root: &str,
+    source_height: u64, source_hash: &str, source_root: &str) -> Result<(),String> {
+    if source_height < local_height {
+        return Err(format!("source height {source_height} is behind local height {local_height}"));
+    }
+    if source_height == local_height && (local_hash != source_hash || local_root != source_root) {
+        return Err(format!("source and local commitments disagree at height {local_height}"));
+    }
+    Ok(())
+}
+
 fn rpc_catch_up_with_audit(
     options: RpcCatchUpOptions,
     audit_mode: RpcCatchUpAuditMode,
@@ -5199,7 +5210,9 @@ fn rpc_catch_up_with_audit(
 
     let local_height = local_before.block_height;
     let source_height = source_status.block_height;
-    if source_height <= local_height {
+    validate_source_progress(local_height, &local_before.block_tip_hash, &local_before.state_root,
+        source_height, &source_status.block_tip_hash, &source_status.state_root)?;
+    if source_height == local_height {
         if matches!(audit_mode, RpcCatchUpAuditMode::CertifiedDelta { .. }) {
             return Err(format!(
                 "rpc catch-up certified delta requires a new block: local height {local_height}, source height {source_height}"
@@ -5355,6 +5368,11 @@ fn rpc_catch_up_with_audit(
         data_dir: options.data_dir.clone(),
     })
     .map_err(|error| format!("rpc catch-up final status failed: {error}"))?;
+    if local_after.block_height == source_height &&
+        (local_after.block_tip_hash != source_status.block_tip_hash || local_after.state_root != source_status.state_root) {
+        return Err(format!("source and applied commitments disagree at height {source_height}"));
+    }
+
     let (audit_mode_label, full_verification_count, verification) = match &audit_mode {
         RpcCatchUpAuditMode::Full => (
             "full",

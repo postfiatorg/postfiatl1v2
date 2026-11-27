@@ -3602,6 +3602,14 @@ mod rpc_cli_tests {
     }
 
     #[test]
+    fn source_progress_requires_equal_commitments_at_a_shared_height() {
+        assert!(validate_source_progress(4, "a", "b", 4, "a", "b").is_ok());
+        assert!(validate_source_progress(4, "a", "b", 3, "a", "b").is_err());
+        assert!(validate_source_progress(4, "a", "b", 4, "c", "b").is_err());
+        assert!(validate_source_progress(4, "a", "b", 4, "a", "c").is_err());
+    }
+
+    #[test]
     fn rpc_catch_up_final_verification_fails_closed_on_history_mismatch() {
         let data_dir = rpc_cli_test_data_dir("rpc-catch-up-final-verification");
         init(InitOptions {
