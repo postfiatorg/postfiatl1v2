@@ -88,13 +88,12 @@
       ],
       "properties": {
         "metric_version": {
-          "const": "accepted-votes-observer-brackets-v1"
+          "const": "certificate-votes-observer-brackets-v2"
         },
         "credit_sources": {
           "const": [
             "precommit_certificate",
-            "prepare_certificate",
-            "proposer_vote_record"
+            "prepare_certificate"
           ]
         },
         "time_basis": {

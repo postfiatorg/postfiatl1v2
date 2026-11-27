@@ -42,7 +42,7 @@ import urllib.request
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validator_uptime_contract as contract  # noqa: E402
 
-STATE_SCHEMA = "postfiat-validator-uptime-observer-state-v1"
+STATE_SCHEMA = "postfiat-validator-uptime-observer-state-v2"
 RPC_VERSION = "postfiat-local-rpc-v1"
 MAX_OBSERVATION_GAP_SECONDS = 900
 BLOCKS_PAGE = 8
@@ -63,8 +63,8 @@ QUORUM_POLICY = {
     "indeterminate_behavior": "block_new_bindings_and_credits_preserve_existing_access",
 }
 WINDOW_SPEC = {
-    "metric_version": "accepted-votes-observer-brackets-v1",
-    "credit_sources": ["precommit_certificate", "prepare_certificate", "proposer_vote_record"],
+    "metric_version": "certificate-votes-observer-brackets-v2",
+    "credit_sources": ["precommit_certificate", "prepare_certificate"],
     "time_basis": "observer_brackets",
     "max_observation_gap_seconds": MAX_OBSERVATION_GAP_SECONDS,
     "evaluation_horizon_days": contract.EVALUATION_HORIZON_DAYS,
@@ -176,6 +176,9 @@ def load_state(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
     state = json.loads(path.read_text(encoding="utf-8"))
+    if state.get("schema") == "postfiat-validator-uptime-observer-state-v1":
+        # Legacy cached counts combine unsigned and certificate votes inseparably.
+        return None
     if state.get("schema") != STATE_SCHEMA:
         raise ObserverError(f"{path} is not an observer state file")
     return state
@@ -228,6 +231,7 @@ def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now:
             "started_at": contract.format_utc(now),
             "days": {},
             "validators": {},
+            "absent_since": {},
         }
         day_entry(state, today)["complete"] = False
     else:
@@ -248,7 +252,7 @@ def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now:
                 if header["parent_hash"] != parent:
                     raise ObserverError(f"block {header['height']} does not follow the block this observer saw last")
                 parent = header["block_hash"]
-            if last_poll.date() != today:
+            if last_poll.date() != today or state["registry_root"] != registry_reply["registry_root"] or state["registry"] != registry:
                 # The head moved across midnight: these blocks cannot be dated.
                 mark_incomplete(state, last_poll.date(), today)
             elif not gap_too_long:
@@ -311,7 +315,7 @@ def read_vote_records(state: dict[str, Any], sources: list[Source], today: dt.da
                     for entry in record.get("entries", [])
                     if entry.get("outcome") in CREDITED_OUTCOMES and entry.get("validator") in block["registry"]
                 }
-                block["credited"] = sorted(set(block["credited"]) | voted)
+                block["reported_voters"] = sorted(voted)
                 block["record"] = True
             while index < len(heights) and heights[index] < start + VOTE_RECORDS_PAGE:
                 index += 1
@@ -391,18 +395,36 @@ def build_rows(state: dict[str, Any], now: dt.datetime) -> list[dict[str, Any]]:
             # A validator id under a new key is a new validator.
             previous = None
         first_text = previous["first_active_date"] if previous else None
-        first = contract.parse_date(first_text) if first_text else today
+        # The current registry does not carry ratification dates. A first sighting
+        # cannot create a ramp. Score a full observation window for unknown dates.
+        first = contract.parse_date(first_text) if first_text else today - contract.EVALUATION_HORIZON_DAYS * contract.DAY
+        if not previous and vid in state["registry"]:
+            previous = dict(access_state="active", first_active_date=None, grace_started_at=None, recovery_floor_date=None)
+        absent = state.setdefault("absent_since", {})
+        if vid in state["registry"]:
+            absent.pop(vid, None)
+        else:
+            removed = contract.parse_date(absent.setdefault(vid, today.isoformat()))
+            if previous["access_state"] == "revoked" and (today - removed).days >= contract.EVALUATION_HORIZON_DAYS:
+                state["validators"].pop(vid, None)
+                absent.pop(vid, None)
+                continue
         row = contract.next_row(
             previous,
             validator_id=vid,
             ml_dsa_public_key=key,
             registry_active=vid in state["registry"],
-            days=days_for(state, vid, first, today) if first_text else [],
+            days=days_for(state, vid, first, today),
             window_end=today,
             observed_at=now,
         )
         window_start = today - contract.EVALUATION_HORIZON_DAYS * contract.DAY
         contract.check_row(row, window_start, today)
+        # A missing certificate signature is inconclusive: an authenticated late
+        # vote could change a failing score. Preserve the last lifecycle state.
+        if vid in state["registry"] and any(day["complete"] and day["participation_bps"] is not None
+                and day["participation_bps"] < contract.LIVENESS_THRESHOLD_BPS for day in row["days"]):
+            continue
         rows.append(row)
         state["validators"][vid] = {k: row[k] for k in FACT_KEYS if k != "days"}
     return rows

@@ -28,12 +28,11 @@ pub const OBSERVER_KEYSET_SCHEMA: &str = "postfiat.observer_keyset.v1";
 pub const OBSERVER_PRIVATE_KEY_SCHEMA: &str = "postfiat.observer_private_key.v1";
 pub const OBSERVER_KEY_PURPOSE: &str = "validator-uptime-observer";
 
-pub const UPTIME_METRIC_VERSION: &str = "accepted-votes-observer-brackets-v1";
+pub const UPTIME_METRIC_VERSION: &str = "certificate-votes-observer-brackets-v2";
 /// A vote counts when any one of these shows it.
-pub const UPTIME_CREDIT_SOURCES: [&str; 3] = [
+pub const UPTIME_CREDIT_SOURCES: [&str; 2] = [
     "precommit_certificate",
     "prepare_certificate",
-    "proposer_vote_record",
 ];
 pub const UPTIME_TIME_BASIS: &str = "observer_brackets";
 pub const UPTIME_MAX_OBSERVATION_GAP_SECONDS: u64 = 900;
@@ -526,7 +525,7 @@ pub fn derive_claim(
     let ramp_in = within_days_after(facts.first_active_date.as_ref(), window_end_day)?;
     let in_recovery = within_days_after(facts.recovery_floor_date.as_ref(), window_end_day)?;
     let liveness_met = facts.registry_active
-        && (observed_days == 0 || mean.is_some_and(|mean| mean >= UPTIME_LIVENESS_THRESHOLD_BPS));
+        && (observed_days == 0 || (observed_days < UPTIME_MIN_OBSERVED_DAYS && !ramp_in && !in_recovery) || mean.is_some_and(|mean| mean >= UPTIME_LIVENESS_THRESHOLD_BPS));
 
     let (reason, hub, reward, removal) = match facts.access_state.as_str() {
         "pending" => ("awaiting_ratification", false, false, false),
@@ -603,7 +602,7 @@ pub fn check_claim(
             "{vid}: ml_dsa_public_key is not an ML-DSA-65 public key"
         ));
     }
-    if (state == "pending") != claim.first_active_date.is_none() {
+    if state == "pending" && claim.first_active_date.is_some() {
         return Err(format!(
             "{vid}: first_active_date is null exactly while pending"
         ));
@@ -637,7 +636,8 @@ pub fn check_claim(
 
     let mut expected_day = match &claim.first_active_date {
         Some(first) => parse_utc_date(first)?.max(window_start_day),
-        None => window_end_day,
+        None if state == "pending" => window_end_day,
+        None => window_start_day,
     };
     let mut last_to = 0_u64;
     for day in &claim.days {
@@ -933,6 +933,14 @@ pub fn reconcile_validator_rows(
                     && other.registry_active == claim.registry_active
                     && other.liveness_met == claim.liveness_met
                     && other.access_state == claim.access_state
+                    && other.reward_eligible == claim.reward_eligible
+                    && other.finance_hub_access == claim.finance_hub_access
+                    && other.research_api_keys_active == claim.research_api_keys_active
+                    && other.removal_proposal_eligible == claim.removal_proposal_eligible
+                    && other.first_active_date == claim.first_active_date
+                    && other.grace_started_at == claim.grace_started_at
+                    && other.grace_expires_at == claim.grace_expires_at
+                    && other.recovery_floor_date == claim.recovery_floor_date
             };
             match groups.iter_mut().find(|group| agrees(group[0].1)) {
                 Some(group) => group.push((observer_id, claim)),

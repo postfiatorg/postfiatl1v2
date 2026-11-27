@@ -46,6 +46,8 @@ pub const RELEASE_KEYSET_ROTATION_CONTEXT: &str = "postfiat-l1-v2/release-keyset
 /// A vote record is only ever carried forward.
 pub const DEFAULT_BACKUP_EXCLUDES: &[&str] = &[
     crate::CONSENSUS_V2_SAFETY_DIR,
+    "block_proposal_vote_locks",
+    "transport_votes",
     crate::VALIDATOR_KEYS_FILE,
     "runtime",
     "readiness",
@@ -345,8 +347,14 @@ pub trait UpgradeSystemHooks {
         port: u16,
         timeout_ms: u64,
     ) -> Result<UpgradeNodeStatusProbe, String>;
+    fn configured_paths(&self, _units: &[String]) -> Result<Vec<PathBuf>, String> {
+        Ok(Vec::new())
+    }
     fn free_disk_bytes(&self, path: &Path) -> Result<u64, String>;
     fn unit_is_active(&self, unit: &str) -> bool;
+    fn confirm_stopped(&self, unit: &str) -> Result<bool, String> {
+        Ok(!self.unit_is_active(unit))
+    }
 }
 
 pub struct LiveUpgradeSystemHooks;
@@ -369,8 +377,58 @@ impl UpgradeSystemHooks for LiveUpgradeSystemHooks {
         probe_local_node_rpc(host, port, timeout_ms)
     }
 
+    fn configured_paths(&self, units: &[String]) -> Result<Vec<PathBuf>, String> {
+        let mut paths = Vec::new();
+        for unit in units {
+            let result = Command::new("systemctl")
+                .args(["show", "--property=MainPID", "--value", unit])
+                .output()
+                .map_err(|e| e.to_string())?;
+            if !result.status.success() {
+                return Err(format!("cannot inspect service {unit}"));
+            }
+            let pid: u32 = String::from_utf8_lossy(&result.stdout)
+                .trim()
+                .parse()
+                .map_err(|_| format!("invalid PID for {unit}"))?;
+            if pid == 0 {
+                return Err(format!(
+                    "cannot establish effective key paths for stopped unit {unit}"
+                ));
+            }
+            let args = fs::read(format!("/proc/{pid}/cmdline")).map_err(|e| e.to_string())?;
+            let args =
+                std::str::from_utf8(&args).map_err(|_| format!("non-UTF8 arguments in {unit}"))?;
+            let cwd = fs::read_link(format!("/proc/{pid}/cwd")).map_err(|e| e.to_string())?;
+            let mut argv = args.split_terminator('\0');
+            while let Some(arg) = argv.next() {
+                let (flag, inline) = arg
+                    .split_once('=')
+                    .map_or((arg, None), |(flag, value)| (flag, Some(value)));
+                if flag == "--vote-dir" || flag.ends_with("-key-file") || flag == "--key-file" {
+                    let value = inline
+                        .or_else(|| argv.next())
+                        .ok_or("missing service key path")?;
+                    paths.push(cwd.join(value));
+                }
+            }
+        }
+        Ok(paths)
+    }
+
     fn free_disk_bytes(&self, path: &Path) -> Result<u64, String> {
         filesystem_free_bytes(path)
+    }
+
+    fn confirm_stopped(&self, unit: &str) -> Result<bool, String> {
+        let state = Command::new("systemctl")
+            .args(["show", "--property=ActiveState", "--value", unit])
+            .output()
+            .map_err(|error| error.to_string())?;
+        if !state.status.success() {
+            return Err(format!("cannot determine state of {unit}"));
+        }
+        Ok(matches!(state.stdout.trim_ascii(), b"inactive" | b"failed"))
     }
 
     fn unit_is_active(&self, unit: &str) -> bool {
@@ -1045,6 +1103,9 @@ pub fn verify_signer_guard_isolation(
     let backup = resolve_normalized_path(backup_dir)
         .map_err(|error| format!("cannot resolve backup-dir: {error}"))?;
 
+    if data.starts_with(&backup) || backup.starts_with(&data) {
+        return Err("backup_path_overlap: backup-dir and data-dir must be disjoint".into());
+    }
     for (label, other) in [("data-dir", &data), ("backup-dir", &backup)] {
         if guard == *other || guard.starts_with(other) || other.starts_with(&guard) {
             return Err(format!(
@@ -1469,15 +1530,7 @@ fn create_pre_upgrade_backup(
     // The backup belongs to the owner of the data directory and to nobody else.
     #[cfg(unix)]
     {
-        use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        let owner =
-            fs::metadata(data_dir).map_err(|error| format!("stat data-dir failed: {error}"))?;
-        let snapshot = fs::metadata(&snapshot_dir)
-            .map_err(|error| format!("stat backup dir failed: {error}"))?;
-        if snapshot.uid() != owner.uid() || snapshot.gid() != owner.gid() {
-            std::os::unix::fs::chown(&snapshot_dir, Some(owner.uid()), Some(owner.gid()))
-                .map_err(|error| format!("chown backup dir failed: {error}"))?;
-        }
+        use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&snapshot_dir, fs::Permissions::from_mode(0o700))
             .map_err(|error| format!("chmod backup dir failed: {error}"))?;
     }
@@ -1537,10 +1590,23 @@ fn restore_pre_upgrade_backup(
     let canonical_guard = resolve_normalized_path(signer_guard_dir)
         .map_err(|error| format!("resolve signer-guard-dir failed: {error}"))?;
 
-    // 1. Atomically restore prior binary.
-    atomic_install_binary(backup_binary, dest_binary)
-        .map_err(|error| format!("rollback binary restore failed: {error}"))?;
-
+    let inventory_path = backup_data_dir
+        .parent()
+        .ok_or("missing snapshot parent")?
+        .join("backup-manifest.json");
+    let inventory: UpgradeBackupManifestV1 =
+        serde_json::from_slice(&fs::read(inventory_path).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("invalid backup inventory: {e}"))?;
+    let binary = sha256_file_and_size(backup_binary).map_err(|e| e.to_string())?;
+    if inventory.schema != UPGRADE_BACKUP_MANIFEST_SCHEMA
+        || binary
+            != (
+                inventory.prior_binary_sha256,
+                inventory.prior_binary_size_bytes,
+            )
+    {
+        return Err("backup binary or inventory mismatch".into());
+    }
     // 2. Stage the restored chain state beside the data directory, then swap.
     let parent = dest_data_dir
         .parent()
@@ -1565,8 +1631,11 @@ fn restore_pre_upgrade_backup(
             fs::remove_dir_all(&restore_stage)
                 .map_err(|error| format!("rollback could not clear an old stage: {error}"))?;
         }
-        copy_chain_state_tree(backup_data_dir, &restore_stage, &canonical_guard, &[])
+        let entries = copy_chain_state_tree(backup_data_dir, &restore_stage, &canonical_guard, &[])
             .map_err(|error| format!("rollback chain-state stage failed: {error}"))?;
+        if entries != inventory.data_files {
+            return Err("backup data inventory mismatch".into());
+        }
         if dest_data_dir.exists() {
             fs::rename(dest_data_dir, &failed_stash)
                 .map_err(|error| format!("rollback move failed data-dir failed: {error}"))?;
@@ -1578,11 +1647,15 @@ fn restore_pre_upgrade_backup(
             return Err(format!("rollback swap restored data-dir failed: {error}"));
         }
     }
+    atomic_install_binary(backup_binary, dest_binary)
+        .map_err(|error| format!("rollback binary restore failed: {error}"))?;
     // 3. Carry the excluded entries over. Until every one has moved, the stash stays.
     for exclude in excludes {
         let from = failed_stash.join(exclude);
-        if fs::symlink_metadata(&from).is_err() {
-            continue;
+        match fs::symlink_metadata(&from) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(format!("reading preserved entry failed: {e}")),
+            Ok(_) => {}
         }
         let to = dest_data_dir.join(exclude);
         if let Some(to_parent) = to.parent() {
@@ -1636,6 +1709,22 @@ fn base_report(check_only: bool) -> UpgradeReportV1 {
     }
 }
 
+fn installation_state(binary: &Path) -> PathBuf {
+    let mut name = binary.as_os_str().to_owned();
+    name.push(".upgrade-state");
+    PathBuf::from(name)
+}
+
+fn stop_for_restore(hooks: &dyn UpgradeSystemHooks, units: &[String]) -> Result<(), String> {
+    hooks.stop_units(units)?;
+    for unit in units {
+        if !hooks.confirm_stopped(unit)? {
+            return Err(format!("{unit} is still running after stop"));
+        }
+    }
+    Ok(())
+}
+
 pub fn execute_upgrade(
     options: &UpgradeOptions,
     hooks: &dyn UpgradeSystemHooks,
@@ -1651,7 +1740,7 @@ pub fn execute_upgrade(
         return report;
     }
 
-    let excludes = match backup_excludes(&options.exclude_paths) {
+    let mut excludes = match backup_excludes(&options.exclude_paths) {
         Ok(excludes) => excludes,
         Err(error) => {
             report.exit_code = UPGRADE_EXIT_INVALID_ARGS;
@@ -1661,9 +1750,42 @@ pub fn execute_upgrade(
         }
     };
 
+    let state_dir = installation_state(&options.binary_path);
+    let acquire = || -> Result<Option<File>, String> {
+        if options.check_only && !state_dir.exists() {
+            return Ok(None);
+        }
+        if !options.check_only {
+            fs::create_dir_all(&state_dir).map_err(|e| e.to_string())?;
+        }
+        let lock = File::open(&state_dir).map_err(|e| e.to_string())?;
+        if options.check_only {
+            lock.try_lock_shared()
+        } else {
+            lock.try_lock()
+        }
+        .map_err(|e| format!("installation lock unavailable: {e}"))?;
+        Ok(Some(lock))
+    };
+    let _installation_lock = match acquire() {
+        Ok(lock) => lock,
+        Err(error) => {
+            report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+            report.error_code = Some("installation_lock_unavailable".into());
+            report.message = Some(error);
+            return report;
+        }
+    };
+    let journal_dir = if options.backup_dir.join(UPGRADE_JOURNAL_FILE).is_file()
+        && !state_dir.join(UPGRADE_JOURNAL_FILE).is_file()
+    {
+        &options.backup_dir
+    } else {
+        &state_dir
+    };
     // An earlier run that did not finish comes first. Nothing else is done
     // until its rollback is complete.
-    match read_upgrade_journal(&options.backup_dir) {
+    match read_upgrade_journal(journal_dir) {
         Ok(None) => {}
         Ok(Some(journal)) if options.check_only => {
             report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
@@ -1675,7 +1797,9 @@ pub fn execute_upgrade(
             ));
             return report;
         }
-        Ok(Some(journal)) => return recover_interrupted_upgrade(&journal, options, hooks, report),
+        Ok(Some(journal)) => {
+            return recover_interrupted_upgrade(&journal, options, hooks, report, journal_dir)
+        }
         Err(error) => {
             report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
             report.error_code = Some("upgrade_journal_invalid".to_string());
@@ -1788,7 +1912,13 @@ pub fn execute_upgrade(
     report.target_git_revision = Some(verification.git_revision.clone());
 
     // Releases have an order. An older one is refused; there is no flag to skip this.
-    let installed = match read_installed_release(&options.backup_dir) {
+    let installed = match read_installed_release(&state_dir).and_then(|current| {
+        if current.is_some() {
+            Ok(current)
+        } else {
+            read_installed_release(&options.backup_dir)
+        }
+    }) {
         Ok(installed) => installed,
         Err(error) => {
             report.exit_code = UPGRADE_EXIT_SECURITY_REFUSAL;
@@ -2085,7 +2215,33 @@ pub fn execute_upgrade(
         .is_some_and(|mode| mode == "socket");
 
     // Step 5: Journal, then graceful stop.
-    let journal_path = options.backup_dir.join(UPGRADE_JOURNAL_FILE);
+    let discovered = hooks
+        .configured_paths(&options.service_units)
+        .and_then(|paths| {
+            let data = resolve_normalized_path(&options.data_dir).map_err(|e| e.to_string())?;
+            for path in paths {
+                let path = resolve_normalized_path(&path).map_err(|e| e.to_string())?;
+                if let Ok(relative) = path.strip_prefix(&data) {
+                    if relative.as_os_str().is_empty() {
+                        return Err("key or vote path equals data-dir".into());
+                    }
+                    if !excludes
+                        .iter()
+                        .any(|excluded| relative.starts_with(excluded))
+                    {
+                        excludes.push(relative.to_owned());
+                    }
+                }
+            }
+            Ok(())
+        });
+    if let Err(error) = discovered {
+        report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+        report.error_code = Some("unit_paths_unavailable".into());
+        report.message = Some(error);
+        return report;
+    }
+    let journal_path = state_dir.join(UPGRADE_JOURNAL_FILE);
     let mut journal = UpgradeJournalV1 {
         schema: UPGRADE_JOURNAL_SCHEMA.to_string(),
         release_id: manifest.release_id.clone(),
@@ -2136,7 +2292,7 @@ pub fn execute_upgrade(
             ));
         }
     };
-    if let Err(error) = hooks.stop_units(&options.service_units) {
+    if let Err(error) = stop_for_restore(hooks, &options.service_units) {
         discard_candidate(&downloaded_temp);
         abort_before_swap(&mut report, "service_stop_failed", error);
         return report;
@@ -2257,22 +2413,21 @@ pub fn execute_upgrade(
         git_revision: manifest.git_revision.clone(),
         installed_unix: now_unix,
     };
-    let recorded = write_json_atomically(&options.backup_dir.join(INSTALLED_RELEASE_FILE), &record);
+    if let Err(error) = write_json_atomically(&state_dir.join(INSTALLED_RELEASE_FILE), &record) {
+        report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+        report.error_code = Some("installed_release_write_failed".into());
+        report.message = Some(error);
+        return report;
+    }
     let _ = fs::remove_file(&journal_path);
     report.installed_release_id = Some(record.release_id.clone());
     report.installed_release_sequence = Some(record.release_sequence);
     report.status = "upgraded".to_string();
     report.exit_code = UPGRADE_EXIT_OK;
-    report.message = Some(match recorded {
-        Ok(()) => format!(
-            "successfully upgraded to `{}` (git {})",
-            manifest.release_id, manifest.git_revision
-        ),
-        Err(error) => format!(
-            "upgraded to `{}`, but the installed-release record could not be written ({error}); the next upgrade cannot check its order until it is",
-            manifest.release_id
-        ),
-    });
+    report.message = Some(format!(
+        "upgraded to {} (git {})",
+        manifest.release_id, manifest.git_revision
+    ));
     report
 }
 
@@ -2283,10 +2438,34 @@ fn recover_interrupted_upgrade(
     options: &UpgradeOptions,
     hooks: &dyn UpgradeSystemHooks,
     mut report: UpgradeReportV1,
+    journal_dir: &Path,
 ) -> UpgradeReportV1 {
-    let journal_path = options.backup_dir.join(UPGRADE_JOURNAL_FILE);
+    let journal_path = journal_dir.join(UPGRADE_JOURNAL_FILE);
     report.release_id = Some(journal.release_id.clone());
     report.release_sequence = Some(journal.release_sequence);
+    // The install record is the commit point. A crash before journal cleanup must
+    // never put the old binary back underneath a durably committed new sequence.
+    if journal.step == "started"
+        && read_installed_release(journal_dir)
+            .ok()
+            .flatten()
+            .is_some_and(|installed| {
+                installed.release_sequence == journal.release_sequence
+                    && installed.release_id == journal.release_id
+            })
+    {
+        match fs::remove_file(&journal_path).and_then(|_| fsync_dir(journal_dir)) {
+            Ok(()) => {
+                report.status = "up_to_date".into();
+                report.exit_code = UPGRADE_EXIT_OK;
+            }
+            Err(error) => {
+                report.error_code = Some("journal_cleanup_failed".into());
+                report.message = Some(error.to_string());
+            }
+        }
+        return report;
+    }
     let cause = format!(
         "an earlier upgrade to `{}` was interrupted at step `{}`",
         journal.release_id, journal.step
@@ -2324,6 +2503,12 @@ fn recover_interrupted_upgrade(
                 &cause,
                 &mut report,
             )
+        }
+        None if journal.step != "stopping" => {
+            report.exit_code = UPGRADE_EXIT_ROLLBACK_FAILED;
+            report.error_code = Some("backup_missing".into());
+            report.message = Some("restore the verified backup before restarting services".into());
+            report
         }
         None => {
             // Interrupted before the backup was complete: the installation is
@@ -2383,21 +2568,18 @@ fn rollback_and_verify(
     cause: &str,
     report: &mut UpgradeReportV1,
 ) -> UpgradeReportV1 {
-    let _ = hooks.stop_units(service_units);
-    let restore = restore_pre_upgrade_backup(
-        backup_binary,
-        backup_data_dir,
-        binary_path,
-        data_dir,
-        signer_guard_dir,
-        excludes,
-    );
-    // The units are started whether or not the restore worked: a validator
-    // left stopped helps nobody, and the report names what is not running.
-    let start = hooks.start_units(service_units);
-    let health = restore
-        .clone()
-        .and_then(|()| start.clone())
+    let health = stop_for_restore(hooks, service_units)
+        .and_then(|()| {
+            restore_pre_upgrade_backup(
+                backup_binary,
+                backup_data_dir,
+                binary_path,
+                data_dir,
+                signer_guard_dir,
+                excludes,
+            )
+        })
+        .and_then(|()| hooks.start_units(service_units))
         .and_then(|()| hooks.probe_node(rpc.0, rpc.1, 5_000).map(|_| ()));
     let stopped = stopped_units(hooks, service_units);
 
@@ -2584,6 +2766,10 @@ mod tests {
                 let safety = self.data_dir.join(crate::CONSENSUS_V2_SAFETY_DIR);
                 fs::create_dir_all(&safety).expect("safety dir");
                 fs::write(safety.join("height-432001.json"), b"VOTED_BY_NEW_BINARY").expect("vote");
+                for dir in ["block_proposal_vote_locks", "transport_votes"] {
+                    fs::create_dir_all(self.data_dir.join(dir)).unwrap();
+                    fs::write(self.data_dir.join(dir).join("decision"), b"candidate vote").unwrap();
+                }
             }
             Ok(())
         }
@@ -2851,7 +3037,7 @@ mod tests {
                 .unwrap_or_else(|error| panic!("{relative}: {error}"))
         }
         fn journal(&self) -> PathBuf {
-            self.options.backup_dir.join(UPGRADE_JOURNAL_FILE)
+            installation_state(&self.options.binary_path).join(UPGRADE_JOURNAL_FILE)
         }
         fn guard(&self) -> Vec<u8> {
             fs::read(self.options.signer_guard_dir.join("guard.state")).unwrap()
@@ -2920,7 +3106,7 @@ mod tests {
             !fixture.journal().exists(),
             "the journal is removed at the end"
         );
-        let record = read_installed_release(&fixture.options.backup_dir)
+        let record = read_installed_release(&installation_state(&fixture.options.binary_path))
             .unwrap()
             .expect("record");
         assert_eq!(
@@ -2990,6 +3176,23 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_applies_share_one_installation_lock_across_backup_paths() {
+        let fixture = Fixture::new("concurrent");
+        let dir = installation_state(&fixture.options.binary_path);
+        fs::create_dir_all(&dir).unwrap();
+        let lock = File::open(dir).unwrap();
+        lock.try_lock().unwrap();
+        let hooks = fixture.hooks();
+        let mut options = fixture.options.clone();
+        options.backup_dir = options.backup_dir.with_extension("other");
+        assert_eq!(
+            execute_upgrade(&options, &hooks).error_code.as_deref(),
+            Some("installation_lock_unavailable")
+        );
+        assert!(hooks.log().is_empty());
+    }
+
+    #[test]
     fn a_rollback_carries_the_vote_record_forward_and_restores_owner_and_mode() {
         let fixture = Fixture::new("rollback");
         let mut hooks = fixture.hooks();
@@ -3021,6 +3224,9 @@ mod tests {
             fixture.data(crate::VALIDATOR_KEYS_FILE),
             b"SECRET_VALIDATOR_KEY"
         );
+        for dir in ["block_proposal_vote_locks", "transport_votes"] {
+            assert_eq!(fixture.data(&format!("{dir}/decision")), b"candidate vote");
+        }
         assert_eq!(fixture.data("runtime/spool"), b"RUNTIME");
         // The service user can start the node: nothing changed owner or mode.
         for (relative, expected) in [
@@ -3037,9 +3243,11 @@ mod tests {
         }
         assert_eq!(hooks.log(), ["stop", "start", "stop", "start"]);
         assert!(!fixture.journal().exists());
-        assert!(read_installed_release(&fixture.options.backup_dir)
-            .unwrap()
-            .is_none());
+        assert!(
+            read_installed_release(&installation_state(&fixture.options.binary_path))
+                .unwrap()
+                .is_none()
+        );
         assert_eq!(fixture.guard(), b"MONOTONIC_GUARD_FLOOR_432000");
         let parent = fixture.options.data_dir.parent().unwrap();
         assert!(
@@ -3133,7 +3341,7 @@ mod tests {
         );
         // A damaged record is a refusal, not a fresh start.
         fs::write(
-            fixture.options.backup_dir.join(INSTALLED_RELEASE_FILE),
+            installation_state(&fixture.options.binary_path).join(INSTALLED_RELEASE_FILE),
             b"{}",
         )
         .unwrap();
@@ -3253,7 +3461,7 @@ mod tests {
             b"REWRITTEN_BY_NEW_BINARY",
         )
         .unwrap();
-        let mut journal = read_upgrade_journal(&fixture.options.backup_dir)
+        let mut journal = read_upgrade_journal(&installation_state(&fixture.options.binary_path))
             .unwrap()
             .expect("journal");
         journal.step = "swapped".to_string();
