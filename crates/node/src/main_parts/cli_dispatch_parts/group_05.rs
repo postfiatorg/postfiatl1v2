@@ -3635,40 +3635,26 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             Ok(())
         }
         "observer-uptime-sign" => {
+            // Signs one observer's attestation. The input names the facts per
+            // validator; every derived field is computed here, so an observer
+            // cannot sign a row that does not follow from its facts.
             use postfiat_node::validator_uptime::{
-                sign_observer_attestation, ObserverPrivateKeyFileV1, ObserverValidatorClaimV1,
-                UptimeFeedChainV1, UptimeWindowSpecV1,
+                sign_observer_attestation, ObserverPrivateKeyFileV1, UnsignedObserverAttestationV1,
             };
-            let key_file =
-                flag_value(flags, "--key-file").ok_or("missing --key-file")?;
-            let input_file =
-                flag_value(flags, "--input-file").ok_or("missing --input-file")?;
-            let output_file = flag_value(flags, "--output-file");
-            let key_raw = fs::read_to_string(key_file)
-                .map_err(|error| format!("read --key-file failed: {error}"))?;
-            let key: ObserverPrivateKeyFileV1 = serde_json::from_str(&key_raw)
-                .map_err(|error| format!("parse --key-file failed: {error}"))?;
-            let input_raw = fs::read_to_string(input_file)
-                .map_err(|error| format!("read --input-file failed: {error}"))?;
-            #[derive(serde::Deserialize)]
-            struct SignInput {
-                chain: UptimeFeedChainV1,
-                window_spec: UptimeWindowSpecV1,
-                observed_at: String,
-                validator_claims: Vec<ObserverValidatorClaimV1>,
-            }
-            let input: SignInput = serde_json::from_str(&input_raw)
-                .map_err(|error| format!("parse --input-file failed: {error}"))?;
-            let attestation = sign_observer_attestation(
-                &key,
-                &input.chain,
-                &input.window_spec,
-                &input.observed_at,
-                input.validator_claims,
-            )?;
+            let key_file = flag_value(flags, "--key-file").ok_or("missing --key-file")?;
+            let input_file = flag_value(flags, "--input-file").ok_or("missing --input-file")?;
+            let key: ObserverPrivateKeyFileV1 = serde_json::from_slice(
+                &fs::read(key_file).map_err(|error| format!("read --key-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("parse --key-file failed: {error}"))?;
+            let unsigned: UnsignedObserverAttestationV1 = serde_json::from_slice(
+                &fs::read(input_file).map_err(|error| format!("read --input-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("parse --input-file failed: {error}"))?;
+            let attestation = sign_observer_attestation(&key, &unsigned)?;
             let json = serde_json::to_string_pretty(&attestation)
                 .map_err(|error| format!("attestation serialize failed: {error}"))?;
-            if let Some(path) = output_file {
+            if let Some(path) = flag_value(flags, "--output-file") {
                 fs::write(path, format!("{json}\n"))
                     .map_err(|error| format!("write --output-file failed: {error}"))?;
             } else {
@@ -3677,28 +3663,40 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             Ok(())
         }
         "observer-uptime-verify" => {
+            // Reads a feed the way a consumer must (spec section 4) and prints
+            // the result. Exit 1 when the feed as a whole is refused.
             use postfiat_node::validator_uptime::{
                 verify_validator_uptime_feed, ObserverKeysetV1, ValidatorUptimeFeedV1,
             };
-            let feed_file =
-                flag_value(flags, "--feed-file").ok_or("missing --feed-file")?;
-            let keyset_file =
-                flag_value(flags, "--keyset-file").ok_or("missing --keyset-file")?;
-            let now_unix = flag_value(flags, "--now-unix")
-                .map(|raw| {
-                    raw.parse::<u64>()
-                        .map_err(|_| "--now-unix must be a u64".to_string())
-                })
-                .transpose()?;
-            let feed_raw = fs::read_to_string(feed_file)
-                .map_err(|error| format!("read --feed-file failed: {error}"))?;
-            let keyset_raw = fs::read_to_string(keyset_file)
-                .map_err(|error| format!("read --keyset-file failed: {error}"))?;
-            let feed: ValidatorUptimeFeedV1 = serde_json::from_str(&feed_raw)
-                .map_err(|error| format!("parse --feed-file failed: {error}"))?;
-            let keyset: ObserverKeysetV1 = serde_json::from_str(&keyset_raw)
-                .map_err(|error| format!("parse --keyset-file failed: {error}"))?;
-            let report = verify_validator_uptime_feed(&feed, &keyset, now_unix)?;
+            let feed_file = flag_value(flags, "--feed-file").ok_or("missing --feed-file")?;
+            let keyset_file = flag_value(flags, "--keyset-file").ok_or("missing --keyset-file")?;
+            let now_unix = match flag_value(flags, "--now-unix") {
+                Some(raw) => raw
+                    .parse::<i64>()
+                    .map_err(|_| "--now-unix must be an integer".to_string())?,
+                None => std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |elapsed| elapsed.as_secs() as i64),
+            };
+            // Observer id to the last `observed_at` this consumer accepted from it.
+            let last_accepted: std::collections::BTreeMap<String, String> =
+                match flag_value(flags, "--last-accepted-file") {
+                    Some(path) if Path::new(path).exists() => serde_json::from_slice(
+                        &fs::read(path)
+                            .map_err(|error| format!("read --last-accepted-file failed: {error}"))?,
+                    )
+                    .map_err(|error| format!("parse --last-accepted-file failed: {error}"))?,
+                    _ => std::collections::BTreeMap::new(),
+                };
+            let feed: ValidatorUptimeFeedV1 = serde_json::from_slice(
+                &fs::read(feed_file).map_err(|error| format!("read --feed-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("schema: {error}"))?;
+            let keyset: ObserverKeysetV1 = serde_json::from_slice(
+                &fs::read(keyset_file).map_err(|error| format!("read --keyset-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("parse --keyset-file failed: {error}"))?;
+            let report = verify_validator_uptime_feed(&feed, &keyset, now_unix, &last_accepted)?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(&report)

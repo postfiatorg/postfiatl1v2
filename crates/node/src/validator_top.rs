@@ -84,8 +84,8 @@ pub struct TopPeersVotesPanel {
     pub configured_peers: usize,
     pub connected_peers: Option<usize>,
     pub quorum_size: usize,
-    pub latest_height_day_bps: Option<u32>,
-    pub mean_30d_participation_bps: Option<u32>,
+    pub latest_day_bps: Option<u32>,
+    pub mean_daily_participation_bps: Option<u32>,
     pub last_voted_height: Option<u64>,
 }
 
@@ -117,9 +117,9 @@ pub struct TopRewardEligibilityPanel {
     pub access_state_reason: Option<String>,
     pub observer_quorum: String,
     pub feed_age_seconds: Option<u64>,
-    pub observed_height_days: Option<u32>,
+    pub observed_days: Option<u32>,
     pub mean_daily_participation_bps: Option<u32>,
-    pub grace_remaining_blocks: Option<u64>,
+    pub grace_remaining_seconds: Option<u64>,
     pub recovery_streak_days: Option<u32>,
     pub finance_hub_access: Option<bool>,
     pub reward_eligible: Option<bool>,
@@ -551,8 +551,8 @@ pub fn collect_top_snapshot(
             configured_peers,
             connected_peers,
             quorum_size,
-            latest_height_day_bps: latest_day_bps,
-            mean_30d_participation_bps: mean_30d_bps,
+            latest_day_bps: latest_day_bps,
+            mean_daily_participation_bps: mean_30d_bps,
             last_voted_height,
         },
         signer: TopSignerPanel {
@@ -712,9 +712,9 @@ fn check_uptime_feed_fail_soft(
         access_state_reason: None,
         observer_quorum: quorum.to_string(),
         feed_age_seconds: None,
-        observed_height_days: None,
+        observed_days: None,
         mean_daily_participation_bps: None,
-        grace_remaining_blocks: None,
+        grace_remaining_seconds: None,
         recovery_streak_days: None,
         finance_hub_access: None,
         reward_eligible: None,
@@ -802,39 +802,63 @@ fn check_uptime_feed_fail_soft(
         }
     };
 
-    let verified = match verify_validator_uptime_feed(&feed, &keyset, Some(now_unix)) {
+    let verified = match verify_validator_uptime_feed(
+        &feed,
+        &keyset,
+        i64::try_from(now_unix).unwrap_or(i64::MAX),
+        &std::collections::BTreeMap::new(),
+    ) {
         Ok(v) => v,
         Err(error) => {
             warnings.push(TopWarning {
                 code: "FEED_UNAVAILABLE".to_string(),
                 severity: "warn".to_string(),
-                message: format!("Uptime feed 2-of-3 verification failed: {error}"),
+                message: format!("Uptime feed refused: {error}"),
             });
             return (default_panel("unknown", "invalid"), None, None, None, None);
         }
     };
 
-    let quorum_label = if verified.feed_stale {
+    let quorum_label = if verified.indeterminate {
+        let reasons: Vec<String> = verified
+            .rejected_observers
+            .iter()
+            .map(|(observer, reason)| format!("{observer}: {reason}"))
+            .collect();
         warnings.push(TopWarning {
             code: "FEED_STALE".to_string(),
             severity: "warn".to_string(),
-            message: "Observer uptime feed is stale (>3600s); existing access preserved"
-                .to_string(),
+            message: format!(
+                "Fewer than 2 observer attestations count ({}); existing access is kept",
+                reasons.join("; ")
+            ),
         });
         "stale".to_string()
     } else {
-        format!("{}/3", verified.fresh_observer_count)
+        format!("{}/3", verified.verified_observers.len())
     };
+    if verified.indeterminate {
+        return (default_panel("unknown", &quorum_label), None, None, None, None);
+    }
 
-    let height_lag = Some(feed.chain.finalized_height.saturating_sub(local_height));
-    let Some(row) = feed.validators.iter().find(|v| v.validator_id == node_id) else {
-        return (
-            default_panel("not_listed", &quorum_label),
-            height_lag,
-            None,
-            None,
-            None,
-        );
+    let height_lag = verified
+        .highest_finalized_height
+        .map(|height| height.saturating_sub(local_height));
+    let feed_age_seconds = verified
+        .newest_observed_at_unix
+        .map(|observed_at| now_unix.saturating_sub(u64::try_from(observed_at).unwrap_or(0)));
+    let Some(row) = verified
+        .validators
+        .iter()
+        .map(|row| &row.claim)
+        .find(|claim| claim.validator_id == node_id)
+    else {
+        let state = if verified.validators_without_quorum.iter().any(|v| v == node_id) {
+            "no_quorum"
+        } else {
+            "not_listed"
+        };
+        return (default_panel(state, &quorum_label), height_lag, None, None, None);
     };
 
     if row
@@ -851,24 +875,34 @@ fn check_uptime_feed_fail_soft(
         });
     }
 
-    let latest_day = row.height_days.last();
+    // The latest day that says something: complete and with at least one block.
+    let latest_day = row
+        .days
+        .iter()
+        .rev()
+        .find(|day| day.participation_bps.is_some());
     let latest_day_bps = latest_day.and_then(|d| d.participation_bps);
-    let last_voted_height = latest_day
-        .filter(|d| d.credited_heights > 0)
-        .map(|d| d.to_height);
+    let last_voted_height = row
+        .days
+        .iter()
+        .rev()
+        .find(|day| day.signed_blocks > 0)
+        .and_then(|day| day.to_height);
     let grace_remaining = row
-        .grace_expires_height
-        .map(|exp| exp.saturating_sub(feed.chain.finalized_height));
+        .grace_expires_at
+        .as_deref()
+        .and_then(|expires| crate::validator_uptime::parse_utc_timestamp(expires).ok())
+        .map(|expires| u64::try_from(expires).unwrap_or(0).saturating_sub(now_unix));
 
     (
         TopRewardEligibilityPanel {
             access_state: row.access_state.clone(),
             access_state_reason: Some(row.access_state_reason.clone()),
             observer_quorum: quorum_label,
-            feed_age_seconds: verified.oldest_fresh_age_seconds,
-            observed_height_days: Some(row.observed_height_days),
+            feed_age_seconds,
+            observed_days: Some(row.observed_days),
             mean_daily_participation_bps: row.mean_daily_participation_bps,
-            grace_remaining_blocks: grace_remaining,
+            grace_remaining_seconds: grace_remaining,
             recovery_streak_days: Some(row.consecutive_passing_days),
             finance_hub_access: Some(row.finance_hub_access),
             reward_eligible: Some(row.reward_eligible),
@@ -948,11 +982,11 @@ pub fn render_top_dashboard(
         snapshot.peers_votes.quorum_size,
         snapshot
             .peers_votes
-            .latest_height_day_bps
+            .latest_day_bps
             .map_or_else(|| "-".to_string(), |b| format!("{b}")),
         snapshot
             .peers_votes
-            .mean_30d_participation_bps
+            .mean_daily_participation_bps
             .map_or_else(|| "-".to_string(), |b| format!("{b}")),
         snapshot
             .peers_votes
@@ -980,8 +1014,17 @@ pub fn render_top_dashboard(
         snapshot.disk_latency.mempool_pending,
     ));
     out.push_str(&format!(
-        "{bold}[6] Task Node Elig{reset}: state={state_color}{}{reset} quorum={} age={}s days={}/30 mean_bps={} fh={} reward={} recovery={}/3\n",
+        "{bold}[6] Task Node Elig{reset}: state={state_color}{}{reset} reason={} grace_left={} quorum={} age={}s days={}/30 mean_bps={} fh={} reward={} recovery={}/3\n",
         snapshot.reward_eligibility.access_state,
+        snapshot
+            .reward_eligibility
+            .access_state_reason
+            .as_deref()
+            .unwrap_or("-"),
+        snapshot
+            .reward_eligibility
+            .grace_remaining_seconds
+            .map_or_else(|| "-".to_string(), |s| format!("{}d{}h", s / 86_400, s % 86_400 / 3_600)),
         snapshot.reward_eligibility.observer_quorum,
         snapshot
             .reward_eligibility
@@ -989,7 +1032,7 @@ pub fn render_top_dashboard(
             .map_or_else(|| "-".to_string(), |a| a.to_string()),
         snapshot
             .reward_eligibility
-            .observed_height_days
+            .observed_days
             .map_or_else(|| "-".to_string(), |d| d.to_string()),
         snapshot
             .reward_eligibility
@@ -1247,6 +1290,91 @@ mod tests {
         assert!(validate_top_options(&opts).is_ok());
         opts.refresh_ms = 100;
         assert!(validate_top_options(&opts).is_err());
+    }
+
+    #[test]
+    fn eligibility_panel_reads_only_a_feed_that_passed_every_check() {
+        let schemas = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/specs/schemas");
+        let feed_file = schemas.join("postfiat-validator-uptime-v1.fixture.json");
+        let now = crate::validator_uptime::parse_utc_timestamp("2026-11-27T01:40:40Z").unwrap() as u64;
+        let options = |feed: PathBuf| ValidatorTopOptions {
+            rpc_host: "127.0.0.1".to_string(),
+            rpc_port: 1,
+            allow_remote_rpc: false,
+            data_dir: None,
+            uptime_feed_url: None,
+            uptime_feed_file: Some(feed),
+            observer_keyset_file: schemas.join("postfiat-observer-keyset-v1.fixture.json"),
+            release_manifest_url: None,
+            release_manifest_file: None,
+            release_keyset_file: PathBuf::from("/nonexistent/release-keyset.json"),
+            refresh_ms: 2_000,
+            once: true,
+            json: true,
+            no_color: true,
+            rpc_timeout_ms: 2_000,
+            now_unix: Some(now),
+        };
+
+        // The fixture's lapsed validator, as its own operator sees it over SSH.
+        let mut warnings = Vec::new();
+        let (panel, height_lag, latest_day_bps, mean_bps, last_voted) = check_uptime_feed_fail_soft(
+            &options(feed_file.clone()),
+            "validator-3",
+            6_590,
+            now,
+            &mut warnings,
+        );
+        assert_eq!(panel.access_state, "lapsed");
+        assert_eq!(panel.access_state_reason.as_deref(), Some("below_liveness_threshold"));
+        assert_eq!(panel.observer_quorum, "3/3");
+        assert_eq!(panel.feed_age_seconds, Some(40));
+        assert_eq!(panel.observed_days, Some(28));
+        assert_eq!(panel.recovery_streak_days, Some(1));
+        assert_eq!((panel.finance_hub_access, panel.reward_eligible), (Some(true), Some(false)));
+        // Grace runs by the clock until 2026-12-08T00:00:00Z.
+        let expires = crate::validator_uptime::parse_utc_timestamp("2026-12-08T00:00:00Z").unwrap() as u64;
+        assert_eq!(panel.grace_remaining_seconds, Some(expires - now));
+        assert_eq!(height_lag, Some(10));
+        assert_eq!(latest_day_bps, Some(9_800));
+        assert_eq!(mean_bps, panel.mean_daily_participation_bps);
+        assert_eq!(last_voted, Some(6_600));
+        assert!(warnings.iter().any(|w| w.code == "PARTICIPATION_BELOW_95"));
+
+        // A healthy validator has no grace and no warning.
+        let mut warnings = Vec::new();
+        let (panel, ..) =
+            check_uptime_feed_fail_soft(&options(feed_file.clone()), "validator-0", 6_600, now, &mut warnings);
+        assert_eq!((panel.access_state.as_str(), panel.grace_remaining_seconds), ("active", None));
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let (panel, ..) =
+            check_uptime_feed_fail_soft(&options(feed_file.clone()), "validator-9", 6_600, now, &mut Vec::new());
+        assert_eq!(panel.access_state, "not_listed");
+
+        // One changed byte in a served row: nothing of the feed is shown.
+        let tampered = std::env::temp_dir().join(format!("postfiat-top-tampered-{}.json", std::process::id()));
+        let mut feed: serde_json::Value = serde_json::from_slice(&fs::read(&feed_file).unwrap()).unwrap();
+        feed["validators"][3]["access_state"] = serde_json::json!("active");
+        fs::write(&tampered, feed.to_string()).unwrap();
+        let mut warnings = Vec::new();
+        let (panel, ..) =
+            check_uptime_feed_fail_soft(&options(tampered.clone()), "validator-3", 6_590, now, &mut warnings);
+        assert_eq!((panel.access_state.as_str(), panel.observer_quorum.as_str()), ("unknown", "invalid"));
+        assert_eq!(panel.finance_hub_access, None);
+        assert!(warnings.iter().any(|w| w.code == "FEED_UNAVAILABLE"));
+        let _ = fs::remove_file(tampered);
+
+        // A stale feed says nothing about anyone.
+        let mut warnings = Vec::new();
+        let (panel, ..) = check_uptime_feed_fail_soft(
+            &options(feed_file),
+            "validator-3",
+            6_590,
+            now + 3_700,
+            &mut warnings,
+        );
+        assert_eq!((panel.access_state.as_str(), panel.observer_quorum.as_str()), ("unknown", "stale"));
+        assert!(warnings.iter().any(|w| w.code == "FEED_STALE"));
     }
 
     #[test]
