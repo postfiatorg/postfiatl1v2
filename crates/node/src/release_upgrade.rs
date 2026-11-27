@@ -764,6 +764,113 @@ pub fn release_manifest_signing_bytes(manifest: &ReleaseManifestV3) -> Result<Ve
     canonical_json_bytes(&value)
 }
 
+/// What the release lead supplies to describe a release. Everything else of
+/// the manifest is taken from the built artifacts and the keyset.
+#[derive(Debug, Clone)]
+pub struct ReleaseManifestInputs {
+    pub release_id: String,
+    pub release_sequence: u64,
+    pub created_unix: u64,
+    pub valid_days: u64,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub git_revision: String,
+    pub build_features: Vec<String>,
+    pub protocol_version: u32,
+    pub min_compatible_protocol_version: u32,
+    pub rollout: ReleaseRolloutV3,
+    pub checkpoint: ReleaseCheckpointV3,
+    /// Where the release is published; the binary URLs are below it.
+    pub url_base: String,
+    pub binary_x86_64: PathBuf,
+    pub binary_aarch64: PathBuf,
+    pub systemd_bundle: PathBuf,
+    pub docker_profiles: PathBuf,
+    pub sbom: PathBuf,
+    pub checksums: PathBuf,
+    pub swap_circuit_metadata: PathBuf,
+    pub private_egress_circuit_metadata: PathBuf,
+}
+
+/// Build the unsigned manifest of a release from its artifacts. The signers
+/// add their signatures with `sign_release_manifest_v3`, each on its own machine.
+pub fn create_release_manifest_v3(
+    inputs: &ReleaseManifestInputs,
+    keyset: &ReleaseKeysetV1,
+) -> Result<ReleaseManifestV3, String> {
+    validate_release_keyset_v1(keyset)?;
+    if !inputs.url_base.starts_with("https://") || inputs.url_base.ends_with('/') {
+        return Err("--url-base must be an https URL without a trailing slash".to_string());
+    }
+    if inputs.valid_days == 0 || inputs.valid_days > 366 {
+        return Err("--valid-days must be between 1 and 366".to_string());
+    }
+    let digest = |path: &Path| -> Result<(String, u64), String> {
+        sha256_file_and_size(path)
+            .map_err(|error| format!("read `{}` failed: {error}", path.display()))
+    };
+    let binary = |path: &Path, arch: &str| -> Result<ReleaseBinaryArtifactV3, String> {
+        let (binary_sha256, binary_size_bytes) = digest(path)?;
+        Ok(ReleaseBinaryArtifactV3 {
+            binary_url: format!(
+                "{}/{}/postfiat-node-{arch}",
+                inputs.url_base, inputs.release_id
+            ),
+            binary_sha256,
+            binary_size_bytes,
+        })
+    };
+    let manifest = ReleaseManifestV3 {
+        schema: RELEASE_MANIFEST_SCHEMA.to_string(),
+        release_id: inputs.release_id.clone(),
+        release_sequence: inputs.release_sequence,
+        created_unix: inputs.created_unix,
+        valid_from_unix: inputs.created_unix,
+        valid_until_unix: inputs.created_unix + inputs.valid_days * 86_400,
+        chain_id: inputs.chain_id.clone(),
+        genesis_hash: inputs.genesis_hash.clone(),
+        git_revision: inputs.git_revision.clone(),
+        build_profile: "release".to_string(),
+        build_features: inputs.build_features.clone(),
+        protocol_version: inputs.protocol_version,
+        min_compatible_protocol_version: inputs.min_compatible_protocol_version,
+        rpc_schema: postfiat_rpc_sdk::RPC_VERSION.to_string(),
+        rollout: inputs.rollout.clone(),
+        checkpoint: inputs.checkpoint.clone(),
+        artifacts: ReleaseArtifactsV3 {
+            linux_x86_64: binary(&inputs.binary_x86_64, "linux-x86_64")?,
+            linux_aarch64: binary(&inputs.binary_aarch64, "linux-aarch64")?,
+            systemd_bundle_sha256: digest(&inputs.systemd_bundle)?.0,
+            docker_profiles_sha256: digest(&inputs.docker_profiles)?.0,
+            sbom_sha256: digest(&inputs.sbom)?.0,
+            checksums_sha256: digest(&inputs.checksums)?.0,
+            swap_circuit_metadata_sha256: digest(&inputs.swap_circuit_metadata)?.0,
+            private_egress_circuit_metadata_sha256: digest(
+                &inputs.private_egress_circuit_metadata,
+            )?
+            .0,
+        },
+        signing_policy: ReleaseSigningPolicyV3 {
+            keyset_id: keyset.keyset_id.clone(),
+            threshold: keyset.threshold,
+            total_signers: keyset.total_signers,
+            algorithm_id: keyset.algorithm_id.clone(),
+            signing_context: keyset.signing_context.clone(),
+        },
+        signatures: Vec::new(),
+    };
+    // Everything a signed manifest must satisfy, checked before anybody signs:
+    // two throwaway signatures are not available here, so the unsigned form is
+    // checked by verifying it with the signature count rule left out.
+    let mut probe = manifest.clone();
+    probe.signatures.clear();
+    match verify_release_manifest_v3(&probe, keyset, manifest.valid_from_unix) {
+        Err(error) if error.contains("signatures, requires at least") => Ok(manifest),
+        Err(error) => Err(error),
+        Ok(_) => Ok(manifest),
+    }
+}
+
 pub fn sign_release_manifest_v3(
     manifest: &ReleaseManifestV3,
     signer_id: &str,
@@ -3610,6 +3717,105 @@ mod tests {
             report.exit_code, UPGRADE_EXIT_SECURITY_REFUSAL,
             "{report:?}"
         );
+    }
+
+    #[test]
+    fn a_manifest_built_from_the_artifacts_and_signed_by_two_is_a_release() {
+        let fixture = Fixture::new("create");
+        let file = |name: &str, bytes: &[u8]| {
+            let path = fixture.root.join(name);
+            fs::write(&path, bytes).unwrap();
+            path
+        };
+        let candidate = fixture.options.binary_file.clone().unwrap();
+        let inputs = ReleaseManifestInputs {
+            release_id: "v0.4.0-testnet".to_string(),
+            release_sequence: 8,
+            created_unix: NOW - 60,
+            valid_days: 90,
+            chain_id: CHAIN.to_string(),
+            genesis_hash: "aa".repeat(48),
+            git_revision: TARGET_REV.to_string(),
+            build_features: vec![
+                "privacy".to_string(),
+                "rpc".to_string(),
+                "transport".to_string(),
+            ],
+            protocol_version: 2,
+            min_compatible_protocol_version: 1,
+            rollout: rolling(),
+            checkpoint: ReleaseCheckpointV3 {
+                height: 432_000,
+                block_hash: "bb".repeat(48),
+                state_root: "cc".repeat(48),
+                certificate_id: "dd".repeat(48),
+                committee_epoch: 12,
+            },
+            url_base: "https://releases.postfiat.org".to_string(),
+            binary_x86_64: candidate.clone(),
+            binary_aarch64: candidate.clone(),
+            systemd_bundle: file("systemd.tar", b"units"),
+            docker_profiles: file("docker.tar", b"profiles"),
+            sbom: file("sbom.json", b"{}"),
+            checksums: file("SHA256SUMS", b"sums"),
+            swap_circuit_metadata: file("swap.json", b"swap"),
+            private_egress_circuit_metadata: file("egress.json", b"egress"),
+        };
+        let mut manifest =
+            create_release_manifest_v3(&inputs, &fixture.keyset).expect("unsigned manifest");
+        assert!(manifest.signatures.is_empty());
+        assert_eq!(
+            manifest.valid_until_unix - manifest.valid_from_unix,
+            90 * 86_400
+        );
+        assert_eq!(
+            manifest.artifacts.linux_x86_64.binary_url,
+            "https://releases.postfiat.org/v0.4.0-testnet/postfiat-node-linux-x86_64"
+        );
+        assert_eq!(
+            manifest.artifacts.linux_x86_64.binary_sha256,
+            sha256_file_and_size(&candidate).unwrap().0
+        );
+        assert_eq!(manifest.signing_policy.keyset_id, fixture.keyset.keyset_id);
+        // Unsigned and with one signature it is not a release; with two it is.
+        assert!(verify_release_manifest_v3(&manifest, &fixture.keyset, NOW).is_err());
+        for (index, expect_ok) in [(0, false), (2, true)] {
+            let (id, publisher, pk, sk) = &fixture.keys[index];
+            let signature =
+                sign_release_manifest_v3(&manifest, id, publisher, pk, sk, NOW).expect("sign");
+            manifest.signatures.push(signature);
+            assert_eq!(
+                verify_release_manifest_v3(&manifest, &fixture.keyset, NOW).is_ok(),
+                expect_ok
+            );
+        }
+        // And `upgrade` installs it.
+        let path = fixture.root.join("created-manifest.json");
+        fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let mut options = fixture.options.clone();
+        options.manifest_file = Some(path);
+        let report = execute_upgrade(&options, &fixture.hooks());
+        assert_eq!(
+            (report.exit_code, report.release_sequence),
+            (UPGRADE_EXIT_OK, Some(8)),
+            "{report:?}"
+        );
+
+        // What is refused before anybody is asked to sign.
+        let refuse = |change: &dyn Fn(&mut ReleaseManifestInputs)| {
+            let mut bad = inputs.clone();
+            change(&mut bad);
+            create_release_manifest_v3(&bad, &fixture.keyset).is_err()
+        };
+        assert!(refuse(&|i| i.release_sequence = 0));
+        assert!(refuse(&|i| i.git_revision = "11111111".to_string()));
+        assert!(refuse(
+            &|i| i.url_base = "http://releases.postfiat.org".to_string()
+        ));
+        assert!(refuse(&|i| i.valid_days = 0));
+        assert!(refuse(&|i| i.binary_aarch64 = fixture.root.join("missing")));
+        assert!(refuse(&|i| i.rollout.halt_if_missed = true));
+        assert!(refuse(&|i| i.checkpoint.height = 0));
     }
 
     #[test]

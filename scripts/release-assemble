@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Assemble the directory of a public release around the two node binaries.
+
+  scripts/release-assemble RELEASE_DIR
+
+RELEASE_DIR already holds `postfiat-node-linux-x86_64` and
+`postfiat-node-linux-aarch64`. This adds, deterministically (same commit, same
+bytes):
+
+  postfiat-units.tar            the packaged systemd units and their guides
+  postfiat-docker-profiles.tar  the Docker profiles (empty until an image is published)
+  postfiat-cargo-sbom.cdx.json  the CycloneDX SBOM of the locked dependencies
+  SHA256SUMS                    over every file above and the two binaries
+
+It signs nothing. The release lead then runs `postfiat-node
+release-manifest-create` on this directory, and two release signers sign.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import io
+from pathlib import Path
+import subprocess
+import sys
+import tarfile
+
+ROOT = Path(__file__).resolve().parents[1]
+BINARIES = ("postfiat-node-linux-x86_64", "postfiat-node-linux-aarch64")
+UNIT_SOURCES = ("ops/validator-rpc", "ops/validator-uptime-observer", "systemd")
+OBSERVER_SCRIPTS = ("scripts/validator-uptime-observer.py", "scripts/validator_uptime_contract.py")
+
+
+def deterministic_tar(target: Path, files: list[Path]) -> None:
+    """A tar whose bytes depend only on the names and contents of its files."""
+    with tarfile.open(target, "w", format=tarfile.USTAR_FORMAT) as archive:
+        for path in sorted(files, key=lambda p: p.relative_to(ROOT).as_posix()):
+            data = path.read_bytes()
+            info = tarfile.TarInfo(path.relative_to(ROOT).as_posix())
+            info.size = len(data)
+            info.mode = 0o755 if path.suffix in {".py", ".sh"} else 0o644
+            info.mtime = 0
+            info.uid = info.gid = 0
+            info.uname = info.gname = ""
+            archive.addfile(info, io.BytesIO(data))
+
+
+def tracked_files(prefix: str) -> list[Path]:
+    """Only files git tracks: nothing a build or an editor left behind enters a release."""
+    listed = subprocess.check_output(["git", "ls-files", "-z", "--", prefix], cwd=ROOT)
+    return [ROOT / name for name in listed.decode().split("\0") if name]
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print(__doc__, file=sys.stderr)
+        return 2
+    release = Path(sys.argv[1]).resolve()
+    missing = [name for name in BINARIES if not (release / name).is_file()]
+    if missing:
+        print(f"release-assemble: missing in {release}: {', '.join(missing)}", file=sys.stderr)
+        return 1
+    units = [path for prefix in UNIT_SOURCES for path in tracked_files(prefix)] + [ROOT / s for s in OBSERVER_SCRIPTS]
+    deterministic_tar(release / "postfiat-units.tar", units)
+    deterministic_tar(release / "postfiat-docker-profiles.tar", [])
+    subprocess.check_call([str(ROOT / "scripts/generate-cargo-sbom"), str(release / "postfiat-cargo-sbom.cdx.json")])
+    names = sorted([*BINARIES, "postfiat-units.tar", "postfiat-docker-profiles.tar", "postfiat-cargo-sbom.cdx.json"])
+    lines = [f"{hashlib.sha256((release / name).read_bytes()).hexdigest()}  {name}\n" for name in names]
+    (release / "SHA256SUMS").write_text("".join(lines), encoding="utf-8")
+    sys.stdout.write("".join(lines))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
