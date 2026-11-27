@@ -377,6 +377,8 @@ Before prompting any irreversible old-chain `NFTokenBurn`:
 2. **Single-block snapshot:** Every `SnapshotSourceRecord` inside
    `ProtocolSnapshot` (`pf.governance.snapshot.v1`) pins L1 reads to one
    `finalized_block_height` and stores `raw_response_sha256` + `raw_response_cid`.
+   `finalized_block_hash` is the 48-byte SHA3-384 chain hash of that block: the
+   raw bytes of its 96-lowercase-hex `BlockHeader.block_hash`.
 3. **Carry-over accountability:** Every `GovernancePacket`
    (`pf.governance.packet.v1`) explicitly scores every deliverable carried over
    from the prior session (`DONE`, `IN_PROGRESS`, `NOT_DONE`, or `DROPPED`) —
@@ -408,8 +410,9 @@ Before prompting any irreversible old-chain `NFTokenBurn`:
 The JSON block below is the machine-verified single source of truth checked in
 CI by `python3 scripts/test-message-protocol-vectors.py` (including a
 pure-Python check that every message and enum declared in the `.proto` files
-matches the script's tables field by field and value by value and that every
-vector decodes against them, plus `protoc`
+matches the script's tables field by field and value by value, that every byte
+size a `.proto` comment states matches them, and that every vector decodes
+against them, plus `protoc`
 decode/re-encode byte-identity round-trip checks when `protoc` is present).
 
 Fixture note: To keep the published wire vectors concise and human-inspectable,

@@ -19,7 +19,8 @@ Validates:
   3. Cryptographic & protocol invariants:
        - IPFS CIDv1 raw (0x01 0x55 0x12 0x20 || SHA-256) binary & base32lower multibase
        - PaymentMemo L1 constraints (lowercase hex, <= 64/64/256 bytes, total <= 512)
-       - FastPay order_hash / certificate_digest and consensus tx_hash are 48-byte SHA3-384 chain hashes
+       - FastPay order_hash / certificate_digest, consensus tx_hash and the governance finalized_block_hash
+         are 48-byte SHA3-384 chain hashes, and every byte size a .proto comment states matches the script
        - Pointer v5 visibility flag mutual exclusion (exact one of PUBLIC/PRIVATE/SEALED)
        - Envelope raw-byte signing preimage (zero re-serialization rule)
        - X-Wing AAD commitment, HKDF-SHA256 CEK wrap key, wallet KEM derivation, key-binding preimage
@@ -1780,6 +1781,56 @@ PROTO_ENUM_VALUES: dict[str, tuple[str, ...]] = {
     ),
 }
 
+# Every `bytes` field whose .proto comment, directly above it, starts with the field's size ("48-byte ...",
+# "Optional 32-byte ...", "16..32-byte ..."), with that size. verify_proto_stated_sizes() fails when a comment
+# states another size, stops stating one, or states one for a field that is not listed here.
+PROTO_STATED_BYTE_SIZES: dict[str, str] = {
+    "postfiat.message.v1.IpfsCidRef.cid_bin": "36",
+    "postfiat.message.v1.Pointer.cid_bin": "36",
+    "postfiat.message.v1.RecipientWrap.recipient_key_id": "32",
+    "postfiat.message.v1.RecipientWrap.xwing_ciphertext": "1120",
+    "postfiat.message.v1.RecipientWrap.wrap_nonce": "24",
+    "postfiat.message.v1.RecipientWrap.wrapped_cek": "48",
+    "postfiat.message.v1.XWingEncryptionHeader.aead_nonce": "24",
+    "postfiat.message.v1.XWingEncryptionHeader.aad_context": "32",
+    "postfiat.message.v1.MessageKeyBinding.xwing_public_key": "1216",
+    "postfiat.message.v1.MessageKeyBinding.key_id": "32",
+    "postfiat.message.v1.FastPayPaymentRef.order_hash": "48",
+    "postfiat.message.v1.FastPayPaymentRef.certificate_digest": "48",
+    "postfiat.message.v1.FastPayPaymentRef.tx_hash": "48",
+    "postfiat.message.v1.X402PaymentRequired.request_hash": "32",
+    "postfiat.message.v1.X402PaymentRequired.nonce": "16..32",
+    "postfiat.message.v1.X402PaymentSignature.order_hash": "48",
+    "postfiat.message.v1.X402PaymentSignature.tx_hash": "48",
+    "postfiat.message.v1.ManifestChunk.aead_nonce": "24",
+    "postfiat.nft.v1.MediaAttachment.sha3_384_digest": "48",
+    "postfiat.nft.v1.OriginProvenance.claim_hash": "32",
+    "postfiat.nft.v1.NftMetadata.prompt_digest": "48",
+    "postfiat.governance.v1.SnapshotSourceRecord.raw_response_sha256": "32",
+    "postfiat.governance.v1.ProtocolSnapshot.finalized_block_hash": "48",
+    "postfiat.governance.v1.TranscriptEntry.raw_event_sha256": "32",
+    "postfiat.governance.v1.SessionTranscript.transcript_root_sha256": "32",
+    "postfiat.governance.v1.RulingAnchor.input_bundle_sha256": "32",
+    "postfiat.governance.v1.RulingAnchor.output_ruling_sha256": "32",
+    "postfiat.governance.v1.RulingAnchor.replay_trace_sha256": "32",
+}
+
+# The fields that carry an L1 chain hash. Each must state CHAIN_HASH_BYTES, and every non-empty vector value of
+# one must have that length. The block hash is BlockHeader.block_hash (crates/types/src/core_chain.rs), made by
+# hash_hex("postfiat.block.v5", ...) in crates/node/src/consensus_artifacts.rs.
+PROTO_CHAIN_HASH_FIELDS = (
+    "postfiat.message.v1.FastPayPaymentRef.order_hash",
+    "postfiat.message.v1.FastPayPaymentRef.certificate_digest",
+    "postfiat.message.v1.FastPayPaymentRef.tx_hash",
+    "postfiat.message.v1.X402PaymentSignature.order_hash",
+    "postfiat.message.v1.X402PaymentSignature.tx_hash",
+    "postfiat.governance.v1.ProtocolSnapshot.finalized_block_hash",
+)
+PROTO_PACKAGE_RE = re.compile(r"^\s*package\s+([A-Za-z0-9_.]+)\s*;")
+PROTO_BLOCK_RE = re.compile(r"^\s*(?:message|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{")
+PROTO_BYTES_FIELD_RE = re.compile(r"^\s*(?:repeated\s+)?bytes\s+([A-Za-z_][A-Za-z0-9_]*)\s*=")
+PROTO_STATED_SIZE_RE = re.compile(r"^(?:[A-Za-z]+ ){0,2}?(\d+(?:\.\.\d+)?)-byte\b")
+
 
 class ProtoTokens:
     def __init__(self, rel: str, src: str) -> None:
@@ -1951,6 +2002,9 @@ def decode_against_proto(
             raise AssertionError(f"{where} holds {value}, which {base} does not define")
         if base in messages:
             decode_against_proto(value, base, messages, enums, visited, label)
+        elif base == "bytes" and f"{message}.{name}" in PROTO_CHAIN_HASH_FIELDS and value:
+            if len(value) != CHAIN_HASH_BYTES:
+                raise AssertionError(f"{where} is an L1 chain hash of {len(value)} bytes, not {CHAIN_HASH_BYTES}")
         elif base == "string":
             require_utf8(value, where)
         elif base == PROTO_MAP_STRING_STRING:
@@ -2034,6 +2088,47 @@ def verify_proto_field_tables(vectors: dict[str, dict[str, Any]]) -> tuple[int, 
     for label, message, raw_bytes in vector_proto_payloads(vectors):
         decode_against_proto(raw_bytes, message, messages, enums, visited, label)
     return len(PROTO_MESSAGE_FIELDS), len(PROTO_ENUM_VALUES), len(visited)
+
+
+def parse_proto_stated_sizes() -> dict[str, str]:
+    """{message.field: size} for every bytes field whose comment, directly above it, starts with the field's size."""
+    sizes: dict[str, str] = {}
+    for rel in PROTO_FILES:
+        package = block = ""
+        comment: list[str] = []
+        for line in (PROTO_ROOT / rel).read_text(encoding="utf-8").splitlines():
+            text = line.strip()
+            if text.startswith("//"):
+                comment.append(text[2:].strip())
+                continue
+            if match := PROTO_PACKAGE_RE.match(line):
+                package = match.group(1)
+            elif match := PROTO_BLOCK_RE.match(line):
+                block = f"{package}.{match.group(1)}"
+            elif (match := PROTO_BYTES_FIELD_RE.match(line)) and (stated := PROTO_STATED_SIZE_RE.match(" ".join(comment))):
+                sizes[f"{block}.{match.group(1)}"] = stated.group(1)
+            comment = []
+    return sizes
+
+
+def verify_proto_stated_sizes() -> int:
+    """Fail when a .proto comment states another byte size than the script's table, or a chain hash is not 48 bytes."""
+    stated = parse_proto_stated_sizes()
+
+    def size_of(table: dict[str, str], field: str) -> str:
+        return f"{table[field]} bytes" if field in table else "no size"
+
+    if stated != PROTO_STATED_BYTE_SIZES:
+        differences = [
+            f"{field}: the .proto comment states {size_of(stated, field)}, the script's table {size_of(PROTO_STATED_BYTE_SIZES, field)}"
+            for field in sorted(set(stated) | set(PROTO_STATED_BYTE_SIZES))
+            if stated.get(field) != PROTO_STATED_BYTE_SIZES.get(field)
+        ]
+        raise AssertionError("stated byte sizes disagree: " + "; ".join(differences))
+    for field in PROTO_CHAIN_HASH_FIELDS:
+        if stated.get(field) != str(CHAIN_HASH_BYTES):
+            raise AssertionError(f"{field} is an L1 chain hash and must state {CHAIN_HASH_BYTES} bytes, not {size_of(stated, field)}")
+    return len(stated)
 
 
 # ---------------------------------------------------------------------------
@@ -2248,6 +2343,7 @@ def main() -> int:
 
     verify_proto_sources_pure_python()
     proto_messages_checked, proto_enums_checked, proto_messages_in_vectors = verify_proto_field_tables(expected)
+    stated_sizes_checked = verify_proto_stated_sizes()
 
     # Check canonical field ordering on every hex protobuf payload
     for vec_name, fields in expected.items():
@@ -2295,6 +2391,7 @@ def main() -> int:
         f"message-protocol-v1 vectors PASSED "
         f"(vectors={len(expected)}, proto_messages_checked={proto_messages_checked}, "
         f"proto_enums_checked={proto_enums_checked}, proto_messages_in_vectors={proto_messages_in_vectors}, "
+        f"stated_sizes_checked={stated_sizes_checked}, "
         f"protoc_roundtrip={'yes' if protoc_used else 'skipped-no-protoc'})"
     )
     return 0
