@@ -2,13 +2,27 @@
 
 // Post Fiat L1v2 x402 v2 Facilitator & Resource Gate (Pillar 2 / Contract C1).
 //
-// Enforces:
+// PROTOTYPE. Nothing in this file reads or writes the chain, and it must not gate anything of
+// value until its settlement adapter is built on the chain's real RPC and on the chain's own
+// order type, OwnedTransferOrderV3.
+//  - No settlement adapter is shipped. A payment counts as settled when the adapter that the
+//    embedding code injects says so; without one, every payment is refused with 503, except
+//    `pf-fastpay-settled` on the FastPay lane, which rests on the certificate format below.
+//  - The object the payer signs here is not a chain order. It is a JSON format made up in this
+//    file (the `version` label inside it does not change that), signed under labels that exist
+//    only here. A validator would not accept it.
+//  - The `pf-fastpay-settled` certificate and its votes are formats of this file too, checked
+//    against a committee that the embedding code supplies by hand.
+//
+// What it does enforce, around that missing part:
 //  - Canonical Contract C1 protobuf3 headers (PAYMENT-REQUIRED / PAYMENT-SIGNATURE / PAYMENT-RESPONSE)
-//  - FastPay PFT (exact + pf-fastpay-settled) and consensus-lane PFUSDC (explicit sequence + finality receipt)
-//  - Immutable order_hash / tx_hash spent-payment deduplication (never certificate_digest)
-//  - Per-IP and per-key sliding-window rate limits + local ML-DSA-65 & pf.ptr v5 INLINE memo
-//    verification strictly BEFORE any upstream validator/RPC call
-//  - Epoch-tagged validator committee rotation for FastPay quorum certificates
+//  - A gate serves only a payment for exactly its own price, asset, recipient, lane and scheme,
+//    for a challenge it issued itself, and for the request in front of it
+//  - Immutable order_hash / tx_hash spent-payment deduplication (never certificate_digest),
+//    recorded before anything is served, and on disk when the store is a FileSpentStore
+//  - Per-IP and per-key rate limits + local ML-DSA-65 & pf.ptr v5 INLINE memo verification
+//    strictly BEFORE any upstream settlement call
+//  - Epoch-tagged validator committee rotation for the certificates of `pf-fastpay-settled`
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');

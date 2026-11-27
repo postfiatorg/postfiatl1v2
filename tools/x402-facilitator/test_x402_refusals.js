@@ -29,6 +29,7 @@ const {
   signFastPayOrder,
 } = require('./facilitator');
 const { X402HttpClient, X402McpClient } = require('./mcp-client');
+const { createFacilitatorFromEnv } = require('./server');
 
 const CHAIN_ID = 'postfiat-devnet-2';
 const NETWORK = 'postfiat:devnet-2';
@@ -1007,6 +1008,35 @@ async function unpaidRequestsAreLimitedPerAddress({ payerKeys }) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The daemon: a prototype until it has a settlement adapter on the chain
+// ---------------------------------------------------------------------------
+
+function daemonRefusesProductionModeWithoutAnAdapter() {
+  return withTempDir((dir) => {
+    const spentStorePath = path.join(dir, 'spent.jsonl');
+    const production = { X402_MODE: 'production', X402_SPENT_STORE_PATH: spentStorePath };
+    const needsAdapter = /settlement adapter/;
+
+    const fromCli = spawnSync(process.execPath, [DAEMON_PATH], {
+      env: daemonEnv(production),
+      encoding: 'utf8',
+      timeout: DAEMON_START_TIMEOUT_MS,
+    });
+    assert.equal(fromCli.status, 1, 'the shipped daemon has no adapter and must not start in production mode');
+    assert.match(fromCli.stderr, needsAdapter);
+
+    assert.throws(() => createFacilitatorFromEnv(production), needsAdapter);
+    const halfAdapter = { settleFastPay: async () => ({ accepted: true }) };
+    assert.throws(() => createFacilitatorFromEnv(production, { settlementAdapter: halfAdapter }), needsAdapter);
+    assert.throws(() => createFacilitatorFromEnv({ ...production, X402_MODE: 'live' }), /X402_MODE/);
+
+    const settlementAdapter = { ...halfAdapter, settleConsensus: async () => ({ accepted: true, finalizedHeight: 1 }) };
+    assert.equal(createFacilitatorFromEnv(production, { settlementAdapter }).mode, 'production');
+    assert.equal(createFacilitatorFromEnv({ X402_SPENT_STORE_PATH: spentStorePath }).mode, 'prototype');
+  });
+}
+
 const CASES = [
   ['a gate serves a payment for its own challenge once', gateServesItsOwnChallengeOnce],
   ['a gate refuses a payment made for another gate', gateRefusesPaymentMadeForAnotherGate],
@@ -1032,6 +1062,7 @@ const CASES = [
   ['limiter counters have a bound and an expiry', limiterCountersHaveABoundAndAnExpiry],
   ['made-up API keys do not reset the count of a payer', madeUpApiKeysDoNotResetAPayersCount],
   ['unpaid requests are limited per address', unpaidRequestsAreLimitedPerAddress],
+  ['the daemon refuses production mode without an adapter', daemonRefusesProductionModeWithoutAnAdapter],
 ];
 
 async function main() {

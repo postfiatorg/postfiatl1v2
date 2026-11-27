@@ -1,21 +1,51 @@
-# Post Fiat x402 v2 Facilitator & MCP Payment Wrapper
+# Post Fiat x402 v2 Facilitator & MCP Payment Wrapper (prototype)
 
-Standalone HTTP `402 Payment Required -> FastPay / PFUSDC payment proof -> 200 OK`
-facilitator, resource-server gate, and thin MCP JSON-RPC client wrapper conforming
-to Post Fiat Pillar 2 and Contract C1 (`postfiat.message.v1.X402PaymentRequired`,
+HTTP `402 Payment Required -> payment -> 200 OK` facilitator, resource-server
+gate, and thin MCP JSON-RPC client wrapper. The three headers follow Post Fiat
+Pillar 2 and Contract C1 (`postfiat.message.v1.X402PaymentRequired`,
 `X402PaymentSignature`, `X402PaymentResponse`).
+
+## Status: prototype, no chain adapter
+
+Nothing in this folder reads or writes the chain. Do not gate anything of value
+with it yet.
+
+- **It ships no settlement adapter.** A payment counts as settled when the
+  `settlementAdapter` that the embedding code passes to `createFacilitatorCore`
+  says so. Without one, every payment is refused with
+  `503 settlement_backend_unavailable`; the only exception is
+  `pf-fastpay-settled` on the FastPay lane, which rests on the certificate
+  format described below.
+- **The object the payer signs is not a chain order.** It is a JSON format made
+  up in `facilitator.js` (`signFastPayOrder`, `signConsensusTransfer`), signed
+  with ML-DSA-65 under labels that exist only in that file. The chain's own
+  order type is `OwnedTransferOrderV3`; a validator would not accept the object
+  signed here, and the `version` label inside the payload does not change that.
+- **The `pf-fastpay-settled` certificate is not a chain certificate.** Its vote
+  format is also made up in `facilitator.js`, and it is checked against a
+  committee that the embedding code supplies by hand.
+- **The payer's key is not tied to the payer's account.** The signature is
+  checked against the key inside the same payload.
+
+It stays a prototype until its settlement adapter is built on the chain's real
+RPC and on `OwnedTransferOrderV3`. The daemon enforces this: with
+`X402_MODE=production` it refuses to start without an adapter, and `server.js`
+has none, so from the command line it runs only as `X402_MODE=prototype` (the
+default). Code that embeds the daemon passes its adapter as
+`createFacilitatorFromEnv(env, { settlementAdapter })`.
 
 ## Wire Contract
 
 - **`PAYMENT-REQUIRED`** (`402 Payment Required`): unpadded base64url canonical
   protobuf `postfiat.message.v1.X402PaymentRequired` (`x402_version = 2`).
 - **`PAYMENT-SIGNATURE`** (client retry): unpadded base64url canonical protobuf
-  `postfiat.message.v1.X402PaymentSignature` carrying the ML-DSA-65 signed
-  transfer payload whose `pf.ptr` v5 `INLINE` memo (`kind = CONTENT_KIND_X402 (14)`,
-  `schema = 402`) embeds the 32-byte `request_hash`.
+  `postfiat.message.v1.X402PaymentSignature`. Its `signed_payload` carries this
+  prototype's signed transfer object, whose `pf.ptr` v5 `INLINE` memo
+  (`kind = CONTENT_KIND_X402 (14)`, `schema = 402`) embeds the 32-byte
+  `request_hash`, and whose `nonce_hex` names the challenge it answers.
 - **`PAYMENT-RESPONSE`** (`200 OK`): unpadded base64url canonical protobuf
   `postfiat.message.v1.X402PaymentResponse` carrying `settled = true` and the
-  verified `FastPayPaymentRef`.
+  payment reference as the adapter reported it.
 
 ## Resource Gate
 
@@ -52,13 +82,14 @@ gave out before is unknown, and a payer who already settled a
    file wins. If the file cannot be read or written, the payment is refused
    with `503 spent_store_unavailable`. The file must be on a local filesystem.
    `MemorySpentStore` forgets everything on restart and is for tests only.
-2. **Local verification before validator calls:** Rate limits (per-IP and
-   per-key), challenge expiry, `network`/`lane`/`asset_id`/`pay_to`/amount,
+2. **Local verification before the settlement adapter is called:** Rate limits,
+   challenge expiry, `network`/`lane`/`asset_id`/`pay_to`/amount,
    `pf.ptr` v5 `INLINE` `request_hash` memo binding, Sui-inspired FastPay fee
    floor (`25 + ceil(weight/512) + 1000 * net_new_objects + inputs`), and
-   ML-DSA-65 signatures are all verified locally before contacting validators.
-3. **Committee rotation:** `pf-fastpay-settled` quorum certificates verify
-   against epoch-tagged ML-DSA-65 validator committees and reject stale epochs.
+   ML-DSA-65 signatures are all verified locally before the adapter is called.
+3. **Committee rotation:** `pf-fastpay-settled` certificates (this prototype's
+   format) verify against epoch-tagged ML-DSA-65 committees and reject stale
+   epochs.
 4. **Limits that cannot be turned against a payer:** asking for a challenge
    and presenting a payment are each limited per address, in separate counts.
    The per-payer limit counts only a payment that passed every local check and
@@ -93,10 +124,13 @@ once per call and retry.
 ## Endpoints
 
 - `GET /healthz` — liveness and active committee epoch metadata.
-- `POST /v1/challenge` — issue a tracked `X402PaymentRequired` challenge.
+- `POST /v1/challenge` — issue a tracked `X402PaymentRequired` challenge. Open
+  to any caller, who chooses amount and recipient; no gate accepts it.
 - `POST /v1/verify` — locally verify a `PAYMENT-SIGNATURE` header without settling.
 - `POST /v1/settle` — verify locally, check spent-payment deduplication, settle
-  via FastPay/consensus adapter, and return `PAYMENT-RESPONSE`.
+  through the injected adapter, and return `PAYMENT-RESPONSE`. The caller may
+  hand in the challenge terms itself (`payment_required_header`), so this
+  endpoint does not prove that anybody's price was paid.
 
 ## Running
 
@@ -104,10 +138,13 @@ once per call and retry.
 # Run automated end-to-end smoke + replay + committee-rotation + MCP tests:
 node tools/x402-facilitator/test_x402_e2e.js
 
-# Run the refusal tests (gate terms, used payments, daemon start, client budget, limits):
+# Run the refusal tests (gate terms, used payments, client budget, limits, daemon start):
 node tools/x402-facilitator/test_x402_refusals.js
 
-# Run standalone facilitator daemon (binds 127.0.0.1:4020 by default).
+# Run the facilitator daemon as a prototype (binds 127.0.0.1:4020 by default).
 # X402_SPENT_STORE_PATH is required: the file that keeps used payments across restarts.
 X402_SPENT_STORE_PATH=/var/lib/postfiat-x402/spent.jsonl node tools/x402-facilitator/server.js
 ```
+
+Both test files and the daemon load `../../wallet-proxy/message-protocol.js`, so
+run `npm ci` in `wallet-proxy` first.

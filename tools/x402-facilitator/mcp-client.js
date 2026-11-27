@@ -3,9 +3,10 @@
 // Thin Post Fiat x402 HTTP & MCP (JSON-RPC 2.0) Payment Wrapper (Pillar 2).
 //
 // Intercepts HTTP 402 Payment Required responses, validates budget/policy caps,
-// signs a FastPay OwnedTransferOrderV3 (or consensus-lane issued_payment_v2) with
-// the request_hash anchored in a pf.ptr v5 INLINE memo, retries with
-// PAYMENT-SIGNATURE, and verifies the returned PAYMENT-RESPONSE settlement receipt.
+// signs the prototype transfer object of facilitator.js (a JSON format of that file,
+// not the chain's OwnedTransferOrderV3 or issued_payment_v2) with the request_hash
+// anchored in a pf.ptr v5 INLINE memo, retries with PAYMENT-SIGNATURE, and checks
+// the returned PAYMENT-RESPONSE against the payment it signed.
 
 const crypto = require('node:crypto');
 const http = require('node:http');

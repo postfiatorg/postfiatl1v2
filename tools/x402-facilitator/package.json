@@ -1,7 +1,7 @@
 {
   "name": "postfiat-x402-facilitator",
   "version": "1.0.0",
-  "description": "Post Fiat L1v2 x402 v2 FastPay & consensus PFUSDC payment facilitator and thin MCP client wrapper.",
+  "description": "Prototype of a Post Fiat L1v2 x402 v2 payment facilitator and thin MCP client wrapper; it ships no chain settlement adapter.",
   "type": "commonjs",
   "private": true,
   "main": "facilitator.js",
