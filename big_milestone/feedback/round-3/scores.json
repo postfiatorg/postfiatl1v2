@@ -1,0 +1,41 @@
+{
+  "run_at": "2026-11-26 22:31 UTC",
+  "pillars": {
+    "02-message-protocol.md": {
+      "pillar": "02-message-protocol.md",
+      "title": "Pillar 2 \u2014 Message Protocol Spec",
+      "scores": {
+        "google/gemini-4-neon": 76,
+        "anthropic/claude-opus-5.5": 78
+      },
+      "mean": 77
+    },
+    "06-hive-identity.md": {
+      "pillar": "06-hive-identity.md",
+      "title": "Pillar 6 \u2014 Hive Chat Identity on Chain",
+      "scores": {
+        "google/gemini-4-neon": 72,
+        "anthropic/claude-opus-5.5": 74
+      },
+      "mean": 73
+    },
+    "08-onchain-identity.md": {
+      "pillar": "08-onchain-identity.md",
+      "title": "Pillar 8 \u2014 On-chain Identity (DID, KYC, Optional Trust Lines)",
+      "scores": {
+        "google/gemini-4-neon": 76,
+        "anthropic/claude-opus-5.5": 79
+      },
+      "mean": 78
+    },
+    "09-finance-hub.md": {
+      "pillar": "09-finance-hub.md",
+      "title": "Pillar 9 \u2014 Finance Hub User Spec",
+      "scores": {
+        "google/gemini-4-neon": 74,
+        "anthropic/claude-opus-5.5": 80
+      },
+      "mean": 77
+    }
+  }
+}

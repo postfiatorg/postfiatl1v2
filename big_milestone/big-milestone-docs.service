@@ -1,0 +1,15 @@
+# Serves big_milestone/ on the Tailscale address. Install with:
+#   cp big_milestone/big-milestone-docs.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now big-milestone-docs
+[Unit]
+Description=Post Fiat big milestone specs (Tailscale :8844)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/repos/postfiatl1v2-big-milestone
+ExecStart=/usr/bin/python3 big_milestone/serve.py --host 100.89.219.44 --port 8844
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
