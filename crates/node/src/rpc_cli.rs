@@ -4566,6 +4566,7 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "account"
             | "account_tx"
             | "account_tx_index_status"
+            | "block_vote_records"
             | "fee"
             | "transfer_fee_quote"
             | "atomic_swap_fee_quote"

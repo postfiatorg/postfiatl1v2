@@ -382,6 +382,7 @@ fn is_in_process_standard_read_method(request: &RpcRequest) -> bool {
         | "account_assets"
         | "account_tx"
         | "account_tx_index_status"
+        | "block_vote_records"
         | "validators"
         | "manifests"
         | "fee"
@@ -604,6 +605,23 @@ fn execute_in_process_standard_read(
                     "account_tx_index_status",
                     target,
                     "account transaction index status queried",
+                )],
+            )
+        }
+        "block_vote_records" => {
+            let from_height = rpc_param_opt_u64(params, "from_height")?
+                .ok_or_else(|| "missing --from-height".to_string())?;
+            let report = rpc_dispatch::rpc_block_vote_records(
+                &dir,
+                from_height,
+                rpc_param_opt_usize(params, "limit")?,
+            )?;
+            wrap(
+                report,
+                vec![RpcEvent::new(
+                    "block_vote_records",
+                    from_height.to_string(),
+                    "block vote records queried",
                 )],
             )
         }

@@ -11,6 +11,10 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use postfiat_node::block_vote_records::{
+    write_block_vote_record, BlockVoteOutcome, BlockVoteRecord, BlockVoteRecordEntry,
+    BLOCK_VOTE_RECORD_SCHEMA,
+};
 use postfiat_node::{faucet_key, init, InitOptions, NodeOptions};
 use postfiat_rpc_sdk::{RpcRequest, RpcResponse};
 
@@ -206,6 +210,37 @@ fn replica_reads_equal_the_worker_path_and_a_replica_refuses_what_it_must() {
         .expect_err("replica must refuse --allow-mempool-submit");
     assert!(refusal.contains("rpc_replica_write_forbidden"), "{refusal}");
 
+    // One vote record, as a proposer writes it: validator-2 answered after the
+    // quorum had closed, validator-3 did not answer.
+    let entry = |validator: &str, outcome: BlockVoteOutcome, after_quorum: bool| BlockVoteRecordEntry {
+        validator: validator.to_string(),
+        vote_id: (outcome != BlockVoteOutcome::NoAnswer).then(|| "ab".repeat(48)),
+        outcome,
+        refusal_class: None,
+        answered_after_quorum: after_quorum,
+    };
+    write_block_vote_record(
+        &data_dir,
+        &BlockVoteRecord {
+            schema: BLOCK_VOTE_RECORD_SCHEMA.to_string(),
+            chain_id: "postfiat-replica-equivalence-test".to_string(),
+            block_height: 7,
+            view: 0,
+            block_hash: "cd".repeat(48),
+            certificate_id: "ef".repeat(48),
+            proposer: "validator-0".to_string(),
+            quorum: 3,
+            round_deadline_ms: 30_000,
+            entries: vec![
+                entry("validator-0", BlockVoteOutcome::Accepted, false),
+                entry("validator-1", BlockVoteOutcome::Accepted, false),
+                entry("validator-2", BlockVoteOutcome::Accepted, true),
+                entry("validator-3", BlockVoteOutcome::NoAnswer, false),
+            ],
+        },
+    )
+    .expect("write vote record");
+
     write_source_tip(&data_dir, 0, 0);
     let replica = spawn_replica(&data_dir, &[]).expect("replica starts");
     wait_for_file(&data_dir.join("readiness/replica-source-tip.json"));
@@ -280,6 +315,12 @@ fn replica_reads_equal_the_worker_path_and_a_replica_refuses_what_it_must() {
             j(serde_json::json!({ "asset_id": "none" })),
         ),
         ("bridge_status", j(serde_json::json!({}))),
+        ("block_vote_records", j(serde_json::json!({ "from_height": 1, "limit": 4 }))),
+        ("block_vote_records", j(serde_json::json!({ "from_height": 7 }))),
+        ("block_vote_records", j(serde_json::json!({ "from_height": 999_999, "limit": 64 }))),
+        ("block_vote_records", j(serde_json::json!({}))),
+        ("block_vote_records", j(serde_json::json!({ "from_height": 0 }))),
+        ("block_vote_records", j(serde_json::json!({ "from_height": 1, "limit": 65 }))),
     ];
     let mut compared = 0;
     for (index, (method, params)) in cases.iter().enumerate() {
@@ -366,6 +407,21 @@ fn replica_reads_equal_the_worker_path_and_a_replica_refuses_what_it_must() {
         .events
         .iter()
         .all(|event| event.event_type != "read_cache"));
+
+    // The vote record comes back as written; a height without one says so.
+    let reply = replica_call(
+        replica.port,
+        &RpcRequest::new("records", "block_vote_records", serde_json::json!({ "from_height": 6, "limit": 2 })),
+    )
+    .result
+    .expect("vote records");
+    assert_eq!(reply["schema"], "postfiat-block-vote-records-v1");
+    assert_eq!(reply["records"][0], serde_json::json!({ "height": 6, "available": false, "record": null }));
+    assert_eq!(reply["records"][1]["available"], true);
+    let entries = &reply["records"][1]["record"]["entries"];
+    assert_eq!(entries[2]["validator"], "validator-2");
+    assert_eq!((&entries[2]["outcome"], &entries[2]["answered_after_quorum"]), (&serde_json::json!("accepted"), &serde_json::json!(true)));
+    assert_eq!(entries[3]["outcome"], "no_answer");
 
     // What a replica never serves.
     for method in [

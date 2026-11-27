@@ -297,6 +297,29 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "block_vote_records" => {
+            let from_height = flag_value(flags, "--from-height")
+                .ok_or("missing --from-height")?
+                .parse::<u64>()
+                .map_err(|_| "--from-height must be a u64".to_string())?;
+            let limit = flag_value(flags, "--limit")
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "--limit must be a usize".to_string())
+                })
+                .transpose()?;
+            let report = rpc_block_vote_records(&data_dir, from_height, limit)?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "block_vote_records",
+                    from_height.to_string(),
+                    "block vote records queried",
+                )],
+            )
+        }
         "account_tx_index_status" => {
             let report = account_tx_index_status(AccountTxIndexOptions { data_dir })
                 .map_err(|error| format!("rpc account_tx_index_status failed: {error}"))?;
@@ -2919,6 +2942,53 @@ pub(crate) fn rpc_server_info_response(
         }]);
     }
     response
+}
+
+/// Most heights one `block_vote_records` request may name.
+pub(super) const RPC_BLOCK_VOTE_RECORDS_MAX_LIMIT: usize = 64;
+
+/// The vote records this node holds for a window of heights. A node holds a
+/// record only for the blocks it proposed; for every other height the entry
+/// says `available: false`. The records are the proposer's observation of who
+/// answered its vote request, including votes that arrived after the quorum
+/// closed. They are never read by consensus.
+pub(super) fn rpc_block_vote_records(
+    data_dir: &Path,
+    from_height: u64,
+    limit: Option<usize>,
+) -> Result<serde_json::Value, String> {
+    let limit = limit.unwrap_or(8);
+    if from_height == 0 {
+        return Err("--from-height must be at least 1".to_string());
+    }
+    if limit == 0 || limit > RPC_BLOCK_VOTE_RECORDS_MAX_LIMIT {
+        return Err(format!(
+            "--limit must be between 1 and {RPC_BLOCK_VOTE_RECORDS_MAX_LIMIT}"
+        ));
+    }
+    let to_height = from_height.saturating_add(limit as u64 - 1);
+    let records = postfiat_node::block_vote_records::block_vote_records_for_heights(
+        data_dir,
+        from_height,
+        to_height,
+    )
+    .map_err(|error| format!("rpc block_vote_records failed: {error}"))?;
+    let rows: Vec<serde_json::Value> = records
+        .into_iter()
+        .map(|(height, record)| {
+            serde_json::json!({
+                "height": height,
+                "available": record.is_some(),
+                "record": record,
+            })
+        })
+        .collect();
+    Ok(serde_json::json!({
+        "schema": "postfiat-block-vote-records-v1",
+        "from_height": from_height,
+        "to_height": to_height,
+        "records": rows,
+    }))
 }
 
 pub(super) fn rpc_ledger_alias(

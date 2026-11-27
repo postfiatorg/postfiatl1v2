@@ -35,6 +35,7 @@ pub const READ_ONLY_PUBLIC_METHODS: &[&str] = &[
     "atomic_settlement_template",
     "atomic_swap_fee_quote",
     "batch_archive",
+    "block_vote_records",
     "blocks",
     "book_offers",
     "bridge_status",

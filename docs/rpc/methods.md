@@ -33,6 +33,7 @@ authorization inventory is
 | `account` | Account state. |
 | `account_tx` | Bounded account transaction history: transparent rows with native and issued payment memo contents, plus shielded-withdrawal credits. |
 | `account_tx_index_status` | Account-history index readiness. |
+| `block_vote_records` | The proposer's vote records this node holds for a window of heights (`from_height`, `limit` up to 64): who answered the vote request for each block it proposed, including votes that arrived after the quorum closed. An observation, never read by consensus. |
 
 `rpc-serve` answers `server_info` in-process, from three sources:
 
