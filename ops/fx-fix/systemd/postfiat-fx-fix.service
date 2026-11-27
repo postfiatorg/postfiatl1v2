@@ -1,0 +1,35 @@
+[Unit]
+Description=Post Fiat Scheduled London-Style FX Fix Executor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=postfiat
+Group=postfiat
+WorkingDirectory=/opt/postfiat/postfiatl1v2
+EnvironmentFile=/etc/postfiat/fx-fix.env
+ExecStart=/usr/bin/python3 -m fx_fix_executor.cli run \
+  --config /etc/postfiat/fx-fix.json \
+  --state-file /var/lib/postfiat/fx-fix/window-state.json \
+  --observations /var/lib/postfiat/fx-fix/latest-observations.json \
+  --output /var/lib/postfiat/fx-fix/last-batch.json
+Environment=PYTHONPATH=/opt/postfiat/postfiatl1v2/ops/fx-fix
+TimeoutStartSec=120
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+ReadWritePaths=/var/lib/postfiat/fx-fix

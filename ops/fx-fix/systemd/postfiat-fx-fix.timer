@@ -1,0 +1,14 @@
+[Unit]
+Description=Post Fiat Scheduled London 16:00 FX Fix Window Timer
+
+[Timer]
+# WM/Refinitiv-style 16:00 London fixing window, DST-aware (GMT/BST).
+OnCalendar=Mon..Fri 16:00:00 Europe/London
+AccuracySec=1s
+RandomizedDelaySec=0
+# Never replay a missed fixing window after host downtime; operators must review.
+Persistent=false
+Unit=postfiat-fx-fix.service
+
+[Install]
+WantedBy=timers.target
