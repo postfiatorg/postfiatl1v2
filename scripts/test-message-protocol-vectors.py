@@ -9,9 +9,9 @@ Validates:
      Uses `protoc` compilation + wire decode cross-checking whenever `protoc` is
      available on PATH (mandatory when `--require-protoc` is passed), and always
      runs pure-Python stdlib schema + wire-format checks so CI needs zero pip installs:
-     the .proto files are parsed, every message the vectors use must match the
-     script's field table (number, label, type, name), and every vector byte string
-     is decoded strictly against the parsed declarations.
+     the .proto files are parsed, every declared message must match the script's
+     field table (number, label, type, name), and every vector byte string is
+     decoded strictly against the parsed declarations.
   2. Exact deterministic worked hex vectors published in
      docs/specs/message-protocol-v1.md (single source of truth; detects any drift
      between the specification document and canonical wire encoding).
@@ -1511,10 +1511,11 @@ PROTO_REPEATED = "repeated "
 PROTO_UNSUPPORTED_STATEMENTS = {"message", "enum", "oneof", "option", "optional", "extend", "extensions", "service"}
 PROTO_TOKEN_RE = re.compile(r'\s*(?:([A-Za-z_][A-Za-z0-9_.]*)|(\d+)|("[^"\n]*")|([{};=<>,]))')
 
-# Every message the vectors encode, field by field as "<number> <type> <name>" in the spelling of the .proto
-# files. verify_proto_field_tables() fails when a .proto file declares a different number, label, type or name
-# for any of them, and decodes every vector byte string against the parsed .proto files.
-VECTOR_PROTO_FIELDS: dict[str, tuple[str, ...]] = {
+# Every message declared in the .proto files, field by field as "<number> <type> <name>" in the spelling of the
+# .proto files. verify_proto_field_tables() fails when a .proto file declares a different number, label, type or
+# name for any of them, or declares a message that has no table here, and decodes every vector byte string
+# against the parsed .proto files.
+PROTO_MESSAGE_FIELDS: dict[str, tuple[str, ...]] = {
     "postfiat.message.v1.IpfsCidRef": ("1 bytes cid_bin", "2 uint64 byte_length", "3 string multibase_cid"),
     "postfiat.message.v1.Pointer": (
         "1 bytes cid_bin", "2 PointerTarget target", "3 ContentKind kind", "4 uint32 schema", "5 string task_id",
@@ -1532,6 +1533,11 @@ VECTOR_PROTO_FIELDS: dict[str, tuple[str, ...]] = {
     "postfiat.message.v1.XWingEncryptionHeader": (
         "1 CipherSuite cipher_suite", "2 bytes aead_nonce", "3 bytes aad_context", "4 uint32 chunk_index",
         "5 string kdf_info", "6 repeated RecipientWrap recipients",
+    ),
+    "postfiat.message.v1.MessageKeyBinding": (
+        "1 string chain_id", "2 string account", "3 bytes xwing_public_key", "4 bytes key_id",
+        "5 uint64 created_at_unix_ms", "6 uint32 key_epoch", "7 SignatureAlgorithm signature_algorithm",
+        "8 bytes account_pubkey", "9 bytes signature",
     ),
     "postfiat.message.v1.FastPayPaymentRef": (
         "1 PaymentLane lane", "2 string chain_id", "3 bytes order_hash", "4 bytes certificate_digest",
@@ -1570,6 +1576,10 @@ VECTOR_PROTO_FIELDS: dict[str, tuple[str, ...]] = {
         "8 repeated ManifestChunk chunks",
     ),
     "postfiat.message.v1.TextMessage": ("1 string text", "2 string format", "3 repeated IpfsCidRef attachments"),
+    "postfiat.message.v1.RewardNotice": (
+        "1 string reward_id", "2 string task_id", "3 string recipient_account", "4 uint64 amount_atoms",
+        "5 string asset_id", "6 string summary", "7 FastPayPaymentRef payment_ref",
+    ),
     "postfiat.nft.v1.ContentHash": (
         "1 string uri", "2 HashAlgorithm algorithm", "3 bytes digest", "4 uint64 byte_length",
     ),
@@ -1602,6 +1612,10 @@ VECTOR_PROTO_FIELDS: dict[str, tuple[str, ...]] = {
         "11 uint64 cutoff_ledger_index", "12 uint64 claimed_at_unix_ms",
         "13 postfiat.message.v1.IpfsCidRef allowlist_cid",
     ),
+    "postfiat.nft.v1.PinOnlyProvenance": (
+        "1 uint32 schema_version", "2 string target_chain_id", "3 string claimant_account", "4 OriginProvenance origin",
+        "5 string old_wallet_signature_hex", "6 uint64 recorded_at_unix_ms",
+    ),
     "postfiat.governance.v1.AuthorityBinding": (
         "1 string signer_set_id", "2 uint32 threshold", "3 uint32 total_signers",
         "4 repeated string authorized_accounts", "5 string founder_nostr_pubkey", "6 string identity_handle",
@@ -1613,6 +1627,18 @@ VECTOR_PROTO_FIELDS: dict[str, tuple[str, ...]] = {
     "postfiat.governance.v1.DeliverableCarryOver": (
         "1 string deliverable_id", "2 string origin_session_id", "3 string title", "4 DeliverableStatus status",
         "5 string evidence_note", "6 repeated string evidence_refs",
+    ),
+    "postfiat.governance.v1.SnapshotSourceRecord": (
+        "1 string source_id", "2 string endpoint", "3 uint64 block_height", "4 uint64 captured_at_unix_ms",
+        "5 bytes raw_response_sha256", "6 postfiat.message.v1.IpfsCidRef raw_response_cid",
+    ),
+    "postfiat.governance.v1.ProtocolSnapshot": (
+        "1 uint32 schema_version", "2 string session_id", "3 string chain_id", "4 uint64 finalized_block_height",
+        "5 bytes finalized_block_hash", "6 uint64 captured_at_unix_ms", "7 uint32 active_validator_count",
+        "8 string bridge_status_summary", "9 string navcoin_supply_summary", "10 string cobalt_verdict_summary",
+        "11 string tasknode_health_summary", "12 string previous_session_id",
+        "13 postfiat.message.v1.IpfsCidRef previous_minutes_cid", "14 repeated DeliverableItem carried_deliverables",
+        "15 repeated SnapshotSourceRecord sources",
     ),
     "postfiat.governance.v1.ProposedDecision": (
         "1 string decision_id", "2 string title", "3 string summary", "4 bool run_deterministic_ruling",
@@ -1885,13 +1911,21 @@ def vector_proto_payloads(vectors: dict[str, dict[str, Any]]) -> list[tuple[str,
     ]
 
 
-def verify_proto_field_tables(vectors: dict[str, dict[str, Any]]) -> int:
-    """Fail when the .proto files disagree with the field tables and byte strings the vectors are built from."""
+def verify_proto_field_tables(vectors: dict[str, dict[str, Any]]) -> tuple[int, int]:
+    """Fail when the .proto files disagree with the script's message tables or with the vector bytes."""
     messages, enums = parse_proto_sources()
     known_types = set(messages) | set(enums)
-    for message, entries in VECTOR_PROTO_FIELDS.items():
-        if message not in messages:
-            raise AssertionError(f"{message}: used by the vectors but not declared in the .proto files")
+    for kind, declared_names, tables in (
+        ("message", messages, PROTO_MESSAGE_FIELDS),
+    ):
+        untabled = sorted(set(declared_names) - set(tables))
+        if untabled:
+            raise AssertionError(f"{kind} declared in the .proto files without a table in this script: {', '.join(untabled)}")
+        undeclared = sorted(set(tables) - set(declared_names))
+        if undeclared:
+            raise AssertionError(f"{kind} in this script's tables but not declared in the .proto files: {', '.join(undeclared)}")
+
+    for message, entries in PROTO_MESSAGE_FIELDS.items():
         package = message.rsplit(".", 1)[0]
         expected: dict[int, tuple[str, str]] = {}
         for entry in entries:
@@ -1909,12 +1943,7 @@ def verify_proto_field_tables(vectors: dict[str, dict[str, Any]]) -> int:
     visited: set[str] = set()
     for label, message, raw_bytes in vector_proto_payloads(vectors):
         decode_against_proto(raw_bytes, message, messages, enums, visited, label)
-    if visited != set(VECTOR_PROTO_FIELDS):
-        raise AssertionError(
-            "script field tables do not match the messages the vectors use: "
-            f"missing {sorted(visited - set(VECTOR_PROTO_FIELDS))}, unused {sorted(set(VECTOR_PROTO_FIELDS) - visited)}"
-        )
-    return len(VECTOR_PROTO_FIELDS)
+    return len(PROTO_MESSAGE_FIELDS), len(visited)
 
 
 # ---------------------------------------------------------------------------
@@ -2128,7 +2157,7 @@ def main() -> int:
         return 0
 
     verify_proto_sources_pure_python()
-    proto_messages_checked = verify_proto_field_tables(expected)
+    proto_messages_checked, proto_messages_in_vectors = verify_proto_field_tables(expected)
 
     # Check canonical field ordering on every hex protobuf payload
     for vec_name, fields in expected.items():
@@ -2175,6 +2204,7 @@ def main() -> int:
     print(
         f"message-protocol-v1 vectors PASSED "
         f"(vectors={len(expected)}, proto_messages_checked={proto_messages_checked}, "
+        f"proto_messages_in_vectors={proto_messages_in_vectors}, "
         f"protoc_roundtrip={'yes' if protoc_used else 'skipped-no-protoc'})"
     )
     return 0
