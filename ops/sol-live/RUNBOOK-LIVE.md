@@ -593,7 +593,7 @@ The loop only proposes. Each host's reviewer signs through its door, and with fe
 **Install on the relay machine, as root there:**
 
 ```bash
-git archive -o exit-settler.tar "$COMMIT" ops/sol-live solana/deploy
+git archive -o exit-settler.tar "$COMMIT" ops/sol-live solana/deploy solana/pfusdc-egress-verifier/bootstrap.py
 bash ops/sol-live/install-exit-settler.sh exit-settler.tar /home/postfiat/.ssh/known_hosts
 ```
 

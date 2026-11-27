@@ -46,6 +46,8 @@ class Relay:
                          "exit_settler.py"):
                 tar.add(HERE / name, arcname=f"ops/sol-live/{name}")
             tar.add(HERE.parents[1] / "solana/deploy/route_binding.py", arcname="solana/deploy/route_binding.py")
+            tar.add(HERE.parents[1] / "solana/pfusdc-egress-verifier/bootstrap.py",
+                    arcname="solana/pfusdc-egress-verifier/bootstrap.py")
         self.known = self.d / "known_hosts"
         self.known.write_text("192.0.2.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA\n")
 
