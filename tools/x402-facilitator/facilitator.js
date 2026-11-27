@@ -2,13 +2,27 @@
 
 // Post Fiat L1v2 x402 v2 Facilitator & Resource Gate (Pillar 2 / Contract C1).
 //
-// Enforces:
+// PROTOTYPE. Nothing in this file reads or writes the chain, and it must not gate anything of
+// value until its settlement adapter is built on the chain's real RPC and on the chain's own
+// order type, OwnedTransferOrderV3.
+//  - No settlement adapter is shipped. A payment counts as settled when the adapter that the
+//    embedding code injects says so; without one, every payment is refused with 503, except
+//    `pf-fastpay-settled` on the FastPay lane, which rests on the certificate format below.
+//  - The object the payer signs here is not a chain order. It is a JSON format made up in this
+//    file (the `version` label inside it does not change that), signed under labels that exist
+//    only here. A validator would not accept it.
+//  - The `pf-fastpay-settled` certificate and its votes are formats of this file too, checked
+//    against a committee that the embedding code supplies by hand.
+//
+// What it does enforce, around that missing part:
 //  - Canonical Contract C1 protobuf3 headers (PAYMENT-REQUIRED / PAYMENT-SIGNATURE / PAYMENT-RESPONSE)
-//  - FastPay PFT (exact + pf-fastpay-settled) and consensus-lane PFUSDC (explicit sequence + finality receipt)
-//  - Immutable order_hash / tx_hash spent-payment deduplication (never certificate_digest)
-//  - Per-IP and per-key sliding-window rate limits + local ML-DSA-65 & pf.ptr v5 INLINE memo
-//    verification strictly BEFORE any upstream validator/RPC call
-//  - Epoch-tagged validator committee rotation for FastPay quorum certificates
+//  - A gate serves only a payment for exactly its own price, asset, recipient, lane and scheme,
+//    for a challenge it issued itself, and for the request in front of it
+//  - Immutable order_hash / tx_hash spent-payment deduplication (never certificate_digest),
+//    recorded before anything is served, and on disk when the store is a FileSpentStore
+//  - Per-IP and per-key rate limits + local ML-DSA-65 & pf.ptr v5 INLINE memo verification
+//    strictly BEFORE any upstream settlement call
+//  - Epoch-tagged validator committee rotation for the certificates of `pf-fastpay-settled`
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -29,6 +43,14 @@ const DOMAIN_CONSENSUS_TX_HASH = Buffer.from('postfiat-l1-v2/consensus-tx-hash/v
 
 const MAX_BODY_BYTES = 256 * 1024;
 const DEFAULT_CHALLENGE_TTL_MS = 5 * 60_000;
+const MAX_CHALLENGE_TTL_MS = 15 * 60_000;
+const DEFAULT_MAX_OPEN_CHALLENGES = 10_000;
+const CHALLENGE_SWEEP_INTERVAL_MS = 60_000;
+const DEFAULT_MAX_RATE_LIMIT_BUCKETS = 50_000;
+
+const SPENT_FILE_MODE = 0o600;
+const SPENT_WRITER_TOKEN_BYTES = 16;
+const LINE_FEED = 0x0a;
 
 class X402Error extends Error {
   constructor(statusCode, code, message) {
@@ -166,6 +188,7 @@ function computeCertificateDigest(cert) {
 // Spent-payment deduplication stores (immutable order_hash / tx_hash ONLY)
 // ---------------------------------------------------------------------------
 
+// Forgets every used payment when the process ends: for tests and short local trials only.
 class MemorySpentStore {
   constructor() {
     this._entries = new Map();
@@ -190,42 +213,108 @@ class MemorySpentStore {
   }
 }
 
+// Used payments in an append-only file that several processes may share, one JSON line each.
+//
+// A payment is marked by appending its line with one write() and syncing it to disk, then reading
+// the file back: the first line for a payment is the one that marked it. The kernel puts all
+// appends to one file in a single order, so two processes cannot both be first, and there is no
+// lock file that a killed process could leave behind. The file has to be on a local filesystem
+// of Linux or macOS; appends are not atomic on a network filesystem.
+//
+// Every record starts with a line feed of its own, so what is left of a write that was cut off
+// (a full disk) stays on a line by itself. Such a line is skipped: its writer never reported the
+// payment as marked. Any other line that is not a record, or a file that got shorter, makes every
+// call throw, and the caller then refuses the payment.
 class FileSpentStore {
   constructor(filePath) {
     this._filePath = path.resolve(filePath);
-    this._entries = new Map();
-    if (fs.existsSync(this._filePath)) {
-      const raw = fs.readFileSync(this._filePath, 'utf8').trim();
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        for (const [k, v] of Object.entries(parsed)) {
-          this._entries.set(k, v);
-        }
-      }
-    }
+    this._entries = new Map(); // dedupKey -> { dedup_key, writer_token, record }, first line wins
+    this._loadedBytes = 0;
+    const dir = path.dirname(this._filePath);
+    fs.mkdirSync(dir, { recursive: true });
+    this._fd = fs.openSync(this._filePath, 'a+', SPENT_FILE_MODE);
+    syncDirectory(dir);
+    this._loadNewLines();
   }
 
   has(dedupKey) {
+    this._loadNewLines();
     return this._entries.has(dedupKey);
   }
 
   get(dedupKey) {
-    return this._entries.get(dedupKey) || null;
+    this._loadNewLines();
+    const entry = this._entries.get(dedupKey);
+    return entry ? entry.record : null;
   }
 
   markSpent(dedupKey, record) {
+    this._loadNewLines();
     if (this._entries.has(dedupKey)) return false;
-    this._entries.set(dedupKey, record);
-    const dir = path.dirname(this._filePath);
-    fs.mkdirSync(dir, { recursive: true });
-    const tmp = `${this._filePath}.tmp.${process.pid}.${Date.now()}`;
-    fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(this._entries), null, 2), 'utf8');
-    fs.renameSync(tmp, this._filePath);
-    return true;
+    const writerToken = crypto.randomBytes(SPENT_WRITER_TOKEN_BYTES).toString('hex');
+    const entry = { dedup_key: dedupKey, writer_token: writerToken, record };
+    const line = Buffer.from(`\n${JSON.stringify(entry)}\n`, 'utf8');
+    const written = fs.writeSync(this._fd, line);
+    if (written !== line.length) {
+      throw new Error(`used-payment file ${this._filePath} took only a part of the record`);
+    }
+    fs.fsyncSync(this._fd);
+    this._loadNewLines();
+    const first = this._entries.get(dedupKey);
+    if (!first) {
+      throw new Error(`used-payment file ${this._filePath} does not hold the record just written`);
+    }
+    return first.writer_token === writerToken;
   }
 
   size() {
+    this._loadNewLines();
     return this._entries.size;
+  }
+
+  _loadNewLines() {
+    const { size } = fs.fstatSync(this._fd);
+    if (size < this._loadedBytes) {
+      throw new Error(`used-payment file ${this._filePath} got shorter`);
+    }
+    const unread = Buffer.alloc(size - this._loadedBytes);
+    let filled = 0;
+    while (filled < unread.length) {
+      const bytesRead = fs.readSync(this._fd, unread, filled, unread.length - filled, this._loadedBytes + filled);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    // A record that another process is still writing has no closing line feed yet: next time.
+    const completeBytes = unread.subarray(0, filled).lastIndexOf(LINE_FEED) + 1;
+    for (const line of unread.subarray(0, completeBytes).toString('utf8').split('\n')) {
+      if (!line.endsWith('}')) continue;
+      const entry = this._parseRecordLine(line);
+      if (!this._entries.has(entry.dedup_key)) this._entries.set(entry.dedup_key, entry);
+    }
+    this._loadedBytes += completeBytes;
+  }
+
+  _parseRecordLine(line) {
+    let entry = null;
+    try {
+      entry = JSON.parse(line);
+    } catch (_) {
+      // Reported below together with a line that parses but is not a record.
+    }
+    if (typeof entry?.dedup_key !== 'string' || typeof entry?.writer_token !== 'string') {
+      throw new Error(`used-payment file ${this._filePath} holds a line that is not a used-payment record`);
+    }
+    return entry;
+  }
+}
+
+// Makes a newly created file survive a power cut: its name lives in the directory.
+function syncDirectory(dir) {
+  const dirFd = fs.openSync(dir, 'r');
+  try {
+    fs.fsyncSync(dirFd);
+  } finally {
+    fs.closeSync(dirFd);
   }
 }
 
@@ -234,18 +323,29 @@ class FileSpentStore {
 // ---------------------------------------------------------------------------
 
 class SlidingWindowRateLimiter {
-  constructor({ limit = 60, windowMs = 60_000, now = Date.now } = {}) {
+  constructor({ limit = 60, windowMs = 60_000, now = Date.now, maxBuckets = DEFAULT_MAX_RATE_LIMIT_BUCKETS } = {}) {
     this._limit = limit;
     this._windowMs = windowMs;
     this._now = now;
-    this._buckets = new Map();
+    this._maxBuckets = maxBuckets;
+    this._buckets = new Map(); // kept in the order the windows started, oldest first
   }
 
   admit(bucketKey) {
     const nowMs = this._now();
     const key = String(bucketKey || 'unknown');
+    this._dropExpiredBuckets(nowMs);
     let entry = this._buckets.get(key);
-    if (!entry || nowMs - entry.startedAtMs >= this._windowMs) {
+    if (entry && nowMs - entry.startedAtMs >= this._windowMs) {
+      this._buckets.delete(key);
+      entry = undefined;
+    }
+    if (!entry) {
+      // A full table forgets its oldest counter instead of refusing the new key: refusing would
+      // let a flood of throwaway keys lock everybody else out for a whole window.
+      if (this._buckets.size >= this._maxBuckets) {
+        this._buckets.delete(this._buckets.keys().next().value);
+      }
       entry = { startedAtMs: nowMs, count: 0 };
       this._buckets.set(key, entry);
     }
@@ -258,6 +358,76 @@ class SlidingWindowRateLimiter {
     entry.count += 1;
     return { allowed: true, retryAfterMs: 0 };
   }
+
+  size() {
+    return this._buckets.size;
+  }
+
+  _dropExpiredBuckets(nowMs) {
+    for (const [key, entry] of this._buckets) {
+      if (nowMs - entry.startedAtMs < this._windowMs) break;
+      this._buckets.delete(key);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Open challenges of one issuer
+// ---------------------------------------------------------------------------
+
+// Each gate keeps its own store, and the public POST /v1/challenge writes to another one, so a
+// gate only ever answers a challenge it issued itself.
+class ChallengeStore {
+  constructor({ maxEntries = DEFAULT_MAX_OPEN_CHALLENGES } = {}) {
+    this._maxEntries = maxEntries;
+    this._entries = new Map(); // nonceHex -> { required, claimed }
+    this._sweptAtMs = 0;
+  }
+
+  // A full store refuses the new challenge instead of dropping an older one: a payer may
+  // already have paid for the older one.
+  add(required, nowMs) {
+    const full = this._entries.size >= this._maxEntries;
+    if (full || nowMs - this._sweptAtMs >= CHALLENGE_SWEEP_INTERVAL_MS) this._dropExpired(nowMs);
+    if (this._entries.size >= this._maxEntries) {
+      throw new X402Error(503, 'challenge_store_full', 'too many open payment challenges; retry later');
+    }
+    this._entries.set(required.nonce.toString('hex'), { required, claimed: false });
+  }
+
+  _dropExpired(nowMs) {
+    for (const [nonceHex, entry] of this._entries) {
+      if (nowMs > entry.required.expires_at_unix_ms && !entry.claimed) this._entries.delete(nonceHex);
+    }
+    this._sweptAtMs = nowMs;
+  }
+
+  find(nonce) {
+    const entry = this._entries.get(nonce.toString('hex'));
+    return entry ? entry.required : null;
+  }
+
+  // Holds the challenge for one payment while it settles. False when it is held or gone.
+  claim(nonce) {
+    const entry = this._entries.get(nonce.toString('hex'));
+    if (!entry || entry.claimed) return false;
+    entry.claimed = true;
+    return true;
+  }
+
+  release(nonce) {
+    const entry = this._entries.get(nonce.toString('hex'));
+    if (entry) entry.claimed = false;
+  }
+
+  consume(nonce) {
+    this._entries.delete(nonce.toString('hex'));
+  }
+
+}
+
+function sameBytes(a, b) {
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 // ---------------------------------------------------------------------------
@@ -369,11 +539,15 @@ function createFacilitatorCore({
   keyRateLimit = 60,
   rateWindowMs = 60_000,
   challengeTtlMs = DEFAULT_CHALLENGE_TTL_MS,
+  maxOpenChallenges = DEFAULT_MAX_OPEN_CHALLENGES,
+  maxRateLimitBuckets = DEFAULT_MAX_RATE_LIMIT_BUCKETS,
   now = Date.now,
 } = {}) {
-  const ipLimiter = new SlidingWindowRateLimiter({ limit: ipRateLimit, windowMs: rateWindowMs, now });
-  const keyLimiter = new SlidingWindowRateLimiter({ limit: keyRateLimit, windowMs: rateWindowMs, now });
-  const challenges = new Map(); // nonceHex -> { required, createdAtMs }
+  const limiterOptions = { windowMs: rateWindowMs, maxBuckets: maxRateLimitBuckets, now };
+  const ipLimiter = new SlidingWindowRateLimiter({ limit: ipRateLimit, ...limiterOptions });
+  const keyLimiter = new SlidingWindowRateLimiter({ limit: keyRateLimit, ...limiterOptions });
+  const payerLimiter = new SlidingWindowRateLimiter({ limit: keyRateLimit, ...limiterOptions });
+  const publicChallenges = new ChallengeStore({ maxEntries: maxOpenChallenges });
 
   function checkRateLimits({ remoteIp = 'unknown', apiKey = '' } = {}) {
     const ipRes = ipLimiter.admit(`ip:${remoteIp}`);
@@ -398,7 +572,20 @@ function createFacilitatorCore({
     resourceUri = '',
     ttlMs = challengeTtlMs,
     nonce = null,
+    challengeStore = publicChallenges,
+    remoteIp = null,
   }) {
+    // Asking for a challenge is counted apart from paying, so a caller who used up its
+    // challenges can still pay the ones it holds.
+    if (remoteIp !== null) {
+      const askRate = ipLimiter.admit(`challenge-ip:${remoteIp}`);
+      if (!askRate.allowed) {
+        throw new X402Error(429, 'rate_limited_ip', `IP rate limit exceeded; retry after ${askRate.retryAfterMs}ms`);
+      }
+    }
+    if (!Number.isSafeInteger(ttlMs) || ttlMs <= 0 || ttlMs > MAX_CHALLENGE_TTL_MS) {
+      throw new X402Error(400, 'invalid_ttl', `ttlMs must be between 1 and ${MAX_CHALLENGE_TTL_MS}`);
+    }
     const hashBuf = Buffer.isBuffer(requestHash) ? requestHash : Buffer.from(String(requestHash || ''), 'hex');
     if (hashBuf.length !== 32) {
       throw new X402Error(400, 'invalid_request_hash', 'requestHash must be 32 bytes');
@@ -428,7 +615,7 @@ function createFacilitatorCore({
       resource_uri: resourceUri,
       facilitator_url: facilitatorUrl,
     };
-    challenges.set(nonceBuf.toString('hex'), { required, createdAtMs: nowMs });
+    challengeStore.add(required, nowMs);
     const raw = mp.encodeX402PaymentRequired(required);
     return {
       required,
@@ -436,17 +623,52 @@ function createFacilitatorCore({
     };
   }
 
-  function resolveChallenge(expectedRequired, nonceBuf) {
+  function resolveChallenge(expectedRequired, nonceBuf, challengeStore) {
     if (expectedRequired) return expectedRequired;
-    const stored = challenges.get(nonceBuf.toString('hex'));
-    if (!stored) {
+    const required = challengeStore.find(nonceBuf);
+    if (!required) {
       throw new X402Error(400, 'unknown_challenge_nonce', 'challenge nonce is unknown or expired');
     }
-    return stored.required;
+    return required;
+  }
+
+  // A gate serves only a payment for exactly its own terms and for the request in front of it.
+  function requireChallengeForGateTerms(req, terms) {
+    const differences = {
+      network: req.network !== network,
+      scheme: req.scheme !== terms.scheme,
+      lane: req.lane !== terms.lane,
+      asset: req.asset_id !== terms.assetId,
+      recipient: req.pay_to !== terms.payTo,
+      price: req.max_amount_atoms !== terms.priceAtoms,
+    };
+    for (const [name, differs] of Object.entries(differences)) {
+      if (differs) {
+        throw new X402Error(400, 'gate_terms_mismatch', `the challenge was not issued for this gate's ${name}`);
+      }
+    }
+    if (!sameBytes(req.request_hash, terms.requestHash)) {
+      throw new X402Error(400, 'request_hash_mismatch', 'the challenge was issued for another request');
+    }
+  }
+
+  // The PAYMENT-SIGNATURE wrapper is not signed, so the signed transfer itself has to carry the
+  // gate's exact price and the nonce of the challenge it answers.
+  function requireTransferForGateChallenge(transfer, req, terms) {
+    if (transfer.amount_atoms !== terms.priceAtoms) {
+      throw new X402Error(400, 'payment_amount_mismatch', `the gate takes exactly ${terms.priceAtoms} atoms`);
+    }
+    if (transfer.nonce_hex !== req.nonce.toString('hex')) {
+      throw new X402Error(400, 'order_nonce_mismatch', 'the signed transfer was made for another challenge');
+    }
   }
 
   // Strictly local verification — NEVER calls upstream validators/RPC.
-  async function verifyPaymentLocally(signatureHeaderValue, { expectedRequired = null, remoteIp = 'unknown', apiKey = '' } = {}) {
+  // A gate passes its own challengeStore and its expectedTerms, which add the gate's checks.
+  async function verifyPaymentLocally(
+    signatureHeaderValue,
+    { expectedRequired = null, expectedTerms = null, challengeStore = publicChallenges, remoteIp = 'unknown', apiKey = '' } = {}
+  ) {
     checkRateLimits({ remoteIp, apiKey });
 
     let sigMsg;
@@ -464,10 +686,11 @@ function createFacilitatorCore({
       throw new X402Error(400, 'invalid_nonce', 'nonce must be 16..32 bytes');
     }
 
-    const req = resolveChallenge(expectedRequired, sigMsg.nonce);
+    const req = resolveChallenge(expectedRequired, sigMsg.nonce, challengeStore);
     if (now() > req.expires_at_unix_ms) {
       throw new X402Error(401, 'challenge_expired', 'PAYMENT-REQUIRED challenge has expired');
     }
+    if (expectedTerms) requireChallengeForGateTerms(req, expectedTerms);
     if (sigMsg.network !== req.network) {
       throw new X402Error(400, 'network_mismatch', `expected network ${req.network}, got ${sigMsg.network}`);
     }
@@ -508,12 +731,7 @@ function createFacilitatorCore({
       throw new X402Error(401, 'invalid_payer_signature_format', 'signed_payload requires ML-DSA-65 pubkey & signature');
     }
 
-    // Secondary rate-limit keyed on payer pubkey fingerprint to prevent Sybil spam
     const payerKeyFingerprint = mp.sha256(payerPubkeyBuf).toString('hex').slice(0, 16);
-    const payerRate = keyLimiter.admit(`payer:${payerKeyFingerprint}`);
-    if (!payerRate.allowed) {
-      throw new X402Error(429, 'rate_limited_payer', `payer rate limit exceeded; retry after ${payerRate.retryAfterMs}ms`);
-    }
 
     if (sigMsg.lane === mp.PaymentLane.FASTPAY) {
       const order = parsedPayload.order;
@@ -532,6 +750,7 @@ function createFacilitatorCore({
       if (!Number.isSafeInteger(order.amount_atoms) || order.amount_atoms < req.max_amount_atoms) {
         throw new X402Error(402, 'insufficient_payment_amount', 'order amount_atoms below required max_amount_atoms');
       }
+      if (expectedTerms) requireTransferForGateChallenge(order, req, expectedTerms);
       const minFee = computeMinimumFastPayFeeAtoms({
         weightBytes: sigMsg.signed_payload.length,
         inputCount: order.input_count || 1,
@@ -560,6 +779,8 @@ function createFacilitatorCore({
         scheme: sigMsg.scheme,
         required: req,
         signature: sigMsg,
+        requestHash: memoHash,
+        payerKeyFingerprint,
         orderHash: computedOrderHash,
         txHash: Buffer.alloc(0),
         payerAccount: String(order.payer_account || ''),
@@ -594,6 +815,7 @@ function createFacilitatorCore({
       if (!Number.isSafeInteger(tx.amount_atoms) || tx.amount_atoms < req.max_amount_atoms) {
         throw new X402Error(402, 'insufficient_payment_amount', 'consensus tx amount_atoms below required amount');
       }
+      if (expectedTerms) requireTransferForGateChallenge(tx, req, expectedTerms);
       const memoHash = extractX402RequestHashFromMemos(tx.memos);
       if (!crypto.timingSafeEqual(memoHash, req.request_hash)) {
         throw new X402Error(400, 'memo_request_hash_mismatch', 'pf.ptr v5 INLINE memo hash does not match request_hash');
@@ -614,6 +836,8 @@ function createFacilitatorCore({
         scheme: sigMsg.scheme,
         required: req,
         signature: sigMsg,
+        requestHash: memoHash,
+        payerKeyFingerprint,
         orderHash: Buffer.alloc(0),
         txHash: computedTxHash,
         payerAccount: String(tx.payer_account || ''),
@@ -628,17 +852,64 @@ function createFacilitatorCore({
     throw new X402Error(400, 'unsupported_lane', `unsupported payment lane: ${sigMsg.lane}`);
   }
 
-  async function settlePayment(signatureHeaderValue, { expectedRequired = null, remoteIp = 'unknown', apiKey = '' } = {}) {
+  async function settlePayment(
+    signatureHeaderValue,
+    { expectedRequired = null, expectedTerms = null, challengeStore = null, remoteIp = 'unknown', apiKey = '' } = {}
+  ) {
     // 1. Complete local verification BEFORE touching spent store or upstream validators.
-    const verified = await verifyPaymentLocally(signatureHeaderValue, { expectedRequired, remoteIp, apiKey });
+    const verified = await verifyPaymentLocally(signatureHeaderValue, {
+      expectedRequired,
+      expectedTerms,
+      challengeStore: challengeStore || publicChallenges,
+      remoteIp,
+      apiKey,
+    });
+    if (!challengeStore) return settleVerifiedPayment(verified);
 
+    // A gate's challenge is good for one payment: held while that payment settles, removed once it
+    // has, and given back when the settlement fails so the payer can present the payment again.
+    const { nonce } = verified.required;
+    if (!challengeStore.claim(nonce)) {
+      throw new X402Error(409, 'challenge_already_used', 'another payment for this challenge is settling or has settled');
+    }
+    try {
+      const settled = await settleVerifiedPayment(verified);
+      challengeStore.consume(nonce);
+      return settled;
+    } catch (err) {
+      challengeStore.release(nonce);
+      throw err;
+    }
+  }
+
+  // A store that cannot be read or written means the payment is refused, never served unrecorded.
+  function withSpentStore(use) {
+    try {
+      return use();
+    } catch (cause) {
+      const err = new X402Error(503, 'spent_store_unavailable', 'the used-payment record is not available; nothing was served');
+      err.cause = cause;
+      throw err;
+    }
+  }
+
+  async function settleVerifiedPayment(verified) {
     // 2. Reject replays keyed strictly on immutable order_hash or tx_hash (NEVER certificate_digest).
-    if (spentStore.has(verified.dedupKey)) {
+    if (withSpentStore(() => spentStore.has(verified.dedupKey))) {
       throw new X402Error(
         409,
         'payment_already_spent',
         `payment ${verified.dedupKey} has already been settled`
       );
+    }
+
+    // Per-payer limit. Counted only here, for a payment that passed every local check and is
+    // not used yet: junk that names a payer's key, or an old payment of that payer sent again,
+    // cannot use up the payer's allowance. Payers have a table of their own, so made-up API keys
+    // cannot push a payer's counter out of it.
+    const payerRate = payerLimiter.admit(verified.payerKeyFingerprint);
+    if (!payerRate.allowed) {
+      throw new X402Error(429, 'rate_limited_payer', `payer rate limit exceeded; retry after ${payerRate.retryAfterMs}ms`);
     }
 
     let certificateDigest = Buffer.alloc(0);
@@ -679,14 +950,17 @@ function createFacilitatorCore({
       finalizedHeight = receipt.finalizedHeight;
     }
 
+    // The record is on disk (for a file store) before this function returns, so before a gate serves.
     const settledAtMs = now();
-    const inserted = spentStore.markSpent(verified.dedupKey, {
-      dedup_key: verified.dedupKey,
-      lane: verified.lane,
-      amount_atoms: verified.amountAtoms,
-      asset_id: verified.assetId,
-      settled_at_unix_ms: settledAtMs,
-    });
+    const inserted = withSpentStore(() =>
+      spentStore.markSpent(verified.dedupKey, {
+        dedup_key: verified.dedupKey,
+        lane: verified.lane,
+        amount_atoms: verified.amountAtoms,
+        asset_id: verified.assetId,
+        settled_at_unix_ms: settledAtMs,
+      })
+    );
     if (!inserted) {
       throw new X402Error(409, 'payment_already_spent', `concurrent replay rejected for ${verified.dedupKey}`);
     }
@@ -716,6 +990,7 @@ function createFacilitatorCore({
       response: responseMsg,
       responseHeaderValue,
       dedupKey: verified.dedupKey,
+      requestHash: verified.requestHash,
     };
   }
 
@@ -799,6 +1074,7 @@ function createFacilitatorServer(core, { maxHeaderSize = 65_536 } = {}) {
           requestHash: body.request_hash_hex,
           resourceUri: body.resource_uri || '',
           ttlMs: body.ttl_ms,
+          remoteIp,
         });
         sendJson(
           res,
@@ -880,7 +1156,10 @@ function createX402Gate({
   lane = mp.PaymentLane.FASTPAY,
   scheme = mp.X402Scheme.EXACT,
   resourceOrigin = 'http://127.0.0.1',
+  maxOpenChallenges = DEFAULT_MAX_OPEN_CHALLENGES,
 }) {
+  const issuedChallenges = new ChallengeStore({ maxEntries: maxOpenChallenges });
+
   return async function enforceX402(req, res, rawBody) {
     const requestHash = computeHttpRequestHash({
       method: req.method,
@@ -889,16 +1168,26 @@ function createX402Gate({
       body: rawBody,
     });
     const sigHeader = req.headers[HEADER_PAYMENT_SIGNATURE];
+    const remoteIp = String(req.socket?.remoteAddress || 'unknown');
     if (!sigHeader) {
-      const challenge = facilitatorCore.issueChallenge({
-        scheme,
-        lane,
-        assetId,
-        maxAmountAtoms: priceAtoms,
-        payTo,
-        requestHash,
-        resourceUri: `${resourceOrigin}${req.url}`,
-      });
+      let challenge;
+      try {
+        challenge = facilitatorCore.issueChallenge({
+          scheme,
+          lane,
+          assetId,
+          maxAmountAtoms: priceAtoms,
+          payTo,
+          requestHash,
+          resourceUri: `${resourceOrigin}${req.url}`,
+          challengeStore: issuedChallenges,
+          remoteIp,
+        });
+      } catch (err) {
+        if (!(err instanceof X402Error)) throw err;
+        sendJson(res, err.statusCode, { ok: false, code: err.code, error: err.message });
+        return null;
+      }
       sendJson(
         res,
         402,
@@ -917,11 +1206,13 @@ function createX402Gate({
 
     try {
       const settled = await facilitatorCore.settlePayment(String(sigHeader), {
-        remoteIp: String(req.socket?.remoteAddress || 'unknown'),
+        expectedTerms: { scheme, lane, assetId, payTo, priceAtoms, requestHash },
+        challengeStore: issuedChallenges,
+        remoteIp,
         apiKey: String(req.headers['x-facilitator-key'] || ''),
       });
-      if (!crypto.timingSafeEqual(settled.response.payment_ref.order_hash.length ? requestHash : requestHash, requestHash)) {
-        throw new X402Error(400, 'request_hash_mismatch', 'request hash mismatch');
+      if (!Buffer.isBuffer(settled.requestHash) || !sameBytes(settled.requestHash, requestHash)) {
+        throw new X402Error(400, 'request_hash_mismatch', 'the settled payment was made for another request');
       }
       return settled;
     } catch (err) {

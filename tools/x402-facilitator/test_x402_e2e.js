@@ -228,7 +228,7 @@ async function main() {
       payerAccount: PAYER,
       payerPublicKey: payerKeys.publicKey,
       payerSecretKey: payerKeys.secretKey,
-      maxBudgetAtoms: 500_000,
+      maxBudgetAtoms: 600_000,
       allowedNetworks: ['postfiat:devnet-2'],
       allowedAssets: ['PFT', PFUSDC_ASSET_ID],
       nextConsensusSequence: () => seq++,

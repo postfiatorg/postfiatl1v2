@@ -3,9 +3,10 @@
 // Thin Post Fiat x402 HTTP & MCP (JSON-RPC 2.0) Payment Wrapper (Pillar 2).
 //
 // Intercepts HTTP 402 Payment Required responses, validates budget/policy caps,
-// signs a FastPay OwnedTransferOrderV3 (or consensus-lane issued_payment_v2) with
-// the request_hash anchored in a pf.ptr v5 INLINE memo, retries with
-// PAYMENT-SIGNATURE, and verifies the returned PAYMENT-RESPONSE settlement receipt.
+// signs the prototype transfer object of facilitator.js (a JSON format of that file,
+// not the chain's OwnedTransferOrderV3 or issued_payment_v2) with the request_hash
+// anchored in a pf.ptr v5 INLINE memo, retries with PAYMENT-SIGNATURE, and checks
+// the returned PAYMENT-RESPONSE against the payment it signed.
 
 const crypto = require('node:crypto');
 const http = require('node:http');
@@ -58,7 +59,37 @@ function httpRequest(targetUrl, { method = 'POST', headers = {}, body = '' } = {
   });
 }
 
+const CONSENSUS_TRANSFER_FEE_ATOMS = 25;
+
+// What a caller states with a call: the price, the asset and the recipient it agreed to pay.
+function requireCompleteExpectedPayment({ amountAtoms, assetId, payTo }) {
+  const complete =
+    Number.isSafeInteger(amountAtoms) &&
+    amountAtoms > 0 &&
+    typeof assetId === 'string' &&
+    assetId.length > 0 &&
+    typeof payTo === 'string' &&
+    payTo.length > 0;
+  if (!complete) {
+    throw new X402Error(400, 'invalid_expected_payment', 'expectedPayment needs amountAtoms, assetId and payTo');
+  }
+}
+
+function requireTermsTheCallerAgreedTo(required, expectedPayment) {
+  const asked = { amountAtoms: required.max_amount_atoms, assetId: required.asset_id, payTo: required.pay_to };
+  for (const [term, askedValue] of Object.entries(asked)) {
+    if (askedValue !== expectedPayment[term]) {
+      throw new X402Error(
+        403,
+        'payment_terms_mismatch',
+        `server asks ${term} ${askedValue}, the caller agreed to ${expectedPayment[term]}`
+      );
+    }
+  }
+}
+
 class X402HttpClient {
+  // maxBudgetAtoms is the most this client object signs away in its lifetime, fees included.
   constructor({
     chainId = 'postfiat-devnet-2',
     payerAccount,
@@ -74,11 +105,15 @@ class X402HttpClient {
     if (!payerAccount || !payerPublicKey || !payerSecretKey) {
       throw new Error('X402HttpClient requires payerAccount, payerPublicKey, and payerSecretKey');
     }
+    if (!Number.isSafeInteger(maxBudgetAtoms) || maxBudgetAtoms < 0) {
+      throw new Error('X402HttpClient maxBudgetAtoms must be a non-negative integer');
+    }
     this._chainId = chainId;
     this._payerAccount = payerAccount;
     this._payerPublicKey = payerPublicKey;
     this._payerSecretKey = payerSecretKey;
     this._maxBudgetAtoms = maxBudgetAtoms;
+    this._signedAtoms = 0;
     this._allowedNetworks = new Set(allowedNetworks);
     this._allowedAssets = new Set(allowedAssets);
     this._nextConsensusSequence = nextConsensusSequence;
@@ -86,10 +121,25 @@ class X402HttpClient {
     this._now = now;
   }
 
-  async _buildPaymentSignatureHeader(required, localRequestHash) {
+  // Counts a payment against the budget before it is signed. Nothing is given back afterwards:
+  // whoever receives a signed payment can settle it, whatever they answer.
+  _reserveBudget(amountAtoms, feeAtoms) {
+    const costAtoms = amountAtoms + feeAtoms;
+    if (!Number.isSafeInteger(costAtoms) || costAtoms <= 0 || this._signedAtoms + costAtoms > this._maxBudgetAtoms) {
+      throw new X402Error(
+        403,
+        'budget_exceeded',
+        `${amountAtoms} atoms plus ${feeAtoms} fee do not fit the client budget: ${this._signedAtoms} of ${this._maxBudgetAtoms} atoms are signed away`
+      );
+    }
+    this._signedAtoms += costAtoms;
+  }
+
+  async _buildPaymentSignatureHeader(required, localRequestHash, expectedPayment = null) {
     if (required.x402_version !== 2) {
       throw new X402Error(400, 'unsupported_x402_version', `unsupported x402 version ${required.x402_version}`);
     }
+    if (expectedPayment) requireTermsTheCallerAgreedTo(required, expectedPayment);
     if (this._now() > required.expires_at_unix_ms) {
       throw new X402Error(400, 'challenge_already_expired', 'server issued an already-expired 402 challenge');
     }
@@ -98,13 +148,6 @@ class X402HttpClient {
     }
     if (!this._allowedAssets.has(required.asset_id)) {
       throw new X402Error(403, 'asset_not_allowed', `asset ${required.asset_id} is not in client allowlist`);
-    }
-    if (required.max_amount_atoms > this._maxBudgetAtoms) {
-      throw new X402Error(
-        403,
-        'budget_exceeded',
-        `requested ${required.max_amount_atoms} atoms exceeds client maxBudgetAtoms ${this._maxBudgetAtoms}`
-      );
     }
     if (
       required.request_hash.length !== 32 ||
@@ -139,6 +182,7 @@ class X402HttpClient {
         inputCount: baseOrder.input_count,
         outputCount: baseOrder.output_count,
       });
+      this._reserveBudget(baseOrder.amount_atoms, baseOrder.fee_atoms);
       const signed = await signFastPayOrder(baseOrder, {
         publicKey: this._payerPublicKey,
         secretKey: this._payerSecretKey,
@@ -156,6 +200,7 @@ class X402HttpClient {
       required.lane === mp.PaymentLane.CONSENSUS_ISSUED ||
       required.lane === mp.PaymentLane.CONSENSUS_PFT
     ) {
+      this._reserveBudget(required.max_amount_atoms, CONSENSUS_TRANSFER_FEE_ATOMS);
       const tx = {
         chain_id: this._chainId,
         lane: required.lane,
@@ -163,7 +208,7 @@ class X402HttpClient {
         payee_account: required.pay_to,
         asset_id: required.asset_id,
         amount_atoms: required.max_amount_atoms,
-        fee_atoms: 25,
+        fee_atoms: CONSENSUS_TRANSFER_FEE_ATOMS,
         sequence: await this._nextConsensusSequence(),
         nonce_hex: required.nonce.toString('hex'),
         memos: [x402Memo],
@@ -197,7 +242,11 @@ class X402HttpClient {
     };
   }
 
-  async request(targetUrl, { method = 'POST', headers = {}, body = '' } = {}) {
+  // With expectedPayment ({ amountAtoms, assetId, payTo }) the client pays only a challenge that
+  // asks exactly that. Without it the server's challenge sets them, within the budget and the
+  // asset and network lists.
+  async request(targetUrl, { method = 'POST', headers = {}, body = '', expectedPayment = null } = {}) {
+    if (expectedPayment) requireCompleteExpectedPayment(expectedPayment);
     const parsed = new URL(targetUrl);
     const bodyBuf = Buffer.isBuffer(body) ? body : Buffer.from(String(body || ''), 'utf8');
     const firstRes = await httpRequest(targetUrl, { method, headers, body: bodyBuf });
@@ -218,7 +267,8 @@ class X402HttpClient {
     });
     const { headerValue, expectedOrderHash, expectedTxHash } = await this._buildPaymentSignatureHeader(
       required,
-      localRequestHash
+      localRequestHash,
+      expectedPayment
     );
 
     const retryRes = await httpRequest(targetUrl, {
@@ -259,7 +309,7 @@ class X402McpClient {
     this._nextId = 1;
   }
 
-  async callTool(toolName, args = {}) {
+  async callTool(toolName, args = {}, { expectedPayment = null } = {}) {
     const id = this._nextId++;
     const payload = JSON.stringify({
       jsonrpc: '2.0',
@@ -271,6 +321,7 @@ class X402McpClient {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: payload,
+      expectedPayment,
     });
     if (res.statusCode !== 200) {
       throw new X402Error(res.statusCode, 'mcp_call_failed', res.body.toString('utf8'));

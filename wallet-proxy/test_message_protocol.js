@@ -5,7 +5,11 @@
 
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const mp = require('./message-protocol');
+
+const ADDRESS_VECTORS_PATH = path.resolve(__dirname, '..', 'docs', 'fixtures', 'addresses', 'pftl-address-vectors-v1.json');
 
 const C1 = {
   V1: {
@@ -170,7 +174,7 @@ async function testRealPqRoundtrips() {
   // 1. MessageKeyBinding real ML-DSA-65 sign & verify
   const { bytes: kbBytes } = await mp.signMessageKeyBinding({
     chain_id: 'postfiat-devnet-2',
-    account: 'pf1recip0000000000000000000000000000000000',
+    account: mp.deriveAccountAddress(senderKeys.publicKey),
     xwing_public_key: recip1.publicKey,
     created_at_unix_ms: 1764201600000,
     key_epoch: 1,
@@ -311,9 +315,61 @@ async function testRealPqRoundtrips() {
   assert.throws(() => mp.validateL1PaymentMemo('70662E707472', '7635', '00'), mp.MessageProtocolError);
 }
 
+// A binding says "this account uses this encryption key". It counts only when the key that
+// signed it is the key of the account it names.
+async function testKeyBindingIsSignedByTheNamedAccount() {
+  const { mlDsa65 } = await mp.loadPqModules();
+
+  // The derivation is the chain's: checked against the published address vectors.
+  const vectors = JSON.parse(fs.readFileSync(ADDRESS_VECTORS_PATH, 'utf8'));
+  const derived = vectors.valid.filter((entry) => entry.ml_dsa_65_seed_hex);
+  assert.ok(derived.length >= 4);
+  for (const entry of derived) {
+    const { publicKey } = mlDsa65.keygen(Buffer.from(entry.ml_dsa_65_seed_hex, 'hex'));
+    assert.equal(mp.deriveAccountAddress(publicKey), entry.canonical, entry.description);
+  }
+  assert.throws(() => mp.deriveAccountAddress(Buffer.alloc(32)), mp.MessageProtocolError);
+
+  const owner = mlDsa65.keygen(crypto.randomBytes(32));
+  const outsider = mlDsa65.keygen(crypto.randomBytes(32));
+  const outsiderKem = await mp.deriveMessageKemKeypair(crypto.randomBytes(32), 'postfiat-devnet-2');
+  const ownerAccount = mp.deriveAccountAddress(owner.publicKey);
+  const bindingSignedBy = (signer, account) =>
+    mp.signMessageKeyBinding({
+      chain_id: 'postfiat-devnet-2',
+      account,
+      xwing_public_key: outsiderKem.publicKey,
+      created_at_unix_ms: 1764201600000,
+      key_epoch: 7,
+      account_pubkey: signer.publicKey,
+      account_secret_key: signer.secretKey,
+    });
+  const refusedAsNotTheAccountKey = (err) =>
+    err instanceof mp.MessageProtocolError && /not the key of the named account/.test(err.message);
+
+  // Another account's binding, signed by a key that has nothing to do with that account.
+  const forOwnerByOutsider = await bindingSignedBy(outsider, ownerAccount);
+  await assert.rejects(() => mp.verifyMessageKeyBinding(forOwnerByOutsider.bytes), refusedAsNotTheAccountKey);
+  await assert.rejects(() => mp.verifyMessageKeyBinding(forOwnerByOutsider.binding), refusedAsNotTheAccountKey);
+
+  // The checksummed spelling of the signer's own account is not the form a binding carries.
+  const checksummedAccount = `pf${ownerAccount.slice(2).toUpperCase()}`;
+  const forChecksummedSpelling = await bindingSignedBy(owner, checksummedAccount);
+  await assert.rejects(() => mp.verifyMessageKeyBinding(forChecksummedSpelling.bytes), refusedAsNotTheAccountKey);
+
+  const forOwnerByOwner = await bindingSignedBy(owner, ownerAccount);
+  const verified = await mp.verifyMessageKeyBinding(forOwnerByOwner.bytes);
+  assert.equal(verified.account, ownerAccount);
+
+  // The owner's binding with the signature of another message is still refused.
+  const tampered = { ...forOwnerByOwner.binding, key_epoch: 8 };
+  await assert.rejects(() => mp.verifyMessageKeyBinding(tampered), /signature invalid/);
+}
+
 async function main() {
   testCanonicalVectors();
   await testRealPqRoundtrips();
+  await testKeyBindingIsSignedByTheNamedAccount();
   console.log('test_message_protocol: all C1 vectors and real PQ (ML-DSA-65 + X-Wing + XChaCha20-Poly1305) tests passed');
 }
 

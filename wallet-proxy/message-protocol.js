@@ -38,6 +38,11 @@ const DOMAIN_XWING_WRAP_INFO = 'postfiat-l1-v2/xwing-wrap/v1';
 const DOMAIN_MESSAGE_KEY_KDF = Buffer.from('postfiat-l1-v2/message-key/v1', 'ascii');
 const DOMAIN_MESSAGE_KEY_BIND = Buffer.from('postfiat-l1-v2/message-key-bind/v1', 'ascii');
 
+// Account address derivation of the chain (crates/crypto_provider/src/address.rs).
+const ACCOUNT_ADDRESS_PREFIX = 'pf';
+const ACCOUNT_ADDRESS_DERIVATION_DOMAIN = Buffer.from('postfiat.address.v1', 'ascii');
+const ACCOUNT_ADDRESS_DIGEST_BYTES = 20;
+
 const MEMO_TYPE_PF_PTR_HEX = Buffer.from('pf.ptr', 'ascii').toString('hex'); // "70662e707472"
 const MEMO_FORMAT_V5_HEX = Buffer.from('v5', 'ascii').toString('hex'); // "7635"
 const MEMO_FORMAT_V4_HEX = Buffer.from('v4', 'ascii').toString('hex'); // "7634"
@@ -527,6 +532,17 @@ function deriveXWingWrapKek(sharedSecret, aadContext, recipientKeyId, kdfInfo = 
   if (kid.length !== 32) throw new MessageProtocolError('recipientKeyId must be 32 bytes');
   const info = Buffer.concat([Buffer.from(kdfInfo, 'utf8'), Buffer.from([0]), kid]);
   return hkdfSha256(ss, aad, info, 32);
+}
+
+// The canonical lowercase address of the account that an ML-DSA-65 public key controls. Same
+// derivation as address_from_public_key in crates/crypto_provider/src/lib.rs.
+function deriveAccountAddress(accountPubkey) {
+  const pubkey = asBuf(accountPubkey);
+  if (pubkey.length !== ML_DSA_65_PUBKEY_BYTES) {
+    throw new MessageProtocolError(`account public key must be ${ML_DSA_65_PUBKEY_BYTES} bytes`);
+  }
+  const digest = sha3_384(Buffer.concat([ACCOUNT_ADDRESS_DERIVATION_DOMAIN, Buffer.from([0]), pubkey]));
+  return `${ACCOUNT_ADDRESS_PREFIX}${digest.subarray(0, ACCOUNT_ADDRESS_DIGEST_BYTES).toString('hex')}`;
 }
 
 function computeKeyBindingPreimage({
@@ -1349,6 +1365,11 @@ async function verifyMessageKeyBinding(bindingOrBytes) {
   if (binding.key_id.length !== 32 || !crypto.timingSafeEqual(binding.key_id, expectedKeyId)) {
     throw new MessageProtocolError('MessageKeyBinding key_id does not match SHA-256(xwing_public_key)');
   }
+  // The signature below only proves that account_pubkey signed. Without this, anyone could
+  // bind an encryption key of their own to somebody else's account.
+  if (binding.account !== deriveAccountAddress(binding.account_pubkey)) {
+    throw new MessageProtocolError('MessageKeyBinding account_pubkey is not the key of the named account');
+  }
   const { mlDsa65 } = await loadPqModules();
   const preimage = computeKeyBindingPreimage(binding);
   const valid = mlDsa65.verify(asBuf(binding.signature), preimage, asBuf(binding.account_pubkey));
@@ -1738,6 +1759,7 @@ module.exports = {
   deriveMessageKemKeypair,
   computeRecipientKeyId,
   deriveXWingWrapKek,
+  deriveAccountAddress,
   computeKeyBindingPreimage,
   xchacha20Poly1305Encrypt,
   xchacha20Poly1305Decrypt,
