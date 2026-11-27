@@ -424,6 +424,147 @@ fn mempool_admission_uses_the_block_rules_after_train_a_activation() {
             || error.to_string().contains("burn-locked and non-transferable"),
         "{error}"
     );
+
+    // Escrow: on an authorization-required asset, finishing an escrow whose
+    // owner's line is authorized is admitted; finishing one whose owner's
+    // line is not is refused at admission, as the block refuses it.
+    let escrow_issuer = review_key(85);
+    let authorized_owner = review_key(86);
+    let unauthorized_owner = review_key(87);
+    let recipient = review_key(88);
+    let mut escrow_asset = postfiat_types::AssetDefinition::new(
+        &genesis.chain_id,
+        &escrow_issuer.address,
+        "EGT",
+        1,
+        6,
+    )
+    .expect("escrow asset");
+    escrow_asset.requires_authorization = true;
+    let mut ledger = store.read_ledger().expect("read ledger");
+    ledger.accounts.extend([
+        review_account(&escrow_issuer),
+        review_account(&authorized_owner),
+        review_account(&unauthorized_owner),
+        review_account(&recipient),
+    ]);
+    let mut escrow_finishes = Vec::new();
+    for (sequence, owner, authorized) in [
+        (1, &authorized_owner, true),
+        (2, &unauthorized_owner, false),
+    ] {
+        ledger.account_mut(&owner.address).expect("owner").sequence = 1;
+        let mut line = postfiat_types::TrustLine::new(
+            &owner.address,
+            &escrow_issuer.address,
+            &escrow_asset.asset_id,
+            1_000,
+            10,
+        )
+        .expect("owner line");
+        line.authorized = authorized;
+        ledger.trustlines.push(line);
+        let escrow = postfiat_types::Escrow::new(
+            &genesis.chain_id,
+            &owner.address,
+            1,
+            &recipient.address,
+            &escrow_asset.asset_id,
+            10,
+            100,
+            "",
+            1,
+            20,
+            1,
+        )
+        .expect("escrow");
+        let unsigned = postfiat_types::UnsignedEscrowTransaction {
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&genesis),
+            protocol_version: genesis.protocol_version,
+            address_namespace: ADDRESS_NAMESPACE.to_string(),
+            transaction_kind: postfiat_types::ESCROW_FINISH_TRANSACTION_KIND.to_string(),
+            signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            source: recipient.address.clone(),
+            fee: 50_000,
+            sequence,
+            operation: postfiat_types::EscrowTransactionOperation::EscrowFinish(
+                postfiat_types::EscrowFinishOperation {
+                    escrow_id: escrow.escrow_id.clone(),
+                    owner: owner.address.clone(),
+                    recipient: recipient.address.clone(),
+                    fulfillment: String::new(),
+                },
+            ),
+        };
+        ledger.escrows.push(escrow);
+        escrow_finishes.push(postfiat_types::SignedEscrowTransaction {
+            signature_hex: bytes_to_hex(
+                &ml_dsa_65_sign(&recipient.keypair.private_key, &unsigned.signing_bytes())
+                    .expect("sign escrow finish"),
+            ),
+            unsigned,
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            public_key_hex: recipient.public_key_hex.clone(),
+        });
+    }
+    let mut recipient_line = postfiat_types::TrustLine::new(
+        &recipient.address,
+        &escrow_issuer.address,
+        &escrow_asset.asset_id,
+        1_000,
+        0,
+    )
+    .expect("recipient line");
+    recipient_line.authorized = true;
+    ledger.trustlines.push(recipient_line);
+    ledger.asset_definitions.push(escrow_asset);
+    store.write_ledger(&ledger).expect("write ledger");
+
+    let admitted = &escrow_finishes[0];
+    let mut block_ledger = ledger.clone();
+    let block = postfiat_execution::execute_escrow_transaction_with_compatibility(
+        &genesis,
+        &mut block_ledger,
+        admitted,
+        6,
+        compatibility,
+    );
+    assert!(block.accepted, "{block:?}");
+    submit_signed_escrow_transaction_json_to_mempool(SignedEscrowTransactionJsonSubmitOptions {
+        data_dir: dir.clone(),
+        signed_escrow_transaction_json: serde_json::to_string(admitted).expect("encode finish"),
+    })
+    .expect("an eligible escrow finish is admitted after activation");
+
+    let refused = &escrow_finishes[1];
+    let legacy = postfiat_execution::execute_escrow_transaction(
+        &genesis,
+        &mut block_ledger.clone(),
+        refused,
+        6,
+    );
+    assert!(legacy.accepted, "the old rules accept it: {legacy:?}");
+    let block = postfiat_execution::execute_escrow_transaction_with_compatibility(
+        &genesis,
+        &mut block_ledger,
+        refused,
+        6,
+        compatibility,
+    );
+    assert_eq!(block.code, "asset_gate_sender_ineligible");
+    let error =
+        submit_signed_escrow_transaction_json_to_mempool(SignedEscrowTransactionJsonSubmitOptions {
+            data_dir: dir.clone(),
+            signed_escrow_transaction_json: serde_json::to_string(refused)
+                .expect("encode finish"),
+        })
+        .expect_err("the block's escrow refusal is an admission refusal");
+    assert!(
+        error.to_string().contains("asset_gate_sender_ineligible")
+            || error.to_string().contains("not eligible"),
+        "{error}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
