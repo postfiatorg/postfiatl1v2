@@ -3013,6 +3013,20 @@ pub fn native_pft_supply_breakdown(
         beacon_finality_states: _,
         solana_route: _,
         additional_solana_routes: _,
+        identities_by_account: _,
+        identity_history_by_account: _,
+        identity_account_by_nostr: _,
+        compromised_nostr_pubkeys: _,
+        identity_account_by_handle: _,
+        retired_handle_holdback: _,
+        identity_validator_bindings: _,
+        identity_account_by_old_chain: _,
+        handle_namespace_registrars: _,
+        handle_reservations: _,
+        pending_handle_reassignments: _,
+        nav_fee_accruals: _,
+        credential_issuers: _,
+        credentials, // locks refundable native PFT credential deposits, counted below
     } = ledger;
     let ShieldedState {
         next_note_position: _,
@@ -3072,6 +3086,13 @@ pub fn native_pft_supply_breakdown(
             &mut total,
             u128::from(deposit.challenge_bond),
             "vault deposit challenge bonds",
+        )?;
+    }
+    for credential in credentials.values() {
+        add(
+            &mut total,
+            u128::from(credential.deposit_paid),
+            "credential deposits",
         )?;
     }
     let mut escrow_ids = std::collections::BTreeSet::new();

@@ -2,7 +2,11 @@
 /// Set and cleared by the owner with an `account_set` transaction once the
 /// `require_memo_activation_height` governance gate is active.
 pub const ACCOUNT_FLAG_REQUIRE_MEMO: u32 = 0x0000_0001;
-pub const ACCOUNT_ALLOWED_FLAGS: u32 = ACCOUNT_FLAG_REQUIRE_MEMO;
+/// Account flag: reject incoming unsolicited issued-asset transfers when no trustline exists.
+/// Set and cleared by the owner with an `account_set` transaction once `credential_did_v1_activation_height` is active.
+pub const ACCOUNT_FLAG_REFUSE_UNSOLICITED_ASSETS: u32 = 0x0000_0002;
+pub const ACCOUNT_ALLOWED_FLAGS: u32 =
+    ACCOUNT_FLAG_REQUIRE_MEMO | ACCOUNT_FLAG_REFUSE_UNSOLICITED_ASSETS;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Account {
@@ -448,6 +452,10 @@ impl Account {
     pub fn requires_memo(&self) -> bool {
         self.flags & ACCOUNT_FLAG_REQUIRE_MEMO != 0
     }
+
+    pub fn refuses_unsolicited_assets(&self) -> bool {
+        self.flags & ACCOUNT_FLAG_REFUSE_UNSOLICITED_ASSETS != 0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -476,6 +484,9 @@ pub struct AssetDefinition {
     pub freeze_enabled: bool,
     #[serde(default)]
     pub clawback_enabled: bool,
+    /// Optional Pillar 8 credential & lapsed-exit access policy (omitted when absent so pre-Train B state is byte-identical).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_policy: Option<AssetAccessPolicyV1>,
 }
 
 impl AssetDefinition {
@@ -503,6 +514,7 @@ impl AssetDefinition {
             requires_authorization: false,
             freeze_enabled: false,
             clawback_enabled: false,
+            access_policy: None,
         };
         asset.validate_for_chain(chain_id)?;
         Ok(asset)
@@ -561,6 +573,9 @@ impl AssetDefinition {
                 return Err("source-series asset must differ from its family asset".to_string());
             }
         }
+        if let Some(policy) = &self.access_policy {
+            policy.validate()?;
+        }
         Ok(())
     }
 
@@ -609,6 +624,7 @@ impl AssetDefinition {
             requires_authorization: family.requires_authorization,
             freeze_enabled: family.freeze_enabled,
             clawback_enabled: family.clawback_enabled,
+            access_policy: family.access_policy.clone(),
         };
         asset.validate()?;
         Ok(asset)
@@ -630,6 +646,13 @@ pub struct TrustLine {
     pub frozen: bool,
     #[serde(default)]
     pub reserve_paid: u64,
+    /// Binding ceiling explicitly set by the holder via `trust_set`.
+    /// Once `Some(cap)`, credits NEVER auto-raise `limit` above `cap`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub holder_limit: Option<u64>,
+    /// True when auto-created without explicit `trust_set`; auto-pruned when zeroed.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub implicit: bool,
 }
 
 impl TrustLine {
@@ -654,6 +677,8 @@ impl TrustLine {
             authorized: false,
             frozen: false,
             reserve_paid,
+            holder_limit: None,
+            implicit: false,
         };
         line.validate()?;
         Ok(line)
@@ -843,6 +868,9 @@ pub struct NavTrackedAsset {
     /// height-aware profile.
     #[serde(default)]
     pub finalized_at_height: u64,
+    /// Optional Pillar 7 deterministic fee schedule & accrual state (omitted when absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fee_state: Option<NavFeeStateV1>,
 }
 
 impl NavTrackedAsset {
@@ -868,6 +896,7 @@ impl NavTrackedAsset {
             halted: false,
             halt_reason: String::new(),
             finalized_at_height: 0,
+            fee_state: None,
         };
         asset.validate()?;
         Ok(asset)
@@ -892,6 +921,9 @@ impl NavTrackedAsset {
             )?;
         }
         validate_optional_text_field("nav_asset.halt_reason", &self.halt_reason, 128)?;
+        if let Some(fee_state) = &self.fee_state {
+            fee_state.validate()?;
+        }
         Ok(())
     }
 }

@@ -817,6 +817,20 @@ fn validate_issued_supply_custody_inventory(
         beacon_finality_states: _,
         solana_route: _,
         additional_solana_routes: _,
+        identities_by_account: _,
+        identity_history_by_account: _,
+        identity_account_by_nostr: _,
+        compromised_nostr_pubkeys: _,
+        identity_account_by_handle: _,
+        retired_handle_holdback: _,
+        identity_validator_bindings: _,
+        identity_account_by_old_chain: _,
+        handle_namespace_registrars: _,
+        handle_reservations: _,
+        pending_handle_reassignments: _,
+        nav_fee_accruals: _,
+        credential_issuers: _,
+        credentials: _,
     } = ledger;
     let ShieldedState {
         pq_pool_v1,
@@ -1956,6 +1970,196 @@ pub(super) fn append_ledger_state(
         }
     }
 
+    // Train B additive keyed LedgerState maps/sets: only appended when non-empty so
+    // pre-activation state roots remain 100% byte-identical.
+    if !ledger.identities_by_account.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.identities_by_account_count",
+            ledger.identities_by_account.len(),
+        );
+        for (key, value) in &ledger.identities_by_account {
+            append_canonical_str(bytes, "ledger.identities_by_account.key", key);
+            let encoded = serde_json::to_vec(value)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            append_canonical_bytes_commitment(
+                bytes,
+                "ledger.identities_by_account.value",
+                &encoded,
+            );
+        }
+    }
+    if !ledger.identity_history_by_account.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.identity_history_by_account_count",
+            ledger.identity_history_by_account.len(),
+        );
+        for (key, value) in &ledger.identity_history_by_account {
+            append_canonical_str(bytes, "ledger.identity_history_by_account.key", key);
+            let encoded = serde_json::to_vec(value)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            append_canonical_bytes_commitment(
+                bytes,
+                "ledger.identity_history_by_account.value",
+                &encoded,
+            );
+        }
+    }
+    if !ledger.identity_account_by_nostr.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.identity_account_by_nostr_count",
+            ledger.identity_account_by_nostr.len(),
+        );
+        for (key, value) in &ledger.identity_account_by_nostr {
+            append_canonical_str(bytes, "ledger.identity_account_by_nostr.key", key);
+            append_canonical_str(bytes, "ledger.identity_account_by_nostr.value", value);
+        }
+    }
+    if !ledger.compromised_nostr_pubkeys.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.compromised_nostr_pubkeys_count",
+            ledger.compromised_nostr_pubkeys.len(),
+        );
+        for key in &ledger.compromised_nostr_pubkeys {
+            append_canonical_str(bytes, "ledger.compromised_nostr_pubkeys.key", key);
+        }
+    }
+    if !ledger.identity_account_by_handle.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.identity_account_by_handle_count",
+            ledger.identity_account_by_handle.len(),
+        );
+        for (key, value) in &ledger.identity_account_by_handle {
+            append_canonical_str(bytes, "ledger.identity_account_by_handle.key", key);
+            append_canonical_str(bytes, "ledger.identity_account_by_handle.value", value);
+        }
+    }
+    if !ledger.retired_handle_holdback.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.retired_handle_holdback_count",
+            ledger.retired_handle_holdback.len(),
+        );
+        for (key, height) in &ledger.retired_handle_holdback {
+            append_canonical_str(bytes, "ledger.retired_handle_holdback.key", key);
+            append_canonical_u64(bytes, "ledger.retired_handle_holdback.height", *height);
+        }
+    }
+    if !ledger.identity_validator_bindings.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.identity_validator_bindings_count",
+            ledger.identity_validator_bindings.len(),
+        );
+        for (key, value) in &ledger.identity_validator_bindings {
+            append_canonical_str(bytes, "ledger.identity_validator_bindings.key", key);
+            let encoded = serde_json::to_vec(value)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            append_canonical_bytes_commitment(
+                bytes,
+                "ledger.identity_validator_bindings.value",
+                &encoded,
+            );
+        }
+    }
+    if !ledger.identity_account_by_old_chain.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.identity_account_by_old_chain_count",
+            ledger.identity_account_by_old_chain.len(),
+        );
+        for (key, value) in &ledger.identity_account_by_old_chain {
+            append_canonical_str(bytes, "ledger.identity_account_by_old_chain.key", key);
+            append_canonical_str(bytes, "ledger.identity_account_by_old_chain.value", value);
+        }
+    }
+    if !ledger.handle_namespace_registrars.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.handle_namespace_registrars_count",
+            ledger.handle_namespace_registrars.len(),
+        );
+        for (key, value) in &ledger.handle_namespace_registrars {
+            append_canonical_str(bytes, "ledger.handle_namespace_registrars.key", key);
+            let encoded = serde_json::to_vec(value)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            append_canonical_bytes_commitment(
+                bytes,
+                "ledger.handle_namespace_registrars.value",
+                &encoded,
+            );
+        }
+    }
+    if !ledger.handle_reservations.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.handle_reservations_count",
+            ledger.handle_reservations.len(),
+        );
+        for (key, value) in &ledger.handle_reservations {
+            append_canonical_str(bytes, "ledger.handle_reservations.key", key);
+            let encoded = serde_json::to_vec(value)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            append_canonical_bytes_commitment(bytes, "ledger.handle_reservations.value", &encoded);
+        }
+    }
+    if !ledger.pending_handle_reassignments.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.pending_handle_reassignments_count",
+            ledger.pending_handle_reassignments.len(),
+        );
+        for (key, value) in &ledger.pending_handle_reassignments {
+            append_canonical_str(bytes, "ledger.pending_handle_reassignments.key", key);
+            let encoded = serde_json::to_vec(value)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            append_canonical_bytes_commitment(
+                bytes,
+                "ledger.pending_handle_reassignments.value",
+                &encoded,
+            );
+        }
+    }
+    if !ledger.nav_fee_accruals.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.nav_fee_accruals_count",
+            ledger.nav_fee_accruals.len(),
+        );
+        for (key, value) in &ledger.nav_fee_accruals {
+            append_canonical_str(bytes, "ledger.nav_fee_accruals.key", key);
+            let encoded = serde_json::to_vec(value)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            append_canonical_bytes_commitment(bytes, "ledger.nav_fee_accruals.value", &encoded);
+        }
+    }
+    if !ledger.credential_issuers.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "ledger.credential_issuers_count",
+            ledger.credential_issuers.len(),
+        );
+        for (key, value) in &ledger.credential_issuers {
+            append_canonical_str(bytes, "ledger.credential_issuers.key", key);
+            let encoded = serde_json::to_vec(value)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            append_canonical_bytes_commitment(bytes, "ledger.credential_issuers.value", &encoded);
+        }
+    }
+    if !ledger.credentials.is_empty() {
+        append_canonical_usize(bytes, "ledger.credentials_count", ledger.credentials.len());
+        for (key, value) in &ledger.credentials {
+            append_canonical_str(bytes, "ledger.credentials.key", key);
+            let encoded = serde_json::to_vec(value)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            append_canonical_bytes_commitment(bytes, "ledger.credentials.value", &encoded);
+        }
+    }
+
     Ok(())
 }
 
@@ -2016,6 +2220,20 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         beacon_finality_states: _,
         solana_route: _,
         additional_solana_routes: _,
+        identities_by_account: _,
+        identity_history_by_account: _,
+        identity_account_by_nostr: _,
+        compromised_nostr_pubkeys: _,
+        identity_account_by_handle: _,
+        retired_handle_holdback: _,
+        identity_validator_bindings: _,
+        identity_account_by_old_chain: _,
+        handle_namespace_registrars: _,
+        handle_reservations: _,
+        pending_handle_reassignments: _,
+        nav_fee_accruals: _,
+        credential_issuers: _,
+        credentials: _,
     } = ledger;
 }
 
@@ -2282,6 +2500,11 @@ pub(super) fn append_asset_definition(bytes: &mut Vec<u8>, prefix: &str, asset: 
         &format!("{prefix}.clawback_enabled"),
         asset.clawback_enabled,
     );
+    if let Some(access_policy) = &asset.access_policy {
+        if let Ok(encoded) = serde_json::to_vec(access_policy) {
+            append_canonical_bytes_commitment(bytes, &format!("{prefix}.access_policy"), &encoded);
+        }
+    }
 }
 
 pub(super) fn append_trustline(bytes: &mut Vec<u8>, prefix: &str, trustline: &TrustLine) {
@@ -2302,6 +2525,12 @@ pub(super) fn append_trustline(bytes: &mut Vec<u8>, prefix: &str, trustline: &Tr
         &format!("{prefix}.reserve_paid"),
         trustline.reserve_paid,
     );
+    if let Some(holder_limit) = trustline.holder_limit {
+        append_canonical_u64(bytes, &format!("{prefix}.holder_limit"), holder_limit);
+    }
+    if trustline.implicit {
+        append_canonical_bool(bytes, &format!("{prefix}.implicit"), true);
+    }
 }
 
 pub(super) fn append_escrow(bytes: &mut Vec<u8>, prefix: &str, escrow: &Escrow) {
@@ -2470,6 +2699,11 @@ pub(super) fn append_nav_tracked_asset(
         &format!("{prefix}.halt_reason"),
         &nav_asset.halt_reason,
     );
+    if let Some(fee_state) = &nav_asset.fee_state {
+        if let Ok(encoded) = serde_json::to_vec(fee_state) {
+            append_canonical_bytes_commitment(bytes, &format!("{prefix}.fee_state"), &encoded);
+        }
+    }
 }
 
 pub(super) fn append_nav_reserve_packet(

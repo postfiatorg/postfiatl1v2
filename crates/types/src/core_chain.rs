@@ -94,6 +94,82 @@ pub const OFFER_CANCEL_TRANSACTION_KIND: &str = "offer_cancel";
 pub const OFFER_PRUNE_INELIGIBLE_TRANSACTION_KIND: &str = "offer_prune_ineligible";
 pub const BRIDGE_HOLD_CLAIM_TRANSACTION_KIND: &str = "bridge_hold_claim";
 pub const BRIDGE_HOLD_RETURN_TRANSACTION_KIND: &str = "bridge_hold_return";
+
+/// Shared protocol time constants (1-second nominal block cadence, Train B).
+pub const PROTOCOL_BLOCKS_PER_DAY: u64 = 86_400;
+pub const PROTOCOL_BLOCKS_PER_7_DAYS: u64 = 604_800;
+pub const PROTOCOL_BLOCKS_PER_30_DAYS: u64 = 2_592_000;
+pub const PROTOCOL_BLOCKS_PER_YEAR: u64 = 31_536_000;
+
+/// Pillar 6 — Native Hive Identity & 2-of-3 Handle Registrar constants.
+pub const IDENTITY_SET_TRANSACTION_KIND: &str = "identity_set";
+pub const IDENTITY_REGISTRAR_REGISTER_TRANSACTION_KIND: &str = "identity_registrar_register";
+pub const IDENTITY_HANDLE_RESERVE_TRANSACTION_KIND: &str = "identity_handle_reserve";
+pub const IDENTITY_HANDLE_REASSIGN_PROPOSE_TRANSACTION_KIND: &str =
+    "identity_handle_reassign_propose";
+pub const IDENTITY_HANDLE_REASSIGN_EXECUTE_TRANSACTION_KIND: &str =
+    "identity_handle_reassign_execute";
+pub const IDENTITY_HANDLE_REASSIGN_CANCEL_TRANSACTION_KIND: &str =
+    "identity_handle_reassign_cancel";
+pub const IDENTITY_MINT_STATE_EXPANSION_FEE: u64 = 20_000;
+pub const IDENTITY_LINK_STATE_EXPANSION_FEE: u64 = 10_000;
+pub const IDENTITY_MAX_LINKS: usize = 16;
+pub const IDENTITY_MAX_RELAYS: usize = 5;
+pub const IDENTITY_MAX_RELAY_URL_BYTES: usize = 128;
+pub const IDENTITY_HANDLE_MIN_LEN: usize = 2;
+pub const IDENTITY_HANDLE_MAX_LEN: usize = 32;
+pub const IDENTITY_NAMESPACE_MAX_LEN: usize = 128;
+pub const IDENTITY_NOSTR_PUBKEY_HEX_LEN: usize = 64;
+pub const IDENTITY_BIP340_SIG_HEX_LEN: usize = 128;
+pub const IDENTITY_XWING_PUBKEY_HEX_LEN: usize = 2432;
+pub const IDENTITY_VALIDATOR_COOLDOWN_BLOCKS: u64 = PROTOCOL_BLOCKS_PER_30_DAYS;
+pub const IDENTITY_HANDLE_REASSIGN_MIN_TIMELOCK_BLOCKS: u64 = PROTOCOL_BLOCKS_PER_7_DAYS;
+pub const IDENTITY_HANDLE_HOLDBACK_BLOCKS: u64 = PROTOCOL_BLOCKS_PER_7_DAYS;
+pub const IDENTITY_LINK_ID_DOMAIN: &str = "postfiat.identity.link_id.v1";
+pub const IDENTITY_NOSTR_PROOF_DOMAIN: &str = "postfiat-l1-v2/identity-nostr/v1";
+pub const IDENTITY_VALIDATOR_LINK_DOMAIN: &str = "postfiat-l1-v2/identity-link/v1";
+pub const IDENTITY_OLD_CHAIN_LINK_DOMAIN: &str = "postfiat-l1-v2/identity-old-chain/v1";
+pub const IDENTITY_CONTROLLER_LINK_DOMAIN: &str = "postfiat-l1-v2/identity-controller/v1";
+pub const IDENTITY_UNLINK_SELF_DOMAIN: &str = "postfiat-l1-v2/identity-unlink/v1";
+pub const IDENTITY_ROTATE_ACCOUNT_DOMAIN: &str = "postfiat-l1-v2/identity-rotate-account/v1";
+pub const IDENTITY_HANDLE_RESERVE_DOMAIN: &str = "postfiat.identity.handle_reserve.v1";
+pub const IDENTITY_HANDLE_ATTESTATION_DOMAIN: &str = "postfiat-l1-v2/handle-attestation/v1";
+pub const IDENTITY_HANDLE_REASSIGN_DOMAIN: &str = "postfiat-l1-v2/handle-reassign/v1";
+
+/// Pillar 7 — Optional Deterministic NAVCoin Fee Schedule constants.
+pub const NAV_FEE_SCHEDULE_ATTACH_TRANSACTION_KIND: &str = "nav_fee_schedule_attach";
+pub const NAV_FEE_SCHEDULE_SET_TRANSACTION_KIND: &str = "nav_fee_schedule_set";
+pub const NAV_FEE_SCHEDULE_CANCEL_TRANSACTION_KIND: &str = "nav_fee_schedule_cancel";
+pub const NAV_FEE_CLAIM_TRANSACTION_KIND: &str = "nav_fee_claim";
+pub const NAV_FEE_BPS_DENOMINATOR: u64 = 10_000;
+pub const NAV_FEE_MAX_ANNUAL_RATE_BPS: u32 = 500;
+pub const NAV_FEE_MAX_HWM_RATE_BPS: u32 = 5_000;
+pub const NAV_FEE_MAX_SPREAD_BPS: u32 = 500;
+pub const NAV_FEE_MAX_FIX_FEE_CAP_BPS: u32 = 100;
+pub const NAV_FEE_MIN_INCREASE_NOTICE_BLOCKS: u64 = PROTOCOL_BLOCKS_PER_7_DAYS;
+pub const NAV_FEE_MAX_DISCLOSURE_REF_BYTES: usize = 128;
+
+/// Pillar 8 (M2 + M3) — Issuer Registry, Credentials & `did:pftl` constants.
+pub const ISSUER_REGISTER_TRANSACTION_KIND: &str = "issuer_register";
+pub const ISSUER_UPDATE_TRANSACTION_KIND: &str = "issuer_update";
+pub const ISSUER_ADMIN_TRANSFER_TRANSACTION_KIND: &str = "issuer_admin_transfer";
+pub const ISSUER_DEREGISTER_TRANSACTION_KIND: &str = "issuer_deregister";
+pub const CREDENTIAL_CREATE_TRANSACTION_KIND: &str = "credential_create";
+pub const CREDENTIAL_ACCEPT_TRANSACTION_KIND: &str = "credential_accept";
+pub const CREDENTIAL_CREATE_AND_ACCEPT_TRANSACTION_KIND: &str = "credential_create_and_accept";
+pub const CREDENTIAL_REVOKE_TRANSACTION_KIND: &str = "credential_revoke";
+pub const CREDENTIAL_DELETE_TRANSACTION_KIND: &str = "credential_delete";
+pub const ASSET_ACCESS_SET_TRANSACTION_KIND: &str = "asset_access_set";
+pub const CREDENTIAL_ISSUER_ID_DOMAIN: &str = "postfiat.credential_issuer_id.v1";
+pub const CREDENTIAL_ID_DOMAIN: &str = "postfiat.credential_id.v1";
+pub const CREDENTIAL_DELEGATED_ACCEPT_DOMAIN: &str = "postfiat.credential.delegated_accept.v1";
+pub const CREDENTIAL_DEPOSIT_ATOMS: u64 = 10_000;
+pub const MAX_ISSUER_SIGNING_ACCOUNTS: usize = 16;
+pub const MAX_ISSUER_CREDENTIAL_TYPES: usize = 32;
+pub const MAX_ISSUER_VENDOR_DIDS: usize = 8;
+pub const MAX_CREDENTIAL_POLICY_OR_CLAUSES: usize = 8;
+pub const MAX_CREDENTIAL_POLICY_AND_PAIRS: usize = 4;
+pub const ASSET_ACCESS_MIN_TIGHTEN_NOTICE_BLOCKS: u64 = PROTOCOL_BLOCKS_PER_7_DAYS;
 pub const ESCROW_ID_DOMAIN: &str = "postfiat.escrow_id.v1";
 pub const ESCROW_CONDITION_HASH_DOMAIN: &str = "postfiat.escrow_condition_hash.v1";
 pub const ATOMIC_SETTLEMENT_TEMPLATE_ID_DOMAIN: &str = "postfiat.atomic_settlement_template_id.v1";

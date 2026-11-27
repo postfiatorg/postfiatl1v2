@@ -352,8 +352,18 @@ pub fn claim_rejected_escrow_transaction_fee(
         return receipt;
     }
     let unsigned = &transaction.unsigned;
-    let minimum_fee = minimum_escrow_transaction_fee_for_ledger(ledger, transaction);
-    let state_expansion_fee = escrow_transaction_state_expansion_fee(ledger, transaction);
+    let minimum_fee = minimum_escrow_transaction_fee_for_ledger_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    );
+    let state_expansion_fee = escrow_transaction_state_expansion_fee_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    );
     let signing_bytes = unsigned.signing_bytes();
     claim_single_signer_fee(
         genesis,
@@ -438,9 +448,18 @@ pub fn claim_rejected_offer_transaction_fee(
         return receipt;
     }
     let unsigned = &transaction.unsigned;
-    let minimum_fee = minimum_offer_transaction_fee_for_ledger(ledger, transaction, block_height);
-    let state_expansion_fee =
-        offer_transaction_state_expansion_fee(ledger, transaction, block_height);
+    let minimum_fee = minimum_offer_transaction_fee_for_ledger_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    );
+    let state_expansion_fee = offer_transaction_state_expansion_fee_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    );
     let signing_bytes = unsigned.signing_bytes();
     claim_single_signer_fee(
         genesis,

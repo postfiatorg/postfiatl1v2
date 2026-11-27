@@ -158,43 +158,95 @@ pub fn asset_transaction_state_expansion_fee_with_compatibility(
     compatibility: AssetExecutionCompatibility,
 ) -> u64 {
     let base = asset_transaction_state_expansion_fee(ledger, transaction);
-    if !compatibility.asset_gate_v1_active(block_height) {
-        return base;
+    let mut extra = 0_u64;
+    if compatibility.asset_gate_v1_active(block_height) {
+        extra = extra.saturating_add(match &transaction.unsigned.operation {
+            AssetTransactionOperation::IssuedPayment(operation)
+                if operation.to != operation.issuer
+                    && ledger
+                        .trustline_for_account_asset(&operation.to, &operation.asset_id)
+                        .is_none() =>
+            {
+                TRUSTLINE_STATE_EXPANSION_FEE
+            }
+            AssetTransactionOperation::IssuedPaymentV2(operation)
+                if operation.to != operation.issuer
+                    && ledger
+                        .trustline_for_account_asset(&operation.to, &operation.asset_id)
+                        .is_none() =>
+            {
+                TRUSTLINE_STATE_EXPANSION_FEE
+            }
+            AssetTransactionOperation::NavMintAtNav(operation)
+                if operation.to != operation.issuer
+                    && ledger
+                        .trustline_for_account_asset(&operation.to, &operation.asset_id)
+                        .is_none() =>
+            {
+                TRUSTLINE_STATE_EXPANSION_FEE
+            }
+            AssetTransactionOperation::BridgeHoldClaim(operation)
+                if ledger
+                    .trustline_for_account_asset(&operation.recipient, &operation.asset_id)
+                    .is_none() =>
+            {
+                TRUSTLINE_STATE_EXPANSION_FEE
+            }
+            _ => 0,
+        });
     }
-    let extra = match &transaction.unsigned.operation {
-        AssetTransactionOperation::IssuedPayment(operation)
-            if operation.to != operation.issuer
-                && ledger
-                    .trustline_for_account_asset(&operation.to, &operation.asset_id)
-                    .is_none() =>
-        {
-            TRUSTLINE_STATE_EXPANSION_FEE
-        }
-        AssetTransactionOperation::IssuedPaymentV2(operation)
-            if operation.to != operation.issuer
-                && ledger
-                    .trustline_for_account_asset(&operation.to, &operation.asset_id)
-                    .is_none() =>
-        {
-            TRUSTLINE_STATE_EXPANSION_FEE
-        }
-        AssetTransactionOperation::NavMintAtNav(operation)
-            if operation.to != operation.issuer
-                && ledger
-                    .trustline_for_account_asset(&operation.to, &operation.asset_id)
-                    .is_none() =>
-        {
-            TRUSTLINE_STATE_EXPANSION_FEE
-        }
-        AssetTransactionOperation::BridgeHoldClaim(operation)
+    if compatibility.hive_identity_v1_active(block_height) {
+        extra = extra.saturating_add(match &transaction.unsigned.operation {
+            AssetTransactionOperation::IdentitySet(op) => match &op.payload {
+                postfiat_types::IdentitySetActionV1::Mint { .. } => {
+                    postfiat_types::IDENTITY_MINT_STATE_EXPANSION_FEE
+                }
+                postfiat_types::IdentitySetActionV1::Link { kind, target, .. } => {
+                    let is_reconfirm = ledger
+                        .identities_by_account
+                        .get(&op.account)
+                        .is_some_and(|id| {
+                            id.links.iter().any(|l| {
+                                l.kind == *kind
+                                    && l.target == *target
+                                    && l.status
+                                        == postfiat_types::IdentityLinkStatus::PendingReconfirmation
+                            })
+                        });
+                    if is_reconfirm {
+                        0
+                    } else {
+                        postfiat_types::IDENTITY_LINK_STATE_EXPANSION_FEE
+                    }
+                }
+                _ => 0,
+            },
+            AssetTransactionOperation::IdentityRegistrarRegister(op)
+                if !ledger
+                    .handle_namespace_registrars
+                    .contains_key(&op.namespace) =>
+            {
+                ASSET_DEFINITION_STATE_EXPANSION_FEE
+            }
+            AssetTransactionOperation::IdentityHandleReserve(_) => TRUSTLINE_STATE_EXPANSION_FEE,
+            _ => 0,
+        });
+    }
+    if compatibility.nav_fee_v1_active(block_height) {
+        if let AssetTransactionOperation::NavFeeClaim(op) = &transaction.unsigned.operation {
             if ledger
-                .trustline_for_account_asset(&operation.recipient, &operation.asset_id)
-                .is_none() =>
-        {
-            TRUSTLINE_STATE_EXPANSION_FEE
+                .trustline_for_account_asset(&op.recipient, &op.asset_id)
+                .is_none()
+            {
+                extra = extra.saturating_add(TRUSTLINE_STATE_EXPANSION_FEE);
+            }
         }
-        _ => 0,
-    };
+    }
+    if compatibility.credential_did_v1_active(block_height) {
+        if let AssetTransactionOperation::IssuerRegister(_) = &transaction.unsigned.operation {
+            extra = extra.saturating_add(ASSET_DEFINITION_STATE_EXPANSION_FEE);
+        }
+    }
     base.saturating_add(extra)
 }
 
@@ -295,12 +347,71 @@ pub fn escrow_transaction_state_expansion_fee(
     }
 }
 
+pub fn escrow_transaction_state_expansion_fee_with_compatibility(
+    ledger: &LedgerState,
+    transaction: &SignedEscrowTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> u64 {
+    let base = escrow_transaction_state_expansion_fee(ledger, transaction);
+    if !compatibility.credential_did_v1_active(block_height) {
+        return base;
+    }
+    let extra = match &transaction.unsigned.operation {
+        EscrowTransactionOperation::EscrowCreate(operation)
+            if operation.asset_id != NATIVE_PFT_ESCROW_ASSET_ID
+                && ledger
+                    .asset_definition(&operation.asset_id)
+                    .is_some_and(|asset| operation.recipient != asset.issuer)
+                && ledger
+                    .trustline_for_account_asset(&operation.recipient, &operation.asset_id)
+                    .is_none() =>
+        {
+            TRUSTLINE_STATE_EXPANSION_FEE
+        }
+        EscrowTransactionOperation::EscrowFinish(operation) => ledger
+            .escrow(&operation.escrow_id)
+            .filter(|escrow| escrow.asset_id != NATIVE_PFT_ESCROW_ASSET_ID)
+            .map_or(0, |escrow| {
+                if ledger
+                    .asset_definition(&escrow.asset_id)
+                    .is_some_and(|asset| escrow.recipient != asset.issuer)
+                    && ledger
+                        .trustline_for_account_asset(&escrow.recipient, &escrow.asset_id)
+                        .is_none()
+                {
+                    TRUSTLINE_STATE_EXPANSION_FEE
+                } else {
+                    0
+                }
+            }),
+        _ => 0,
+    };
+    base.saturating_add(extra)
+}
+
 pub fn minimum_escrow_transaction_fee_for_ledger(
     ledger: &LedgerState,
     transaction: &SignedEscrowTransaction,
 ) -> u64 {
     minimum_escrow_transaction_fee(transaction)
         .saturating_add(escrow_transaction_state_expansion_fee(ledger, transaction))
+}
+
+pub fn minimum_escrow_transaction_fee_for_ledger_with_compatibility(
+    ledger: &LedgerState,
+    transaction: &SignedEscrowTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> u64 {
+    minimum_escrow_transaction_fee(transaction).saturating_add(
+        escrow_transaction_state_expansion_fee_with_compatibility(
+            ledger,
+            transaction,
+            block_height,
+            compatibility,
+        ),
+    )
 }
 
 pub fn nft_transaction_weight_bytes(transaction: &SignedNftTransaction) -> usize {
@@ -433,6 +544,33 @@ pub fn offer_transaction_match_fee(
     .saturating_mul(OFFER_MATCH_CROSS_FEE)
 }
 
+pub fn offer_transaction_state_expansion_fee_with_compatibility(
+    ledger: &LedgerState,
+    transaction: &SignedOfferTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> u64 {
+    let base = offer_transaction_state_expansion_fee(ledger, transaction, block_height);
+    if !compatibility.credential_did_v1_active(block_height) {
+        return base;
+    }
+    let extra = match &transaction.unsigned.operation {
+        OfferTransactionOperation::OfferCreate(operation)
+            if operation.taker_pays_asset_id != NATIVE_PFT_ESCROW_ASSET_ID
+                && ledger
+                    .asset_definition(&operation.taker_pays_asset_id)
+                    .is_some_and(|asset| operation.owner != asset.issuer)
+                && ledger
+                    .trustline_for_account_asset(&operation.owner, &operation.taker_pays_asset_id)
+                    .is_none() =>
+        {
+            TRUSTLINE_STATE_EXPANSION_FEE
+        }
+        _ => 0,
+    };
+    base.saturating_add(extra)
+}
+
 pub fn minimum_offer_transaction_fee_for_ledger(
     ledger: &LedgerState,
     transaction: &SignedOfferTransaction,
@@ -443,6 +581,26 @@ pub fn minimum_offer_transaction_fee_for_ledger(
             ledger,
             transaction,
             block_height,
+        ))
+        .saturating_add(offer_transaction_match_fee(
+            ledger,
+            transaction,
+            block_height,
+        ))
+}
+
+pub fn minimum_offer_transaction_fee_for_ledger_with_compatibility(
+    ledger: &LedgerState,
+    transaction: &SignedOfferTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> u64 {
+    minimum_offer_transaction_fee(transaction)
+        .saturating_add(offer_transaction_state_expansion_fee_with_compatibility(
+            ledger,
+            transaction,
+            block_height,
+            compatibility,
         ))
         .saturating_add(offer_transaction_match_fee(
             ledger,
@@ -582,6 +740,8 @@ fn apply_offer_operation(
     compatibility: AssetExecutionCompatibility,
 ) -> Result<OfferApplyOutcome, (&'static str, String)> {
     let gate_active = compatibility.asset_gate_v1_active(block_height);
+    let cred_active = compatibility.credential_did_v1_active(block_height);
+    let effective_gate = gate_active || cred_active;
     match &transaction.unsigned.operation {
         OfferTransactionOperation::OfferCreate(operation) => {
             if transaction.unsigned.transaction_kind != OFFER_CREATE_TRANSACTION_KIND {
@@ -608,7 +768,7 @@ fn apply_offer_operation(
                     format!("offer `{offer_id}` already exists"),
                 ));
             }
-            if gate_active {
+            if effective_gate {
                 if operation.taker_gets_asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
                     let sell_asset = ledger
                         .asset_definition(&operation.taker_gets_asset_id)
@@ -678,36 +838,107 @@ fn apply_offer_operation(
                     }
                 }
             }
-            ensure_offer_asset_participation(
-                ledger,
-                &operation.owner,
-                &operation.taker_gets_asset_id,
-                true,
-            )?;
-            ensure_offer_asset_participation(
-                ledger,
-                &operation.owner,
-                &operation.taker_pays_asset_id,
-                false,
-            )?;
-            if operation.taker_pays_asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
-                ensure_issued_offer_receive_capacity(
+            if cred_active {
+                // Pillar 8 M2: Permissionless-by-default DEX offers auto-create missing
+                // buy-side implicit lines (and skip legacy authorized-flag rejection for
+                // credential-approved holders already verified by `asset_gate`).
+                if operation.taker_pays_asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
+                    let buy_asset = ledger
+                        .asset_definition(&operation.taker_pays_asset_id)
+                        .cloned()
+                        .ok_or_else(|| {
+                            (
+                                "missing_asset",
+                                format!("asset `{}` does not exist", operation.taker_pays_asset_id),
+                            )
+                        })?;
+                    if operation.owner == buy_asset.issuer {
+                        return Err((
+                            "unsupported_issuer_offer",
+                            "issued-asset offers require holder trustlines".to_string(),
+                        ));
+                    }
+                    let idx = issued_asset_credit_recipient_line_index_gated(
+                        ledger,
+                        &buy_asset,
+                        &operation.owner,
+                        operation.taker_pays_amount,
+                        "offer_create buy-side",
+                    )?;
+                    if ledger.trustlines[idx].reserve_paid == 0
+                        && ledger.trustlines[idx].holder_limit.is_none()
+                    {
+                        ledger.trustlines[idx].implicit = true;
+                    }
+                    let reserved = issued_asset_reserved_total_for_account(
+                        ledger,
+                        &operation.owner,
+                        &operation.taker_pays_asset_id,
+                        None,
+                        None,
+                    )?;
+                    let required = ledger.trustlines[idx]
+                        .balance
+                        .checked_add(reserved)
+                        .and_then(|v| v.checked_add(operation.taker_pays_amount))
+                        .ok_or_else(|| {
+                            (
+                                "issued_balance_overflow",
+                                "offer buy-side issued-asset reservations would overflow"
+                                    .to_string(),
+                            )
+                        })?;
+                    if let Some(cap) = ledger.trustlines[idx].holder_limit {
+                        if required > cap {
+                            return Err((
+                                "trustline_limit_exceeded",
+                                "offer buy-side issued amount exceeds binding holder_limit"
+                                    .to_string(),
+                            ));
+                        }
+                    } else if required > ledger.trustlines[idx].limit {
+                        ledger.trustlines[idx].limit = required;
+                    }
+                }
+                lock_offer_sell_side_with_mode(
+                    ledger,
+                    &operation.owner,
+                    &operation.taker_gets_asset_id,
+                    operation.taker_gets_amount,
+                    true,
+                )?;
+            } else {
+                ensure_offer_asset_participation(
+                    ledger,
+                    &operation.owner,
+                    &operation.taker_gets_asset_id,
+                    true,
+                )?;
+                ensure_offer_asset_participation(
                     ledger,
                     &operation.owner,
                     &operation.taker_pays_asset_id,
-                    operation.taker_pays_amount,
-                    None,
+                    false,
+                )?;
+                if operation.taker_pays_asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
+                    ensure_issued_offer_receive_capacity(
+                        ledger,
+                        &operation.owner,
+                        &operation.taker_pays_asset_id,
+                        operation.taker_pays_amount,
+                        None,
+                    )?;
+                }
+
+                lock_offer_sell_side(
+                    ledger,
+                    &operation.owner,
+                    &operation.taker_gets_asset_id,
+                    operation.taker_gets_amount,
                 )?;
             }
 
-            lock_offer_sell_side(
-                ledger,
-                &operation.owner,
-                &operation.taker_gets_asset_id,
-                operation.taker_gets_amount,
-            )?;
-
-            let (plan, ineligible_to_cancel) = if gate_active {
+            let (plan, ineligible_to_cancel) = if effective_gate {
                 plan_offer_create_matches_gated(ledger, operation, block_height)?
             } else {
                 (plan_offer_create_matches(ledger, operation, block_height)?, Vec::new())
@@ -717,7 +948,7 @@ fn apply_offer_operation(
             for maker_idx in ineligible_to_cancel {
                 cancel_offer_and_refund_gated(ledger, maker_idx, block_height)?;
             }
-            let fills = apply_offer_fills(ledger, operation, &plan)?;
+            let fills = apply_offer_fills_with_mode(ledger, operation, &plan, cred_active)?;
             if offer_create_has_residual(&plan) {
                 lock_offer_reserve(ledger, &operation.owner, OFFER_OBJECT_RESERVE)?;
                 let mut offer = Offer::new(
@@ -1060,10 +1291,11 @@ fn offer_create_has_residual(plan: &OfferMatchPlan) -> bool {
     plan.taker_gets_remaining > 0 && plan.taker_pays_remaining > 0
 }
 
-fn apply_offer_fills(
+fn apply_offer_fills_with_mode(
     ledger: &mut LedgerState,
     operation: &OfferCreateOperation,
     plan: &OfferMatchPlan,
+    cred_active: bool,
 ) -> Result<Vec<OfferFillReceipt>, (&'static str, String)> {
     let mut receipts = Vec::new();
     for (fill_index, fill) in plan.fills.iter().enumerate() {
@@ -1125,17 +1357,19 @@ fn apply_offer_fills(
             &maker.owner, &operation.owner, fill.maker_sends_amount)?;
         b23_facility_transfer_offer_inventory(ledger, &maker.taker_pays_asset_id,
             &operation.owner, &maker.owner, fill.taker_sends_amount)?;
-        credit_offer_received_asset(
+        credit_offer_received_asset_with_mode(
             ledger,
             &operation.owner,
             &maker.taker_gets_asset_id,
             fill.maker_sends_amount,
+            cred_active,
         )?;
-        credit_offer_received_asset(
+        credit_offer_received_asset_with_mode(
             ledger,
             &maker.owner,
             &maker.taker_pays_asset_id,
             fill.taker_sends_amount,
+            cred_active,
         )?;
 
         let maker_offer = ledger

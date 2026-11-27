@@ -1884,8 +1884,18 @@ fn execute_escrow_transaction_inner(
         );
     }
 
-    let state_expansion_fee = escrow_transaction_state_expansion_fee(ledger, transaction);
-    let minimum_fee = minimum_escrow_transaction_fee_for_ledger(ledger, transaction);
+    let state_expansion_fee = escrow_transaction_state_expansion_fee_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    );
+    let minimum_fee = minimum_escrow_transaction_fee_for_ledger_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    );
     if transaction.unsigned.fee < minimum_fee {
         return Receipt::rejected(
             tx_id,
@@ -2391,9 +2401,18 @@ pub fn execute_offer_transaction_with_compatibility(
         );
     }
 
-    let state_expansion_fee =
-        offer_transaction_state_expansion_fee(ledger, transaction, block_height);
-    let minimum_fee = minimum_offer_transaction_fee_for_ledger(ledger, transaction, block_height);
+    let state_expansion_fee = offer_transaction_state_expansion_fee_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    );
+    let minimum_fee = minimum_offer_transaction_fee_for_ledger_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    );
     if transaction.unsigned.fee < minimum_fee {
         return Receipt::rejected(
             tx_id,

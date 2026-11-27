@@ -1,11 +1,17 @@
 {
  "operations": {
   "account_set": "AccountSetOperation",
+  "asset_access_set": "AssetAccessSetOperation",
   "asset_burn": "AssetBurnOperation",
   "asset_clawback": "AssetClawbackOperation",
   "asset_create": "AssetCreateOperation",
   "bridge_hold_claim": "BridgeHoldClaimOperation",
   "bridge_hold_return": "BridgeHoldReturnOperation",
+  "credential_accept": "CredentialAcceptOperation",
+  "credential_create": "CredentialCreateOperation",
+  "credential_create_and_accept": "CredentialCreateAndAcceptOperation",
+  "credential_delete": "CredentialDeleteOperation",
+  "credential_revoke": "CredentialRevokeOperation",
   "escrow_cancel": "EscrowCancelOperation",
   "escrow_create": "EscrowCreateOperation",
   "escrow_finish": "EscrowFinishOperation",
@@ -15,13 +21,27 @@
   "fx_fix_register_v1": "FxFixRegisterOperationV1",
   "fx_fix_reservation_create_v1": "FxFixReservationCreateOperationV1",
   "fx_fix_reservation_release_v1": "FxFixReservationReleaseOperationV1",
+  "identity_handle_reassign_cancel": "IdentityHandleReassignCancelOperation",
+  "identity_handle_reassign_execute": "IdentityHandleReassignExecuteOperation",
+  "identity_handle_reassign_propose": "IdentityHandleReassignProposeOperation",
+  "identity_handle_reserve": "IdentityHandleReserveOperation",
+  "identity_registrar_register": "IdentityRegistrarRegisterOperation",
+  "identity_set": "IdentitySetOperation",
   "issued_payment": "IssuedPaymentOperation",
   "issued_payment_v2": "IssuedPaymentV2Operation",
+  "issuer_admin_transfer": "IssuerAdminTransferOperation",
+  "issuer_deregister": "IssuerDeregisterOperation",
+  "issuer_register": "IssuerRegisterOperation",
+  "issuer_update": "IssuerUpdateOperation",
   "market_ops_finalize": "MarketOpsFinalizeOperation",
   "market_ops_policy_register": "MarketOpsPolicyRegisterOperation",
   "nav_asset_register": "NavAssetRegisterOperation",
   "nav_attestor_register": "NavAttestorRegisterOperation",
   "nav_epoch_finalize": "NavEpochFinalizeOperation",
+  "nav_fee_claim": "NavFeeClaimOperation",
+  "nav_fee_schedule_attach": "NavFeeScheduleAttachOperation",
+  "nav_fee_schedule_cancel": "NavFeeScheduleCancelOperation",
+  "nav_fee_schedule_set": "NavFeeScheduleSetOperation",
   "nav_halt": "NavHaltOperation",
   "nav_mint_at_nav": "NavMintAtNavOperation",
   "nav_profile_register": "NavProfileRegisterOperation",
@@ -75,6 +95,20 @@
    "set_flags": "int",
    "clear_flags": "int"
   },
+  "AssetAccessSetOperation": {
+   "issuer": "required",
+   "asset_id": "required",
+   "disable_authorization_permanently": "bool",
+   "approval_mode": "option",
+   "lapsed_exit_rule": "option",
+   "wrapper_mode": "option",
+   "credential_policy": [
+    "option",
+    "CredentialPolicyV1"
+   ],
+   "notice_blocks": "option",
+   "emergency_remove_issuer_id": "option"
+  },
   "AssetBurnOperation": {
    "owner": "required",
    "issuer": "required",
@@ -111,6 +145,54 @@
    "asset_id": "required",
    "amount": "required",
    "burn": "bool"
+  },
+  "CredentialAcceptOperation": {
+   "subject": "required",
+   "credential_id": "required"
+  },
+  "CredentialCreateAndAcceptOperation": {
+   "signing_account": "required",
+   "issuer_id": "required",
+   "subject": "required",
+   "credential_type": "required",
+   "commitment_hash": "required",
+   "expires_at_height": "required",
+   "subject_pubkey_hex": "required",
+   "subject_accept_signature_hex": "required",
+   "subject_accept_nonce": "required"
+  },
+  "CredentialCreateOperation": {
+   "signing_account": "required",
+   "issuer_id": "required",
+   "subject": "required",
+   "credential_type": "required",
+   "commitment_hash": "required",
+   "expires_at_height": "required"
+  },
+  "CredentialDeleteOperation": {
+   "caller": "required",
+   "credential_id": "required"
+  },
+  "CredentialPolicyRuleV1": {
+   "all_of": [
+    "required",
+    "CredentialRequirementPairV1"
+   ]
+  },
+  "CredentialPolicyV1": {
+   "any_of": [
+    "vec",
+    "CredentialPolicyRuleV1"
+   ]
+  },
+  "CredentialRequirementPairV1": {
+   "issuer_id": "required",
+   "credential_type": "required"
+  },
+  "CredentialRevokeOperation": {
+   "caller": "required",
+   "credential_id": "required",
+   "reason_code": "required"
   },
   "EscrowCancelOperation": {
    "escrow_id": "required",
@@ -262,6 +344,49 @@
    "operator": "required",
    "reservation_id": "required"
   },
+  "IdentityHandleReassignCancelOperation": {
+   "caller": "required",
+   "reassignment_id": "required",
+   "approvals": [
+    "vec",
+    "RegistrarCosignatureV1"
+   ]
+  },
+  "IdentityHandleReassignExecuteOperation": {
+   "executor": "required",
+   "reassignment_id": "required"
+  },
+  "IdentityHandleReassignProposeOperation": {
+   "proposer": "required",
+   "namespace": "required",
+   "handle": "required",
+   "from_account": "required",
+   "to_account": "required",
+   "reason_code": "required",
+   "emergency_compromise": "required",
+   "approvals": [
+    "required",
+    "RegistrarCosignatureV1"
+   ]
+  },
+  "IdentityHandleReserveOperation": {
+   "registrar_account": "required",
+   "namespace": "required",
+   "handle": "required",
+   "commitment_hash": "required",
+   "expires_at_height": "required"
+  },
+  "IdentityRegistrarRegisterOperation": {
+   "caller": "required",
+   "namespace": "required",
+   "hot_attestation_account": "required",
+   "cold_signers": "required",
+   "reassignment_timelock_blocks": "required"
+  },
+  "IdentitySetOperation": {
+   "account": "required",
+   "payload": "required"
+  },
   "IssuedPaymentOperation": {
    "from": "required",
    "to": "required",
@@ -279,6 +404,34 @@
     "vec",
     "PaymentMemo"
    ]
+  },
+  "IssuerAdminTransferOperation": {
+   "caller": "required",
+   "issuer_id": "required",
+   "action": "required",
+   "new_admin_account": "option"
+  },
+  "IssuerDeregisterOperation": {
+   "admin_account": "required",
+   "issuer_id": "required",
+   "reason_code": "required"
+  },
+  "IssuerRegisterOperation": {
+   "admin_account": "required",
+   "domain": "required",
+   "signing_accounts": "required",
+   "allowed_credential_types": "required",
+   "vendor_dids": "vec",
+   "registration_nonce": "required"
+  },
+  "IssuerUpdateOperation": {
+   "admin_account": "required",
+   "issuer_id": "required",
+   "domain": "option",
+   "add_signing_accounts": "vec",
+   "revoke_signing_accounts": "vec",
+   "allowed_credential_types": "option",
+   "vendor_dids": "option"
   },
   "MarketOpsAlignmentParams": {
    "policy_min_usd_e8": "required",
@@ -414,6 +567,43 @@
    "asset_id": "required",
    "epoch": "required",
    "reserve_packet_hash": "required"
+  },
+  "NavFeeClaimOperation": {
+   "recipient": "required",
+   "asset_id": "required",
+   "amount": "required"
+  },
+  "NavFeeScheduleAttachOperation": {
+   "issuer": "required",
+   "asset_id": "required",
+   "schedule": [
+    "required",
+    "NavFeeScheduleInputV1"
+   ]
+  },
+  "NavFeeScheduleCancelOperation": {
+   "issuer": "required",
+   "asset_id": "required"
+  },
+  "NavFeeScheduleInputV1": {
+   "annual_rate_bps": "required",
+   "hwm_rate_bps": "required",
+   "issue_spread_bps": "required",
+   "redeem_spread_bps": "required",
+   "fix_fee_cap_bps": "required",
+   "recipient": "required",
+   "increase_notice_blocks": "required",
+   "accrual_cap_blocks": "required",
+   "rates_locked": "bool",
+   "disclosure_ref": "option"
+  },
+  "NavFeeScheduleSetOperation": {
+   "issuer": "required",
+   "asset_id": "required",
+   "schedule": [
+    "required",
+    "NavFeeScheduleInputV1"
+   ]
   },
   "NavHaltOperation": {
    "issuer": "required",
@@ -759,6 +949,11 @@
    "operator": "required",
    "route_id": "required",
    "paused": "required"
+  },
+  "RegistrarCosignatureV1": {
+   "signer_account": "required",
+   "public_key_hex": "required",
+   "signature_hex": "required"
   },
   "SolanaProofOperation": {
    "submitter": "required",

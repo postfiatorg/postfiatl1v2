@@ -330,6 +330,7 @@ fn apply_escrow_operation(
     compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     let gate_active = compatibility.asset_gate_v1_active(block_height);
+    let cred_active = compatibility.credential_did_v1_active(block_height);
     match &transaction.unsigned.operation {
         EscrowTransactionOperation::EscrowCreate(operation) => {
             if transaction.unsigned.transaction_kind != ESCROW_CREATE_TRANSACTION_KIND {
@@ -370,7 +371,13 @@ fn apply_escrow_operation(
                 }
                 owner.balance = owner_after_lock;
             } else {
-                lock_issued_asset_for_escrow(ledger, operation, block_height, gate_active)?;
+                lock_issued_asset_for_escrow(
+                    ledger,
+                    operation,
+                    block_height,
+                    gate_active || cred_active,
+                    cred_active,
+                )?;
             }
             let escrow = Escrow::new(
                 &genesis.chain_id,
@@ -387,7 +394,7 @@ fn apply_escrow_operation(
             )
             .map_err(|error| ("bad_escrow", error))?;
             ledger.escrows.push(escrow);
-            if gate_active && operation.asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
+            if (gate_active || cred_active) && operation.asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
                 auto_prune_empty_implicit_trustline(ledger, &operation.owner, &operation.asset_id)?;
             }
             Ok(())
@@ -450,7 +457,13 @@ fn apply_escrow_operation(
                 let recipient = ledger.ensure_account(&escrow.recipient);
                 recipient.balance = recipient_after_credit;
             } else {
-                release_issued_asset_escrow_to_recipient(ledger, &escrow, block_height, gate_active)?;
+                release_issued_asset_escrow_to_recipient(
+                    ledger,
+                    &escrow,
+                    block_height,
+                    gate_active || cred_active,
+                    cred_active,
+                )?;
             }
             ledger.escrows[escrow_index].state = ESCROW_STATE_FINISHED.to_string();
             Ok(())
@@ -508,7 +521,12 @@ fn apply_escrow_operation(
                 let owner = ledger.ensure_account(&escrow.owner);
                 owner.balance = owner_after_credit;
             } else {
-                refund_issued_asset_escrow_to_owner(ledger, &escrow, block_height, gate_active)?;
+                refund_issued_asset_escrow_to_owner(
+                    ledger,
+                    &escrow,
+                    block_height,
+                    gate_active || cred_active,
+                )?;
             }
             ledger.escrows[escrow_index].state = ESCROW_STATE_CANCELED.to_string();
             Ok(())
@@ -521,6 +539,7 @@ fn lock_issued_asset_for_escrow(
     operation: &EscrowCreateOperation,
     block_height: u64,
     gate_active: bool,
+    cred_active: bool,
 ) -> Result<(), (&'static str, String)> {
     let asset = ledger
         .asset_definition(&operation.asset_id)
@@ -571,13 +590,27 @@ fn lock_issued_asset_for_escrow(
                 "issued-asset escrow owner has no trustline for asset".to_string(),
             )
         })?;
-    let recipient_index = trustline_index(ledger, &operation.recipient, &operation.asset_id)
-        .ok_or_else(|| {
+    let recipient_index = if cred_active {
+        let idx = issued_asset_credit_recipient_line_index_gated(
+            ledger,
+            &asset,
+            &operation.recipient,
+            operation.amount,
+            "escrow_create",
+        )?;
+        if ledger.trustlines[idx].reserve_paid == 0 && ledger.trustlines[idx].holder_limit.is_none()
+        {
+            ledger.trustlines[idx].implicit = true;
+        }
+        idx
+    } else {
+        trustline_index(ledger, &operation.recipient, &operation.asset_id).ok_or_else(|| {
             (
                 "missing_trustline",
                 "issued-asset escrow recipient has no trustline for asset".to_string(),
             )
-        })?;
+        })?
+    };
 
     if !gate_active {
         ensure_line_can_move(&asset, &ledger.trustlines[owner_index])?;
@@ -608,7 +641,18 @@ fn lock_issued_asset_for_escrow(
                 "recipient issued-asset escrow balance would overflow".to_string(),
             )
         })?;
-    if recipient_required > ledger.trustlines[recipient_index].limit {
+    if cred_active {
+        if let Some(cap) = ledger.trustlines[recipient_index].holder_limit {
+            if recipient_required > cap {
+                return Err((
+                    "trustline_limit_exceeded",
+                    "issued-asset escrow exceeds recipient binding holder_limit".to_string(),
+                ));
+            }
+        } else if recipient_required > ledger.trustlines[recipient_index].limit {
+            ledger.trustlines[recipient_index].limit = recipient_required;
+        }
+    } else if recipient_required > ledger.trustlines[recipient_index].limit {
         return Err((
             "trustline_limit_exceeded",
             "issued-asset escrow exceeds recipient trustline limit".to_string(),
@@ -624,6 +668,7 @@ fn release_issued_asset_escrow_to_recipient(
     escrow: &Escrow,
     block_height: u64,
     gate_active: bool,
+    cred_active: bool,
 ) -> Result<(), (&'static str, String)> {
     let asset = ledger
         .asset_definition(&escrow.asset_id)
@@ -659,13 +704,27 @@ fn release_issued_asset_escrow_to_recipient(
             AssetGateOutcome::Reject { code, message } => return Err((code, message)),
         }
     }
-    let recipient_index =
+    let recipient_index = if cred_active {
+        let idx = issued_asset_credit_recipient_line_index_gated(
+            ledger,
+            &asset,
+            &escrow.recipient,
+            escrow.amount,
+            "escrow_finish",
+        )?;
+        if ledger.trustlines[idx].reserve_paid == 0 && ledger.trustlines[idx].holder_limit.is_none()
+        {
+            ledger.trustlines[idx].implicit = true;
+        }
+        idx
+    } else {
         trustline_index(ledger, &escrow.recipient, &escrow.asset_id).ok_or_else(|| {
             (
                 "missing_trustline",
                 "issued-asset escrow recipient has no trustline for asset".to_string(),
             )
-        })?;
+        })?
+    };
     if !gate_active {
         ensure_line_can_move(&asset, &ledger.trustlines[recipient_index])?;
     }
@@ -694,7 +753,18 @@ fn release_issued_asset_escrow_to_recipient(
                 "recipient issued-asset escrow reservations would overflow".to_string(),
             )
         })?;
-    if required_limit > ledger.trustlines[recipient_index].limit {
+    if cred_active {
+        if let Some(cap) = ledger.trustlines[recipient_index].holder_limit {
+            if required_limit > cap {
+                return Err((
+                    "trustline_limit_exceeded",
+                    "issued-asset escrow finish exceeds recipient binding holder_limit".to_string(),
+                ));
+            }
+        } else if required_limit > ledger.trustlines[recipient_index].limit {
+            ledger.trustlines[recipient_index].limit = required_limit;
+        }
+    } else if required_limit > ledger.trustlines[recipient_index].limit {
         return Err((
             "trustline_limit_exceeded",
             "issued-asset escrow finish exceeds recipient trustline limit".to_string(),
@@ -861,6 +931,11 @@ pub struct AssetExecutionCompatibility {
     pub fastpay_fee_v1_activation_height: Option<u64>,
     pub nft_scaling_v1_activation_height: Option<u64>,
     pub asset_gate_v1_activation_height: Option<u64>,
+    /// Train B governance activation heights & classical proof kill-switch.
+    pub hive_identity_v1_activation_height: Option<u64>,
+    pub hive_identity_classical_proof_kill_switch: Option<u64>,
+    pub nav_fee_v1_activation_height: Option<u64>,
+    pub credential_did_v1_activation_height: Option<u64>,
 }
 
 /// Which external-lane inputs of an [`AssetExecutionCompatibility`] came
@@ -941,6 +1016,10 @@ impl AssetExecutionCompatibility {
             fastpay_fee_v1_activation_height: None,
             nft_scaling_v1_activation_height: None,
             asset_gate_v1_activation_height: None,
+            hive_identity_v1_activation_height: None,
+            hive_identity_classical_proof_kill_switch: None,
+            nav_fee_v1_activation_height: None,
+            credential_did_v1_activation_height: None,
         }
     }
 
@@ -976,6 +1055,10 @@ impl AssetExecutionCompatibility {
             fastpay_fee_v1_activation_height: None,
             nft_scaling_v1_activation_height: None,
             asset_gate_v1_activation_height: None,
+            hive_identity_v1_activation_height: None,
+            hive_identity_classical_proof_kill_switch: None,
+            nav_fee_v1_activation_height: None,
+            credential_did_v1_activation_height: None,
         }
     }
 
@@ -1011,6 +1094,10 @@ impl AssetExecutionCompatibility {
             fastpay_fee_v1_activation_height: None,
             nft_scaling_v1_activation_height: None,
             asset_gate_v1_activation_height: None,
+            hive_identity_v1_activation_height: None,
+            hive_identity_classical_proof_kill_switch: None,
+            nav_fee_v1_activation_height: None,
+            credential_did_v1_activation_height: None,
         }
     }
 
@@ -1046,6 +1133,10 @@ impl AssetExecutionCompatibility {
             fastpay_fee_v1_activation_height: None,
             nft_scaling_v1_activation_height: None,
             asset_gate_v1_activation_height: None,
+            hive_identity_v1_activation_height: None,
+            hive_identity_classical_proof_kill_switch: None,
+            nav_fee_v1_activation_height: None,
+            credential_did_v1_activation_height: None,
         }
     }
 
@@ -1081,6 +1172,10 @@ impl AssetExecutionCompatibility {
             fastpay_fee_v1_activation_height: None,
             nft_scaling_v1_activation_height: None,
             asset_gate_v1_activation_height: None,
+            hive_identity_v1_activation_height: None,
+            hive_identity_classical_proof_kill_switch: None,
+            nav_fee_v1_activation_height: None,
+            credential_did_v1_activation_height: None,
         }
     }
 
@@ -1284,6 +1379,58 @@ impl AssetExecutionCompatibility {
         self.asset_gate_v1_activation_height
             .is_some_and(|a| a > 0 && block_height >= a)
     }
+
+    pub const fn with_hive_identity_v1_activation_height(
+        mut self,
+        activation_height: Option<u64>,
+    ) -> Self {
+        self.hive_identity_v1_activation_height = activation_height;
+        self
+    }
+
+    pub fn hive_identity_v1_active(&self, block_height: u64) -> bool {
+        self.hive_identity_v1_activation_height
+            .is_some_and(|a| a > 0 && block_height >= a)
+    }
+
+    pub const fn with_hive_identity_classical_proof_kill_switch(
+        mut self,
+        kill_switch_height: Option<u64>,
+    ) -> Self {
+        self.hive_identity_classical_proof_kill_switch = kill_switch_height;
+        self
+    }
+
+    pub fn hive_identity_classical_proof_disabled(&self, block_height: u64) -> bool {
+        self.hive_identity_classical_proof_kill_switch
+            .is_some_and(|h| h > 0 && block_height >= h)
+    }
+
+    pub const fn with_nav_fee_v1_activation_height(
+        mut self,
+        activation_height: Option<u64>,
+    ) -> Self {
+        self.nav_fee_v1_activation_height = activation_height;
+        self
+    }
+
+    pub fn nav_fee_v1_active(&self, block_height: u64) -> bool {
+        self.nav_fee_v1_activation_height
+            .is_some_and(|a| a > 0 && block_height >= a)
+    }
+
+    pub const fn with_credential_did_v1_activation_height(
+        mut self,
+        activation_height: Option<u64>,
+    ) -> Self {
+        self.credential_did_v1_activation_height = activation_height;
+        self
+    }
+
+    pub fn credential_did_v1_active(&self, block_height: u64) -> bool {
+        self.credential_did_v1_activation_height
+            .is_some_and(|a| a > 0 && block_height >= a)
+    }
 }
 
 /// Deterministic one-time activation migration of `ledger.nfts` into keyed maps
@@ -1464,6 +1611,10 @@ fn apply_asset_operation(
                     }
                     let line = &mut ledger.trustlines[index];
                     line.limit = operation.limit;
+                    if compatibility.credential_did_v1_active(block_height) {
+                        line.holder_limit = Some(operation.limit);
+                        line.implicit = false;
+                    }
                 } else {
                     if operation.reserve_paid < TRUSTLINE_STATE_EXPANSION_FEE {
                         return Err((
@@ -1482,6 +1633,10 @@ fn apply_asset_operation(
                     )
                     .map_err(|error| ("bad_trustline", error))?;
                     line.authorized = !requires_authorization;
+                    if compatibility.credential_did_v1_active(block_height) {
+                        line.holder_limit = Some(operation.limit);
+                        line.implicit = false;
+                    }
                     ledger.trustlines.push(line);
                 }
                 Ok(())
@@ -1565,7 +1720,20 @@ fn apply_asset_operation(
                     "account_set transaction kind mismatch".to_string(),
                 ));
             }
-            if !compatibility.require_memo_active(block_height) {
+            let touched_flags = operation.set_flags | operation.clear_flags;
+            if touched_flags & postfiat_types::ACCOUNT_FLAG_REFUSE_UNSOLICITED_ASSETS != 0
+                && !compatibility.credential_did_v1_active(block_height)
+            {
+                return Err((
+                    "credential_did_not_active",
+                    format!(
+                        "refuse_unsolicited_assets account flag is not active at block height {block_height}"
+                    ),
+                ));
+            }
+            if touched_flags & postfiat_types::ACCOUNT_FLAG_REQUIRE_MEMO != 0
+                && !compatibility.require_memo_active(block_height)
+            {
                 return Err((
                     "account_set_not_active",
                     format!("account_set is not active at block height {block_height}"),
@@ -2026,6 +2194,15 @@ fn apply_asset_operation(
                 nav_unit_scale,
             )
             .map_err(|error| ("nav_reserve_undercollateralized", error))?;
+            if compatibility.nav_fee_v1_active(block_height) {
+                postfiat_types::nav_fee_verify_nav_per_unit(
+                    operation.verified_net_assets,
+                    operation.circulating_supply,
+                    nav_asset_definition.precision,
+                    operation.nav_per_unit,
+                    None,
+                )?;
+            }
             if nav_asset.issuer != operation.issuer {
                 return Err((
                     "nav_issuer_mismatch",
@@ -2427,7 +2604,53 @@ fn apply_asset_operation(
             }
             let packet_nav_per_unit = packet.nav_per_unit;
             let packet_circulating_supply = packet.circulating_supply;
+            let packet_verified_net_assets = packet.verified_net_assets;
+            let packet_attested_value = packet.attested_value;
+            let packet_attestations = packet.attestations.clone();
             let packet_submitted_at_height = packet.submitted_at_height;
+            if compatibility.nav_fee_v1_active(block_height) {
+                let asset_def = ledger
+                    .asset_definition(&operation.asset_id)
+                    .cloned()
+                    .ok_or_else(|| {
+                        (
+                            "missing_asset",
+                            format!("asset `{}` does not exist", operation.asset_id),
+                        )
+                    })?;
+                let orchard_supply: u64 = orchard_balances
+                    .iter()
+                    .filter(|b| b.asset_id == operation.asset_id)
+                    .try_fold(0_u64, |acc, b| {
+                        acc.checked_add(b.live_total).ok_or_else(|| {
+                            (
+                                "issued_supply_overflow",
+                                "orchard supply overflow during nav_epoch_finalize".to_string(),
+                            )
+                        })
+                    })?;
+                let live_supply = issued_asset_supply(ledger, &operation.asset_id)?
+                    .checked_add(orchard_supply)
+                    .ok_or_else(|| {
+                        (
+                            "issued_supply_overflow",
+                            "live ledger supply overflow during nav_epoch_finalize".to_string(),
+                        )
+                    })?;
+                postfiat_types::nav_fee_verify_nav_per_unit(
+                    packet_verified_net_assets,
+                    packet_circulating_supply,
+                    asset_def.precision,
+                    packet_nav_per_unit,
+                    Some(live_supply),
+                )?;
+                postfiat_types::nav_fee_check_non_issuer_attestation(
+                    &nav_asset.issuer,
+                    nav_asset.fee_state.as_ref(),
+                    packet_attested_value,
+                    &packet_attestations,
+                )?;
+            }
             let profile = nav_profile_for_asset(ledger, &nav_asset).cloned();
             if let Some(profile) = &profile {
                 if packet_submitted_at_height > 0 {
@@ -2523,6 +2746,36 @@ fn apply_asset_operation(
                         .source_class
                         .starts_with(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX)
                 });
+            let mut final_nav_per_unit = packet_nav_per_unit;
+            let mut final_circulating_supply = packet_circulating_supply;
+            let mut updated_fee_state_and_accrual = None;
+            if compatibility.nav_fee_v1_active(block_height) {
+                if let Some(existing_fee_state) = nav_asset.fee_state.clone() {
+                    let asset_def = ledger
+                        .asset_definition(&operation.asset_id)
+                        .cloned()
+                        .ok_or_else(|| {
+                            (
+                                "missing_asset",
+                                format!("asset `{}` does not exist", operation.asset_id),
+                            )
+                        })?;
+                    let (next_fee_state, accrual) = postfiat_types::nav_fee_accrue_epoch(
+                        &operation.asset_id,
+                        operation.epoch,
+                        block_height,
+                        packet_verified_net_assets,
+                        packet_circulating_supply,
+                        asset_def.precision,
+                        &existing_fee_state,
+                        asset_def.max_supply,
+                        postfiat_types::PROTOCOL_BLOCKS_PER_YEAR,
+                    )?;
+                    final_nav_per_unit = accrual.nav_after;
+                    final_circulating_supply = accrual.supply_after;
+                    updated_fee_state_and_accrual = Some((next_fee_state, accrual));
+                }
+            }
             {
                 let nav_asset = ledger.nav_asset_mut(&operation.asset_id).ok_or_else(|| {
                     (
@@ -2537,12 +2790,20 @@ fn apply_asset_operation(
                     ));
                 }
                 nav_asset.finalized_epoch = operation.epoch;
-                nav_asset.nav_per_unit = packet_nav_per_unit;
-                nav_asset.circulating_supply = packet_circulating_supply;
+                nav_asset.nav_per_unit = final_nav_per_unit;
+                nav_asset.circulating_supply = final_circulating_supply;
                 nav_asset.finalized_reserve_packet_hash = operation.reserve_packet_hash.clone();
                 nav_asset.halted = false;
                 nav_asset.halt_reason.clear();
                 nav_asset.finalized_at_height = block_height;
+                if let Some((next_fee_state, _)) = &updated_fee_state_and_accrual {
+                    nav_asset.fee_state = Some(next_fee_state.clone());
+                }
+            }
+            if let Some((_, accrual)) = updated_fee_state_and_accrual {
+                let accrual_key =
+                    postfiat_types::nav_fee_accrual_key(&operation.asset_id, operation.epoch);
+                ledger.nav_fee_accruals.insert(accrual_key, accrual);
             }
             if is_vault_bridge_profile {
                 for bucket in ledger
@@ -2626,6 +2887,19 @@ fn apply_asset_operation(
                     "fx_fix_asset_missing",
                     "fx fix packet must reference two registered issued assets".to_string(),
                 ));
+            }
+            if compatibility.nav_fee_v1_active(block_height) {
+                for nav_id in [
+                    operation.packet.base_asset_id.as_str(),
+                    operation.packet.quote_asset_id.as_str(),
+                ] {
+                    if let Some(nav_asset) = ledger.nav_asset(nav_id) {
+                        postfiat_types::nav_fee_check_fx_fix_fee_cap(
+                            u32::from(operation.packet.fee_bps),
+                            nav_asset.fee_state.as_ref(),
+                        )?;
+                    }
+                }
             }
             if ledger.fx_fix_states.len() >= MAX_FX_FIX_STATES {
                 return Err((
@@ -3773,6 +4047,47 @@ fn apply_asset_operation(
                     "pftl_uniswap_route_epoch_advance transaction kind mismatch".to_string(),
                 ));
             }
+            if compatibility.nav_fee_v1_active(block_height) {
+                if let Some(route) = ledger
+                    .pftl_uniswap_routes
+                    .iter()
+                    .find(|route| route.route_id == operation.route_id)
+                {
+                    if let Some(v2) = route.v2.as_ref() {
+                        let current_nav_fee_state = ledger
+                            .nav_asset(&route.native_nav_asset_id)
+                            .and_then(|nav| nav.fee_state.as_ref());
+                        postfiat_types::nav_fee_check_exit_capacity_update(
+                            current_nav_fee_state,
+                            v2.primary_market_policy.redeem_capacity_atoms,
+                            operation.next_primary_market_policy.redeem_capacity_atoms,
+                        )?;
+                        if current_nav_fee_state.is_none() {
+                            let old_issue_spread = v2
+                                .primary_market_policy
+                                .issue_multiplier_bps
+                                .saturating_sub(10_000);
+                            let old_redeem_spread = 10_000_u32
+                                .saturating_sub(v2.primary_market_policy.redeem_multiplier_bps);
+                            let new_issue_spread = operation
+                                .next_primary_market_policy
+                                .issue_multiplier_bps
+                                .saturating_sub(10_000);
+                            let new_redeem_spread = 10_000_u32.saturating_sub(
+                                operation.next_primary_market_policy.redeem_multiplier_bps,
+                            );
+                            postfiat_types::nav_fee_check_unscheduled_spread_update(
+                                old_issue_spread,
+                                old_redeem_spread,
+                                new_issue_spread,
+                                new_redeem_spread,
+                                v2.primary_market_policy.valid_from_height,
+                                block_height,
+                            )?;
+                        }
+                    }
+                }
+            }
             apply_pftl_uniswap_route_epoch_advance(ledger, operation, block_height)
         }
         AssetTransactionOperation::PftlUniswapRoutePause(operation) => {
@@ -4141,6 +4456,333 @@ fn apply_asset_operation(
                 },
             });
             Ok(())
+        }
+        AssetTransactionOperation::IdentitySet(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::IDENTITY_SET_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "identity_set transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::identity_execution::apply_identity_set(
+                genesis,
+                ledger,
+                transaction,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::IdentityRegistrarRegister(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::IDENTITY_REGISTRAR_REGISTER_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "identity_registrar_register transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::identity_execution::apply_identity_registrar_register(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::IdentityHandleReserve(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::IDENTITY_HANDLE_RESERVE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "identity_handle_reserve transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::identity_execution::apply_identity_handle_reserve(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::IdentityHandleReassignPropose(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::IDENTITY_HANDLE_REASSIGN_PROPOSE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "identity_handle_reassign_propose transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::identity_execution::apply_identity_handle_reassign_propose(
+                genesis,
+                ledger,
+                transaction,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::IdentityHandleReassignExecute(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::IDENTITY_HANDLE_REASSIGN_EXECUTE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "identity_handle_reassign_execute transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::identity_execution::apply_identity_handle_reassign_execute(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::IdentityHandleReassignCancel(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::IDENTITY_HANDLE_REASSIGN_CANCEL_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "identity_handle_reassign_cancel transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::identity_execution::apply_identity_handle_reassign_cancel(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::NavFeeScheduleAttach(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::NAV_FEE_SCHEDULE_ATTACH_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "nav_fee_schedule_attach transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::nav_fee_execution::apply_nav_fee_schedule_attach(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::NavFeeScheduleSet(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::NAV_FEE_SCHEDULE_SET_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "nav_fee_schedule_set transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::nav_fee_execution::apply_nav_fee_schedule_set(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::NavFeeScheduleCancel(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::NAV_FEE_SCHEDULE_CANCEL_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "nav_fee_schedule_cancel transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::nav_fee_execution::apply_nav_fee_schedule_cancel(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::NavFeeClaim(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::NAV_FEE_CLAIM_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "nav_fee_claim transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::nav_fee_execution::apply_nav_fee_claim(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::IssuerRegister(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::ISSUER_REGISTER_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "issuer_register transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::credential_did_execution::apply_issuer_register(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::IssuerUpdate(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::ISSUER_UPDATE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "issuer_update transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::credential_did_execution::apply_issuer_update(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::IssuerAdminTransfer(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::ISSUER_ADMIN_TRANSFER_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "issuer_admin_transfer transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::credential_did_execution::apply_issuer_admin_transfer(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::IssuerDeregister(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::ISSUER_DEREGISTER_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "issuer_deregister transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::credential_did_execution::apply_issuer_deregister(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::CredentialCreate(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::CREDENTIAL_CREATE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "credential_create transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::credential_did_execution::apply_credential_create(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::CredentialAccept(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::CREDENTIAL_ACCEPT_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "credential_accept transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::credential_did_execution::apply_credential_accept(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::CredentialCreateAndAccept(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::CREDENTIAL_CREATE_AND_ACCEPT_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "credential_create_and_accept transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::credential_did_execution::apply_credential_create_and_accept(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::CredentialRevoke(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::CREDENTIAL_REVOKE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "credential_revoke transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::credential_did_execution::apply_credential_revoke(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::CredentialDelete(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::CREDENTIAL_DELETE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "credential_delete transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::credential_did_execution::apply_credential_delete(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
+        }
+        AssetTransactionOperation::AssetAccessSet(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::ASSET_ACCESS_SET_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "asset_access_set transaction kind mismatch".to_string(),
+                ));
+            }
+            crate::credential_did_execution::apply_asset_access_set(
+                ledger,
+                operation,
+                block_height,
+                compatibility,
+            )
         }
     }
 }

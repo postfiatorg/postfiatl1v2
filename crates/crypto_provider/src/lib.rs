@@ -11,6 +11,8 @@ use std::{
 
 mod address;
 pub use address::*;
+mod classical;
+pub use classical::*;
 
 pub const CRATE_PURPOSE: &str = "versioned post-quantum crypto provider interfaces";
 pub const ML_DSA_65_ALGORITHM: &str = "ML-DSA-65";

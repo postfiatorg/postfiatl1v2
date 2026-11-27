@@ -14,8 +14,8 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 174
-- Read-only public methods: 91
+- Total methods observed: 188
+- Read-only public methods: 105
 - Public cryptographically authorized protocol mutations: 12
 - Controlled write gated methods: 17
 - Privacy-alpha gated methods: 4
@@ -53,6 +53,7 @@ method lacks an explicit posture.
 | account | read_only_public | yes | no | yes | yes | yes | XRP-like transparent account read |
 | account_assets | read_only_public | yes | no | yes | yes | yes |  |
 | account_bridge_holds | read_only_public | yes | no | yes | no | no | read-only aggregated bridge holds for a recipient account |
+| account_credentials | read_only_public | yes | no | yes | no | no | read-only cursor-paginated zero-PII credentials for an account |
 | account_escrows | read_only_public | yes | no | yes | yes | yes |  |
 | account_lines | read_only_public | yes | no | yes | yes | yes |  |
 | account_nfts | read_only_public | yes | no | yes | yes | yes |  |
@@ -63,6 +64,7 @@ method lacks an explicit posture.
 | apply_bridge_batch | operator_or_local_only | no | no | yes | yes | no | operator/state-apply path; not public RPC |
 | apply_shield_batch | operator_or_local_only | no | no | yes | yes | no | operator/state-apply path; not public RPC |
 | archive_window | read_only_public | yes | no | yes | yes | yes | bounded archive-window bundle read |
+| asset_access_info | read_only_public | yes | no | yes | no | no | read-only issued asset gating and credential access policy lookup |
 | asset_bridge_holds | read_only_public | yes | no | yes | no | no | read-only cursor-paginated aggregated bridge holds for an issued asset |
 | asset_fee_quote | read_only_public | yes | no | yes | yes | yes |  |
 | asset_info | read_only_public | yes | no | yes | yes | yes |  |
@@ -86,6 +88,8 @@ method lacks an explicit posture.
 | bridge_status | read_only_public | yes | no | yes | yes | yes | bridge simulation state read |
 | bridge_transfer | operator_or_local_only | no | no | yes | no | no |  |
 | consensus_v2_timeout_vote | controlled_write_gated | no | yes | no | no | no |  |
+| credential_info | read_only_public | yes | no | yes | no | no | read-only zero-PII credential record and live validity lookup |
+| did_resolve | read_only_public | yes | no | yes | no | no | read-only W3C did:pftl DID document resolution (zero PII) |
 | escrow_fee_quote | read_only_public | yes | no | yes | yes | yes |  |
 | escrow_info | read_only_public | yes | no | yes | yes | yes |  |
 | external_lane_info | read_only_public | yes | no | yes | no | yes | public genesis external lane config, committed record, release_count, pruned_release_count, release_history_root and one page of stored release records; sequences below pruned_release_count are pruned and no page returns them |
@@ -119,7 +123,15 @@ method lacks an explicit posture.
 | fx_fix_list | read_only_public | yes | no | yes | no | yes | public fixed-rate FX market directory read |
 | fx_fix_quote | read_only_public | yes | no | yes | no | yes | deterministic fixed-rate FX quote preview |
 | fx_fix_reservation_info | read_only_public | yes | no | yes | no | yes | public fixed-rate FX reservation status read |
+| identity_by_handle | read_only_public | yes | no | yes | no | no | read-only Hive identity lookup by registered NIP-05 handle |
+| identity_by_link | read_only_public | yes | no | yes | no | no | read-only Hive identity lookup by verified external/validator/old-chain link |
+| identity_by_nostr | read_only_public | yes | no | yes | no | no | read-only Hive identity lookup by BIP-340 Nostr public key |
+| identity_history | read_only_public | yes | no | yes | no | no | read-only chronological Hive identity lifecycle history for an account |
+| identity_info | read_only_public | yes | no | yes | no | no | read-only Hive identity record lookup by ML-DSA account |
+| identity_resolve | read_only_public | yes | no | yes | no | no | read-only unified Hive identity resolver across account, nostr_pubkey, handle, or link |
 | issuer_assets | read_only_public | yes | no | yes | yes | yes |  |
+| issuer_info | read_only_public | yes | no | yes | no | no | read-only credential issuer registry entry lookup |
+| issuer_list | read_only_public | yes | no | yes | no | no | read-only cursor-paginated credential issuer registry list |
 | issuer_nfts | read_only_public | yes | no | yes | yes | yes |  |
 | ledger | read_only_public | yes | no | yes | yes | yes | XRP-like latest ledger alias with bounded block sample |
 | manifests | read_only_public | yes | no | yes | yes | yes | operator manifest read |
@@ -143,6 +155,8 @@ method lacks an explicit posture.
 | mempool_submit_signed_transfer_finality | controlled_write_gated | no | yes | no | no | no | controlled in-process write/finality edge; disabled unless explicitly enabled |
 | mempool_submit_transfer | operator_or_local_only | no | no | yes | yes | no | local wallet/debug helper; uses local key file |
 | metrics | read_only_public | yes | no | yes | yes | yes | public node metrics read |
+| nav_fee_history | read_only_public | yes | no | yes | no | no | read-only cursor-paginated NAVCoin epoch fee accrual history |
+| nav_fee_schedule | read_only_public | yes | no | yes | no | no | read-only optional NAVCoin fee schedule and accrual state |
 | nav_reserve_proof_status | read_only_public | yes | no | yes | yes | yes | provider-neutral NAV reserve proof and profile status read |
 | navcoin_bridge_claims | read_only_public | yes | no | yes | yes | yes |  |
 | navcoin_bridge_destination_consume | operator_or_local_only | no | no | yes | no | no |  |

@@ -3195,6 +3195,8 @@ pub struct IssuedAssetReport {
     pub requires_authorization: bool,
     pub freeze_enabled: bool,
     pub clawback_enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_policy: Option<postfiat_types::AssetAccessPolicyV1>,
     pub outstanding_supply: u64,
     pub trustline_count: u64,
     pub holder_count: u64,
@@ -3220,6 +3222,10 @@ pub struct AssetLineReport {
     pub authorized: bool,
     pub frozen: bool,
     pub reserve_paid: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub holder_limit: Option<u64>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub implicit: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
