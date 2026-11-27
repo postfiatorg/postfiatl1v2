@@ -751,6 +751,23 @@ pub fn create_release_manifest_v3(
             .map_err(|error| format!("read `{}` failed: {error}", path.display()))
     };
     let binary = |path: &Path, arch: &str| -> Result<ReleaseBinaryArtifactV3, String> {
+        let mut elf = [0u8; 64];
+        File::open(path)
+            .and_then(|mut file| file.read_exact(&mut elf))
+            .map_err(|err| format!("cannot read ELF header for {arch}: {err}"))?;
+        let machine = match arch {
+            "linux-x86_64" => 62,
+            "linux-aarch64" => 183,
+            _ => return Err(format!("unsupported release architecture {arch}")),
+        };
+        if &elf[..7] != b"\x7fELF\x02\x01\x01"
+            || !matches!(u16::from_le_bytes([elf[16], elf[17]]), 2 | 3)
+            || u16::from_le_bytes([elf[18], elf[19]]) != machine
+        {
+            return Err(format!(
+                "release binary is not an ELF64 executable for {arch}"
+            ));
+        }
         let (binary_sha256, binary_size_bytes) = digest(path)?;
         Ok(ReleaseBinaryArtifactV3 {
             binary_url: format!(
@@ -2666,7 +2683,7 @@ mod tests {
             }
         }
         fn new_binary_installed(&self) -> bool {
-            fs::read(&self.installed_bin).is_ok_and(|bytes| bytes == b"NEW_BINARY_BYTES_V3")
+            fs::read(&self.installed_bin).is_ok_and(|bytes| bytes.ends_with(b"NEW_BINARY_BYTES_V3"))
         }
         fn log(&self) -> Vec<String> {
             self.log.lock().expect("log").clone()
@@ -3576,6 +3593,15 @@ mod tests {
             path
         };
         let candidate = fixture.options.binary_file.clone().unwrap();
+        let mut header = [0u8; 64];
+        header[..7].copy_from_slice(b"\x7fELF\x02\x01\x01");
+        header[16] = 3;
+        header[18] = 62;
+        let mut executable = header.to_vec();
+        executable.extend_from_slice(b"NEW_BINARY_BYTES_V3");
+        fs::write(&candidate, executable).unwrap();
+        header[18] = 183;
+        let arm = file("aarch64", &header);
         let inputs = ReleaseManifestInputs {
             release_id: "v0.4.0-testnet".to_string(),
             release_sequence: 8,
@@ -3601,7 +3627,7 @@ mod tests {
             },
             url_base: "https://releases.postfiat.org".to_string(),
             binary_x86_64: candidate.clone(),
-            binary_aarch64: candidate.clone(),
+            binary_aarch64: arm,
             systemd_bundle: file("systemd.tar", b"units"),
             docker_profiles: file("docker.tar", b"profiles"),
             sbom: file("sbom.json", b"{}"),
@@ -3655,6 +3681,7 @@ mod tests {
             change(&mut bad);
             create_release_manifest_v3(&bad, &fixture.keyset).is_err()
         };
+        assert!(refuse(&|i| i.binary_aarch64 = i.binary_x86_64.clone()));
         assert!(refuse(&|i| i.release_sequence = 0));
         assert!(refuse(&|i| i.git_revision = "11111111".to_string()));
         assert!(refuse(

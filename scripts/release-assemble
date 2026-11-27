@@ -60,6 +60,13 @@ def main() -> int:
     if missing:
         print(f"release-assemble: missing in {release}: {', '.join(missing)}", file=sys.stderr)
         return 1
+    for name, machine in zip(BINARIES, (62, 183), strict=True):
+        with (release / name).open("rb") as artifact:
+            header = artifact.read(64)
+        if (len(header) != 64 or header[:7] != b"\x7fELF\x02\x01\x01"
+            or int.from_bytes(header[16:18], "little") not in (2, 3)
+            or int.from_bytes(header[18:20], "little") != machine):
+            raise SystemExit(f"release-assemble: wrong ELF architecture or executable type for {name}")
     units = [path for prefix in UNIT_SOURCES for path in tracked_files(prefix)] + [ROOT / s for s in OBSERVER_SCRIPTS]
     deterministic_tar(release / "postfiat-units.tar", units)
     deterministic_tar(release / "postfiat-docker-profiles.tar", [])

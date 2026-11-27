@@ -66,9 +66,23 @@ class ReleaseFlow(unittest.TestCase):
             # 2. The release directory: the two binaries as CI built them, then the rest.
             release = tmp / "release"
             release.mkdir()
-            for arch in ("linux-x86_64", "linux-aarch64"):
-                shutil.copy2(node, release / f"postfiat-node-{arch}")
-            subprocess.run([str(REPO / "scripts/release-assemble"), str(release)], check=True, capture_output=True)
+            native = Path(node)
+            with native.open("rb") as stream:
+                header = bytearray(stream.read(64))
+            arches = {"linux-x86_64": 62, "linux-aarch64": 183}
+            native_arch = next(arch for arch, machine in arches.items() if machine == int.from_bytes(header[18:20], "little"))
+            foreign_arch = next(arch for arch in arches if arch != native_arch)
+            shutil.copy2(native, release / f"postfiat-node-{native_arch}")
+            foreign = release / f"postfiat-node-{foreign_arch}"
+            foreign.write_bytes(header)
+            assemble = [str(REPO / "scripts/release-assemble"), str(release)]
+            refused = subprocess.run(assemble, capture_output=True)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn(b"wrong ELF architecture", refused.stderr)
+            # Synthetic foreign ELF header; native execution is tested by each architecture's CI job.
+            header[18:20] = arches[foreign_arch].to_bytes(2, "little")
+            foreign.write_bytes(header)
+            subprocess.run(assemble, check=True, capture_output=True)
             sums = (release / "SHA256SUMS").read_text()
             for name in ("postfiat-units.tar", "postfiat-cargo-sbom.cdx.json", "postfiat-node-linux-aarch64"):
                 self.assertIn(name, sums)
@@ -96,11 +110,11 @@ class ReleaseFlow(unittest.TestCase):
             run(*create)
             manifest = json.loads(manifest_file.read_text())
             self.assertEqual((manifest["release_sequence"], manifest["signatures"]), (1, []))
-            self.assertEqual(manifest["artifacts"]["linux-x86_64"]["binary_sha256"], info["binary_sha256"])
+            self.assertEqual(manifest["artifacts"][native_arch]["binary_sha256"], info["binary_sha256"])
             self.assertNotEqual(run(*create, ok=False).returncode, 0, "a manifest is never overwritten")
 
             verify = ["release-manifest-verify", "--manifest-file", str(manifest_file), "--keyset-file", str(keyset_file),
-                      "--runtime-binary-file", str(release / "postfiat-node-linux-x86_64"), "--arch", "linux-x86_64"]
+                      "--runtime-binary-file", str(release / f"postfiat-node-{native_arch}"), "--arch", native_arch]
             # 4. Unsigned, and with one signature, it is not a release.
             self.assertNotEqual(run(*verify, ok=False).returncode, 0)
             run("release-manifest-sign", "--manifest-file", str(manifest_file), "--key-file", str(tmp / "release-lead-1.key.json"))
@@ -118,7 +132,7 @@ class ReleaseFlow(unittest.TestCase):
             # 6. Another binary than the one the manifest names is refused at start.
             other = tmp / "other-binary"
             other.write_bytes(b"not the release binary")
-            refused = run(*verify[:6], "--runtime-binary-file", str(other), "--arch", "linux-x86_64", ok=False)
+            refused = run(*verify[:6], "--runtime-binary-file", str(other), "--arch", native_arch, ok=False)
             self.assertNotEqual(refused.returncode, 0)
             # A changed manifest is refused too.
             manifest = json.loads(manifest_file.read_text())
