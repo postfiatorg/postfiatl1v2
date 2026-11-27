@@ -1,10 +1,27 @@
 use super::*;
 
+#[cfg(test)]
 pub(super) fn execute_fastlane_primary_for_chain(
     genesis: &Genesis,
     ledger: &mut LedgerState,
     transaction: &postfiat_types::FastLanePrimaryTransactionV1,
     block_height: u64,
+) -> Receipt {
+    execute_fastlane_primary_for_chain_with_compatibility(
+        genesis,
+        ledger,
+        transaction,
+        block_height,
+        AssetExecutionCompatibility::strict(),
+    )
+}
+
+pub(super) fn execute_fastlane_primary_for_chain_with_compatibility(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    transaction: &postfiat_types::FastLanePrimaryTransactionV1,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Receipt {
     if let postfiat_types::FastLanePrimaryOperationV1::OwnedDeposit { signed } =
         &transaction.operation
@@ -78,7 +95,12 @@ pub(super) fn execute_fastlane_primary_for_chain(
             );
         }
     }
-    execute_fastlane_primary_transaction(ledger, transaction, block_height)
+    execute_fastlane_primary_transaction_with_compatibility(
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+    )
 }
 
 #[cfg(test)]
@@ -112,6 +134,7 @@ pub(super) fn execute_transparent_batch_with_orchard(
 ) -> Vec<Receipt> {
     let compatibility =
         transparent_block_fee_claim_compatibility(asset_execution_compatibility, governance);
+    migrate_nfts_to_keyed_state_if_needed(ledger, block_height, compatibility);
     let mut receipts = Vec::with_capacity(batch.transaction_count());
     for transfer in &batch.transactions {
         let receipt = execute_transfer_with_compatibility(
@@ -187,11 +210,12 @@ pub(super) fn execute_transparent_batch_with_orchard(
         ));
     }
     for transaction in &batch.fastlane_primary_transactions {
-        receipts.push(execute_fastlane_primary_for_chain(
+        receipts.push(execute_fastlane_primary_for_chain_with_compatibility(
             genesis,
             ledger,
             transaction,
             block_height,
+            compatibility,
         ));
     }
     for transaction in &batch.escrow_transactions {
@@ -229,7 +253,13 @@ pub(super) fn execute_transparent_batch_with_orchard(
         ));
     }
     for transaction in &batch.offer_transactions {
-        let receipt = execute_offer_transaction(genesis, ledger, transaction, block_height);
+        let receipt = execute_offer_transaction_with_compatibility(
+            genesis,
+            ledger,
+            transaction,
+            block_height,
+            compatibility,
+        );
         receipts.push(claim_rejected_offer_transaction_fee(
             genesis,
             ledger,
@@ -546,6 +576,9 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
         .with_external_lane_export_root_activation_height(
             postfiat_types::external_lane_export_root_activation_height(genesis, governance),
         )
+        .with_fastpay_fee_v1_activation_height(governance.fastpay_fee_v1_activation_height())
+        .with_nft_scaling_v1_activation_height(governance.nft_scaling_v1_activation_height())
+        .with_asset_gate_v1_activation_height(governance.asset_gate_v1_activation_height())
 }
 
 pub(super) fn asset_execution_compatibility_with_chain_activation(
@@ -580,6 +613,9 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
         .with_external_lane_export_root_activation_height(
             postfiat_types::external_lane_export_root_activation_height(genesis, governance),
         )
+        .with_fastpay_fee_v1_activation_height(governance.fastpay_fee_v1_activation_height())
+        .with_nft_scaling_v1_activation_height(governance.nft_scaling_v1_activation_height())
+        .with_asset_gate_v1_activation_height(governance.asset_gate_v1_activation_height())
 }
 
 pub(super) fn ensure_atomic_swap_batch_allowed(
@@ -633,6 +669,7 @@ pub(super) fn execute_transparent_batch_for_archive_replay(
     // Same fee-claim and memo rules as live execution of the certified block.
     let compatibility = transparent_block_fee_claim_compatibility(compatibility, governance);
     let block_height = block.header.height;
+    migrate_nfts_to_keyed_state_if_needed(ledger, block_height, compatibility);
 
     let mut receipts = Vec::with_capacity(batch.transaction_count());
     for transfer in &batch.transactions {
@@ -707,11 +744,12 @@ pub(super) fn execute_transparent_batch_for_archive_replay(
         ));
     }
     for transaction in &batch.fastlane_primary_transactions {
-        receipts.push(execute_fastlane_primary_for_chain(
+        receipts.push(execute_fastlane_primary_for_chain_with_compatibility(
             genesis,
             ledger,
             transaction,
             block_height,
+            compatibility,
         ));
     }
     for transaction in &batch.escrow_transactions {
@@ -749,7 +787,13 @@ pub(super) fn execute_transparent_batch_for_archive_replay(
         ));
     }
     for transaction in &batch.offer_transactions {
-        let receipt = execute_offer_transaction(genesis, ledger, transaction, block_height);
+        let receipt = execute_offer_transaction_with_compatibility(
+            genesis,
+            ledger,
+            transaction,
+            block_height,
+            compatibility,
+        );
         receipts.push(claim_rejected_offer_transaction_fee(
             genesis,
             ledger,
@@ -2571,6 +2615,21 @@ pub(super) fn governance_amendment_lifecycle_rejection(
             "invalid_recipient_format_v2_activation_height",
             "recipient-format",
         ),
+        (
+            postfiat_types::GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT,
+            "invalid_fastpay_fee_v1_activation_height",
+            "fastpay-fee-v1",
+        ),
+        (
+            postfiat_types::GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT,
+            "invalid_nft_scaling_v1_activation_height",
+            "nft-scaling-v1",
+        ),
+        (
+            postfiat_types::GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT,
+            "invalid_asset_gate_v1_activation_height",
+            "asset-gate-v1",
+        ),
     ] {
         if amendment.kind == kind && u64::from(amendment.value) <= block_height {
             return Some((
@@ -2763,6 +2822,18 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .unwrap_or(0),
         postfiat_types::GOVERNANCE_KIND_EXTERNAL_LANE_EXPORT_ROOT_ACTIVATION_HEIGHT => governance
             .external_lane_export_root_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        postfiat_types::GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT => governance
+            .fastpay_fee_v1_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        postfiat_types::GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT => governance
+            .nft_scaling_v1_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        postfiat_types::GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT => governance
+            .asset_gate_v1_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
         kind if postfiat_types::is_pq_rehearsal_kind(kind) => governance
@@ -4144,8 +4215,10 @@ fn execute_shielded_batch_actions(
                 ledger,
                 shielded,
                 &batch.batch_id,
+                block_height,
                 index,
                 action,
+                asset_execution_compatibility,
             ),
             ShieldedAction::AssetOrchardPrivateEgressV1(action) => {
                 execute_asset_orchard_private_egress_action(
@@ -4158,6 +4231,7 @@ fn execute_shielded_batch_actions(
                     action,
                     &egress_policies,
                     archive_replay,
+                    asset_execution_compatibility,
                 )
             }
             ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(action) => {
@@ -4170,6 +4244,7 @@ fn execute_shielded_batch_actions(
                     index,
                     action,
                     archive_replay,
+                    asset_execution_compatibility,
                 )
             }
             ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(action) => {
@@ -4496,8 +4571,10 @@ pub(super) fn execute_asset_orchard_egress_action(
     ledger: &mut LedgerState,
     shielded: &mut ShieldedState,
     batch_id: &str,
+    block_height: u64,
     index: usize,
     payload: &AssetOrchardEgressActionPayload,
+    compatibility: AssetExecutionCompatibility,
 ) -> Receipt {
     if let Err(error) = validate_asset_orchard_egress_payload_for_genesis(genesis, payload) {
         return Receipt::rejected(
@@ -4506,7 +4583,14 @@ pub(super) fn execute_asset_orchard_egress_action(
             error.to_string(),
         );
     }
-    match apply_asset_orchard_egress_action_to_state(genesis, ledger, shielded, payload) {
+    match apply_asset_orchard_egress_action_to_state(
+        genesis,
+        ledger,
+        shielded,
+        payload,
+        block_height,
+        compatibility,
+    ) {
         Ok(receipt) => receipt,
         Err(error) => Receipt::rejected(
             shielded_action_rejection_id(batch_id, index, "asset_orchard_egress_apply_error"),
@@ -4560,6 +4644,7 @@ pub(super) fn execute_asset_orchard_private_egress_action(
     payload: &AssetOrchardPrivateEgressActionPayload,
     egress_policies: &postfiat_types::AssetOrchardEgressPolicyRegistry,
     archive_replay: bool,
+    compatibility: AssetExecutionCompatibility,
 ) -> Receipt {
     // Checked first: it reads only the public asset, policy and disclosure
     // fields, and it is inert until governance writes a record or activation.
@@ -4596,6 +4681,8 @@ pub(super) fn execute_asset_orchard_private_egress_action(
         payload,
         archived_pre_repin,
         archive_replay,
+        block_height,
+        compatibility,
     ) {
         Ok(receipt) => receipt,
         Err(error) => Receipt::rejected(
@@ -4619,7 +4706,23 @@ pub(super) fn execute_asset_orchard_private_primary_issue_action(
     index: usize,
     payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
     archive_replay: bool,
+    compatibility: AssetExecutionCompatibility,
 ) -> Receipt {
+    if let Some(route) = ledger.pftl_uniswap_route(&payload.route_id) {
+        if let Err((code, message)) = ensure_shielded_entry_allowed_with_compatibility(
+            ledger,
+            &payload.subscriber,
+            &route.native_nav_asset_id,
+            block_height,
+            compatibility,
+        ) {
+            return Receipt::rejected(
+                shielded_action_rejection_id(batch_id, index, code),
+                code,
+                message,
+            );
+        }
+    }
     // Private-primary issuance replays through the live transition. The
     // certificate-bound wan-devnet-2 archive list changes only the historical
     // supply calculation; proof, policy, nullifier, state, and receipt checks

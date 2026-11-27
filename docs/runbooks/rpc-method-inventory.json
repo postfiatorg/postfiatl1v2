@@ -15,9 +15,9 @@
     "owned_lane_gated": 8,
     "privacy_alpha_gated": 4,
     "private_action_gated": 2,
-    "read_only_public": 89,
+    "read_only_public": 92,
     "sdk_only_or_unknown": 0,
-    "total_methods": 172
+    "total_methods": 175
   },
   "gaps": [
     {
@@ -36,10 +36,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-11-27T19:37:04Z",
+  "generated_utc": "2026-11-27T20:23:41Z",
   "git": {
     "dirty": true,
-    "revision": "51198b6e29d722b84af159bd958bc98cf9d1be55"
+    "revision": "02a7abbece62a4127a88da85543fee50c9533bb4"
   },
   "methods": [
     {
@@ -73,6 +73,22 @@
       "remote_rpc_implemented": true,
       "requires_finality_submit_switch": false,
       "sdk_constant": true
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "account_bridge_holds",
+      "node_dispatch": true,
+      "notes": "read-only aggregated bridge holds for a recipient account",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": false,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
+      "sdk_constant": false
     },
     {
       "authorized_protocol_mutation_public": false,
@@ -233,6 +249,22 @@
       "remote_rpc_implemented": true,
       "requires_finality_submit_switch": false,
       "sdk_constant": true
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "asset_bridge_holds",
+      "node_dispatch": true,
+      "notes": "read-only cursor-paginated aggregated bridge holds for an issued asset",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": false,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
+      "sdk_constant": false
     },
     {
       "authorized_protocol_mutation_public": false,
@@ -729,6 +761,22 @@
       "remote_rpc_implemented": true,
       "requires_finality_submit_switch": false,
       "sdk_constant": true
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "fastpay_fee_quote",
+      "node_dispatch": true,
+      "notes": "read-only FastPay v3 fee quote and owned-object capacity status",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": false,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
+      "sdk_constant": false
     },
     {
       "authorized_protocol_mutation_public": false,

@@ -2091,6 +2091,9 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
         | "ratify-rejected-tx-fee-v2-activation-height"
         | "ratify-require-memo-v2-activation-height"
         | "ratify-recipient-format-v2-activation-height"
+        | "ratify-fastpay-fee-v1-activation-height"
+        | "ratify-nft-scaling-v1-activation-height"
+        | "ratify-asset-gate-v1-activation-height"
         | "ratify-orchard-aware-bridge-claim-activation-height"
         | "ratify-pfusdc-source-series-activation-height"
         | "ratify-solana-bridge-activation-height"
@@ -2136,6 +2139,18 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 "ratify-recipient-format-v2-activation-height" => (
                     postfiat_types::GOVERNANCE_KIND_RECIPIENT_FORMAT_V2_ACTIVATION_HEIGHT,
                     "--recipient-format-v2-activation-height",
+                ),
+                "ratify-fastpay-fee-v1-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_FASTPAY_FEE_V1_ACTIVATION_HEIGHT,
+                    "--fastpay-fee-v1-activation-height",
+                ),
+                "ratify-nft-scaling-v1-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_NFT_SCALING_V1_ACTIVATION_HEIGHT,
+                    "--nft-scaling-v1-activation-height",
+                ),
+                "ratify-asset-gate-v1-activation-height" => (
+                    postfiat_types::GOVERNANCE_KIND_ASSET_GATE_V1_ACTIVATION_HEIGHT,
+                    "--asset-gate-v1-activation-height",
                 ),
                 "ratify-orchard-aware-bridge-claim-activation-height" => (
                     GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT,

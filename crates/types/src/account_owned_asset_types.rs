@@ -728,6 +728,96 @@ pub fn trustline_id(account: &str, issuer: &str, asset_id: &str) -> Result<Strin
     Ok(hash_hex_domain(TRUSTLINE_ID_DOMAIN, preimage.as_bytes()))
 }
 
+pub fn nft_collection_policy_key(issuer: &str, collection_id: &str) -> String {
+    let preimage = format!(
+        "issuer={issuer}\ncollection_id_bytes={}\ncollection_id={collection_id}\n",
+        collection_id.len()
+    );
+    hash_hex_domain(NFT_COLLECTION_POLICY_KEY_DOMAIN, preimage.as_bytes())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NftCollectionPolicyV1 {
+    pub issuer: String,
+    pub collection_id: String,
+    pub collection_flags: u32,
+    pub first_minted_height: u64,
+}
+
+impl NftCollectionPolicyV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("nft_collection_policy.issuer", &self.issuer)?;
+        validate_text_field("nft_collection_policy.collection_id", &self.collection_id)?;
+        if self.collection_id.len() > MAX_NFT_COLLECTION_ID_BYTES {
+            return Err(format!(
+                "nft_collection_policy.collection_id must not exceed {MAX_NFT_COLLECTION_ID_BYTES} bytes"
+            ));
+        }
+        if self.collection_flags & !NFT_COLLECTION_ALLOWED_FLAGS != 0 {
+            return Err("nft_collection_policy.collection_flags contains unsupported bits".to_string());
+        }
+        Ok(())
+    }
+}
+
+pub fn asset_bridge_hold_key(asset_id: &str, recipient: &str) -> String {
+    let preimage = format!("asset_id={asset_id}\nrecipient={recipient}\n");
+    hash_hex_domain(ASSET_BRIDGE_HOLD_KEY_DOMAIN, preimage.as_bytes())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetBridgeHoldV1 {
+    /// 96 lowercase hex = `asset_bridge_hold_key(asset_id, recipient)`.
+    pub hold_key: String,
+    pub asset_id: String,
+    pub issuer: String,
+    pub recipient: String,
+    /// Total held atoms (counted in circulating/outstanding asset supply!).
+    pub amount: u64,
+    /// Number of finalized bridge credits aggregated into this hold.
+    pub credit_count: u64,
+    pub created_at_height: u64,
+    pub last_updated_height: u64,
+    /// Most recent gate reason that routed a credit here.
+    pub last_reason_code: String,
+}
+
+impl AssetBridgeHoldV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_lower_hex_len("asset_bridge_hold.hold_key", &self.hold_key, ISSUED_ASSET_ID_HEX_LEN)?;
+        validate_lower_hex_len("asset_bridge_hold.asset_id", &self.asset_id, ISSUED_ASSET_ID_HEX_LEN)?;
+        validate_text_field("asset_bridge_hold.issuer", &self.issuer)?;
+        validate_text_field("asset_bridge_hold.recipient", &self.recipient)?;
+        if self.recipient == self.issuer {
+            return Err("asset_bridge_hold.recipient must differ from issuer".to_string());
+        }
+        if self.amount == 0 {
+            return Err("asset_bridge_hold.amount must be nonzero".to_string());
+        }
+        if self.credit_count == 0 {
+            return Err("asset_bridge_hold.credit_count must be nonzero".to_string());
+        }
+        validate_text_field("asset_bridge_hold.last_reason_code", &self.last_reason_code)?;
+        let expected_key = asset_bridge_hold_key(&self.asset_id, &self.recipient);
+        if self.hold_key != expected_key {
+            return Err("asset_bridge_hold.hold_key does not match asset_id and recipient".to_string());
+        }
+        Ok(())
+    }
+}
+
+/// Emitted in transaction receipts for every individual bridge credit routed to a hold
+/// so off-chain indexers retain exact per-transfer provenance without bloating ledger state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetBridgeHoldReceiptEventV1 {
+    pub hold_key: String,
+    pub asset_id: String,
+    pub recipient: String,
+    pub amount: u64,
+    pub source_reference: String,
+    pub reason_code: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NavTrackedAsset {
     pub asset_id: String,

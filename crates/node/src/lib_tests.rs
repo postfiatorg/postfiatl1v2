@@ -48,6 +48,8 @@ mod tests {
     mod vault_bridge_governed_route;
     mod escrow_offer_quote_native_lock;
     mod account_tx_escrow_finish_row;
+    mod train_a_integration_tests;
+    mod train_a_review_tests;
     use consensus_history::{dummy_block_record, write_split_validator_key_files};
     include!("tests/governance_history_manifest_tests.rs");
     include!("tests/pftl_uniswap_bridge_rpc_tests.rs");

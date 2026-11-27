@@ -30,8 +30,9 @@ use postfiat_network::{
     DEFAULT_BASE_PORT,
 };
 use postfiat_node::{
-    account, account_assets, account_escrows, account_lines, account_nfts, account_offers,
-    account_tx, account_tx_index_status, active_validator_ids_for_node,
+    account, account_assets, account_bridge_holds, account_escrows, account_lines, account_nfts,
+    account_offers, account_tx, account_tx_index_status, active_validator_ids_for_node,
+    asset_bridge_holds, fastpay_fee_quote,
     admit_fastlane_primary_to_mempool, aggregate_block_certificate,
     aggregate_block_timeout_certificate, aggregate_prevalidated_verified_block_certificate,
     apply_amendment, apply_batch, apply_batch_with_expected_commit_identity, apply_batch_with_replay,
@@ -163,9 +164,10 @@ use postfiat_node::{
     wallet_keygen, wallet_restore, wallet_sign_asset_transaction, wallet_sign_escrow_transaction,
     wallet_sign_offer_transaction, wallet_sign_transfer, wallet_test_vector,
     write_consensus_v2_block_certificate_file, write_consensus_v2_topology, write_local_topology,
-    AccountAssetsOptions, AccountEscrowsOptions, AccountLinesOptions, AccountNftsOptions,
-    AccountOffersOptions, AccountTxIndexOptions, AccountTxQueryOptions, ApplyAmendmentOptions,
-    ApplyBatchOptions, ApplyBatchTimingReport, AssetFeeQuoteOptions, AssetFeeQuoteReport,
+    AccountAssetsOptions, AccountBridgeHoldsOptions, AccountEscrowsOptions, AccountLinesOptions,
+    AccountNftsOptions, AccountOffersOptions, AccountTxIndexOptions, AccountTxQueryOptions,
+    ApplyAmendmentOptions, ApplyBatchOptions, ApplyBatchTimingReport, AssetBridgeHoldsOptions,
+    AssetFeeQuoteOptions, AssetFeeQuoteReport, FastPayFeeQuoteOptions,
     AssetInfoOptions, NavReserveProofStatusOptions, AssetOrchardEgressBatchOptions, AssetOrchardEgressCreateOptions,
     AssetOrchardActionStatusOptions, AssetOrchardIngressBatchOptions,
     AssetOrchardIngressCreateOptions, AssetOrchardNoteStatusOptions,
@@ -508,6 +510,9 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-rejected-tx-fee-v2-activation-height"
         | "ratify-require-memo-v2-activation-height"
         | "ratify-recipient-format-v2-activation-height"
+        | "ratify-fastpay-fee-v1-activation-height"
+        | "ratify-nft-scaling-v1-activation-height"
+        | "ratify-asset-gate-v1-activation-height"
         | "ratify-orchard-aware-bridge-claim-activation-height"
         | "ratify-pfusdc-source-series-activation-height"
         | "ratify-solana-exit-open"

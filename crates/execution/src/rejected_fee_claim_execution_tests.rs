@@ -429,6 +429,7 @@ fn asset_escrow_nft_offer_and_atomic_swap_effect_rejections_claim_fees() {
         NftTransactionOperation::NftBurn(NftBurnOperation {
             nft_id: "ef".repeat(48),
             owner: fixture.sender.clone(),
+            issuer: String::new(),
         }),
     );
     let mut ledger = fixture.ledger.clone();

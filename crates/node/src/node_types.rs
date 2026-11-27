@@ -2862,6 +2862,7 @@ pub struct AccountNftsOptions {
     pub data_dir: PathBuf,
     pub account: String,
     pub include_burned: bool,
+    pub cursor: Option<String>,
     pub limit: Option<usize>,
 }
 
@@ -2871,7 +2872,96 @@ pub struct IssuerNftsOptions {
     pub issuer: String,
     pub collection_id: Option<String>,
     pub include_burned: bool,
+    pub cursor: Option<String>,
     pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FastPayFeeQuoteOptions {
+    pub data_dir: PathBuf,
+    pub operation: String,
+    pub owner_pubkey_hex: Option<String>,
+    pub inputs_count: usize,
+    pub outputs_count: usize,
+    pub memo_bytes: usize,
+    pub estimated_weight_bytes: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FastPayFeeQuoteReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub block_height: u64,
+    pub fee_v1_active: bool,
+    pub operation: String,
+    pub weight_bytes: usize,
+    pub inputs_count: usize,
+    pub outputs_count: usize,
+    pub base_fee: u64,
+    pub byte_fee: u64,
+    pub new_object_fee: u64,
+    pub input_fee: u64,
+    pub minimum_fee: u64,
+    pub owner_current_object_count: u64,
+    pub owner_soft_cap: u64,
+    pub global_current_object_count: u64,
+    pub global_hard_cap: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountBridgeHoldsOptions {
+    pub data_dir: PathBuf,
+    pub recipient: String,
+    pub asset_id: Option<String>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssetBridgeHoldsOptions {
+    pub data_dir: PathBuf,
+    pub asset_id: String,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BridgeHoldReport {
+    pub hold_key: String,
+    pub asset_id: String,
+    pub issuer: String,
+    pub recipient: String,
+    pub amount: u64,
+    pub credit_count: u64,
+    pub created_at_height: u64,
+    pub last_updated_height: u64,
+    pub last_reason_code: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountBridgeHoldsReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub recipient: String,
+    pub hold_count: u64,
+    pub truncated: bool,
+    pub holds: Vec<BridgeHoldReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetBridgeHoldsReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub asset_id: String,
+    pub total_held_atoms: u64,
+    pub hold_count: u64,
+    pub truncated: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    pub holds: Vec<postfiat_types::AssetBridgeHoldV1>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -3552,6 +3642,10 @@ pub struct AccountNftsReport {
     pub include_burned: bool,
     pub limit: u64,
     pub truncated: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_count: Option<u64>,
     pub nft_count: u64,
     pub nfts: Vec<NftReport>,
 }
@@ -3567,6 +3661,10 @@ pub struct IssuerNftsReport {
     pub include_burned: bool,
     pub limit: u64,
     pub truncated: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_count: Option<u64>,
     pub nft_count: u64,
     pub nfts: Vec<NftReport>,
 }
@@ -4048,6 +4146,15 @@ pub struct AccountTxRow {
     pub fill_index: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub condition_hash: Option<String>,
+    /// Canonical immutable FastPay order hash (equals `tx_id` on FastPay rows).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub order_hash: Option<String>,
+    /// Applied validator-quorum certificate digest (informational; never used as primary key).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub certificate_digest: Option<String>,
+    /// FastPay lock_id from FastPayVersionFenceV1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fastpay_lock_id: Option<String>,
     pub accepted: Option<bool>,
     pub receipt_code: Option<String>,
 }

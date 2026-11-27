@@ -24,10 +24,11 @@ const ACCOUNT_TX_ACCOUNT_HEAD_FILE: &str = "head.json";
 // retained blocks.
 // v4 rows attribute an `escrow_finish` to the recipient who signed it.
 // v5 also indexes the public account effects of PQ payments.
-const ACCOUNT_TX_INDEX_SCHEMA: &str = "postfiat-account-tx-index-v5";
-const ACCOUNT_TX_DISK_INDEX_SCHEMA: &str = "postfiat-account-tx-disk-index-v5";
-const ACCOUNT_TX_ACCOUNT_HEAD_SCHEMA: &str = "postfiat-account-tx-account-head-v5";
-const ACCOUNT_TX_ACCOUNT_CHUNK_SCHEMA: &str = "postfiat-account-tx-account-chunk-v5";
+// v6 also indexes confirmed FastPay v3 effects from `block.fastpay_pre_state_effects`.
+const ACCOUNT_TX_INDEX_SCHEMA: &str = "postfiat-account-tx-index-v6";
+const ACCOUNT_TX_DISK_INDEX_SCHEMA: &str = "postfiat-account-tx-disk-index-v6";
+const ACCOUNT_TX_ACCOUNT_HEAD_SCHEMA: &str = "postfiat-account-tx-account-head-v6";
+const ACCOUNT_TX_ACCOUNT_CHUNK_SCHEMA: &str = "postfiat-account-tx-account-chunk-v6";
 /// Rows per account chunk written by `account-tx-index-build`. Commits use the
 /// value recorded in the metadata.
 pub(crate) const ACCOUNT_TX_CHUNK_ROWS: u64 = 64;
@@ -236,7 +237,9 @@ fn rebuild_account_tx_disk_index(
     let mut disk_index = AccountTxDiskIndex::empty(genesis, ACCOUNT_TX_CHUNK_ROWS);
     let mut accounts: BTreeMap<String, (Vec<AccountTxRow>, u64, u64, String)> = BTreeMap::new();
     for block in &block_log.blocks {
-        if !account_tx_indexes_batch_kind(&block.header.batch_kind) {
+        if !account_tx_indexes_batch_kind(&block.header.batch_kind)
+            && block.fastpay_pre_state_effects.is_empty()
+        {
             continue;
         }
         let rows = account_tx_rows_for_block(block, archive, &receipt_by_tx)?;

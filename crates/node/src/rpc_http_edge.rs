@@ -20,6 +20,7 @@ use std::time::Duration;
 pub const READ_ONLY_PUBLIC_METHODS: &[&str] = &[
     "account",
     "account_assets",
+    "account_bridge_holds",
     "account_escrows",
     "account_lines",
     "account_nfts",
@@ -27,6 +28,7 @@ pub const READ_ONLY_PUBLIC_METHODS: &[&str] = &[
     "account_tx",
     "account_tx_index_status",
     "archive_window",
+    "asset_bridge_holds",
     "asset_fee_quote",
     "asset_info",
     "asset_orchard_action_status",
@@ -43,6 +45,7 @@ pub const READ_ONLY_PUBLIC_METHODS: &[&str] = &[
     "escrow_info",
     "external_lane_info",
     "fastlane_asset_control_preview",
+    "fastpay_fee_quote",
     "fastpay_recovery_committee",
     "fastswap_capabilities",
     "fastswap_checkpoint_status",

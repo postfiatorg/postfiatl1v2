@@ -58,6 +58,7 @@ fn ar10_execute_issue(archive_replay: bool) -> Receipt {
         0,
         &ar10_payload("postfiat-asset-orchard-private-primary-issue-action-v1"),
         archive_replay,
+        postfiat_execution::AssetExecutionCompatibility::strict(),
     )
 }
 

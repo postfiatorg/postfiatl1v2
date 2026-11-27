@@ -151,12 +151,75 @@ pub fn asset_transaction_state_expansion_fee(
     }
 }
 
+pub fn asset_transaction_state_expansion_fee_with_compatibility(
+    ledger: &LedgerState,
+    transaction: &SignedAssetTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> u64 {
+    let base = asset_transaction_state_expansion_fee(ledger, transaction);
+    if !compatibility.asset_gate_v1_active(block_height) {
+        return base;
+    }
+    let extra = match &transaction.unsigned.operation {
+        AssetTransactionOperation::IssuedPayment(operation)
+            if operation.to != operation.issuer
+                && ledger
+                    .trustline_for_account_asset(&operation.to, &operation.asset_id)
+                    .is_none() =>
+        {
+            TRUSTLINE_STATE_EXPANSION_FEE
+        }
+        AssetTransactionOperation::IssuedPaymentV2(operation)
+            if operation.to != operation.issuer
+                && ledger
+                    .trustline_for_account_asset(&operation.to, &operation.asset_id)
+                    .is_none() =>
+        {
+            TRUSTLINE_STATE_EXPANSION_FEE
+        }
+        AssetTransactionOperation::NavMintAtNav(operation)
+            if operation.to != operation.issuer
+                && ledger
+                    .trustline_for_account_asset(&operation.to, &operation.asset_id)
+                    .is_none() =>
+        {
+            TRUSTLINE_STATE_EXPANSION_FEE
+        }
+        AssetTransactionOperation::BridgeHoldClaim(operation)
+            if ledger
+                .trustline_for_account_asset(&operation.recipient, &operation.asset_id)
+                .is_none() =>
+        {
+            TRUSTLINE_STATE_EXPANSION_FEE
+        }
+        _ => 0,
+    };
+    base.saturating_add(extra)
+}
+
 pub fn minimum_asset_transaction_fee_for_ledger(
     ledger: &LedgerState,
     transaction: &SignedAssetTransaction,
 ) -> u64 {
     minimum_asset_transaction_fee(transaction)
         .saturating_add(asset_transaction_state_expansion_fee(ledger, transaction))
+}
+
+pub fn minimum_asset_transaction_fee_for_ledger_with_compatibility(
+    ledger: &LedgerState,
+    transaction: &SignedAssetTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+) -> u64 {
+    minimum_asset_transaction_fee(transaction).saturating_add(
+        asset_transaction_state_expansion_fee_with_compatibility(
+            ledger,
+            transaction,
+            block_height,
+            compatibility,
+        ),
+    )
 }
 
 pub fn atomic_swap_transaction_weight_bytes(transaction: &SignedAtomicSwapTransaction) -> usize {
@@ -388,12 +451,137 @@ pub fn minimum_offer_transaction_fee_for_ledger(
         ))
 }
 
+fn offer_maker_is_eligible_at_height(
+    ledger: &LedgerState,
+    offer: &Offer,
+    block_height: u64,
+) -> bool {
+    if offer_is_expired(offer, block_height) {
+        return false;
+    }
+    if offer.taker_gets_asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
+        let Some(asset) = ledger.asset_definition(&offer.taker_gets_asset_id) else {
+            return false;
+        };
+        if !matches!(
+            asset_gate(
+                ledger,
+                asset,
+                Some(&offer.owner),
+                None,
+                AssetMovementOpKind::OfferFill,
+                block_height,
+            ),
+            AssetGateOutcome::Allow
+        ) {
+            return false;
+        }
+    }
+    if offer.taker_pays_asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
+        let Some(asset) = ledger.asset_definition(&offer.taker_pays_asset_id) else {
+            return false;
+        };
+        if !matches!(
+            asset_gate(
+                ledger,
+                asset,
+                None,
+                Some(&offer.owner),
+                AssetMovementOpKind::OfferFill,
+                block_height,
+            ),
+            AssetGateOutcome::Allow
+        ) {
+            return false;
+        }
+    }
+    true
+}
+
+fn cancel_offer_and_refund_gated(
+    ledger: &mut LedgerState,
+    offer_index: usize,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let offer = ledger.offers[offer_index].clone();
+    if offer.taker_gets_amount_remaining > 0 {
+        if offer.taker_gets_asset_id == NATIVE_PFT_ESCROW_ASSET_ID {
+            refund_offer_sell_side(
+                ledger,
+                &offer.owner,
+                &offer.taker_gets_asset_id,
+                offer.taker_gets_amount_remaining,
+                Some(&offer.offer_id),
+            )?;
+        } else {
+            let asset = ledger
+                .asset_definition(&offer.taker_gets_asset_id)
+                .cloned()
+                .ok_or_else(|| {
+                    (
+                        "missing_asset",
+                        format!("asset `{}` does not exist", offer.taker_gets_asset_id),
+                    )
+                })?;
+            let _ = asset_gate(
+                ledger,
+                &asset,
+                Some(&offer.owner),
+                Some(&offer.owner),
+                AssetMovementOpKind::OfferCancelRefund,
+                block_height,
+            );
+            let owner_index = issued_asset_credit_recipient_line_index_gated(
+                ledger,
+                &asset,
+                &offer.owner,
+                offer.taker_gets_amount_remaining,
+                "offer cancel refund",
+            )?;
+            let owner_after = ledger.trustlines[owner_index]
+                .balance
+                .checked_add(offer.taker_gets_amount_remaining)
+                .ok_or_else(|| {
+                    (
+                        "issued_balance_overflow",
+                        "offer issued-asset refund would overflow".to_string(),
+                    )
+                })?;
+            let reserved_after_cancel = issued_asset_reserved_total_for_account(
+                ledger,
+                &offer.owner,
+                &offer.taker_gets_asset_id,
+                None,
+                Some(&offer.offer_id),
+            )?;
+            let required_limit = owner_after
+                .checked_add(reserved_after_cancel)
+                .ok_or_else(|| {
+                    (
+                        "issued_balance_overflow",
+                        "offer issued-asset refund reservations would overflow".to_string(),
+                    )
+                })?;
+            apply_prepared_issued_asset_credit(ledger, owner_index, owner_after, required_limit);
+        }
+    }
+    refund_offer_reserve(ledger, &offer.owner, offer.reserve_paid)?;
+    let offer_mut = &mut ledger.offers[offer_index];
+    offer_mut.taker_gets_amount_remaining = 0;
+    offer_mut.taker_pays_amount_remaining = 0;
+    offer_mut.state = OFFER_STATE_CANCELED.to_string();
+    offer_mut.reserve_paid = 0;
+    Ok(())
+}
+
 fn apply_offer_operation(
     genesis: &Genesis,
     ledger: &mut LedgerState,
     transaction: &SignedOfferTransaction,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<OfferApplyOutcome, (&'static str, String)> {
+    let gate_active = compatibility.asset_gate_v1_active(block_height);
     match &transaction.unsigned.operation {
         OfferTransactionOperation::OfferCreate(operation) => {
             if transaction.unsigned.transaction_kind != OFFER_CREATE_TRANSACTION_KIND {
@@ -419,6 +607,76 @@ fn apply_offer_operation(
                     "duplicate_offer",
                     format!("offer `{offer_id}` already exists"),
                 ));
+            }
+            if gate_active {
+                if operation.taker_gets_asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
+                    let sell_asset = ledger
+                        .asset_definition(&operation.taker_gets_asset_id)
+                        .cloned()
+                        .ok_or_else(|| {
+                            (
+                                "missing_asset",
+                                format!("asset `{}` does not exist", operation.taker_gets_asset_id),
+                            )
+                        })?;
+                    match asset_gate(
+                        ledger,
+                        &sell_asset,
+                        Some(&operation.owner),
+                        None,
+                        AssetMovementOpKind::OfferCreate,
+                        block_height,
+                    ) {
+                        AssetGateOutcome::Allow => {}
+                        AssetGateOutcome::AllowReturnOnly => {
+                            return Err((
+                                "asset_gate_sender_ineligible",
+                                "offer_create is not a return-only exit".to_string(),
+                            ));
+                        }
+                        AssetGateOutcome::RouteToHold { reason_code } => {
+                            return Err((
+                                reason_code,
+                                "offer_create sell-side rejected by asset_gate".to_string(),
+                            ));
+                        }
+                        AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+                    }
+                }
+                if operation.taker_pays_asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
+                    let buy_asset = ledger
+                        .asset_definition(&operation.taker_pays_asset_id)
+                        .cloned()
+                        .ok_or_else(|| {
+                            (
+                                "missing_asset",
+                                format!("asset `{}` does not exist", operation.taker_pays_asset_id),
+                            )
+                        })?;
+                    match asset_gate(
+                        ledger,
+                        &buy_asset,
+                        None,
+                        Some(&operation.owner),
+                        AssetMovementOpKind::OfferCreate,
+                        block_height,
+                    ) {
+                        AssetGateOutcome::Allow => {}
+                        AssetGateOutcome::AllowReturnOnly => {
+                            return Err((
+                                "asset_gate_recipient_ineligible",
+                                "offer_create is not a return-only exit".to_string(),
+                            ));
+                        }
+                        AssetGateOutcome::RouteToHold { reason_code } => {
+                            return Err((
+                                reason_code,
+                                "offer_create buy-side rejected by asset_gate".to_string(),
+                            ));
+                        }
+                        AssetGateOutcome::Reject { code, message } => return Err((code, message)),
+                    }
+                }
             }
             ensure_offer_asset_participation(
                 ledger,
@@ -449,7 +707,16 @@ fn apply_offer_operation(
                 operation.taker_gets_amount,
             )?;
 
-            let plan = plan_offer_create_matches(ledger, operation, block_height)?;
+            let (plan, ineligible_to_cancel) = if gate_active {
+                plan_offer_create_matches_gated(ledger, operation, block_height)?
+            } else {
+                (plan_offer_create_matches(ledger, operation, block_height)?, Vec::new())
+            };
+            // Inline DEX anti-poisoning: cancel & refund skipped ineligible makers inline so
+            // cancellations persist even on partial fills or resting book!
+            for maker_idx in ineligible_to_cancel {
+                cancel_offer_and_refund_gated(ledger, maker_idx, block_height)?;
+            }
             let fills = apply_offer_fills(ledger, operation, &plan)?;
             if offer_create_has_residual(&plan) {
                 lock_offer_reserve(ledger, &operation.owner, OFFER_OBJECT_RESERVE)?;
@@ -469,6 +736,13 @@ fn apply_offer_operation(
                 offer.original_taker_pays_amount = operation.taker_pays_amount;
                 offer.reserve_paid = OFFER_OBJECT_RESERVE;
                 ledger.offers.push(offer);
+                if gate_active && operation.taker_gets_asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
+                    auto_prune_empty_implicit_trustline(
+                        ledger,
+                        &operation.owner,
+                        &operation.taker_gets_asset_id,
+                    )?;
+                }
                 Ok(OfferApplyOutcome {
                     receipt_code: if fills.is_empty() {
                         "accepted"
@@ -486,6 +760,13 @@ fn apply_offer_operation(
                     plan.taker_gets_remaining,
                     None,
                 )?;
+                if gate_active && operation.taker_gets_asset_id != NATIVE_PFT_ESCROW_ASSET_ID {
+                    auto_prune_empty_implicit_trustline(
+                        ledger,
+                        &operation.owner,
+                        &operation.taker_gets_asset_id,
+                    )?;
+                }
                 Ok(OfferApplyOutcome {
                     receipt_code: if fills.is_empty() {
                         "accepted"
@@ -520,24 +801,180 @@ fn apply_offer_operation(
             if offer.state != OFFER_STATE_OPEN {
                 return Err(("offer_not_open", "offer is not open for cancel".to_string()));
             }
-            refund_offer_sell_side(
-                ledger,
-                &offer.owner,
-                &offer.taker_gets_asset_id,
-                offer.taker_gets_amount_remaining,
-                Some(&offer.offer_id),
-            )?;
-            refund_offer_reserve(ledger, &offer.owner, offer.reserve_paid)?;
-            let offer = &mut ledger.offers[offer_index];
-            offer.state = OFFER_STATE_CANCELED.to_string();
-            offer.reserve_paid = 0;
+            if gate_active {
+                cancel_offer_and_refund_gated(ledger, offer_index, block_height)?;
+            } else {
+                refund_offer_sell_side(
+                    ledger,
+                    &offer.owner,
+                    &offer.taker_gets_asset_id,
+                    offer.taker_gets_amount_remaining,
+                    Some(&offer.offer_id),
+                )?;
+                refund_offer_reserve(ledger, &offer.owner, offer.reserve_paid)?;
+                let offer = &mut ledger.offers[offer_index];
+                offer.state = OFFER_STATE_CANCELED.to_string();
+                offer.reserve_paid = 0;
+            }
             Ok(OfferApplyOutcome {
                 receipt_code: "accepted",
                 offer_id: Some(operation.offer_id.clone()),
                 fills: Vec::new(),
             })
         }
+        OfferTransactionOperation::OfferPruneIneligible(operation) => {
+            if transaction.unsigned.transaction_kind
+                != postfiat_types::OFFER_PRUNE_INELIGIBLE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "offer_prune_ineligible transaction kind mismatch".to_string(),
+                ));
+            }
+            if !gate_active {
+                return Err((
+                    "asset_gate_not_active",
+                    format!(
+                        "offer_prune_ineligible is not active at block height {block_height}"
+                    ),
+                ));
+            }
+            if operation.offer_ids.is_empty()
+                || operation.offer_ids.len() > postfiat_types::MAX_OFFER_PRUNE_BATCH
+            {
+                return Err((
+                    "offer_prune_batch_limit_exceeded",
+                    format!(
+                        "offer_prune_ineligible requires 1..={} offer IDs",
+                        postfiat_types::MAX_OFFER_PRUNE_BATCH
+                    ),
+                ));
+            }
+            let mut indices = Vec::with_capacity(operation.offer_ids.len());
+            for offer_id in &operation.offer_ids {
+                let idx = offer_index(ledger, offer_id).ok_or_else(|| {
+                    (
+                        "missing_offer",
+                        format!("offer `{offer_id}` does not exist"),
+                    )
+                })?;
+                let offer = &ledger.offers[idx];
+                if offer.state != OFFER_STATE_OPEN {
+                    return Err((
+                        "offer_not_open",
+                        format!("offer `{offer_id}` is not open for pruning"),
+                    ));
+                }
+                if offer_maker_is_eligible_at_height(ledger, offer, block_height) {
+                    return Err((
+                        "offer_still_eligible",
+                        format!("offer `{offer_id}` is still eligible and unexpired"),
+                    ));
+                }
+                indices.push(idx);
+            }
+            for idx in indices {
+                cancel_offer_and_refund_gated(ledger, idx, block_height)?;
+            }
+            Ok(OfferApplyOutcome {
+                receipt_code: "accepted",
+                offer_id: operation.offer_ids.first().cloned(),
+                fills: Vec::new(),
+            })
+        }
     }
+}
+
+fn plan_offer_create_matches_gated(
+    ledger: &LedgerState,
+    operation: &OfferCreateOperation,
+    block_height: u64,
+) -> Result<(OfferMatchPlan, Vec<usize>), (&'static str, String)> {
+    let mut candidate_indexes: Vec<usize> = ledger
+        .offers
+        .iter()
+        .enumerate()
+        .filter_map(|(index, offer)| {
+            if offer.state == OFFER_STATE_OPEN
+                && !offer_is_expired(offer, block_height)
+                && offer.taker_gets_asset_id == operation.taker_pays_asset_id
+                && offer.taker_pays_asset_id == operation.taker_gets_asset_id
+                && offer_is_crossable_at_taker_limit(offer, operation)
+            {
+                Some(index)
+            } else {
+                None
+            }
+        })
+        .collect();
+    candidate_indexes.sort_by(|left, right| {
+        let left_offer = &ledger.offers[*left];
+        let right_offer = &ledger.offers[*right];
+        compare_offer_price_for_taker(left_offer, right_offer)
+            .then_with(|| left_offer.created_height.cmp(&right_offer.created_height))
+            .then_with(|| left_offer.owner_sequence.cmp(&right_offer.owner_sequence))
+            .then_with(|| left_offer.offer_id.cmp(&right_offer.offer_id))
+    });
+
+    let mut taker_gets_remaining = operation.taker_gets_amount;
+    let mut taker_pays_remaining = operation.taker_pays_amount;
+    let mut fills = Vec::new();
+    let mut ineligible_to_cancel = Vec::new();
+    let mut crossed = 0usize;
+    let mut skipped_ineligible = 0usize;
+    for offer_index in candidate_indexes {
+        if taker_gets_remaining == 0
+            || taker_pays_remaining == 0
+            || crossed >= MAX_DEX_CROSSES_PER_TRANSACTION
+        {
+            break;
+        }
+        let offer = &ledger.offers[offer_index];
+        if !offer_maker_is_eligible_at_height(ledger, offer, block_height) {
+            if skipped_ineligible >= postfiat_types::MAX_DEX_INELIGIBLE_SKIPS_PER_TRANSACTION {
+                break;
+            }
+            skipped_ineligible = skipped_ineligible.saturating_add(1);
+            ineligible_to_cancel.push(offer_index);
+            continue;
+        }
+        crossed = crossed.saturating_add(1);
+        let Some((maker_sends_amount, taker_sends_amount)) =
+            integer_offer_fill_amounts(offer, taker_gets_remaining, taker_pays_remaining)
+        else {
+            continue;
+        };
+        taker_gets_remaining = taker_gets_remaining
+            .checked_sub(taker_sends_amount)
+            .ok_or_else(|| {
+                (
+                    "offer_fill_underflow",
+                    "taker send-side remaining underflowed".to_string(),
+                )
+            })?;
+        taker_pays_remaining = taker_pays_remaining
+            .checked_sub(maker_sends_amount)
+            .ok_or_else(|| {
+                (
+                    "offer_fill_underflow",
+                    "taker receive-side remaining underflowed".to_string(),
+                )
+            })?;
+        fills.push(OfferFillPlan {
+            maker_offer_index: offer_index,
+            maker_sends_amount,
+            taker_sends_amount,
+        });
+    }
+
+    Ok((
+        OfferMatchPlan {
+            fills,
+            taker_gets_remaining,
+            taker_pays_remaining,
+        },
+        ineligible_to_cancel,
+    ))
 }
 
 fn plan_offer_create_matches(
