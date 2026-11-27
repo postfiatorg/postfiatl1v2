@@ -15,7 +15,7 @@
   - [postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286): the contract and its conformance test (runs in CI).
   - [postfiatl1v2#290](https://github.com/postfiatorg/postfiatl1v2/pull/290): `upgrade`, `top`, replicas, the HTTP edge, the observer, `block_vote_records`, `rpc-catch-up --follow`, `tasknode-bind`, release signing commands.
   - [postfiatl1v2#321](https://github.com/postfiatorg/postfiatl1v2/pull/321): the release build workflow, `scripts/release-assemble`, `release-manifest-create`, and the two-of-three procedure in `docs/release-process.md`, tested end to end through the real commands.
-  - [tasknode#459](https://github.com/postfiatorg/tasknode/pull/459): Task Node reads the feed and can suspend, restore and credit from it. Nothing is switched on.
+  - [tasknode#459](https://github.com/postfiatorg/tasknode/pull/459): Task Node reads the feed and can suspend, restore, credit and block new bindings from it. Proven on a real Postgres. Nothing is switched on.
   - [postfiatorg.github.io#66](https://github.com/postfiatorg/postfiatorg.github.io/pull/66): the live guide says at the top what is released and what is not. Merging publishes it.
 - **Proven on `postfiat-wan-devnet-2`:**
   - The feed, end to end: three soak observers on one host read the six validators every five minutes, sign, bundle and verify. Three implementations (Python reference, the node in Rust, Task Node in JavaScript) accept and reject the same feeds, including one signed on the live network.
