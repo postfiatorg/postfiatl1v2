@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Warn, never fail, when a rust-ci test job comes close to its time limit.
+#
+# The job's first step writes JOB_STARTED_AT (seconds since the epoch) to
+# $GITHUB_ENV; its last step (if: always()) runs this script. Above WARN
+# minutes it writes a GitHub warning annotation and a line in the job summary.
+# It always exits 0, so it never turns a green job red.
+#
+# Usage: scripts/ci-test-job-time-warning [LIMIT_MINUTES [WARN_MINUTES]]
+
+limit=${1:-120}
+warn=${2:-90}
+job=${GITHUB_JOB:-this job}
+
+if [[ ! ${JOB_STARTED_AT:-} =~ ^[0-9]+$ ]]; then
+  echo "JOB_STARTED_AT is not set, so the job's time is unknown"
+  exit 0
+fi
+
+minutes=$((($(date +%s) - JOB_STARTED_AT) / 60))
+echo "$job took $minutes minutes of $limit"
+if ((minutes > warn)); then
+  echo "::warning title=Test job close to its limit::$job took $minutes minutes of $limit"
+  if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then
+    echo "Warning: \`$job\` took $minutes minutes of its $limit-minute limit (warning above $warn)." \
+      >>"$GITHUB_STEP_SUMMARY" || true
+  fi
+fi
+exit 0

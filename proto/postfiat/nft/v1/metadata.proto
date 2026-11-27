@@ -1,0 +1,190 @@
+// Post Fiat L1v2 — Canonical NFT Metadata & Migration Provenance Schema (Pillar 4, Contract C1)
+//
+// Frozen canonical protobuf3 definitions for:
+//   - pf.nft.metadata.v1: signed NFT metadata wrapped in a PUBLIC Pillar 2 Envelope
+//     (on-chain nft.metadata_uri = ipfs://<envelope_cid>, nft.metadata_hash = SHA3-384(raw_envelope_bytes))
+//   - Burn-first migration provenance (old Post Fiat XRPL-fork chain -> postfiatl1v2)
+//   - pf.nft.claim.v1: ML-DSA-65 signed migration claim persisted and pinned BEFORE old-chain NFTokenBurn
+//   - pf.nft.provenance.v1: optional pin-only recorded provenance (never minted as a migrated live NFT)
+//
+// Wire & canonical serialization specification: docs/specs/message-protocol-v1.md
+
+syntax = "proto3";
+
+package postfiat.nft.v1;
+
+import "postfiat/message/v1/message.proto";
+
+// Old-chain retirement policy for historical NFT provenance.
+enum RetirementMode {
+  RETIREMENT_MODE_UNSPECIFIED = 0;
+  // Default: old NFT MUST be burned on the source chain with claim_hash in its memo before new-chain mint.
+  RETIREMENT_MODE_BURN_FIRST = 1;
+  // Optional: old NFT remains untouched on the source chain; anchored strictly as a Recorded Provenance note.
+  RETIREMENT_MODE_PIN_ONLY = 2;
+}
+
+// Cryptographic digest algorithm used in ContentHash records.
+enum HashAlgorithm {
+  HASH_ALGORITHM_UNSPECIFIED = 0;
+  // 48-byte SHA3-384 (canonical postfiatl1v2 metadata_hash and asset content hash).
+  HASH_ALGORITHM_SHA3_384 = 1;
+  // 32-byte SHA-256 (IPFS CIDv1 raw multihash).
+  HASH_ALGORITHM_SHA2_256 = 2;
+}
+
+// Semantic role for typed media attachments.
+enum MediaRole {
+  MEDIA_ROLE_UNSPECIFIED = 0;
+  MEDIA_ROLE_PRIMARY_IMAGE = 1;
+  MEDIA_ROLE_THUMBNAIL = 2;
+  MEDIA_ROLE_ANIMATION = 3;
+  MEDIA_ROLE_AUDIO = 4;
+  MEDIA_ROLE_DOCUMENT = 5;
+  // Private generation prompt asset encrypted via Pillar 2 X-Wing to Task Node keys.
+  MEDIA_ROLE_ENCRYPTED_PROMPT = 6;
+}
+
+// Cryptographic integrity binding for an external/IPFS asset referenced by an NFT.
+message ContentHash {
+  string uri = 1;
+  HashAlgorithm algorithm = 2;
+  bytes digest = 3;
+  uint64 byte_length = 4;
+}
+
+// Typed media attachment referenced by an NFT.
+message MediaAttachment {
+  // Content-addressed URI (e.g. "ipfs://<cid>").
+  string uri = 1;
+  postfiat.message.v1.IpfsCidRef cid = 2;
+  string mime_type = 3;
+  MediaRole role = 4;
+  uint32 width = 5;
+  uint32 height = 6;
+  uint64 byte_length = 7;
+  // 48-byte SHA3-384 digest of the asset bytes.
+  bytes sha3_384_digest = 8;
+  // True when the attachment is wrapped in a Pillar 2 private/X-Wing envelope (e.g. encrypted prompt).
+  bool encrypted = 9;
+}
+
+// Key/value trait attribute for display projection (ERC-721 / XLS-24 compatible).
+message Attribute {
+  string trait_type = 1;
+  string value = 2;
+  string display_type = 3;
+}
+
+// On-chain collection binding.
+// Explorers and wallets MUST display (issuer_account, collection_id) together, never collection name alone.
+message CollectionRef {
+  // Matches on-chain nft.collection_id (<= 64 bytes).
+  string collection_id = 1;
+  // Matches on-chain nft.issuer and Envelope.sender_account.
+  string issuer_account = 2;
+  string name = 3;
+  string description = 4;
+  string external_url = 5;
+}
+
+// Verifiable historical origin and burn-first migration provenance.
+message OriginProvenance {
+  // Source chain identifier, e.g. "postfiat-legacy-xrpl".
+  string source_chain = 1;
+  // Source chain NFTokenID (64 hex characters).
+  string nftoken_id = 2;
+  // Original issuer address on the source chain.
+  string original_issuer = 3;
+  // Original owner address on the source chain (MUST match burn_tx.account for BURN_FIRST).
+  string original_owner = 4;
+  // Original URI recorded on the source-chain NFToken.
+  string original_uri = 5;
+  // Source-chain mint transaction hash.
+  string mint_tx = 6;
+  // Source-chain ledger index at mint (MUST be strictly before pre-cutoff allowlist ledger index).
+  uint64 mint_ledger_index = 7;
+  // Burn-first (live migrated NFT) vs pin-only (recorded provenance only).
+  RetirementMode retirement_mode = 8;
+  // Source-chain NFTokenBurn transaction hash (required for BURN_FIRST; empty for PIN_ONLY).
+  string burn_tx = 9;
+  // Source-chain validated ledger index of burn_tx.
+  uint64 burn_ledger_index = 10;
+  // CIDv1 raw of the ML-DSA-65 signed pf.nft.claim.v1 Envelope so verifiers can check the claim offline.
+  postfiat.message.v1.IpfsCidRef claim_cid = 11;
+  // 32-byte SHA-256 of the raw signed pf.nft.claim.v1 Envelope bytes placed in the old-chain NFTokenBurn memo.
+  bytes claim_hash = 12;
+  // Optional CIDv1 raw of the archived founder-signed old-chain burn-proof bundle for post-Stage-4 offline verification.
+  postfiat.message.v1.IpfsCidRef burn_proof_bundle_cid = 13;
+  // Deterministic hash-derived serial on postfiatl1v2 with bit 63 set (1 << 63) for migrated NFTs.
+  uint64 migrated_serial = 14;
+}
+
+// Canonical NFT metadata body (schema_name = "pf.nft.metadata.v1").
+//
+// ONE-HASH RULE:
+// Serialized NftMetadata bytes are wrapped in a PUBLIC Pillar 2 Envelope (postfiat.message.v1.Envelope)
+// pinned as a CIDv1 raw IPFS block. On-chain nft_mint sets:
+//   - metadata_uri  = "ipfs://<envelope_cid_base32>"
+//   - metadata_hash = lowercase_hex(SHA3-384(raw_envelope_bytes))  (96 hex chars = 48 bytes)
+// Verifiers MUST check SHA3-384(raw_envelope_bytes) == nft.metadata_hash AND
+// account(Envelope.sender_pubkey) == nft.issuer AND Envelope ML-DSA-65 signature validity.
+message NftMetadata {
+  // Schema version (MUST be 1 for pf.nft.metadata.v1).
+  uint32 schema_version = 1;
+  string name = 2;
+  string description = 3;
+  // Primary artwork URI ("ipfs://<cid>"), preserved unchanged across burn-first migration.
+  string image = 4;
+  postfiat.message.v1.IpfsCidRef image_cid = 5;
+  repeated MediaAttachment media = 6;
+  repeated Attribute attributes = 7;
+  CollectionRef collection = 8;
+  // SHA3-384 integrity digests for every referenced asset.
+  repeated ContentHash content_hashes = 9;
+  // Optional 48-byte SHA3-384 digest of private prompt generation asset.
+  bytes prompt_digest = 10;
+  string license = 11;
+  string external_url = 12;
+  // Present on migrated or pin-only NFTs; omitted on fresh native postfiatl1v2 mints.
+  OriginProvenance origin = 13;
+  // Extensible metadata map (Pillar 8 credentials stay in the native credential system, not duplicated here).
+  map<string, string> extensions = 14;
+}
+
+// Signed burn-first migration claim (schema_name = "pf.nft.claim.v1").
+// Wrapped in a PUBLIC Pillar 2 Envelope signed by the claimant's new postfiatl1v2 ML-DSA-65 key,
+// durably persisted and pinned to IPFS (producing claim_cid and claim_hash) BEFORE prompting NFTokenBurn.
+message MigrationClaim {
+  uint32 schema_version = 1;
+  string target_chain_id = 2;
+  string source_chain = 3;
+  string nftoken_id = 4;
+  // Source-chain owner address (verifier confirms burn_tx.account == old_owner).
+  string old_owner = 5;
+  // Claimant's postfiatl1v2 recipient account (MUST match Envelope.sender_account).
+  string new_owner_account = 6;
+  string target_collection_id = 7;
+  // Dedicated migration issuer account (distinct from ongoing fresh-mint issuer key; retired at Stage 4).
+  string migration_issuer_account = 8;
+  // Deterministic bit-63-set serial reserved for this NFTokenID (protected by permanent used_nft_serials tombstone).
+  uint64 migrated_serial = 9;
+  RetirementMode retirement_mode = 10;
+  // Frozen pre-cutoff ledger index enforced by the signed eligibility allowlist.
+  uint64 cutoff_ledger_index = 11;
+  uint64 claimed_at_unix_ms = 12;
+  // CIDv1 raw of the founder-signed pre-cutoff eligibility allowlist.
+  postfiat.message.v1.IpfsCidRef allowlist_cid = 13;
+}
+
+// Optional pin-only provenance record (schema_name = "pf.nft.provenance.v1").
+// Anchored via a Pillar 2 self-payment; renders strictly as Recorded Provenance, never as a live migrated NFT.
+message PinOnlyProvenance {
+  uint32 schema_version = 1;
+  string target_chain_id = 2;
+  string claimant_account = 3;
+  OriginProvenance origin = 4;
+  // Lowercase hex signature from the source-chain wallet attesting ownership without burning.
+  string old_wallet_signature_hex = 5;
+  uint64 recorded_at_unix_ms = 6;
+}
