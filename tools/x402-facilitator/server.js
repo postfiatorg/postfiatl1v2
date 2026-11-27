@@ -7,6 +7,7 @@
 // issue and check challenges but settles nothing on the chain (see the top of facilitator.js).
 
 const { FileSpentStore, createFacilitatorCore, createFacilitatorServer } = require('./facilitator');
+const { createChainSettlementAdapter } = require('./chain-adapter');
 
 const MODE_PROTOTYPE = 'prototype';
 const MODE_PRODUCTION = 'production';
@@ -16,16 +17,28 @@ function isSettlementAdapter(adapter) {
 }
 
 // Throws when the environment does not describe a facilitator that may run.
-// `settlementAdapter` comes from code that embeds this module; this package ships none.
+// When `X402_RPC_URLS` is configured and no custom `settlementAdapter` is injected,
+// builds the live postfiatl1v2 JSON-RPC settlement adapter automatically.
 function createFacilitatorFromEnv(env = process.env, { settlementAdapter = null } = {}) {
   const mode = String(env.X402_MODE || MODE_PROTOTYPE).trim().toLowerCase();
   if (mode !== MODE_PROTOTYPE && mode !== MODE_PRODUCTION) {
     throw new Error(`X402_MODE must be "${MODE_PROTOTYPE}" or "${MODE_PRODUCTION}", got "${mode}"`);
   }
-  if (mode === MODE_PRODUCTION && !isSettlementAdapter(settlementAdapter)) {
+  let resolvedAdapter = settlementAdapter;
+  const rpcUrlsRaw = String(env.X402_RPC_URLS || '').trim();
+  if (!resolvedAdapter && rpcUrlsRaw) {
+    const quorum = env.X402_QUORUM_THRESHOLD ? Number(env.X402_QUORUM_THRESHOLD) : null;
+    resolvedAdapter = createChainSettlementAdapter({
+      rpcUrls: rpcUrlsRaw,
+      quorumThreshold: quorum,
+      rpcTimeoutMs: env.X402_RPC_TIMEOUT_MS ? Number(env.X402_RPC_TIMEOUT_MS) : undefined,
+      finalityTimeoutMs: env.X402_FINALITY_TIMEOUT_MS ? Number(env.X402_FINALITY_TIMEOUT_MS) : undefined,
+    });
+  }
+  if (mode === MODE_PRODUCTION && !isSettlementAdapter(resolvedAdapter)) {
     throw new Error(
-      `X402_MODE=${MODE_PRODUCTION} needs a settlement adapter built on the chain RPC and the chain order type ` +
-        'OwnedTransferOrderV3; this package ships none and runs as a prototype only'
+      `X402_MODE=${MODE_PRODUCTION} requires a settlement adapter (set X402_RPC_URLS or inject settlementAdapter) ` +
+        'backed by postfiatl1v2 validator JSON-RPC endpoints'
     );
   }
 
@@ -44,7 +57,7 @@ function createFacilitatorFromEnv(env = process.env, { settlementAdapter = null 
     network: env.X402_NETWORK || 'postfiat:devnet-2',
     facilitatorUrl: env.X402_PUBLIC_URL || `http://${listenHost}:${listenPort}`,
     spentStore: new FileSpentStore(spentStorePath),
-    settlementAdapter,
+    settlementAdapter: resolvedAdapter,
     ipRateLimit: Number(env.X402_IP_RATE_LIMIT || 60),
     keyRateLimit: Number(env.X402_KEY_RATE_LIMIT || 60),
     rateWindowMs: Number(env.X402_RATE_WINDOW_MS || 60_000),
