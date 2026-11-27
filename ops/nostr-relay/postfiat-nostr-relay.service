@@ -1,0 +1,27 @@
+[Unit]
+Description=Post Fiat First-Party Nostr Relay (relay.postfiat.org)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=postfiat-relay
+Group=postfiat-relay
+WorkingDirectory=/opt/postfiat-nostr-relay
+EnvironmentFile=-/etc/postfiat/nostr-relay.env
+Environment=NOSTR_RELAY_ENV=production
+Environment=NOSTR_RELAY_ALLOWLIST_PATH=/var/lib/postfiat-nostr-relay/members-allowlist.json
+Environment=NOSTR_RELAY_RATE_LIMIT_MAX_EVENTS=20
+Environment=NOSTR_RELAY_RATE_LIMIT_WINDOW_SECONDS=60
+ExecStart=/usr/local/bin/strfry --config=/etc/strfry/strfry.conf relay
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/postfiat-nostr-relay
+
+[Install]
+WantedBy=multi-user.target

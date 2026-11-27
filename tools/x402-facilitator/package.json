@@ -1,0 +1,13 @@
+{
+  "name": "postfiat-x402-facilitator",
+  "version": "1.0.0",
+  "description": "Post Fiat L1v2 x402 v2 FastPay & consensus PFUSDC payment facilitator and thin MCP client wrapper.",
+  "type": "commonjs",
+  "private": true,
+  "main": "facilitator.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_x402_e2e.js"
+  },
+  "license": "MIT OR Apache-2.0"
+}
