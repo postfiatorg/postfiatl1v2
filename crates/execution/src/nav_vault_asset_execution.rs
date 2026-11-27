@@ -8086,6 +8086,30 @@ pub fn settle_governed_solana_payout(
     block_height: u64,
     second: bool,
 ) -> Result<(), String> {
+    settle_governed_solana_payout_with_compatibility(
+        ledger,
+        chain_id,
+        packet_hash,
+        amendment_id,
+        block_height,
+        second,
+        AssetExecutionCompatibility::strict(),
+    )
+}
+
+/// `settle_governed_solana_payout`; once `asset_gate_v1` is active it then
+/// prunes the burner's emptied implicit line, which the pending burn kept for
+/// a refund, by the rule that prunes an emptied implicit line elsewhere (so
+/// another pending burn on the same line still keeps it).
+pub fn settle_governed_solana_payout_with_compatibility(
+    ledger: &mut LedgerState,
+    chain_id: &str,
+    packet_hash: &str,
+    amendment_id: &str,
+    block_height: u64,
+    second: bool,
+    compatibility: AssetExecutionCompatibility,
+) -> Result<(), String> {
     use postfiat_types::solana_exit;
     // First release: the revision-8 bucket only, found before the redemption, as released.
     let first_bucket = if second {
@@ -8138,6 +8162,11 @@ pub fn settle_governed_solana_payout(
         settled_atoms: red.amount_atoms,
         withdrawal_observations: vec![],
     };
+    let owner = red.owner.clone();
+    let lines = [
+        postfiat_types::solana_source_series_id(chain_id, &red.asset_id, &red.bucket_id),
+        red.asset_id.clone(),
+    ];
     let mut staged = ledger.clone();
     apply_vault_bridge_settlement_accounting(
         &mut staged,
@@ -8148,6 +8177,12 @@ pub fn settle_governed_solana_payout(
         true,
     )
     .map_err(|(_, message)| message)?;
+    if compatibility.asset_gate_v1_active(block_height) {
+        for asset_id in &lines {
+            auto_prune_empty_implicit_trustline(&mut staged, &owner, asset_id)
+                .map_err(|(_, message)| message)?;
+        }
+    }
     *ledger = staged;
     Ok(())
 }
