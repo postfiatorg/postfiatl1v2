@@ -13,6 +13,7 @@ const http = require('node:http');
 const https = require('node:https');
 
 const mp = require('../../wallet-proxy/message-protocol');
+const nativeChain = require('./native-chain');
 const {
   HEADER_PAYMENT_REQUIRED,
   HEADER_PAYMENT_SIGNATURE,
@@ -100,6 +101,8 @@ class X402HttpClient {
     allowedAssets = ['PFT'],
     nextConsensusSequence = () => 1,
     directFastPaySettleFn = null,
+    nativePaymentV2 = null,
+    nativeFastPay = null,
     now = Date.now,
   }) {
     if (!payerAccount || !payerPublicKey || !payerSecretKey) {
@@ -118,6 +121,8 @@ class X402HttpClient {
     this._allowedAssets = new Set(allowedAssets);
     this._nextConsensusSequence = nextConsensusSequence;
     this._directFastPaySettleFn = directFastPaySettleFn;
+    this._nativePaymentV2 = nativePaymentV2;
+    this._nativeFastPay = nativeFastPay;
     this._now = now;
   }
 
@@ -163,62 +168,178 @@ class X402HttpClient {
     let certificatePayload = Buffer.alloc(0);
 
     if (required.lane === mp.PaymentLane.FASTPAY) {
-      const baseOrder = {
-        chain_id: this._chainId,
-        payer_account: this._payerAccount,
-        payee_account: required.pay_to,
-        asset_id: required.asset_id,
-        amount_atoms: required.max_amount_atoms,
-        fee_atoms: 0,
-        input_count: 1,
-        output_count: 2,
-        nonce_hex: required.nonce.toString('hex'),
-        memos: [x402Memo],
-      };
-      // Compute fee floor conservatively using signed payload size estimate (order + ML-DSA-65 pk/sig hex)
-      const estBytes = mp.canonicalJsonBytes(baseOrder).length + (mp.ML_DSA_65_PUBKEY_BYTES + mp.ML_DSA_65_SIGNATURE_BYTES) * 2 + 256;
-      baseOrder.fee_atoms = computeMinimumFastPayFeeAtoms({
-        weightBytes: estBytes,
-        inputCount: baseOrder.input_count,
-        outputCount: baseOrder.output_count,
-      });
-      this._reserveBudget(baseOrder.amount_atoms, baseOrder.fee_atoms);
-      const signed = await signFastPayOrder(baseOrder, {
-        publicKey: this._payerPublicKey,
-        secretKey: this._payerSecretKey,
-      });
-      orderHash = signed.orderHash;
-      signedPayload = signed.signedPayload;
-
-      if (required.scheme === mp.X402Scheme.PF_FASTPAY_SETTLED) {
-        if (typeof this._directFastPaySettleFn !== 'function') {
-          throw new X402Error(400, 'missing_direct_settle_fn', 'pf-fastpay-settled requires directFastPaySettleFn');
+      if (this._nativeFastPay) {
+        const cfg =
+          typeof this._nativeFastPay === 'function'
+            ? await this._nativeFastPay({ required, localRequestHash, memo: x402Memo })
+            : this._nativeFastPay;
+        const payeePubkeyHex =
+          typeof cfg.payeePubkeyForAccount === 'function'
+            ? await cfg.payeePubkeyForAccount(required.pay_to)
+            : cfg.payeePubkeyHex;
+        if (!payeePubkeyHex || !/^[0-9a-f]+$/i.test(payeePubkeyHex)) {
+          throw new X402Error(400, 'missing_payee_pubkey', 'native FastPay requires payee ML-DSA-65 pubkey hex');
         }
-        certificatePayload = await this._directFastPaySettleFn({ orderHash, signedPayload, order: baseOrder });
+        const payerPubkeyHex = Buffer.from(this._payerPublicKey).toString('hex');
+        const recovery =
+          typeof cfg.recoveryWindow === 'function'
+            ? await cfg.recoveryWindow({ required })
+            : cfg.recovery;
+        const selected =
+          typeof cfg.selectInputs === 'function'
+            ? await cfg.selectInputs({ required, minAtoms: required.max_amount_atoms })
+            : cfg.inputs;
+        const inputList = Array.isArray(selected?.inputs) ? selected.inputs : Array.isArray(selected) ? selected : [];
+        const inputValueTotal = Number(selected?.totalAtoms ?? cfg.inputTotalAtoms ?? 0);
+        const nonceNum = Number(
+          selected?.nonce ?? (typeof cfg.nextNonce === 'function' ? await cfg.nextNonce() : cfg.nonce ?? 1)
+        );
+        const buildDraft = (withChange) => {
+          const outputs = [
+            { owner_pubkey_hex: String(payeePubkeyHex).toLowerCase(), value: required.max_amount_atoms, asset: required.asset_id },
+          ];
+          if (withChange) {
+            outputs.push({ owner_pubkey_hex: payerPubkeyHex, value: 0, asset: required.asset_id });
+          }
+          const draft = {
+            domain: cfg.domain,
+            recovery: {
+              schema: nativeChain.FASTPAY_ORDER_RECOVERY_SCHEMA_V1,
+              committee_epoch: Number(recovery.committee_epoch),
+              lock_id: '00'.repeat(48),
+              valid_from_height: Number(recovery.valid_from_height),
+              expires_at_height: Number(recovery.expires_at_height),
+              recovery_closes_at_height: Number(recovery.recovery_closes_at_height),
+            },
+            inputs: inputList.map((i) => ({ id: String(i.id), version: Number(i.version) })),
+            outputs,
+            fee: 0,
+            nonce: nonceNum,
+            memos: [x402Memo],
+          };
+          const minFee = computeMinimumFastPayFeeAtoms({
+            weightBytes: nativeChain.ownedTransferV3SigningBytes(draft).length,
+            inputCount: draft.inputs.length,
+            outputCount: draft.outputs.length,
+          });
+          return { draft, minFee };
+        };
+        let { draft: nativeOrder, minFee } = buildDraft(true);
+        const changeAtoms = inputValueTotal - required.max_amount_atoms - minFee;
+        if (changeAtoms > 0) {
+          nativeOrder.fee = minFee;
+          nativeOrder.outputs[1].value = changeAtoms;
+        } else {
+          ({ draft: nativeOrder, minFee } = buildDraft(false));
+          const exactFee = inputValueTotal - required.max_amount_atoms;
+          if (exactFee < minFee) {
+            throw new X402Error(402, 'insufficient_fastpay_input', 'FastPay input cannot cover amount + minimum fee');
+          }
+          nativeOrder.fee = exactFee;
+        }
+        this._reserveBudget(required.max_amount_atoms, nativeOrder.fee);
+        const signed = await nativeChain.signNativeOwnedTransferOrderV3(nativeOrder, {
+          publicKey: this._payerPublicKey,
+          secretKey: this._payerSecretKey,
+        });
+        orderHash = signed.orderHash;
+        signedPayload = signed.signedPayload;
+
+        if (required.scheme === mp.X402Scheme.PF_FASTPAY_SETTLED) {
+          if (typeof this._directFastPaySettleFn !== 'function') {
+            throw new X402Error(400, 'missing_direct_settle_fn', 'pf-fastpay-settled requires directFastPaySettleFn');
+          }
+          certificatePayload = await this._directFastPaySettleFn({
+            orderHash,
+            signedPayload,
+            order: signed.signedOrder.order,
+            signedOrder: signed.signedOrder,
+          });
+        }
+      } else {
+        const baseOrder = {
+          chain_id: this._chainId,
+          payer_account: this._payerAccount,
+          payee_account: required.pay_to,
+          asset_id: required.asset_id,
+          amount_atoms: required.max_amount_atoms,
+          fee_atoms: 0,
+          input_count: 1,
+          output_count: 2,
+          nonce_hex: required.nonce.toString('hex'),
+          memos: [x402Memo],
+        };
+        // Compute fee floor conservatively using signed payload size estimate (order + ML-DSA-65 pk/sig hex)
+        const estBytes = mp.canonicalJsonBytes(baseOrder).length + (mp.ML_DSA_65_PUBKEY_BYTES + mp.ML_DSA_65_SIGNATURE_BYTES) * 2 + 256;
+        baseOrder.fee_atoms = computeMinimumFastPayFeeAtoms({
+          weightBytes: estBytes,
+          inputCount: baseOrder.input_count,
+          outputCount: baseOrder.output_count,
+        });
+        this._reserveBudget(baseOrder.amount_atoms, baseOrder.fee_atoms);
+        const signed = await signFastPayOrder(baseOrder, {
+          publicKey: this._payerPublicKey,
+          secretKey: this._payerSecretKey,
+        });
+        orderHash = signed.orderHash;
+        signedPayload = signed.signedPayload;
+
+        if (required.scheme === mp.X402Scheme.PF_FASTPAY_SETTLED) {
+          if (typeof this._directFastPaySettleFn !== 'function') {
+            throw new X402Error(400, 'missing_direct_settle_fn', 'pf-fastpay-settled requires directFastPaySettleFn');
+          }
+          certificatePayload = await this._directFastPaySettleFn({ orderHash, signedPayload, order: baseOrder });
+        }
       }
     } else if (
       required.lane === mp.PaymentLane.CONSENSUS_ISSUED ||
       required.lane === mp.PaymentLane.CONSENSUS_PFT
     ) {
-      this._reserveBudget(required.max_amount_atoms, CONSENSUS_TRANSFER_FEE_ATOMS);
-      const tx = {
-        chain_id: this._chainId,
-        lane: required.lane,
-        payer_account: this._payerAccount,
-        payee_account: required.pay_to,
-        asset_id: required.asset_id,
-        amount_atoms: required.max_amount_atoms,
-        fee_atoms: CONSENSUS_TRANSFER_FEE_ATOMS,
-        sequence: await this._nextConsensusSequence(),
-        nonce_hex: required.nonce.toString('hex'),
-        memos: [x402Memo],
-      };
-      const signed = await signConsensusTransfer(tx, {
-        publicKey: this._payerPublicKey,
-        secretKey: this._payerSecretKey,
-      });
-      txHash = signed.txHash;
-      signedPayload = signed.signedPayload;
+      if (required.lane === mp.PaymentLane.CONSENSUS_PFT && this._nativePaymentV2) {
+        const cfg =
+          typeof this._nativePaymentV2 === 'function'
+            ? await this._nativePaymentV2({ required, localRequestHash, memo: x402Memo })
+            : this._nativePaymentV2;
+        const feeAtoms = Number(cfg.feeAtoms ?? CONSENSUS_TRANSFER_FEE_ATOMS);
+        this._reserveBudget(required.max_amount_atoms, feeAtoms);
+        const unsigned = nativeChain.buildUnsignedPaymentV2({
+          chainId: this._chainId,
+          genesisHash: cfg.genesisHash,
+          protocolVersion: Number(cfg.protocolVersion ?? 1),
+          from: this._payerAccount,
+          to: required.pay_to,
+          amount: required.max_amount_atoms,
+          fee: feeAtoms,
+          sequence: await this._nextConsensusSequence(),
+          memos: [x402Memo],
+        });
+        const signed = await nativeChain.signNativePaymentV2(unsigned, {
+          publicKey: this._payerPublicKey,
+          secretKey: this._payerSecretKey,
+        });
+        txHash = signed.txId;
+        signedPayload = signed.signedPayload;
+      } else {
+        this._reserveBudget(required.max_amount_atoms, CONSENSUS_TRANSFER_FEE_ATOMS);
+        const tx = {
+          chain_id: this._chainId,
+          lane: required.lane,
+          payer_account: this._payerAccount,
+          payee_account: required.pay_to,
+          asset_id: required.asset_id,
+          amount_atoms: required.max_amount_atoms,
+          fee_atoms: CONSENSUS_TRANSFER_FEE_ATOMS,
+          sequence: await this._nextConsensusSequence(),
+          nonce_hex: required.nonce.toString('hex'),
+          memos: [x402Memo],
+        };
+        const signed = await signConsensusTransfer(tx, {
+          publicKey: this._payerPublicKey,
+          secretKey: this._payerSecretKey,
+        });
+        txHash = signed.txHash;
+        signedPayload = signed.signedPayload;
+      }
     } else {
       throw new X402Error(400, 'unsupported_lane', `unsupported lane ${required.lane}`);
     }
