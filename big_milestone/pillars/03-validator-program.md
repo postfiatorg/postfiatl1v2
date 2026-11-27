@@ -1,6 +1,6 @@
 # Pillar 3 — Validator Rewards Program
 
-> **Status:** Code in review, proven on live data, nothing released. Four PRs are open: the contract ([postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286)), the node code ([#290](https://github.com/postfiatorg/postfiatl1v2/pull/290)), Task Node enforcement ([tasknode#459](https://github.com/postfiatorg/tasknode/pull/459), off by default) and a status notice for the live guide ([site#66](https://github.com/postfiatorg/postfiatorg.github.io/pull/66)). A soak run of the uptime feed has been reading devnet-2 every five minutes since 27 November. Blocked: a new node cannot be seeded on devnet-2 ([postfiatl1v2#320](https://github.com/postfiatorg/postfiatl1v2/issues/320)). Not started: the release build pipeline and key ceremony, the rollout to the six validators, the join and ratification client. Full step list under [Build milestones](#build-milestones).
+> **Status:** Code in review, proven on live data, nothing released. Five PRs are open and wait for review: the contract ([postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286)), the node code ([#290](https://github.com/postfiatorg/postfiatl1v2/pull/290)), the release pipeline ([#321](https://github.com/postfiatorg/postfiatl1v2/pull/321), stacked on #290), Task Node enforcement ([tasknode#459](https://github.com/postfiatorg/tasknode/pull/459), off by default) and a status notice for the live guide ([site#66](https://github.com/postfiatorg/postfiatorg.github.io/pull/66)). A soak run of the uptime feed has been reading devnet-2 every five minutes since 27 November. Blocked: a new node cannot be seeded on devnet-2 ([postfiatl1v2#320](https://github.com/postfiatorg/postfiatl1v2/issues/320)). Not started: the three release keys and a first signed release, the rollout to the six validators, the join and ratification client. Full step list under [Build milestones](#build-milestones).
 >
 > **Outcome:** [B · A production-ready new chain](../README.md#three-outcomes) — moving `postfiatl1v2` from 6 Foundation-run nodes to a real outside validator network.
 
@@ -8,12 +8,13 @@
 
 | Gate 1 · Code / Executed | Gate 2 · Founder UAT | Gate 3 · Docs | Gate 4 · Blog Post |
 | --- | --- | --- | --- |
-| **4 PRs open, CI running** (`l1#286`, `l1#290`, `tasknode#459`, `site#66`). Soak feed running on devnet-2. Seeding a new node blocked (`l1#320`). Release pipeline, rollout, join client Not Started | Not Started | **Guide live** (`site#56`); a notice of what is not released yet waits in `site#66`; MkDocs copy missing | **Draft merged** (`draft: true`, `site#57`) |
+| **5 PRs open, waiting for review** (`l1#286`, `l1#290`, `l1#321`, `tasknode#459` CI green, `site#66` CI green). `main` requires approving reviews, so none can be merged by its author. Soak feed running on devnet-2. Seeding a new node blocked (`l1#320`). Release pipeline, rollout, join client Not Started | Not Started | **Guide live** (`site#56`); a notice of what is not released yet waits in `site#66`; MkDocs copy missing | **Draft merged** (`draft: true`, `site#57`) |
 
 - **Merged on `main`:** Validator doctor fixes ([postfiatl1v2#281](https://github.com/postfiatorg/postfiatl1v2/pull/281)) and the pillar spec ([postfiatl1v2#285](https://github.com/postfiatorg/postfiatl1v2/pull/285)).
 - **In open PRs (all 12 blocking review points and the smaller ones answered):**
   - [postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286): the contract and its conformance test (runs in CI).
   - [postfiatl1v2#290](https://github.com/postfiatorg/postfiatl1v2/pull/290): `upgrade`, `top`, replicas, the HTTP edge, the observer, `block_vote_records`, `rpc-catch-up --follow`, `tasknode-bind`, release signing commands.
+  - [postfiatl1v2#321](https://github.com/postfiatorg/postfiatl1v2/pull/321): the release build workflow, `scripts/release-assemble`, `release-manifest-create`, and the two-of-three procedure in `docs/release-process.md`, tested end to end through the real commands.
   - [tasknode#459](https://github.com/postfiatorg/tasknode/pull/459): Task Node reads the feed and can suspend, restore and credit from it. Nothing is switched on.
   - [postfiatorg.github.io#66](https://github.com/postfiatorg/postfiatorg.github.io/pull/66): the live guide says at the top what is released and what is not. Merging publishes it.
 - **Proven on `postfiat-wan-devnet-2`:**
@@ -147,7 +148,7 @@ Each milestone is broken into numbered steps. `[x]` means merged on `main` or li
 - [ ] **1.4** **PR `#290`.** Rollback never restores the validator's own vote record (today it does, which allows a second vote at the same height). Requires the separate signer and guard directory to be the default (step 1.9).
 - [ ] **1.5** **PR `#290`.** `upgrade` cannot leave services stopped; chain, clock and older-release checks cannot be skipped.
 - [ ] **1.6** Generate the three offline ML-DSA-65 release keys and publish the pinned keyset. The commands (`release-key-create`, `release-manifest-sign`, `upgrade --rotate-keyset`) are in PR `#290`.
-- [ ] **1.7** Release build workflow: reproducible `linux-x86_64` + `aarch64` binaries, systemd units, SBOM, checksums, pinned catch-up checkpoint, manifest co-signed 2-of-3 with an independent second builder. No such workflow exists yet (`scripts/generate-cargo-sbom` is the only piece).
+- [ ] **1.7** **PR `#321`** (workflow not yet run on a tag; two clean builders giving the same hash not yet shown). Release build workflow: reproducible `linux-x86_64` + `aarch64` binaries, systemd units, SBOM, checksums, pinned catch-up checkpoint, manifest co-signed 2-of-3 with an independent second builder. No such workflow exists yet (`scripts/generate-cargo-sbom` is the only piece).
 - [ ] **1.8** Publish the first signed release at a public URL.
 - [ ] **1.9** Make the separate `validator-signer-serve` process and `/var/lib/postfiat/signer-guard/` the default deployment on the 6 Foundation validators.
 - [ ] **1.10** Document and rehearse hot-key rotation (`validator-key-stage` + registry transition).
