@@ -110,3 +110,14 @@ For the owner (date first asked):
 - **Repairs:** #300, #301, #302, #304; tasknode #451, #452, #453, #454, #455.
 - **Merged:** #298, #299.
 - **Previous handoff:** [2026-11-27: PFSH03 merged, PR cleanup done, Big Milestone specs locked and Wave 1 PRs open](2026-11-27___antigravity__pfsh03_merged_big_milestone_specs_and_wave1_to_dravlic.md).
+
+## End of session, 14:00 UTC
+
+What changed after the text above was written (13:06 UTC):
+
+- **The research paper is done.** The last check of today's corrections found two reference points (a sentence that named the wrong default source commit, and one line number of the old verifier) and nothing in a claim or a proof. Both are corrected. The paper is on the private branch `research/solana-withdrawal-refund-safety-20261125` and is ready for you to read, change and use. It should stay private until the repair it describes is installed.
+- **tasknode [#451](https://github.com/postfiatorg/tasknode/pull/451) is merged** (13:49 UTC). After the third read came two more short rounds: an answer's age is now measured with both clocks, and a clock that reads earlier than at the request's start ends the answer. The fifth read found nothing, and the four hosted checks passed. The code side is ready for `L1_PROVING_WINDOW_UTC`; switching it on is your side, after the next deploy. Not covered by any read: a real browser with a real sleep.
+- **[#301](https://github.com/postfiatorg/postfiatl1v2/pull/301)** had its second read: fine to merge into its branch as it is. Five low follow-ups are in its comment. I have not merged it, so nothing moves under work that is going on in that branch.
+- **[#300](https://github.com/postfiatorg/postfiatl1v2/pull/300)** had its second read: the 48 bytes are right, and four points came out of it (the vector check did not cover enum values, nor five of the forty messages). They are in as four commits, which are not read by a second reader yet.
+- **[#304](https://github.com/postfiatorg/postfiatl1v2/pull/304)**, first hosted run: `test` and `test-node-orchard` passed in 35 minutes each. `test-workspace` stopped after 7 minutes on a false alarm of the split check's new feature guard, which read `cargo tree` with colour codes. That repair is being written.
+- In "Next decision or action" above, items 3 and 6 are done.
