@@ -31,6 +31,7 @@ use std::time::{Duration, Instant};
 pub const FASTPAY_RPC_V2_VERSION: u8 = 2;
 pub const MAX_FASTPAY_V2_FRAME_BYTES: usize = 65_536;
 pub const MAX_FASTPAY_V2_CONCURRENT_CONNECTIONS: usize = 128;
+pub const FASTPAY_V2_IDLE_READ_TIMEOUT_SECS: u64 = 300;
 pub const DEFAULT_FASTPAY_V2_RATE_LIMIT_PER_SEC: f64 = 200.0;
 pub const DEFAULT_FASTPAY_V2_RATE_BURST: f64 = 400.0;
 
@@ -1274,9 +1275,12 @@ pub fn spawn_fastpay_rpc_v2_tls_listener(
                             continue;
                         }
                         let _ = tcp_stream.set_nodelay(true);
-                        let timeout = Some(Duration::from_millis(cfg.timeout_ms.max(1000)));
-                        let _ = tcp_stream.set_read_timeout(timeout);
-                        let _ = tcp_stream.set_write_timeout(timeout);
+                        let idle_read_timeout = Some(Duration::from_millis(
+                            cfg.timeout_ms.max(FASTPAY_V2_IDLE_READ_TIMEOUT_SECS * 1000),
+                        ));
+                        let write_timeout = Some(Duration::from_millis(cfg.timeout_ms.max(1000)));
+                        let _ = tcp_stream.set_read_timeout(idle_read_timeout);
+                        let _ = tcp_stream.set_write_timeout(write_timeout);
 
                         let tls_cfg = Arc::clone(&tls_config);
                         let data_dir = cfg.data_dir.clone();
