@@ -224,13 +224,16 @@ postfiat-node upgrade [OPTIONS]
    - `block_height >= pre_upgrade_height`;
    - when two-user signer socket mode is configured, `private_readiness` reports `validator_signer = "socket"` and `signer_double_sign_protection = true`.
 9. **Rollback on failure:** If any check in Step 8 fails:
-   - Stop `--service-units`;
+   - Stop `--service-units` and confirm that none is still active. If one is, nothing is replaced and the exit is `6`;
+   - Check the backup against its `backup-manifest.json` (the prior binary and every file by size and SHA-256, and no file the manifest does not name). A backup that does not match replaces nothing;
    - Restore the prior binary and the backed-up chain state, with owner, group and mode as they were;
    - **Leave every signing record of step 6 as the new binary left it.** If the new binary signed anything before the health gate failed, the old binary starts with that on record and cannot sign a different message for the same slot. A signing record is only ever carried forward. If the old binary cannot read a record the new one wrote, it refuses to start and the exit is `6`: a stopped validator, never one that signs twice;
-   - Restart `--service-units` and run `rpc-probe`;
+   - **Only after a complete restore**, restart `--service-units` and run `rpc-probe`. After a failed or partial restore the units stay stopped, the journal stays, and the exit is `6`: a validator is never started on a partly restored data directory;
    - Exit `5` (`rolled_back`) if the prior version recovers cleanly, or `6` (`rollback_failed`).
 10. **Services are never left stopped silently.** Every exit after step 5 either has the units running or reports the stopped units by name in `units_stopped` with exit `6`.
 11. **Interrupted upgrade:** If `upgrade` starts and finds a journal, the earlier run did not finish. It refuses every other action and completes the rollback of that run from the journal (steps 9 and 10), then exits `5` or `6`. `--check` reports `interrupted_upgrade` and exits `4`.
+12. **One upgrade at a time.** `upgrade` holds an exclusive lock on `<backup-dir>/upgrade.lock` from before it reads the journal until it exits. A second run, `--check` included, reports `upgrade_in_progress` and exits `4` without touching anything.
+13. **The installed sequence is durable before the upgrade is complete.** After the health gate the journal moves to step `record_pending`, then `installed-release.json` is written, then the journal is removed. If the record cannot be written the status is `upgraded_record_pending` and the exit is `4`; the new release keeps running, and the next run writes the record from the journal and rolls nothing back.
 
 ### 3.2.1 Report (`postfiat-node-upgrade-report-v1`)
 
@@ -240,7 +243,7 @@ With `--json`, one object:
 | --- | --- | --- |
 | `schema` | string | `postfiat-node-upgrade-report-v1` |
 | `check_only` | bool | `--check` was given |
-| `status` | string | `up_to_date`, `upgrade_available`, `activation_imminent`, `upgraded`, `refused`, `rolled_back`, `rollback_failed` |
+| `status` | string | `up_to_date`, `upgrade_available`, `activation_imminent`, `upgraded`, `upgraded_record_pending`, `refused`, `rolled_back`, `rollback_failed` |
 | `exit_code` | integer | as in 3.3 |
 | `error_code`, `message` | string or null | typed reason and one line of text when not successful |
 | `release_id`, `release_sequence`, `target_git_revision` | string, integer, string, or null | from the verified manifest |
