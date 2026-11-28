@@ -2803,6 +2803,12 @@ pub fn execute_upgrade(
                     "health gate mismatch: rev_ok={rev_ok} (node reports {:?}), height_ok={height_ok} (node at {}, was at {pre_height}), signer_ok={signer_ok}, units_not_running={stopped:?}",
                     probe.git_revision, probe.block_height
                 );
+                // A running binary does not change its revision. Waiting out
+                // the timeout only lets the wrong binary vote for longer: in
+                // rehearsal it signed 17 blocks in that minute.
+                if !rev_ok && probe.git_revision.is_some() && stopped.is_empty() {
+                    break;
+                }
             }
             Err(error) => {
                 last_health_err = error;
@@ -4127,6 +4133,9 @@ mod tests {
         // The new binary answers, on the wrong revision: it runs and makes blocks.
         let mut hooks = fixture.hooks();
         hooks.new_binary_wrong_revision = true;
+        let mut options = options;
+        options.health_timeout_ms = 60_000;
+        let started = Instant::now();
         let report = execute_upgrade(&options, &hooks);
         assert_eq!(
             (report.status.as_str(), report.exit_code),
@@ -4135,6 +4144,10 @@ mod tests {
         assert_eq!(
             (report.height_before_rollback, report.height_after_rollback),
             (Some(432_001), Some(432_000))
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "a wrong revision fails at once, not after the health timeout"
         );
         assert!(report.catch_up_needed);
         let message = report.message.unwrap();

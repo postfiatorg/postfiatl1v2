@@ -222,7 +222,7 @@ postfiat-node upgrade [OPTIONS]
 7. **Atomic binary swap:** Write staged binary to `<binary-path>.staging.<pid>`, `chmod 0755`, `fsync`, atomically `rename(2)` onto `<binary-path>`, and `fsync` parent directory. Then write the verified manifest to `--installed-manifest-file` the same way (mode `0644`). The units verify the binary against that file before they start (section 4), so the two always change together; the prior manifest was saved with the backup in step 6.
 8. **Start and post-upgrade health gate:** Start `--service-units` and verify within `--health-timeout-ms`:
    - `rpc-probe` returns `ok: true`;
-   - the revision the node reports is a prefix of manifest `git_revision` and at least 8 hex characters long (the node reports a short revision);
+   - the revision the node reports is a prefix of manifest `git_revision` and at least 8 hex characters long (the node reports a short revision). A node that is up and reports another revision fails the gate at once, without waiting for the timeout: the wrong binary should not go on voting;
    - `block_height >= pre_upgrade_height`;
    - when two-user signer socket mode is configured, `private_readiness` reports `validator_signer = "socket"` and `signer_double_sign_protection = true`.
 9. **Rollback on failure:** If any check in Step 8 fails:
