@@ -1316,8 +1316,23 @@ pub fn fetch_https_bounded(url: &str, max_bytes: usize) -> Result<Vec<u8>, Strin
             "--fail",
             "--silent",
             "--show-error",
-            "--max-time",
+            // Release hosts answer with a redirect to their object store.
+            // Every redirect stays on https; what is fetched is still checked
+            // against the signed manifest.
+            "--location",
+            "--proto-redir",
+            "=https",
+            "--max-redirs",
+            "5",
+            "--connect-timeout",
             "30",
+            // A stalled transfer is dropped; a slow one of a large binary is not.
+            "--speed-limit",
+            "10240",
+            "--speed-time",
+            "30",
+            "--max-time",
+            "1800",
             "--max-filesize",
             &max_bytes.to_string(),
             url,
