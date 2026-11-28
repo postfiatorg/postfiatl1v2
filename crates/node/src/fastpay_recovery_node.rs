@@ -302,8 +302,32 @@ fn hydrate_fastpay_state_from_snapshot_sidecar(
     }))
 }
 
-/// Lock-free background pre-warmer called by `rpc-serve` so post-block
-/// `owned_sign_v3` RPCs hit an already-warm in-process cache with zero `redb` opens.
+fn fastpay_prewarmed_tip_tracker(
+) -> &'static std::sync::Mutex<BTreeMap<std::path::PathBuf, (u64, String, String)>> {
+    static TRACKER: std::sync::OnceLock<
+        std::sync::Mutex<BTreeMap<std::path::PathBuf, (u64, String, String)>>,
+    > = std::sync::OnceLock::new();
+    TRACKER.get_or_init(|| std::sync::Mutex::new(BTreeMap::new()))
+}
+
+fn cache_has_tip(data_dir: &std::path::Path, tip: &(u64, String, String)) -> bool {
+    let dir = canonical_fastpay_cache_dir(data_dir);
+    let cache = fastpay_ledger_cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache.iter().any(|entry| {
+        entry.key.data_dir == dir
+            && entry.key.height == tip.0
+            && entry.key.block_hash == tip.1
+            && entry.key.state_root == tip.2
+    })
+}
+
+/// Lock-free background pre-warmer called by `rpc-serve` once per newly committed
+/// finalized tip so post-block `owned_sign_v3` RPCs hit an already-warm in-process
+/// cache with zero `redb` opens. Parses the snapshot sidecar off-lock, then
+/// acquires the ordered-commit lock briefly to read the WAL and install the cache
+/// entry without racing concurrent `owned_apply_v3` writes or evicting newer state.
 pub fn prewarm_fastpay_ledger_cache_from_sidecar(data_dir: &std::path::Path) -> bool {
     let Some(sidecar) = read_chain_tip_generation_sidecar(data_dir) else {
         return false;
@@ -330,11 +354,114 @@ pub fn prewarm_fastpay_ledger_cache_from_sidecar(data_dir: &std::path::Path) -> 
     if !db_matches {
         return false;
     }
+
+    let dir = canonical_fastpay_cache_dir(data_dir);
+    let tip_sig = (
+        sidecar.finalized_height,
+        sidecar.finalized_block_hash.clone(),
+        sidecar.finalized_state_root.clone(),
+    );
+    {
+        let tracker = fastpay_prewarmed_tip_tracker()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if tracker.get(&dir) == Some(&tip_sig) {
+            return false;
+        }
+    }
+    if cache_has_tip(data_dir, &tip_sig) {
+        let mut tracker = fastpay_prewarmed_tip_tracker()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        tracker.insert(dir, tip_sig);
+        return false;
+    }
+
+    // Parse snapshot sidecar off-lock so we never stall live FastPay RPCs.
+    let Some(mut snapshot) = read_fastpay_ledger_snapshot_sidecar(data_dir, &sidecar) else {
+        return false;
+    };
+
+    // Synchronize WAL reads and cache installation with `owned_apply_v3` / block commits.
+    let store = NodeStore::new(data_dir);
+    let Ok(_mutation_lock) = store.lock_ordered_commit() else {
+        return false;
+    };
+    if read_chain_tip_generation_sidecar(data_dir).as_ref() != Some(&sidecar) {
+        return false;
+    }
+    if cache_has_tip(data_dir, &tip_sig) {
+        let mut tracker = fastpay_prewarmed_tip_tracker()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        tracker.insert(dir, tip_sig);
+        return false;
+    }
     let Ok(journal_bytes_hash) = fastpay_speculative_journal_hash(data_dir) else {
         return false;
     };
+    let Ok(journal) = read_fastpay_speculative_journal(data_dir) else {
+        return false;
+    };
+    let mut pending = Vec::new();
+    let mut legacy_pending = 0usize;
+    for record in &journal.effects {
+        if snapshot
+            .ledger
+            .fastpay_version_fences
+            .iter()
+            .any(|f| f.lock_id == record.fence.lock_id)
+        {
+            continue;
+        }
+        let (height, sequence) = match &record.retained_tip {
+            Some(base) => {
+                if base.height == sidecar.finalized_height
+                    && (base.block_hash != sidecar.finalized_block_hash
+                        || base.state_root != sidecar.finalized_state_root)
+                {
+                    return false;
+                }
+                (base.height, base.application_sequence)
+            }
+            None => (record.fence.decided_at_height, 0),
+        };
+        if height > sidecar.finalized_height {
+            return false;
+        }
+        if height < sidecar.finalized_height {
+            continue;
+        }
+        if record.retained_tip.is_none() {
+            legacy_pending += 1;
+        }
+        pending.push((sequence, record.fence.clone()));
+    }
+    if pending.len() > postfiat_types::MAX_FASTPAY_PRE_STATE_EFFECTS_PER_BLOCK || legacy_pending > 1
+    {
+        return false;
+    }
+    pending.sort_by_key(|(sequence, _)| *sequence);
+    if pending.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return false;
+    }
+    let effects: Vec<_> = pending.into_iter().map(|(_, fence)| fence).collect();
+    let replayed_count = effects.len();
+    if !effects.is_empty() {
+        let empty_shielded = ShieldedState::empty();
+        if replay_confirmed_fastpay_fences_dependency_ordered(
+            &mut snapshot.ledger,
+            &empty_shielded,
+            &effects,
+            snapshot.fastpay_fee_v1_activation_height,
+        )
+        .is_err()
+        {
+            return false;
+        }
+    }
     let key = FastPayLedgerCacheKey {
-        data_dir: canonical_fastpay_cache_dir(data_dir),
+        data_dir: dir.clone(),
         generation: sidecar.generation.clone(),
         height: sidecar.finalized_height,
         block_hash: sidecar.finalized_block_hash.clone(),
@@ -343,13 +470,22 @@ pub fn prewarm_fastpay_ledger_cache_from_sidecar(data_dir: &std::path::Path) -> 
         db_identity,
         journal_bytes_hash,
     };
-    if peek_cached_fastpay_state(&key).is_some() {
-        return false;
-    }
-    matches!(
-        hydrate_fastpay_state_from_snapshot_sidecar(data_dir, &sidecar, &key, false),
-        Ok(Some(_))
-    )
+    let pending_unanchored_count = snapshot.base_pending_unanchored_count + replayed_count;
+    let fee_v1_active = snapshot
+        .fastpay_fee_v1_activation_height
+        .is_some_and(|activation| activation > 0 && key.height >= activation);
+    store_cached_fastpay_state(CachedFastPayState {
+        key,
+        ledger: std::sync::Arc::new(snapshot.ledger),
+        genesis: snapshot.genesis,
+        pending_unanchored_count,
+        fee_v1_active,
+    });
+    let mut tracker = fastpay_prewarmed_tip_tracker()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    tracker.insert(dir, tip_sig);
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -619,6 +755,12 @@ pub(super) fn invalidate_fastpay_ledger_cache(data_dir: &std::path::Path) {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     cache.retain(|entry| entry.key.data_dir != dir);
+    drop(cache);
+    let mut prewarmed = fastpay_prewarmed_tip_tracker()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    prewarmed.remove(&dir);
+    drop(prewarmed);
     invalidate_fastpay_wal_tracker(data_dir);
 }
 

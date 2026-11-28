@@ -633,7 +633,7 @@ function createChainSettlementAdapter({
     if (verifiedVotes.length < requiredVotes) {
       return {
         accepted: false,
-        reason: `fastpay_authenticated_quorum_not_reached:${verifiedVotes.length}/${requiredVotes}${errors.length ? ` (${errors[0]})` : ''}`,
+        reason: `fastpay_authenticated_quorum_not_reached:${verifiedVotes.length}/${requiredVotes}${errors.length ? ` (${errors.join(' | ')})` : ''}`,
       };
     }
     metricsState.voteQuorumSamplesMs.push(Number((performance.now() - tVoteStart).toFixed(2)));
