@@ -4,6 +4,7 @@ const FASTPAY_V3_TRANSFER_ORDER_HASH_DOMAIN: &str = "postfiat.fastpay.transfer-o
 const FASTPAY_V3_UNWRAP_ORDER_HASH_DOMAIN: &str = "postfiat.fastpay.unwrap-order.v3";
 const FASTPAY_SPECULATIVE_JOURNAL_SCHEMA_V1: &str = "postfiat.fastpay.speculative-effects.v1";
 const CHAIN_TIP_GENERATION_SIDECAR_SCHEMA_V1: &str = "postfiat.chain-tip-generation.v1";
+const FASTPAY_LEDGER_SNAPSHOT_SIDECAR_SCHEMA_V1: &str = "postfiat.fastpay.ledger-snapshot.v1";
 const FASTPAY_SPECULATIVE_WAL_MAGIC_V2: u32 = 0x5046_5732; // "PFW2"
 const FASTPAY_SPECULATIVE_WAL_HEADER_LEN: usize = 12;
 const FASTPAY_SPECULATIVE_WAL_MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
@@ -89,6 +90,7 @@ pub(super) fn write_chain_tip_generation_sidecar(
     db_path: &std::path::Path,
 ) -> io::Result<()> {
     let db_identity = fastpay_db_identity(db_path)?;
+    let db_len = std::fs::metadata(db_path)?.len();
     let sidecar = ChainTipGenerationSidecarV1 {
         schema: CHAIN_TIP_GENERATION_SIDECAR_SCHEMA_V1.to_string(),
         generation: meta.generation.clone(),
@@ -98,7 +100,7 @@ pub(super) fn write_chain_tip_generation_sidecar(
         ordered_history_accumulator: meta.ordered_history_accumulator.clone(),
         scheduled_activation_height: meta.scheduled_activation_height,
         db_path: db_identity.path,
-        db_len: db_identity.len,
+        db_len,
         #[cfg(unix)]
         db_ino: db_identity.ino,
     };
@@ -119,6 +121,235 @@ fn read_chain_tip_generation_sidecar(
         return None;
     }
     Some(sidecar)
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct FastPayLedgerSnapshotSidecarV1 {
+    schema: String,
+    generation: String,
+    finalized_height: u64,
+    finalized_block_hash: String,
+    finalized_state_root: String,
+    ordered_history_accumulator: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    scheduled_activation_height: Option<u64>,
+    ledger: LedgerState,
+    genesis: Genesis,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fastpay_fee_v1_activation_height: Option<u64>,
+    base_pending_unanchored_count: usize,
+}
+
+pub(super) fn write_fastpay_ledger_snapshot_sidecar(
+    data_dir: &std::path::Path,
+    meta: &postfiat_storage::TransactionalStoreMetaV1,
+    ledger: &LedgerState,
+    genesis: &Genesis,
+    fastpay_fee_v1_activation_height: Option<u64>,
+    base_pending_unanchored_count: usize,
+) -> io::Result<()> {
+    let snapshot = FastPayLedgerSnapshotSidecarV1 {
+        schema: FASTPAY_LEDGER_SNAPSHOT_SIDECAR_SCHEMA_V1.to_string(),
+        generation: meta.generation.clone(),
+        finalized_height: meta.finalized_height,
+        finalized_block_hash: meta.finalized_block_hash.clone(),
+        finalized_state_root: meta.finalized_state_root.clone(),
+        ordered_history_accumulator: meta.ordered_history_accumulator.clone(),
+        scheduled_activation_height: meta.scheduled_activation_height,
+        ledger: ledger.clone(),
+        genesis: genesis.clone(),
+        fastpay_fee_v1_activation_height,
+        base_pending_unanchored_count,
+    };
+    let bytes = serde_json::to_vec(&snapshot).map_err(invalid_data)?;
+    static SNAPSHOT_TMP_COUNTER: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(1);
+    let seq = SNAPSHOT_TMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp_path = data_dir.join(format!(
+        "{FASTPAY_LEDGER_SNAPSHOT_SIDECAR_FILE}.tmp.{}.{seq}",
+        std::process::id()
+    ));
+    let final_path = data_dir.join(FASTPAY_LEDGER_SNAPSHOT_SIDECAR_FILE);
+    std::fs::write(&tmp_path, &bytes)?;
+    if let Err(err) = std::fs::rename(&tmp_path, &final_path) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(err);
+    }
+    Ok(())
+}
+
+fn read_fastpay_ledger_snapshot_sidecar(
+    data_dir: &std::path::Path,
+    expected_sidecar: &ChainTipGenerationSidecarV1,
+) -> Option<FastPayLedgerSnapshotSidecarV1> {
+    let path = data_dir.join(FASTPAY_LEDGER_SNAPSHOT_SIDECAR_FILE);
+    let raw = std::fs::read(&path).ok()?;
+    let snapshot: FastPayLedgerSnapshotSidecarV1 = serde_json::from_slice(&raw).ok()?;
+    if snapshot.schema != FASTPAY_LEDGER_SNAPSHOT_SIDECAR_SCHEMA_V1
+        || snapshot.generation != expected_sidecar.generation
+        || snapshot.finalized_height != expected_sidecar.finalized_height
+        || snapshot.finalized_block_hash != expected_sidecar.finalized_block_hash
+        || snapshot.finalized_state_root != expected_sidecar.finalized_state_root
+        || snapshot.ordered_history_accumulator != expected_sidecar.ordered_history_accumulator
+        || snapshot.scheduled_activation_height != expected_sidecar.scheduled_activation_height
+    {
+        return None;
+    }
+    Some(snapshot)
+}
+
+fn hydrate_fastpay_state_from_snapshot_sidecar(
+    data_dir: &std::path::Path,
+    sidecar: &ChainTipGenerationSidecarV1,
+    key: &FastPayLedgerCacheKey,
+    take_ownership: bool,
+) -> io::Result<Option<LoadedFastPayState>> {
+    let Some(mut snapshot) = read_fastpay_ledger_snapshot_sidecar(data_dir, sidecar) else {
+        return Ok(None);
+    };
+    let journal = read_fastpay_speculative_journal(data_dir)?;
+    let mut pending = Vec::new();
+    let mut legacy_pending = 0usize;
+    for record in &journal.effects {
+        if snapshot
+            .ledger
+            .fastpay_version_fences
+            .iter()
+            .any(|f| f.lock_id == record.fence.lock_id)
+        {
+            continue;
+        }
+        let (height, sequence) = match &record.retained_tip {
+            Some(base) => {
+                if base.height == sidecar.finalized_height
+                    && (base.block_hash != sidecar.finalized_block_hash
+                        || base.state_root != sidecar.finalized_state_root)
+                {
+                    return Err(fastpay_invalid_data(
+                        "FastPay journal is bound to a different finalized tip",
+                    ));
+                }
+                (base.height, base.application_sequence)
+            }
+            None => (record.fence.decided_at_height, 0),
+        };
+        if height > sidecar.finalized_height {
+            return Err(fastpay_invalid_data(
+                "FastPay journal is ahead of the finalized tip",
+            ));
+        }
+        if height < sidecar.finalized_height {
+            continue;
+        }
+        if record.retained_tip.is_none() {
+            legacy_pending += 1;
+        }
+        pending.push((sequence, record.fence.clone()));
+    }
+    if pending.len() > postfiat_types::MAX_FASTPAY_PRE_STATE_EFFECTS_PER_BLOCK || legacy_pending > 1
+    {
+        return Err(fastpay_invalid_data(
+            "FastPay pending journal is oversized or has ambiguous legacy application order",
+        ));
+    }
+    pending.sort_by_key(|(sequence, _)| *sequence);
+    if pending.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return Err(fastpay_invalid_data(
+            "FastPay journal has duplicate application sequence",
+        ));
+    }
+    let effects: Vec<_> = pending.into_iter().map(|(_, fence)| fence).collect();
+    let replayed_count = effects.len();
+    if !effects.is_empty() {
+        let empty_shielded = ShieldedState::empty();
+        replay_confirmed_fastpay_fences_dependency_ordered(
+            &mut snapshot.ledger,
+            &empty_shielded,
+            &effects,
+            snapshot.fastpay_fee_v1_activation_height,
+        )?;
+    }
+    // Verify the finalized tip sidecar did not advance concurrently while reading WAL.
+    if read_chain_tip_generation_sidecar(data_dir).as_ref() != Some(sidecar) {
+        return Ok(None);
+    }
+    let pending_unanchored_count = snapshot.base_pending_unanchored_count + replayed_count;
+    let fee_v1_active = snapshot
+        .fastpay_fee_v1_activation_height
+        .is_some_and(|activation| activation > 0 && key.height >= activation);
+    let ledger = std::sync::Arc::new(snapshot.ledger);
+    if !take_ownership {
+        store_cached_fastpay_state(CachedFastPayState {
+            key: key.clone(),
+            ledger: std::sync::Arc::clone(&ledger),
+            genesis: snapshot.genesis.clone(),
+            pending_unanchored_count,
+            fee_v1_active,
+        });
+    }
+    update_fastpay_rpc_metrics(|m| {
+        m.ledger_cache_hit = Some(false);
+        m.redb_opened = Some(false);
+        m.redb_lease_wait_ms = Some(0.0);
+    });
+    Ok(Some(LoadedFastPayState {
+        height: key.height,
+        cache_key: Some(key.clone()),
+        ledger,
+        genesis: snapshot.genesis,
+        pending_unanchored_count,
+        fee_v1_active,
+    }))
+}
+
+/// Lock-free background pre-warmer called by `rpc-serve` so post-block
+/// `owned_sign_v3` RPCs hit an already-warm in-process cache with zero `redb` opens.
+pub fn prewarm_fastpay_ledger_cache_from_sidecar(data_dir: &std::path::Path) -> bool {
+    let Some(sidecar) = read_chain_tip_generation_sidecar(data_dir) else {
+        return false;
+    };
+    let active = sidecar
+        .scheduled_activation_height
+        .is_some_and(|activation| sidecar.finalized_height >= activation);
+    if !active {
+        return false;
+    }
+    let Ok(db_identity) = fastpay_db_identity(&sidecar.db_path) else {
+        return false;
+    };
+    let db_matches = db_identity.path == sidecar.db_path && {
+        #[cfg(unix)]
+        {
+            db_identity.ino == sidecar.db_ino
+        }
+        #[cfg(not(unix))]
+        {
+            true
+        }
+    };
+    if !db_matches {
+        return false;
+    }
+    let Ok(journal_bytes_hash) = fastpay_speculative_journal_hash(data_dir) else {
+        return false;
+    };
+    let key = FastPayLedgerCacheKey {
+        data_dir: canonical_fastpay_cache_dir(data_dir),
+        generation: sidecar.generation.clone(),
+        height: sidecar.finalized_height,
+        block_hash: sidecar.finalized_block_hash.clone(),
+        state_root: sidecar.finalized_state_root.clone(),
+        ordered_history_accumulator: sidecar.ordered_history_accumulator.clone(),
+        db_identity,
+        journal_bytes_hash,
+    };
+    if peek_cached_fastpay_state(&key).is_some() {
+        return false;
+    }
+    matches!(
+        hydrate_fastpay_state_from_snapshot_sidecar(data_dir, &sidecar, &key, false),
+        Ok(Some(_))
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -160,7 +391,6 @@ struct FastPaySpeculativeTipV1 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FastPayDbIdentity {
     path: std::path::PathBuf,
-    len: u64,
     #[cfg(unix)]
     ino: u64,
 }
@@ -401,7 +631,6 @@ fn fastpay_db_identity(db_path: &std::path::Path) -> io::Result<FastPayDbIdentit
     };
     Ok(FastPayDbIdentity {
         path: canonical_fastpay_cache_dir(db_path),
-        len: meta.len(),
         #[cfg(unix)]
         ino,
     })
@@ -647,7 +876,9 @@ fn load_fastpay_state(store: &NodeStore, take_ownership: bool) -> io::Result<Loa
                 .is_some_and(|activation| sidecar.finalized_height >= activation);
             if active {
                 if let Ok(db_identity) = fastpay_db_identity(&sidecar.db_path) {
-                    let db_matches = db_identity.len == sidecar.db_len && {
+                    // Match on canonical path + inode rather than byte length because redb
+                    // shrinks/expands unused trailing pages on open/close without changing state.
+                    let db_matches = db_identity.path == sidecar.db_path && {
                         #[cfg(unix)]
                         {
                             db_identity.ino == sidecar.db_ino
@@ -662,11 +893,13 @@ fn load_fastpay_state(store: &NodeStore, take_ownership: bool) -> io::Result<Loa
                             fastpay_speculative_journal_hash(store.data_dir())?;
                         let key = FastPayLedgerCacheKey {
                             data_dir: canonical_fastpay_cache_dir(store.data_dir()),
-                            generation: sidecar.generation,
+                            generation: sidecar.generation.clone(),
                             height: sidecar.finalized_height,
-                            block_hash: sidecar.finalized_block_hash,
-                            state_root: sidecar.finalized_state_root,
-                            ordered_history_accumulator: sidecar.ordered_history_accumulator,
+                            block_hash: sidecar.finalized_block_hash.clone(),
+                            state_root: sidecar.finalized_state_root.clone(),
+                            ordered_history_accumulator: sidecar
+                                .ordered_history_accumulator
+                                .clone(),
                             db_identity,
                             journal_bytes_hash,
                         };
@@ -692,6 +925,14 @@ fn load_fastpay_state(store: &NodeStore, take_ownership: bool) -> io::Result<Loa
                                 pending_unanchored_count: cached.pending_unanchored_count,
                                 fee_v1_active: cached.fee_v1_active,
                             });
+                        }
+                        if let Some(hydrated) = hydrate_fastpay_state_from_snapshot_sidecar(
+                            store.data_dir(),
+                            &sidecar,
+                            &key,
+                            take_ownership,
+                        )? {
+                            return Ok(hydrated);
                         }
                     }
                 }
@@ -722,11 +963,11 @@ fn load_fastpay_state(store: &NodeStore, take_ownership: bool) -> io::Result<Loa
             let journal_bytes_hash = fastpay_speculative_journal_hash(store.data_dir())?;
             let key = FastPayLedgerCacheKey {
                 data_dir: canonical_fastpay_cache_dir(store.data_dir()),
-                generation: meta.generation,
+                generation: meta.generation.clone(),
                 height: meta.finalized_height,
-                block_hash: meta.finalized_block_hash,
-                state_root: meta.finalized_state_root,
-                ordered_history_accumulator: meta.ordered_history_accumulator,
+                block_hash: meta.finalized_block_hash.clone(),
+                state_root: meta.finalized_state_root.clone(),
+                ordered_history_accumulator: meta.ordered_history_accumulator.clone(),
                 db_identity,
                 journal_bytes_hash,
             };
@@ -751,13 +992,28 @@ fn load_fastpay_state(store: &NodeStore, take_ownership: bool) -> io::Result<Loa
                 });
             }
 
+            let base_ledger = store.read_ledger()?;
+            let genesis = store.read_genesis()?;
+            let fee_v1_activation = store.read_governance()?.fastpay_fee_v1_activation_height();
+            let base_pending_unanchored_count =
+                fastpay_pre_state_effects_for_next_block(store, &base_ledger)?.len();
+            let _ = write_fastpay_ledger_snapshot_sidecar(
+                store.data_dir(),
+                &meta,
+                &base_ledger,
+                &genesis,
+                fee_v1_activation,
+                base_pending_unanchored_count,
+            );
+            let _ = write_chain_tip_generation_sidecar(
+                store.data_dir(),
+                &meta,
+                transactional.database_path(),
+            );
             let ledger = std::sync::Arc::new(read_fastpay_ledger(store)?);
             let pending_unanchored_count =
                 fastpay_pre_state_effects_for_next_block(store, &ledger)?.len();
-            let genesis = store.read_genesis()?;
-            let fee_v1_active = store
-                .read_governance()?
-                .fastpay_fee_v1_activation_height()
+            let fee_v1_active = fee_v1_activation
                 .is_some_and(|activation| activation > 0 && key.height >= activation);
             if !take_ownership {
                 store_cached_fastpay_state(CachedFastPayState {

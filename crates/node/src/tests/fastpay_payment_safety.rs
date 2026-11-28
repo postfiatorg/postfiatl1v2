@@ -4045,4 +4045,122 @@ fn fastpay_v3_w4_protobuf_v2_wire_budget_lru_fallback_and_cross_codec_equivocati
     std::fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn fastpay_v3_snapshot_sidecar_and_prewarmer_avoid_redb_on_cold_cache() {
+    let (root, dirs, owner) = active_fastpay_fixture();
+    // validator-0 committed block 1 via apply_batch; snapshot sidecar must already exist there.
+    assert!(
+        dirs[0].join(FASTPAY_LEDGER_SNAPSHOT_SIDECAR_FILE).exists(),
+        "committed transactional block on validator-0 must write fastpay_ledger_snapshot.v1.json"
+    );
+    // Clear in-process RAM cache on validator-0 and prove pre-warmer hydrates block 1 with 0 redb opens.
+    crate::invalidate_fastpay_ledger_cache(&dirs[0]);
+    assert!(
+        crate::prewarm_fastpay_ledger_cache_from_sidecar(&dirs[0]),
+        "pre-warmer must hydrate post-block cold cache on validator-0 from snapshot sidecar"
+    );
+    assert!(!crate::prewarm_fastpay_ledger_cache_from_sidecar(&dirs[0]));
+
+    // Run one transfer across validator-0..4 (validator-1..4 were snapshot-imported so their first
+    // cold load seeds their snapshot sidecar too), then clear RAM cache across all 5 validators
+    // and verify BOTH pre-warmed (v0..2) and direct-hydrated (v3..4) owned_sign_v3 open redb 0 times!
+    let cert1 = active_fastpay_transfer(&dirs, &owner);
+    let cert1_json = serde_json::to_string(&cert1).unwrap();
+    for (i, dir) in dirs.iter().take(5).enumerate() {
+        owned_apply_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &cert1_json,
+            &format!("validator-{i}"),
+        )
+        .unwrap();
+        assert!(
+            dir.join(FASTPAY_LEDGER_SNAPSHOT_SIDECAR_FILE).exists(),
+            "snapshot sidecar must exist on validator-{i}"
+        );
+    }
+
+    // Build chained order spending cert1's output.
+    let recip1 = ml_dsa_65_keygen_from_seed(&[81; 32]);
+    let recip2 = ml_dsa_65_keygen_from_seed(&[82; 32]);
+    let out1 = postfiat_execution::owned_transfer_output_objects(
+        &cert1.owner_pubkey_hex,
+        cert1.order.nonce,
+        &cert1.order.outputs,
+    );
+    let mut order2 = postfiat_types::OwnedTransferOrderV3 {
+        domain: cert1.order.domain.clone(),
+        recovery: postfiat_types::FastPayOrderRecoveryV1 {
+            schema: postfiat_types::FASTPAY_ORDER_RECOVERY_SCHEMA_V1.into(),
+            committee_epoch: cert1.order.recovery.committee_epoch,
+            valid_from_height: cert1.order.recovery.valid_from_height,
+            expires_at_height: cert1.order.recovery.expires_at_height,
+            recovery_closes_at_height: cert1.order.recovery.recovery_closes_at_height,
+            lock_id: String::new(),
+        },
+        inputs: vec![postfiat_types::OwnedObjectRef {
+            id: out1[0].id.clone(),
+            version: out1[0].version,
+        }],
+        outputs: vec![postfiat_types::OwnedOutputSpec {
+            owner_pubkey_hex: bytes_to_hex(&recip2.public_key),
+            value: 98,
+            asset: "PFT".into(),
+        }],
+        fee: 1,
+        nonce: 99,
+        memos: Vec::new(),
+    };
+    order2.recovery.lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&order2);
+    let signed2 = postfiat_types::SignedOwnedTransferOrderV3 {
+        owner_pubkey_hex: bytes_to_hex(&recip1.public_key),
+        owner_signature_hex: bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &recip1.private_key,
+                &postfiat_execution::owned_transfer_v3_signing_bytes(&order2),
+                postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
+            )
+            .unwrap(),
+        ),
+        order: order2,
+    };
+    let signed2_json = serde_json::to_string(&signed2).unwrap();
+
+    // Simulate fresh rpc-serve / post-block cold RAM cache across all 5 validators.
+    for dir in dirs.iter().take(5) {
+        crate::invalidate_fastpay_ledger_cache(dir);
+    }
+    // Pre-warm v0..2 off the hot path; leave v3..4 cold to test direct lock-free snapshot hydration.
+    for dir in dirs.iter().take(3) {
+        assert!(crate::prewarm_fastpay_ledger_cache_from_sidecar(dir));
+    }
+    for (i, dir) in dirs.iter().take(5).enumerate() {
+        owned_sign_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &signed2_json,
+            &format!("validator-{i}"),
+        )
+        .unwrap();
+        let metrics = crate::take_fastpay_rpc_metrics().expect("sign metrics");
+        assert_eq!(
+            metrics.redb_opened,
+            Some(false),
+            "post-block/cold owned_sign_v3 must not open redb on validator-{i}"
+        );
+        assert_eq!(metrics.redb_lease_wait_ms, Some(0.0));
+        if i < 3 {
+            assert_eq!(
+                metrics.ledger_cache_hit,
+                Some(true),
+                "prewarmed validator-{i} must be an immediate RAM cache hit"
+            );
+        }
+    }
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 include!("fastpay_fence_status_tests.rs");

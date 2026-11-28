@@ -8,8 +8,9 @@
 //!   per-IP token-bucket rate limiter, and max concurrent connection cap.
 
 use crate::{
-    owned_apply_v3_fast_typed, owned_apply_v3_typed, owned_sign_v3_typed, take_fastpay_rpc_metrics,
-    FastPayApplyOutcomeV3, NodeOptions,
+    owned_apply_v3_fast_typed, owned_apply_v3_typed, owned_sign_v3_typed,
+    prewarm_fastpay_ledger_cache_from_sidecar, take_fastpay_rpc_metrics, FastPayApplyOutcomeV3,
+    NodeOptions,
 };
 use postfiat_types::{
     FastPayApplyAckV1, FastPayOrderRecoveryV1, OwnedCertificateDomain, OwnedObjectRef,
@@ -1243,6 +1244,17 @@ pub fn spawn_fastpay_rpc_v2_tls_listener(
 
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = Arc::clone(&stop);
+    let stop_prewarmer = Arc::clone(&stop);
+    let prewarmer_data_dir = cfg.data_dir.clone();
+    let _ = std::thread::Builder::new()
+        .name("fastpay-cache-prewarmer".to_string())
+        .spawn(move || {
+            let _ = prewarm_fastpay_ledger_cache_from_sidecar(&prewarmer_data_dir);
+            while !stop_prewarmer.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(25));
+                let _ = prewarm_fastpay_ledger_cache_from_sidecar(&prewarmer_data_dir);
+            }
+        });
     let active_conns = Arc::new(AtomicUsize::new(0));
     let limiter = Arc::new(PerIpRateLimiter::new(
         DEFAULT_FASTPAY_V2_RATE_LIMIT_PER_SEC,
