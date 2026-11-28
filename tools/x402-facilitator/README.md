@@ -29,8 +29,18 @@ two finality modes:
   `fastpayRpcV2Endpoints` and `fastpayRpcV2TlsOptions` (`ca`, `cert`, `key`) to
   talk directly to validator `postfiat-fastpay-rpc-v2` listeners (`7,611 B`
   `owned_sign_v3`, `16,716 B` `owned_apply_v3_fast` with automatic
-  `OrderNotCached` -> `owned_apply_v3_full` fallback). JSON-RPC v1 (`rpcUrls`)
-  remains supported as a fallback and for consensus/committee reads.
+  `OrderNotCached` -> `owned_apply_v3_full` fallback). Validators decouple
+  persistent socket idle reads (`FASTPAY_V2_IDLE_READ_TIMEOUT_SECS = 300`) from
+  per-request `--timeout-ms` so sockets stay warm across consensus block pauses.
+  JSON-RPC v1 (`rpcUrls`) remains supported as a fallback and for
+  consensus/committee reads. On settlement failure, `chain-adapter.js` surfaces
+  the full per-validator error summary rather than only the first error.
+- **Live 3-Continent WAN Verification (`train-a-r8`, 19 blocks, `5-of-5` active
+  signers in a 6-node fleet):** Direct 1-RTT `273.0 ms` p50 / `306.6 ms` p95;
+  direct 2-RTT `563.8 ms` p50 / `596.0 ms` p95; x402 `402 -> 200` `321.7 ms`
+  p50 / `350.2 ms` p95; concurrent `OwnedObjectPool` (`K = 8` parallel x 4
+  waves = `32` calls) `9.33 calls/s` mean (`851.4 ms` p50 wave wall-clock,
+  `32/32` OK); `0` hot-path `redb` opens across `1,370` server RPCs.
 - **1-RTT Certificate Finality (`settlementFinalityMode: 'certificate'`):**
   Races `owned_sign_v3` across all active committee validators, verifies
   `>= 2f+1` distinct ML-DSA-65 votes locally against the pinned `registry_root`,
