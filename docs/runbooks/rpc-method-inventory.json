@@ -15,9 +15,9 @@
     "owned_lane_gated": 8,
     "privacy_alpha_gated": 4,
     "private_action_gated": 2,
-    "read_only_public": 91,
+    "read_only_public": 92,
     "sdk_only_or_unknown": 0,
-    "total_methods": 174
+    "total_methods": 175
   },
   "gaps": [
     {
@@ -36,10 +36,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-11-27T16:51:45Z",
+  "generated_utc": "2026-11-27T20:23:41Z",
   "git": {
     "dirty": true,
-    "revision": "549dda0510a82eacdcc9542acb1be85e18ae3413"
+    "revision": "02a7abbece62a4127a88da85543fee50c9533bb4"
   },
   "methods": [
     {
@@ -425,6 +425,22 @@
       "remote_rpc_implemented": false,
       "requires_finality_submit_switch": false,
       "sdk_constant": false
+    },
+    {
+      "authorized_protocol_mutation_public": false,
+      "controlled_write_allowed_when_enabled": false,
+      "method": "block_vote_records",
+      "node_dispatch": true,
+      "notes": "read-only proposer vote records (who answered each vote request, late votes included) for the validator uptime feed",
+      "owned_lane_allowed_when_enabled": false,
+      "posture": "read_only_public",
+      "privacy_alpha_allowed_when_enabled": false,
+      "python_client": true,
+      "remote_enabled_by_default": true,
+      "remote_read_allowed": true,
+      "remote_rpc_implemented": true,
+      "requires_finality_submit_switch": false,
+      "sdk_constant": true
     },
     {
       "authorized_protocol_mutation_public": false,

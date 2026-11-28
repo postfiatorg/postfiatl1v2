@@ -1,0 +1,41 @@
+[Unit]
+Description=PostFiat read-replica catch-up from its source (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=postfiat-rpc
+Group=postfiat-rpc
+# POSTFIAT_SOURCE_RPC_HOST and POSTFIAT_SOURCE_RPC_PORT: the rpc-serve the
+# replica follows. Every block is verified against its certificate.
+EnvironmentFile=/etc/postfiat/rpc-replica.env
+ExecStart=/usr/local/bin/postfiat-node rpc-catch-up --follow \
+  --data-dir /var/lib/postfiat-rpc/replica \
+  --source-host ${POSTFIAT_SOURCE_RPC_HOST} \
+  --source-rpc-port ${POSTFIAT_SOURCE_RPC_PORT} \
+  --max-blocks 64 \
+  --timeout-ms 15000 \
+  --source-tip-file /var/lib/postfiat-rpc/replica/readiness/replica-source-tip.json
+CPUQuota=50%
+CPUWeight=20
+MemoryHigh=1G
+MemoryMax=2G
+IOWeight=50
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+UMask=0077
+ReadWritePaths=/var/lib/postfiat-rpc/replica

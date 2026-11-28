@@ -2281,9 +2281,21 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                     expected_block_hash,
                     expected_state_root,
                 )?
+            } else if flag_present(flags, "--follow") {
+                rpc_catch_up_follow(options)?
             } else {
                 rpc_catch_up(options)?
             };
+            // A replica's `rpc-serve` reads this record to know how far behind it is.
+            if let Some(tip_file) = flag_value(flags, "--source-tip-file") {
+                let source_height = report["source_height"]
+                    .as_u64()
+                    .ok_or("rpc catch-up report has no source_height")?;
+                let local_height = report["local_height_after"]
+                    .as_u64()
+                    .ok_or("rpc catch-up report has no local_height_after")?;
+                write_rpc_replica_source_tip(Path::new(tip_file), source_height, local_height)?;
+            }
             let json = serde_json::to_string_pretty(&report)
                 .map_err(|error| format!("rpc catch-up serialization failed: {error}"))?;
             println!("{json}");

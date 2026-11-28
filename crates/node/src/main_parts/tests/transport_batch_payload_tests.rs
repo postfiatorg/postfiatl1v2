@@ -473,6 +473,8 @@ mod transport_batch_payload_tests {
                 max_child_dispatch_concurrent: 8,
                 max_child_dispatch_per_peer: 4,
                 keep_alive: false,
+                rpc_profile: RpcServeProfile::Standard,
+                max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
             }, Some(recovery_rpc_listener))
             .expect("serve recovery finality RPC")
         });
@@ -5246,6 +5248,8 @@ mod transport_batch_payload_tests {
                         max_child_dispatch_concurrent: 8,
                         max_child_dispatch_per_peer: 4,
                         keep_alive: false,
+                        rpc_profile: RpcServeProfile::Standard,
+                        max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
                     },
                     Some(rpc_listener),
                 )

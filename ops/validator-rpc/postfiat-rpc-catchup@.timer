@@ -1,0 +1,11 @@
+[Unit]
+Description=Keep the PostFiat read replica (%i) caught up
+
+[Timer]
+OnBootSec=10s
+OnUnitInactiveSec=5s
+AccuracySec=1s
+Unit=postfiat-rpc-catchup@%i.service
+
+[Install]
+WantedBy=timers.target

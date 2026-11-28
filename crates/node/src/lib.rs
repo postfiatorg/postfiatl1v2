@@ -677,5 +677,10 @@ pub use fastpay_committee_prepare::*;
 pub use fastpay_recovery_node::*;
 pub use fastswap_control_signing::*;
 
+pub mod release_upgrade;
+pub mod rpc_http_edge;
+pub mod validator_top;
+pub mod validator_uptime;
+
 #[cfg(test)]
 include!("lib_tests.rs");

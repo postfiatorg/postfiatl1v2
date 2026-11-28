@@ -3333,6 +3333,574 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "release-manifest-verify" => {
+            // Pre-start check of a packaged unit: the manifest is signed by the
+            // pinned 2-of-3 keyset and names the binary about to run.
+            use postfiat_node::release_upgrade::{
+                host_release_architecture, verify_installed_release, DEFAULT_RELEASE_KEYSET_FILE,
+            };
+            let manifest_file = flag_value(flags, "--manifest-file").ok_or("missing --manifest-file")?;
+            let keyset_file = flag_value(flags, "--keyset-file").unwrap_or(DEFAULT_RELEASE_KEYSET_FILE);
+            let runtime_binary = match flag_value(flags, "--runtime-binary-file") {
+                Some(path) => PathBuf::from(path),
+                None => env::current_exe()
+                    .map_err(|error| format!("cannot find the running binary: {error}"))?,
+            };
+            let architecture = match flag_value(flags, "--arch") {
+                Some(arch) => arch.to_string(),
+                None => host_release_architecture()?.to_string(),
+            };
+            let verification = verify_installed_release(
+                Path::new(manifest_file),
+                Path::new(keyset_file),
+                &runtime_binary,
+                &architecture,
+            )
+            .map_err(|error| format!("release-manifest-verify failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&verification)
+                    .map_err(|error| format!("serialization failed: {error}"))?
+            );
+            Ok(())
+        }
+        "release-key-create" => {
+            // One of the three offline release keys. The private half is written
+            // owner-only and never printed.
+            let signer_id = flag_value(flags, "--signer-id").ok_or("missing --signer-id")?;
+            let role = flag_value(flags, "--role").ok_or("missing --role")?;
+            let out_file = PathBuf::from(flag_value(flags, "--out-file").ok_or("missing --out-file")?);
+            if out_file.exists() {
+                return Err(format!("`{}` already exists; a key is never overwritten", out_file.display()));
+            }
+            let keypair = postfiat_crypto_provider::ml_dsa_65_keygen()
+                .map_err(|error| format!("release-key-create failed: {error}"))?;
+            let public_key_hex = postfiat_crypto_provider::bytes_to_hex(&keypair.public_key);
+            let publisher = postfiat_crypto_provider::address_from_public_key(&keypair.public_key);
+            let private = serde_json::json!({
+                "schema": "postfiat.release_signer_key.v1",
+                "signer_id": signer_id,
+                "role": role,
+                "publisher": publisher,
+                "algorithm_id": postfiat_crypto_provider::ML_DSA_65_ALGORITHM,
+                "public_key_hex": public_key_hex,
+                "private_key_hex": postfiat_crypto_provider::bytes_to_hex(&keypair.private_key),
+            });
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                let mut file = std::fs::OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .mode(0o600)
+                    .open(&out_file)
+                    .map_err(|error| format!("write `{}` failed: {error}", out_file.display()))?;
+                file.write_all(private.to_string().as_bytes())
+                    .and_then(|()| file.sync_all())
+                    .map_err(|error| format!("write `{}` failed: {error}", out_file.display()))?;
+            }
+            // The public entry for the keyset file.
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "signer_id": signer_id,
+                    "role": role,
+                    "publisher": publisher,
+                    "public_key_hex": public_key_hex,
+                }))
+                .map_err(|error| format!("serialization failed: {error}"))?
+            );
+            Ok(())
+        }
+        "release-build-info" => {
+            // What this binary is: the facts a release manifest states about it.
+            let binary = env::current_exe().map_err(|error| format!("cannot find the running binary: {error}"))?;
+            let (sha256, size_bytes) = postfiat_node::release_upgrade::sha256_file_and_size(&binary)
+                .map_err(|error| format!("read `{}` failed: {error}", binary.display()))?;
+            println!(
+                "{}",
+                serde_json::json!({
+                    "schema": "postfiat-node-release-build-info-v1",
+                    "architecture": postfiat_node::release_upgrade::host_release_architecture()?,
+                    "build_git_revision": env!("POSTFIAT_BUILD_GIT_REV"),
+                    "build_profile": env!("POSTFIAT_BUILD_PROFILE"),
+                    "binary_sha256": sha256,
+                    "binary_size_bytes": size_bytes,
+                })
+            );
+            Ok(())
+        }
+        "release-manifest-create" => {
+            // Builds the unsigned manifest of a release from its artifacts.
+            use postfiat_node::release_upgrade::{
+                create_release_manifest_v3, ReleaseCheckpointV3, ReleaseKeysetV1, ReleaseManifestInputs,
+                ReleaseRolloutV3,
+            };
+            let need = |flag: &str| flag_value(flags, flag).ok_or_else(|| format!("missing {flag}"));
+            let number = |flag: &str| -> Result<u64, String> {
+                need(flag)?.parse::<u64>().map_err(|_| format!("{flag} must be a number"))
+            };
+            let keyset: ReleaseKeysetV1 = serde_json::from_slice(
+                &fs::read(need("--keyset-file")?).map_err(|error| format!("read --keyset-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("invalid release keyset: {error}"))?;
+            let rollout = match flag_value(flags, "--activation-height") {
+                None => ReleaseRolloutV3 {
+                    mode: "rolling".to_string(),
+                    activation_height: None,
+                    advance_warning_blocks: None,
+                    halt_if_missed: false,
+                },
+                Some(_) => ReleaseRolloutV3 {
+                    mode: "activation_height".to_string(),
+                    activation_height: Some(number("--activation-height")?),
+                    advance_warning_blocks: Some(number("--advance-warning-blocks")?),
+                    halt_if_missed: true,
+                },
+            };
+            let inputs = ReleaseManifestInputs {
+                release_id: need("--release-id")?.to_string(),
+                release_sequence: number("--release-sequence")?,
+                created_unix: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |elapsed| elapsed.as_secs()),
+                valid_days: flag_value(flags, "--valid-days")
+                    .unwrap_or("90")
+                    .parse::<u64>()
+                    .map_err(|_| "--valid-days must be a number".to_string())?,
+                chain_id: need("--chain-id")?.to_string(),
+                genesis_hash: need("--genesis-hash")?.to_string(),
+                git_revision: need("--git-revision")?.to_string(),
+                build_features: need("--build-features")?
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|feature| !feature.is_empty())
+                    .map(str::to_string)
+                    .collect(),
+                protocol_version: number("--protocol-version")? as u32,
+                min_compatible_protocol_version: number("--min-compatible-protocol-version")? as u32,
+                rollout,
+                checkpoint: ReleaseCheckpointV3 {
+                    height: number("--checkpoint-height")?,
+                    block_hash: need("--checkpoint-block-hash")?.to_string(),
+                    state_root: need("--checkpoint-state-root")?.to_string(),
+                    certificate_id: need("--checkpoint-certificate-id")?.to_string(),
+                    committee_epoch: number("--checkpoint-committee-epoch")?,
+                },
+                url_base: need("--url-base")?.to_string(),
+                binary_x86_64: PathBuf::from(need("--binary-x86-64")?),
+                binary_aarch64: PathBuf::from(need("--binary-aarch64")?),
+                systemd_bundle: PathBuf::from(need("--systemd-bundle")?),
+                docker_profiles: PathBuf::from(need("--docker-profiles")?),
+                sbom: PathBuf::from(need("--sbom")?),
+                checksums: PathBuf::from(need("--checksums")?),
+                swap_circuit_metadata: PathBuf::from(need("--swap-circuit-metadata")?),
+                private_egress_circuit_metadata: PathBuf::from(need("--private-egress-circuit-metadata")?),
+            };
+            let output = PathBuf::from(need("--output")?);
+            if output.exists() {
+                return Err(format!("`{}` already exists; a manifest is never overwritten", output.display()));
+            }
+            let manifest = create_release_manifest_v3(&inputs, &keyset)?;
+            let json = serde_json::to_string_pretty(&manifest)
+                .map_err(|error| format!("serialization failed: {error}"))?;
+            fs::write(&output, format!("{json}\n"))
+                .map_err(|error| format!("write `{}` failed: {error}", output.display()))?;
+            println!("unsigned manifest of `{}` (sequence {}) written to {}", manifest.release_id, manifest.release_sequence, output.display());
+            Ok(())
+        }
+        "release-manifest-sign" => {
+            // Adds this signer's signature to a manifest. Run once per signer,
+            // each on its own machine; two signatures make a release.
+            use postfiat_node::release_upgrade::{sign_release_manifest_v3, ReleaseManifestV3};
+            let manifest_file = PathBuf::from(flag_value(flags, "--manifest-file").ok_or("missing --manifest-file")?);
+            let key_file = flag_value(flags, "--key-file").ok_or("missing --key-file")?;
+            let key: serde_json::Value = serde_json::from_slice(
+                &fs::read(key_file).map_err(|error| format!("read `{key_file}` failed: {error}"))?,
+            )
+            .map_err(|error| format!("invalid release signer key file: {error}"))?;
+            let field = |name: &str| -> Result<String, String> {
+                key[name]
+                    .as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| format!("release signer key file has no `{name}`"))
+            };
+            let mut manifest: ReleaseManifestV3 = serde_json::from_slice(
+                &fs::read(&manifest_file)
+                    .map_err(|error| format!("read `{}` failed: {error}", manifest_file.display()))?,
+            )
+            .map_err(|error| format!("invalid release manifest: {error}"))?;
+            let signer_id = field("signer_id")?;
+            if manifest.signatures.iter().any(|s| s.signer_id == signer_id) {
+                return Err(format!("the manifest already carries a signature of `{signer_id}`"));
+            }
+            let signature = sign_release_manifest_v3(
+                &manifest,
+                &signer_id,
+                &field("publisher")?,
+                &field("public_key_hex")?,
+                &field("private_key_hex")?,
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |elapsed| elapsed.as_secs()),
+            )?;
+            manifest.signatures.push(signature);
+            let json = serde_json::to_string_pretty(&manifest)
+                .map_err(|error| format!("serialization failed: {error}"))?;
+            fs::write(&manifest_file, format!("{json}\n"))
+                .map_err(|error| format!("write `{}` failed: {error}", manifest_file.display()))?;
+            println!("signed by `{signer_id}`: {} signature(s)", manifest.signatures.len());
+            Ok(())
+        }
+        "release-keyset-rotation-sign" => {
+            // Adds this signer's signature to a keyset rotation. The file is
+            // created from --new-keyset-file and --prior-keyset-id when absent.
+            use postfiat_node::release_upgrade::{
+                sign_release_keyset_rotation, ReleaseKeysetRotationV1, ReleaseKeysetV1,
+                RELEASE_KEYSET_ROTATION_SCHEMA,
+            };
+            let rotation_file = PathBuf::from(flag_value(flags, "--rotation-file").ok_or("missing --rotation-file")?);
+            let key_file = flag_value(flags, "--key-file").ok_or("missing --key-file")?;
+            let key: serde_json::Value = serde_json::from_slice(
+                &fs::read(key_file).map_err(|error| format!("read `{key_file}` failed: {error}"))?,
+            )
+            .map_err(|error| format!("invalid release signer key file: {error}"))?;
+            let signer_id = key["signer_id"].as_str().ok_or("release signer key file has no `signer_id`")?;
+            let private_key_hex = key["private_key_hex"]
+                .as_str()
+                .ok_or("release signer key file has no `private_key_hex`")?;
+            let mut rotation: ReleaseKeysetRotationV1 = if rotation_file.exists() {
+                serde_json::from_slice(
+                    &fs::read(&rotation_file)
+                        .map_err(|error| format!("read `{}` failed: {error}", rotation_file.display()))?,
+                )
+                .map_err(|error| format!("invalid keyset rotation: {error}"))?
+            } else {
+                let new_keyset_file = flag_value(flags, "--new-keyset-file").ok_or("missing --new-keyset-file")?;
+                let new_keyset: ReleaseKeysetV1 = serde_json::from_slice(
+                    &fs::read(new_keyset_file)
+                        .map_err(|error| format!("read `{new_keyset_file}` failed: {error}"))?,
+                )
+                .map_err(|error| format!("invalid new keyset: {error}"))?;
+                ReleaseKeysetRotationV1 {
+                    schema: RELEASE_KEYSET_ROTATION_SCHEMA.to_string(),
+                    prior_keyset_id: flag_value(flags, "--prior-keyset-id")
+                        .ok_or("missing --prior-keyset-id")?
+                        .to_string(),
+                    new_keyset,
+                    signatures: Vec::new(),
+                }
+            };
+            if rotation.signatures.iter().any(|s| s.signer_id == signer_id) {
+                return Err(format!("the rotation already carries a signature of `{signer_id}`"));
+            }
+            rotation
+                .signatures
+                .push(sign_release_keyset_rotation(&rotation.new_keyset, signer_id, private_key_hex)?);
+            let json = serde_json::to_string_pretty(&rotation)
+                .map_err(|error| format!("serialization failed: {error}"))?;
+            fs::write(&rotation_file, format!("{json}\n"))
+                .map_err(|error| format!("write `{}` failed: {error}", rotation_file.display()))?;
+            println!("signed by `{signer_id}`: {} signature(s)", rotation.signatures.len());
+            Ok(())
+        }
+        "tasknode-bind" => {
+            // Signs the one-time challenge that binds this validator to a Task
+            // Node account. The challenge is read from stdin, exactly as Task
+            // Node issued it. It opens no network connection: getting the
+            // challenge and handing in the proof is the caller's part.
+            unsafe {
+                // No core dump of a process that may hold a key.
+                let limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+                libc::setrlimit(libc::RLIMIT_CORE, &limit);
+                libc::prctl(libc::PR_SET_DUMPABLE, 0);
+            }
+            let validator_id = flag_value(flags, "--validator-id").ok_or("missing --validator-id")?;
+            let mut challenge = String::new();
+            std::io::Read::read_to_string(&mut std::io::Read::take(std::io::stdin(), 514), &mut challenge)
+                .map_err(|_| "the challenge on stdin is not UTF-8".to_string())?;
+            // One trailing newline is what a shell adds; nothing else is changed.
+            let challenge = challenge.strip_suffix('\n').unwrap_or(&challenge);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_secs());
+            let proof = match (flag_value(flags, "--signer-socket"), flag_value(flags, "--key-file")) {
+                (Some(socket), None) => {
+                    postfiat_node::validate_tasknode_challenge(challenge, now)
+                        .map_err(|reason| format!("tasknode-bind refused: {reason}"))?;
+                    postfiat_node::tasknode_binding_proof_via_socket(
+                        Path::new(socket),
+                        Duration::from_secs(10),
+                        validator_id,
+                        challenge,
+                    )
+                }
+                (None, Some(key_file)) => postfiat_node::tasknode_binding_proof_from_key_file(
+                    Path::new(key_file),
+                    validator_id,
+                    challenge,
+                    now,
+                ),
+                _ => return Err("tasknode-bind needs exactly one of --signer-socket and --key-file".to_string()),
+            }
+            .map_err(|error| format!("tasknode-bind failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::to_string(&proof).map_err(|error| format!("proof serialization failed: {error}"))?
+            );
+            Ok(())
+        }
+        "rpc-http-edge" => {
+            use postfiat_node::rpc_http_edge::{run_rpc_http_edge, RpcHttpEdgeOptions};
+            let parse_port = |flag: &str, default: u16| -> Result<u16, String> {
+                match flag_value(flags, flag) {
+                    Some(raw) => raw.parse::<u16>().map_err(|_| format!("{flag} must be a u16")),
+                    None => Ok(default),
+                }
+            };
+            let options = RpcHttpEdgeOptions {
+                listen_host: flag_value(flags, "--listen-host").unwrap_or("127.0.0.1").to_string(),
+                listen_port: parse_port("--listen-port", 8650)?,
+                upstream_host: flag_value(flags, "--upstream-host").unwrap_or("127.0.0.1").to_string(),
+                upstream_port: parse_port("--upstream-port", 27651)?,
+                allow_private_action_admission: flag_present(flags, "--allow-private-action-admission"),
+                max_connections: flag_value(flags, "--max-connections")
+                    .unwrap_or("64")
+                    .parse::<usize>()
+                    .map_err(|_| "--max-connections must be a usize".to_string())?,
+                timeout_ms: flag_value(flags, "--timeout-ms")
+                    .unwrap_or("15000")
+                    .parse::<u64>()
+                    .map_err(|_| "--timeout-ms must be a u64".to_string())?,
+                rate_per_second: flag_value(flags, "--rate-per-second")
+                    .unwrap_or("20")
+                    .parse::<u32>()
+                    .map_err(|_| "--rate-per-second must be a u32".to_string())?,
+                burst: flag_value(flags, "--burst")
+                    .unwrap_or("40")
+                    .parse::<u32>()
+                    .map_err(|_| "--burst must be a u32".to_string())?,
+                max_requests: None,
+            };
+            run_rpc_http_edge(options)
+        }
+        "top" => {
+            use postfiat_node::validator_top::{
+                run_validator_top, ValidatorTopOptions, DEFAULT_OBSERVER_KEYSET_FILE,
+                DEFAULT_TOP_REFRESH_MS, DEFAULT_TOP_RELEASE_KEYSET_FILE, DEFAULT_TOP_RPC_HOST,
+                DEFAULT_TOP_RPC_PORT,
+            };
+            let rpc_host = flag_value(flags, "--rpc-host")
+                .unwrap_or(DEFAULT_TOP_RPC_HOST)
+                .to_string();
+            let rpc_port = match flag_value(flags, "--rpc-port") {
+                Some(raw) => raw
+                    .parse::<u16>()
+                    .map_err(|_| "--rpc-port must be a u16".to_string())?,
+                None => DEFAULT_TOP_RPC_PORT,
+            };
+            let refresh_ms = match flag_value(flags, "--refresh-ms") {
+                Some(raw) => raw
+                    .parse::<u64>()
+                    .map_err(|_| "--refresh-ms must be a u64".to_string())?,
+                None => DEFAULT_TOP_REFRESH_MS,
+            };
+            let rpc_timeout_ms = match flag_value(flags, "--timeout-ms") {
+                Some(raw) => raw
+                    .parse::<u64>()
+                    .map_err(|_| "--timeout-ms must be a u64".to_string())?,
+                None => 5_000,
+            };
+            let now_unix = flag_value(flags, "--now-unix")
+                .map(|raw| {
+                    raw.parse::<u64>()
+                        .map_err(|_| "--now-unix must be a u64".to_string())
+                })
+                .transpose()?;
+            let options = ValidatorTopOptions {
+                rpc_host,
+                rpc_port,
+                allow_remote_rpc: flag_present(flags, "--allow-remote-rpc"),
+                data_dir: flag_value(flags, "--data-dir").map(PathBuf::from),
+                uptime_feed_url: flag_value(flags, "--uptime-feed-url").map(str::to_string),
+                uptime_feed_file: flag_value(flags, "--uptime-feed-file").map(PathBuf::from),
+                observer_keyset_file: PathBuf::from(
+                    flag_value(flags, "--observer-keyset-file")
+                        .unwrap_or(DEFAULT_OBSERVER_KEYSET_FILE),
+                ),
+                release_manifest_url: flag_value(flags, "--release-manifest-url")
+                    .map(str::to_string),
+                release_manifest_file: flag_value(flags, "--release-manifest-file")
+                    .map(PathBuf::from),
+                release_keyset_file: PathBuf::from(
+                    flag_value(flags, "--release-keyset-file")
+                        .unwrap_or(DEFAULT_TOP_RELEASE_KEYSET_FILE),
+                ),
+                refresh_ms,
+                once: flag_present(flags, "--once"),
+                json: flag_present(flags, "--json"),
+                no_color: flag_present(flags, "--no-color"),
+                rpc_timeout_ms,
+                now_unix,
+            };
+            run_validator_top(&options)
+        }
+        "observer-key-create" => {
+            let key_file = PathBuf::from(
+                flag_value(flags, "--key-file").ok_or("missing --key-file")?,
+            );
+            let observer_id =
+                flag_value(flags, "--observer-id").ok_or("missing --observer-id")?;
+            let region = flag_value(flags, "--region").ok_or("missing --region")?;
+            let operator_group =
+                flag_value(flags, "--operator-group").ok_or("missing --operator-group")?;
+            let created = postfiat_node::validator_uptime::create_observer_key_file(
+                &key_file,
+                observer_id,
+                region,
+                operator_group,
+            )
+            .map_err(|error| format!("observer-key-create failed: {error}"))?;
+            let summary = serde_json::json!({
+                "schema": "postfiat.observer_public_key.v1",
+                "observer_id": created.observer_id,
+                "region": created.region,
+                "operator_group": created.operator_group,
+                "address": created.address,
+                "algorithm_id": created.algorithm_id,
+                "public_key_hex": created.public_key_hex,
+                "key_file": key_file.display().to_string(),
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&summary)
+                    .map_err(|error| format!("observer key serialize failed: {error}"))?
+            );
+            Ok(())
+        }
+        "observer-uptime-sign" => {
+            // Signs one observer's attestation. The input names the facts per
+            // validator; every derived field is computed here, so an observer
+            // cannot sign a row that does not follow from its facts.
+            use postfiat_node::validator_uptime::{
+                sign_observer_attestation, ObserverPrivateKeyFileV1, UnsignedObserverAttestationV1,
+            };
+            let key_file = flag_value(flags, "--key-file").ok_or("missing --key-file")?;
+            let input_file = flag_value(flags, "--input-file").ok_or("missing --input-file")?;
+            let key: ObserverPrivateKeyFileV1 = serde_json::from_slice(
+                &fs::read(key_file).map_err(|error| format!("read --key-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("parse --key-file failed: {error}"))?;
+            let unsigned: UnsignedObserverAttestationV1 = serde_json::from_slice(
+                &fs::read(input_file).map_err(|error| format!("read --input-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("parse --input-file failed: {error}"))?;
+            let attestation = sign_observer_attestation(&key, &unsigned)?;
+            let json = serde_json::to_string_pretty(&attestation)
+                .map_err(|error| format!("attestation serialize failed: {error}"))?;
+            if let Some(path) = flag_value(flags, "--output-file") {
+                fs::write(path, format!("{json}\n"))
+                    .map_err(|error| format!("write --output-file failed: {error}"))?;
+            } else {
+                println!("{json}");
+            }
+            Ok(())
+        }
+        "observer-uptime-bundle" => {
+            // Bundles the observers' attestation files into one feed. Needs no key.
+            use postfiat_node::validator_uptime::{
+                bundle_validator_uptime_feed, ObserverAttestationEnvelopeV1, ObserverKeysetV1,
+            };
+            let keyset_file = flag_value(flags, "--keyset-file").ok_or("missing --keyset-file")?;
+            let output_file = flag_value(flags, "--output-file").ok_or("missing --output-file")?;
+            let now_unix = match flag_value(flags, "--now-unix") {
+                Some(raw) => raw
+                    .parse::<i64>()
+                    .map_err(|_| "--now-unix must be an integer".to_string())?,
+                None => std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |elapsed| elapsed.as_secs() as i64),
+            };
+            let keyset: ObserverKeysetV1 = serde_json::from_slice(
+                &fs::read(keyset_file).map_err(|error| format!("read --keyset-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("parse --keyset-file failed: {error}"))?;
+            let mut envelopes = Vec::new();
+            let mut unreadable = std::collections::BTreeMap::new();
+            for pair in flags.windows(2).filter(|pair| pair[0] == "--attestation-file") {
+                // One unreadable file is one missing observer, not a failed bundle.
+                match fs::read(&pair[1])
+                    .map_err(|error| error.to_string())
+                    .and_then(|bytes| {
+                        serde_json::from_slice::<ObserverAttestationEnvelopeV1>(&bytes)
+                            .map_err(|error| error.to_string())
+                    }) {
+                    Ok(envelope) => envelopes.push(envelope),
+                    Err(error) => {
+                        unreadable.insert(pair[1].clone(), error);
+                    }
+                }
+            }
+            let (feed, rejected) = bundle_validator_uptime_feed(&envelopes, &keyset, now_unix)?;
+            let json = serde_json::to_string(&feed)
+                .map_err(|error| format!("feed serialize failed: {error}"))?;
+            let tmp = format!("{output_file}.tmp.{}", process::id());
+            fs::write(&tmp, format!("{json}\n"))
+                .and_then(|()| fs::rename(&tmp, output_file))
+                .map_err(|error| format!("write --output-file failed: {error}"))?;
+            println!(
+                "{}",
+                serde_json::json!({
+                    "bundled_observers": feed.observer_attestations.iter().map(|a| a.observer_id.clone()).collect::<Vec<_>>(),
+                    "rejected_observers": rejected,
+                    "unreadable_files": unreadable,
+                    "validators": feed.validators.len(),
+                    "window_end": feed.window_spec.window_end,
+                })
+            );
+            Ok(())
+        }
+        "observer-uptime-verify" => {
+            // Reads a feed the way a consumer must (spec section 4) and prints
+            // the result. Exit 1 when the feed as a whole is refused.
+            use postfiat_node::validator_uptime::{
+                verify_validator_uptime_feed, ObserverKeysetV1, ValidatorUptimeFeedV1,
+            };
+            let feed_file = flag_value(flags, "--feed-file").ok_or("missing --feed-file")?;
+            let keyset_file = flag_value(flags, "--keyset-file").ok_or("missing --keyset-file")?;
+            let now_unix = match flag_value(flags, "--now-unix") {
+                Some(raw) => raw
+                    .parse::<i64>()
+                    .map_err(|_| "--now-unix must be an integer".to_string())?,
+                None => std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |elapsed| elapsed.as_secs() as i64),
+            };
+            // Observer id to the last `observed_at` this consumer accepted from it.
+            let last_accepted: std::collections::BTreeMap<String, String> =
+                match flag_value(flags, "--last-accepted-file") {
+                    Some(path) if Path::new(path).exists() => serde_json::from_slice(
+                        &fs::read(path)
+                            .map_err(|error| format!("read --last-accepted-file failed: {error}"))?,
+                    )
+                    .map_err(|error| format!("parse --last-accepted-file failed: {error}"))?,
+                    _ => std::collections::BTreeMap::new(),
+                };
+            let feed: ValidatorUptimeFeedV1 = serde_json::from_slice(
+                &fs::read(feed_file).map_err(|error| format!("read --feed-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("schema: {error}"))?;
+            let keyset: ObserverKeysetV1 = serde_json::from_slice(
+                &fs::read(keyset_file).map_err(|error| format!("read --keyset-file failed: {error}"))?,
+            )
+            .map_err(|error| format!("parse --keyset-file failed: {error}"))?;
+            let report = verify_validator_uptime_feed(&feed, &keyset, now_unix, &last_accepted)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .map_err(|error| format!("verify report serialize failed: {error}"))?
+            );
+            Ok(())
+        }
         "rpc" => run_rpc(flags),
         "help" | "--help" | "-h" => {
             print_usage();

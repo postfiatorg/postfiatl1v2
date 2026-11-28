@@ -13,6 +13,7 @@ include!("main_parts/certified_asset_ops.rs");
 include!("main_parts/cli_dispatch.rs");
 include!("transport_cli.rs");
 include!("rpc_cli.rs");
+include!("rpc_read_cache.rs");
 include!("rpc_probe.rs");
 include!("finality_view_recovery.rs");
 include!("atomic_swap_rpc_server.rs");

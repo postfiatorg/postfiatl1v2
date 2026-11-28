@@ -116,6 +116,8 @@ struct RpcServeOptions {
     max_child_dispatch_concurrent: u64,
     max_child_dispatch_per_peer: u64,
     keep_alive: bool,
+    rpc_profile: RpcServeProfile,
+    max_replica_lag_blocks: u64,
 }
 
 struct RpcServeConnectionContext {
@@ -156,8 +158,11 @@ struct RpcServeConnectionContext {
     mempool_mutation_lock: Arc<Mutex<()>>,
     finality_submit_lock: Arc<Mutex<()>>,
     health_cache: Arc<Mutex<RpcServeHealthCache>>,
+    read_cache: Arc<Mutex<RpcServeReadCache>>,
     fastswap_service: Arc<Mutex<Option<crate::fastswap_service::FastSwapValidatorServiceV1>>>,
     runtime_metrics: Arc<RpcServeRuntimeMetrics>,
+    rpc_profile: RpcServeProfile,
+    max_replica_lag_blocks: u64,
 }
 
 #[derive(Debug, Default)]
@@ -973,6 +978,8 @@ fn handle_rpc_serve_connection(
     let mut mempool_submit_counts = None;
     let mut orchard_batch_create_counts = None;
     let mut health_cache_hit = false;
+    let mut in_process_read_used = false;
+    let mut in_process_read_cache_hit = false;
     let mut response = if let Err(error) = request.validate_protocol() {
         rpc_serve_error_response(&id, "rpc_protocol_error", &error.to_string())
     } else if rpc_value_contains_key_material(&request.params) {
@@ -981,6 +988,21 @@ fn handle_rpc_serve_connection(
             "rpc_protocol_error",
             "remote rpc request contains key material fields",
         )
+    } else if !rpc_replica_profile_serves(
+        context.rpc_profile,
+        &method,
+        context.allow_private_action_admission,
+    ) {
+        rpc_serve_error_response(
+            &id,
+            "method_not_served_by_profile",
+            &format!(
+                "rpc method `{method}` is not served by the `{}` profile",
+                context.rpc_profile.as_str()
+            ),
+        )
+    } else if let Some(refusal) = rpc_replica_lag_refusal_for(&method, &id, context) {
+        refusal
     } else if is_private_action_method(&method) {
         if rpc_serve_private_action_allowed(&method, context.allow_private_action_admission) {
             run_rpc_serve_private_action(&request, context)
@@ -1015,10 +1037,33 @@ fn handle_rpc_serve_connection(
                 } else {
                     "status queried".into()
                 };
-                success_response(&id, &report, vec![RpcEvent::new("status", report.node_id.clone(), message)])
-                    .unwrap_or_else(|error| {
-                        rpc_serve_error_response(&id, "rpc_internal", &format!("status serialization failed: {error}"))
-                    })
+                match serde_json::to_value(&report) {
+                    Ok(mut value) => {
+                        merge_rpc_replica_status_fields(
+                            &mut value,
+                            context.rpc_profile,
+                            context.max_replica_lag_blocks,
+                            &context.data_dir,
+                        );
+                        success_response(
+                            &id,
+                            &value,
+                            vec![RpcEvent::new("status", report.node_id.clone(), message)],
+                        )
+                        .unwrap_or_else(|error| {
+                            rpc_serve_error_response(
+                                &id,
+                                "rpc_internal",
+                                &format!("status serialization failed: {error}"),
+                            )
+                        })
+                    }
+                    Err(error) => rpc_serve_error_response(
+                        &id,
+                        "rpc_internal",
+                        &format!("status serialization failed: {error}"),
+                    ),
+                }
             }
             Err(error) => rpc_serve_error_response(&id, "rpc_status_failed", &error.to_string()),
         }
@@ -1904,6 +1949,12 @@ fn handle_rpc_serve_connection(
                     context.max_mempool_submit_per_peer,
                     context.max_mempool_submit_total,
                 );
+                merge_rpc_replica_status_fields(
+                    &mut result,
+                    context.rpc_profile,
+                    context.max_replica_lag_blocks,
+                    &context.data_dir,
+                );
                 let node_id = result
                     .get("node_id")
                     .and_then(serde_json::Value::as_str)
@@ -1924,6 +1975,11 @@ fn handle_rpc_serve_connection(
             }
             Err(error) => rpc_serve_error_response(&id, "rpc_status_failed", &error),
         }
+    } else if rpc_serve_reads_in_process(context.rpc_profile, &request) {
+        let (reply, cache_hit) = run_rpc_serve_in_process_read(&request, context);
+        in_process_read_used = true;
+        in_process_read_cache_hit = cache_hit;
+        reply
     } else {
         match run_rpc_request_via_child_limited(context, request_index, &id, &line) {
             Ok(response) => response,
@@ -1971,6 +2027,12 @@ fn handle_rpc_serve_connection(
             "in_process_health_cache".to_string()
         } else {
             "in_process_health_refresh".to_string()
+        }
+    } else if in_process_read_used {
+        if in_process_read_cache_hit {
+            "in_process_read_cache".to_string()
+        } else {
+            "in_process_read".to_string()
         }
     } else {
         "isolated_or_specialized".to_string()
@@ -4473,6 +4535,7 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "account"
             | "account_tx"
             | "account_tx_index_status"
+            | "block_vote_records"
             | "fee"
             | "transfer_fee_quote"
             | "atomic_swap_fee_quote"
@@ -4935,6 +4998,11 @@ struct RpcCatchUpOptions {
 #[derive(Debug, Clone)]
 enum RpcCatchUpAuditMode {
     Full,
+    /// A follower that runs every few seconds. Each block is applied only
+    /// with its certificate, and the local tip and state root must equal the
+    /// block's after every apply. The full re-verification of the whole state
+    /// is not repeated on every run; `rpc-catch-up` without `--follow` runs it.
+    Follow,
     CertifiedDelta {
         expected_height: u64,
         expected_block_hash: String,
@@ -5083,6 +5151,10 @@ fn archive_window_backfill(
     }))
 }
 
+fn rpc_catch_up_follow(options: RpcCatchUpOptions) -> Result<serde_json::Value, String> {
+    rpc_catch_up_with_audit(options, RpcCatchUpAuditMode::Follow)
+}
+
 fn rpc_catch_up(options: RpcCatchUpOptions) -> Result<serde_json::Value, String> {
     rpc_catch_up_with_audit(options, RpcCatchUpAuditMode::Full)
 }
@@ -5133,7 +5205,17 @@ fn rpc_catch_up_with_audit(
                 "rpc catch-up certified delta requires a new block: local height {local_height}, source height {source_height}"
             ));
         }
-        let verification = rpc_catch_up_verify_completed_state(&options.data_dir)?;
+        let follow = matches!(audit_mode, RpcCatchUpAuditMode::Follow);
+        let verification = if follow {
+            serde_json::json!({
+                "schema": "postfiat-rpc-catch-up-deferred-audit-v1",
+                "status": "deferred",
+                "terminal_full_audit_required": true,
+                "certified_continuity_verified": true,
+            })
+        } else {
+            rpc_catch_up_verify_completed_state(&options.data_dir)?
+        };
         return Ok(serde_json::json!({
             "schema": "postfiat-rpc-catch-up-v1",
             "status": "up_to_date",
@@ -5146,8 +5228,8 @@ fn rpc_catch_up_with_audit(
             "local_height_after": local_height,
             "local_block_tip_after": local_before.block_tip_hash,
             "local_state_root_after": local_before.state_root,
-            "audit_mode": "full",
-            "full_verification_count": 1,
+            "audit_mode": if follow { "follow" } else { "full" },
+            "full_verification_count": usize::from(!follow),
             "verification": verification,
         }));
     }
@@ -5156,7 +5238,9 @@ fn rpc_catch_up_with_audit(
         .checked_add(options.max_blocks as u64)
         .ok_or_else(|| "rpc catch-up max height overflow".to_string())?;
     let catch_up_to = match &audit_mode {
-        RpcCatchUpAuditMode::Full => std::cmp::min(source_height, max_catch_up_height),
+        RpcCatchUpAuditMode::Full | RpcCatchUpAuditMode::Follow => {
+            std::cmp::min(source_height, max_catch_up_height)
+        }
         RpcCatchUpAuditMode::CertifiedDelta {
             expected_height, ..
         } => {
@@ -5276,6 +5360,16 @@ fn rpc_catch_up_with_audit(
             "full",
             1usize,
             rpc_catch_up_verify_completed_state(&options.data_dir)?,
+        ),
+        RpcCatchUpAuditMode::Follow => (
+            "follow",
+            0usize,
+            serde_json::json!({
+                "schema": "postfiat-rpc-catch-up-deferred-audit-v1",
+                "status": "deferred",
+                "terminal_full_audit_required": true,
+                "certified_continuity_verified": true,
+            }),
         ),
         RpcCatchUpAuditMode::CertifiedDelta {
             expected_height,
@@ -6037,7 +6131,10 @@ mod child_dispatch_limit_tests {
                 mempool_checked_at: None,
             })),
             fastswap_service: Arc::new(Mutex::new(None)),
+            read_cache: Arc::new(Mutex::new(RpcServeReadCache::default())),
             runtime_metrics: Arc::new(RpcServeRuntimeMetrics::default()),
+            rpc_profile: RpcServeProfile::Standard,
+            max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
         }
     }
 

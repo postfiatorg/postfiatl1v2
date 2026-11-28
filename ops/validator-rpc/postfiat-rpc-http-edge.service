@@ -1,0 +1,52 @@
+[Unit]
+Description=PostFiat RPC HTTP edge (POST /rpc in front of a loopback rpc-serve)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=postfiat-edge
+Group=postfiat-edge
+# POSTFIAT_EDGE_UPSTREAM_PORT: 27651 for a public replica, or a validator's own
+# RPC port when this edge fronts a validator.
+# POSTFIAT_EDGE_FLAGS: empty, or --allow-private-action-admission in front of a
+# validator that runs with that switch.
+EnvironmentFile=/etc/postfiat/rpc-http-edge.env
+ExecStart=/usr/local/bin/postfiat-node rpc-http-edge \
+  --listen-host 127.0.0.1 \
+  --listen-port 8650 \
+  --upstream-host 127.0.0.1 \
+  --upstream-port ${POSTFIAT_EDGE_UPSTREAM_PORT} \
+  --rate-per-second 20 \
+  --burst 40 \
+  --max-connections 64 \
+  --timeout-ms 15000 $POSTFIAT_EDGE_FLAGS
+Restart=always
+RestartSec=1
+CPUQuota=100%
+CPUWeight=20
+MemoryHigh=256M
+MemoryMax=512M
+TasksMax=128
+LimitNOFILE=4096
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

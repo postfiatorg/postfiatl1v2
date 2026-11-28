@@ -1675,6 +1675,24 @@ class PostFiatRpcClient:
     def orchard_pool_report(self) -> dict[str, Any]:
         return self._call("orchard_pool_report")
 
+    def block_vote_records(self, *, from_height: int, limit: int | None = None) -> dict[str, Any]:
+        """The vote records this node holds for a window of heights.
+
+        A node holds a record only for the blocks it proposed. Each record lists
+        every validator the proposer asked and what came back, including votes
+        that arrived after the quorum closed.
+        """
+        if from_height < 1:
+            raise ValueError("from_height must be at least 1")
+        params = self._limit_params(limit)
+        params["from_height"] = from_height
+        result = self._call("block_vote_records", params)
+        if not isinstance(result, dict) or result.get("schema") != "postfiat-block-vote-records-v1":
+            raise RpcProtocolError("block_vote_records result has wrong schema")
+        if not isinstance(result.get("records"), list):
+            raise RpcProtocolError("block_vote_records result has no records list")
+        return result
+
     def account_tx_index_status(self) -> AccountTxIndexStatus:
         result = self._call("account_tx_index_status")
         if not isinstance(result, dict):

@@ -213,8 +213,8 @@ postfiat-node upgrade [OPTIONS]
 4. **In `--check` mode:** Stop here and emit the report (`exit 0` if already at `release_id`; `exit 10` if upgrade available; `exit 11` if `activation_height` is within `advance_warning_blocks`).
 5. **Journal, then graceful stop:** Write `<backup-dir>/upgrade-journal.json` (target release, the units, the backup path, the step reached) and `fsync` it. Then stop `--service-units` via systemd so `redb` closes cleanly. The journal is updated before each later step and removed at the end.
 6. **Chain-state backup:** Create `<backup-dir>/<release-id>-pre-<unix>/` (mode `0700`, owned by the owner of `--data-dir`) with a copy of the chain state, the prior binary, and a `backup-manifest.json` of SHA-256 digests. The copy keeps every file's owner, group and mode. It leaves out, and the rollback therefore never touches:
-   - `consensus-v2-safety/`, the validator's own record of what it has voted for;
-   - every file a unit passes as `--finality-key-file` or `--finality-proposal-key-file`, and `validator_keys.json`;
+   - every record of what this validator has signed: `consensus-v2-safety/`, `block_proposal_vote_locks/`, `transport_votes/`, the certificates they refer to in `consensus-v2-qcs/`, the FastPay owned-object locks (`owned_locks.json`, `owned_locks.wal`, `owned_locks.guard`), `ethereum-checkpoint-signing/` and `fastswap-control-signing/`;
+   - every key file, whatever its name: `validator_keys.json`, and any file of at most 1 MiB that names a private key field (`private_key_hex`, `private_key`, `secret_key_hex`, `secret_key`). The data directory is scanned before the backup; the files found are listed in the journal and in `backup-manifest.json`. If the scan cannot read a file, `upgrade` exits `4` (`key_file_scan_failed`) before any service is stopped;
    - `runtime/`, `readiness/`, sockets, and every `--exclude-path`;
    - `--signer-guard-dir`, which is outside the data directory by step 2.
 7. **Atomic binary swap:** Write staged binary to `<binary-path>.staging.<pid>`, `chmod 0755`, `fsync`, atomically `rename(2)` onto `<binary-path>`, and `fsync` parent directory.
@@ -226,7 +226,7 @@ postfiat-node upgrade [OPTIONS]
 9. **Rollback on failure:** If any check in Step 8 fails:
    - Stop `--service-units`;
    - Restore the prior binary and the backed-up chain state, with owner, group and mode as they were;
-   - **Leave `consensus-v2-safety/` as the new binary left it.** If the new binary voted before the health gate failed, the old binary starts with that vote on record and cannot sign a different vote for the same height and round. A vote record is only ever carried forward;
+   - **Leave every signing record of step 6 as the new binary left it.** If the new binary signed anything before the health gate failed, the old binary starts with that on record and cannot sign a different message for the same slot. A signing record is only ever carried forward. If the old binary cannot read a record the new one wrote, it refuses to start and the exit is `6`: a stopped validator, never one that signs twice;
    - Restart `--service-units` and run `rpc-probe`;
    - Exit `5` (`rolled_back`) if the prior version recovers cleanly, or `6` (`rollback_failed`).
 10. **Services are never left stopped silently.** Every exit after step 5 either has the units running or reports the stopped units by name in `units_stopped` with exit `6`.

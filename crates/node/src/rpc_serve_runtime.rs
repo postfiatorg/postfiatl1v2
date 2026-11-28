@@ -53,6 +53,14 @@ fn rpc_serve_drain(
     let owned_certificate_domain = owned_certificate_domain(&options.data_dir)
         .map_err(|error| format!("rpc serve FastPay domain failed: {error}"))?;
     validate_rpc_serve_bind_host(&options.bind_host)?;
+    if options.rpc_profile.is_replica() && options.finality_signer_socket.is_some() {
+        return Err("rpc_replica_signer_forbidden: read-replica profile forbids --finality-signer-socket".to_string());
+    }
+    if options.rpc_profile.is_replica() && options.data_dir.join(VALIDATOR_KEYS_FILE).exists() {
+        return Err(format!(
+            "rpc_replica_key_material_present: read-replica profiles refuse a data directory that holds `{VALIDATOR_KEYS_FILE}`"
+        ));
+    }
     prepare_rpc_serve_spool_root(&options.spool_dir)?;
     probe_rpc_serve_spool_root(&options.spool_dir)?;
     let bind_address = socket_address(&options.bind_host, options.port);
@@ -162,6 +170,7 @@ fn rpc_serve_drain(
         write_rpc_serve_readiness(&options.ready_file, &readiness)?;
     }
     let fastswap_service = Arc::new(Mutex::new(None));
+    let read_cache = Arc::new(Mutex::new(RpcServeReadCache::default()));
     let runtime_metrics = Arc::new(RpcServeRuntimeMetrics::default());
     let (event_sender, event_receiver) = mpsc::channel::<(Option<RpcServeEventRecord>, bool)>();
     let build_context = |peer_addr: String| RpcServeConnectionContext {
@@ -201,8 +210,11 @@ fn rpc_serve_drain(
         mempool_mutation_lock: Arc::clone(&mempool_mutation_lock),
         finality_submit_lock: Arc::clone(&finality_submit_lock),
         health_cache: Arc::clone(&health_cache),
+        read_cache: Arc::clone(&read_cache),
         fastswap_service: Arc::clone(&fastswap_service),
         runtime_metrics: Arc::clone(&runtime_metrics),
+        rpc_profile: options.rpc_profile,
+        max_replica_lag_blocks: options.max_replica_lag_blocks,
     };
     let private_action_stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let _private_action_stop_guard = PrivateActionServiceStopGuard(Arc::clone(&private_action_stop));

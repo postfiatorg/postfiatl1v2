@@ -121,6 +121,8 @@ fn rpc_serve_offer_preview_reuses_live_redb_handle() {
                 max_child_dispatch_concurrent: 2,
                 max_child_dispatch_per_peer: 2,
                 keep_alive: false,
+                rpc_profile: RpcServeProfile::Standard,
+                max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
             },
             Some(listener),
         )

@@ -78,6 +78,7 @@ pub const METHOD_VALIDATE_LOCAL_KEYS: &str = "validate_local_keys";
 pub const METHOD_ACCOUNT: &str = "account";
 pub const METHOD_ACCOUNT_TX: &str = "account_tx";
 pub const METHOD_ACCOUNT_TX_INDEX_STATUS: &str = "account_tx_index_status";
+pub const METHOD_BLOCK_VOTE_RECORDS: &str = "block_vote_records";
 pub const METHOD_FEE: &str = "fee";
 pub const METHOD_TRANSFER_FEE_QUOTE: &str = "transfer_fee_quote";
 pub const METHOD_OWNED_SIGN: &str = "owned_sign";
@@ -426,6 +427,20 @@ pub fn account_request(id: impl Into<String>, address: impl Into<String>) -> Rpc
 
 pub fn account_tx_index_status_request(id: impl Into<String>) -> RpcRequest {
     RpcRequest::empty(id, METHOD_ACCOUNT_TX_INDEX_STATUS)
+}
+
+/// The vote records the node holds for `limit` heights from `from_height`.
+pub fn block_vote_records_request(
+    id: impl Into<String>,
+    from_height: u64,
+    limit: Option<usize>,
+) -> RpcRequest {
+    let mut request = RpcRequest::empty(id, METHOD_BLOCK_VOTE_RECORDS)
+        .with_param_value("from_height", u64_value(from_height));
+    if let Some(limit) = limit {
+        request = request.with_param_value("limit", usize_value(limit));
+    }
+    request
 }
 
 pub fn account_tx_request(

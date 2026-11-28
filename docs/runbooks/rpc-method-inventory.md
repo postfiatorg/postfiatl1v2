@@ -14,8 +14,8 @@ method lacks an explicit posture.
 
 ## Summary
 
-- Total methods observed: 174
-- Read-only public methods: 91
+- Total methods observed: 175
+- Read-only public methods: 92
 - Public cryptographically authorized protocol mutations: 12
 - Controlled write gated methods: 17
 - Privacy-alpha gated methods: 4
@@ -74,6 +74,7 @@ method lacks an explicit posture.
 | atomic_swap_fee_quote | read_only_public | yes | no | yes | yes | no |  |
 | batch_archive | read_only_public | yes | no | yes | yes | yes | bounded batch payload archive read |
 | batch_transfer | operator_or_local_only | no | no | yes | no | no |  |
+| block_vote_records | read_only_public | yes | no | yes | yes | yes | read-only proposer vote records (who answered each vote request, late votes included) for the validator uptime feed |
 | blocks | read_only_public | yes | no | yes | yes | yes | bounded block query; node/Rust SDK/Python support from_height |
 | book_offers | read_only_public | yes | no | yes | yes | yes |  |
 | bridge_batch_domain | operator_or_local_only | no | no | yes | yes | no |  |

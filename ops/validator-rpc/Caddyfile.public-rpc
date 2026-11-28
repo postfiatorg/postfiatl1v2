@@ -1,0 +1,54 @@
+# TLS in front of `postfiat-node rpc-http-edge`.
+# The node speaks JSON lines over TCP, not HTTP, so the proxy never talks to
+# rpc-serve directly: it forwards HTTPS to the HTTP edge on 127.0.0.1:8650.
+# The edge holds the method list and the per-address request budget.
+{
+	admin off
+	servers {
+		timeouts {
+			read_body 10s
+			read_header 5s
+			write 20s
+			idle 60s
+		}
+	}
+}
+
+{$POSTFIAT_PUBLIC_RPC_DOMAIN} {
+	tls {
+		protocols tls1.3
+	}
+
+	log {
+		output file /var/log/postfiat-edge/access.json {
+			roll_size 50MiB
+			roll_keep 14
+		}
+		format json
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	@rpc path /rpc /healthz
+	handle @rpc {
+		request_body {
+			max_size 64KB
+		}
+		reverse_proxy 127.0.0.1:8650 {
+			health_uri /healthz
+			health_interval 5s
+			health_timeout 3s
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 20s
+			}
+		}
+	}
+	handle {
+		respond 404
+	}
+}

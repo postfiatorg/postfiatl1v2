@@ -98,6 +98,68 @@ mod validator_signer_socket_tests {
             .expect("signer ready");
     }
 
+    #[test]
+    #[ignore = "starts the signer, which needs a TMPDIR no other user can write; run with --ignored"]
+    fn the_signer_signs_a_current_task_node_challenge_and_nothing_else_under_that_context() {
+        use postfiat_crypto_provider::{hex_to_bytes, ml_dsa_65_verify_with_context};
+        let root = signer_root("bind");
+        let (key_file, _) = chain_with_key_moved_out(&root);
+        let socket = root.join("signer").join("bind.sock");
+        start_signer(&key_file, &socket, None);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_secs();
+        let challenge = format!("pf-tasknode:{}:acct_test:{}", "a".repeat(32), now + 900);
+        let verifies = |proof: &postfiat_node::TasknodeBindingProof, message: &str, context: &[u8]| {
+            ml_dsa_65_verify_with_context(
+                &hex_to_bytes(&proof.ml_dsa_public_key).expect("key"),
+                message.as_bytes(),
+                &hex_to_bytes(&proof.signature).expect("signature"),
+                context,
+            )
+        };
+
+        // Through the separate signer process.
+        let proof = postfiat_node::tasknode_binding_proof_via_socket(&socket, Duration::from_secs(10), "validator-0", &challenge)
+            .expect("the signer signs a current challenge");
+        assert_eq!(proof.validator_id, "validator-0");
+        assert!(verifies(&proof, &challenge, postfiat_node::TASKNODE_VALIDATOR_BINDING_CONTEXT));
+        // The signature is worth nothing as a vote or under any other context.
+        assert!(!verifies(&proof, &challenge, postfiat_node::TRANSPORT_AUTH_CONTEXT));
+        assert!(!verifies(&proof, &format!("{challenge}x"), postfiat_node::TASKNODE_VALIDATOR_BINDING_CONTEXT));
+
+        // The signer checks the message itself: it cannot be made to sign other bytes under the context.
+        for (bad, reason) in [
+            (format!("pf-tasknode:{}:acct_test:{}", "a".repeat(32), now - 1), "expired"),
+            (format!("pf-tasknode:{}:acct_test:{}", "a".repeat(32), now + 86_400), "longer than 30 minutes"),
+            (format!("pf-tasknode:short:acct_test:{}", now + 900), "not a Task Node challenge"),
+            (format!("pf-other:{}:acct_test:{}", "a".repeat(32), now + 900), "not a Task Node challenge"),
+            ("{\"schema\":\"postfiat-consensus-vote-v2\"}".to_string(), "not a Task Node challenge"),
+        ] {
+            let error = postfiat_node::tasknode_binding_proof_via_socket(&socket, Duration::from_secs(10), "validator-0", &bad)
+                .expect_err("refused");
+            let text = error.to_string();
+            assert!(text.contains("validator_signer_binding_refused") && text.contains(reason), "{bad}: {text}");
+        }
+        assert!(postfiat_node::tasknode_binding_proof_via_socket(&socket, Duration::from_secs(10), "validator-9", &challenge).is_err());
+
+        // From a key file, for a validator without a separate signer.
+        let proof = postfiat_node::tasknode_binding_proof_from_key_file(&key_file, "validator-0", &challenge, now)
+            .expect("key file proof");
+        assert!(verifies(&proof, &challenge, postfiat_node::TASKNODE_VALIDATOR_BINDING_CONTEXT));
+        assert!(postfiat_node::tasknode_binding_proof_from_key_file(&key_file, "validator-0", &challenge, now + 901).is_err());
+        assert!(postfiat_node::tasknode_binding_proof_from_key_file(&key_file, "validator-9", &challenge, now).is_err());
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&key_file, fs::Permissions::from_mode(0o644)).expect("chmod");
+        }
+        let error = postfiat_node::tasknode_binding_proof_from_key_file(&key_file, "validator-0", &challenge, now)
+            .expect_err("a readable key file is refused");
+        assert!(error.to_string().contains("private regular file"), "{error}");
+        let _ = fs::remove_dir_all(root);
+    }
+
     fn socket_serve_options(root: &Path, socket: &Path, port: u16, requests: usize) -> RpcServeOptions {
         let data_dir = root.join("node");
         RpcServeOptions {
@@ -133,6 +195,8 @@ mod validator_signer_socket_tests {
             max_child_dispatch_concurrent: 8,
             max_child_dispatch_per_peer: 4,
             keep_alive: false,
+            rpc_profile: RpcServeProfile::Standard,
+            max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
         }
     }
 

@@ -62,6 +62,8 @@ mod rpc_serve_request_tests {
             max_child_dispatch_concurrent: 8,
             max_child_dispatch_per_peer: 4,
             keep_alive,
+            rpc_profile: RpcServeProfile::Standard,
+            max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
         }
     }
 
@@ -509,6 +511,8 @@ mod rpc_serve_request_tests {
                 max_child_dispatch_concurrent: 8,
                 max_child_dispatch_per_peer: 4,
                 keep_alive: false,
+                rpc_profile: RpcServeProfile::Standard,
+                max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
             })
             .expect("serve timeout vote loopback RPC")
         });
@@ -624,6 +628,8 @@ mod rpc_serve_request_tests {
                 max_child_dispatch_concurrent: 8,
                 max_child_dispatch_per_peer: 4,
                 keep_alive: true,
+                rpc_profile: RpcServeProfile::Standard,
+                max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
             })
             .expect("serve stalled client RPC")
         });
@@ -884,6 +890,8 @@ mod rpc_serve_request_tests {
                 max_child_dispatch_concurrent: 8,
                 max_child_dispatch_per_peer: 4,
                 keep_alive: false,
+                rpc_profile: RpcServeProfile::Standard,
+                max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
             })
             .expect("serve FastPay v3 loopback RPC")
         });
@@ -2603,6 +2611,8 @@ mod rpc_serve_request_tests {
                 max_child_dispatch_concurrent: 8,
                 max_child_dispatch_per_peer: 4,
                 keep_alive: false,
+                rpc_profile: RpcServeProfile::Standard,
+                max_replica_lag_blocks: DEFAULT_MAX_REPLICA_LAG_BLOCKS,
             })
             .expect("serve recipient format loopback RPC")
         });

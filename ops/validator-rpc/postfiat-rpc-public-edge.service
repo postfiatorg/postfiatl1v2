@@ -1,0 +1,43 @@
+[Unit]
+Description=PostFiat public RPC TLS proxy (in front of postfiat-rpc-http-edge)
+After=network-online.target postfiat-rpc-http-edge.service
+Wants=network-online.target postfiat-rpc-http-edge.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=postfiat-edge
+Group=postfiat-edge
+EnvironmentFile=/etc/postfiat/rpc-public.env
+ExecStart=/usr/bin/caddy run --config /etc/postfiat/Caddyfile.public-rpc --adapter caddyfile
+ExecReload=/usr/bin/caddy reload --config /etc/postfiat/Caddyfile.public-rpc --adapter caddyfile
+Restart=always
+RestartSec=2
+TimeoutStopSec=15s
+CPUQuota=100%
+CPUWeight=20
+MemoryHigh=512M
+MemoryMax=1G
+TasksMax=256
+LimitNOFILE=65536
+LimitCORE=0
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ReadWritePaths=/var/lib/postfiat-edge /var/log/postfiat-edge
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

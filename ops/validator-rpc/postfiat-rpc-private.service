@@ -1,0 +1,64 @@
+[Unit]
+Description=PostFiat Private Read-Replica RPC (non-voting follower)
+After=network-online.target
+Wants=network-online.target postfiat-rpc-catchup@private.timer
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=postfiat-rpc
+Group=postfiat-rpc
+# The binary about to run is the one a 2-of-3 signed release manifest names.
+ExecStartPre=/usr/local/bin/postfiat-node release-manifest-verify \
+  --manifest-file /etc/postfiat/release-manifest.json \
+  --keyset-file /etc/postfiat/release-keyset.json \
+  --runtime-binary-file /usr/local/bin/postfiat-node
+ExecStart=/usr/local/bin/postfiat-node rpc-serve \
+  --rpc-profile private-replica \
+  --data-dir /var/lib/postfiat-rpc/replica \
+  --spool-dir /run/postfiat-rpc-private/spool \
+  --ready-file /run/postfiat-rpc-private/ready.json \
+  --bind-host 127.0.0.1 \
+  --port 27650 \
+  --max-requests 100000 \
+  --timeout-ms 30000 \
+  --child-timeout-ms 30000 \
+  --max-child-dispatch-concurrent 8 \
+  --max-child-dispatch-per-peer 4 \
+  --max-replica-lag-blocks 5 \
+  --event-log /var/log/postfiat-rpc/rpc-private-events.ndjson \
+  --keep-alive
+RuntimeDirectory=postfiat-rpc-private
+RuntimeDirectoryMode=0700
+Restart=always
+RestartSec=1
+TimeoutStopSec=30s
+KillMode=control-group
+CPUQuota=100%
+CPUWeight=50
+MemoryHigh=2G
+MemoryMax=3G
+IOWeight=100
+TasksMax=512
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+UMask=0077
+ReadWritePaths=/var/lib/postfiat-rpc/replica /var/log/postfiat-rpc /run/postfiat-rpc-private
+
+[Install]
+WantedBy=multi-user.target

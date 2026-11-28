@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the PostFiat uptime observer every 5 minutes
+
+[Timer]
+# Two reads more than 15 minutes apart cost the observer the whole day.
+OnBootSec=30s
+OnUnitActiveSec=5min
+AccuracySec=10s
+Unit=postfiat-uptime-observer.service
+
+[Install]
+WantedBy=timers.target

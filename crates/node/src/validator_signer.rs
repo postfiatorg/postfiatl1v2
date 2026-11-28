@@ -48,6 +48,52 @@ pub const VALIDATOR_SIGNER_SOCKET_MODE: u32 = 0o660;
 /// The context of the authentication on every transport envelope a node
 /// sends its peers (`sign_transport_envelope_auth`).
 pub const TRANSPORT_AUTH_CONTEXT: &[u8] = b"postfiat-l1-v2/transport-auth/v1";
+/// Context of the one-time proof that binds a validator to a Task Node account.
+/// The message is the exact challenge Task Node issued.
+pub const TASKNODE_VALIDATOR_BINDING_CONTEXT: &[u8] =
+    b"postfiat-l1-v2/tasknode-validator-binding/v1";
+
+/// A Task Node challenge is `pf-tasknode:<nonce>:<account>:<expiry unix>`, at
+/// most 30 minutes from now. The signer signs nothing else under the binding
+/// context, so the context cannot be used to obtain a signature over other bytes.
+pub fn validate_tasknode_challenge(challenge: &str, now_unix: u64) -> Result<(), &'static str> {
+    let token = |part: &str, min: usize, max: usize| {
+        (min..=max).contains(&part.len())
+            && part
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    };
+    let parts: Vec<&str> = challenge.split(':').collect();
+    if challenge.len() > 512
+        || parts.len() != 4
+        || parts[0] != "pf-tasknode"
+        || !token(parts[1], 32, 128)
+        || !token(parts[2], 1, 200)
+        || parts[3].is_empty()
+        || parts[3].len() > 20
+        || !parts[3].bytes().all(|b| b.is_ascii_digit())
+    {
+        return Err("not a Task Node challenge");
+    }
+    let expires = parts[3]
+        .parse::<u64>()
+        .map_err(|_| "not a Task Node challenge")?;
+    if expires <= now_unix {
+        return Err("the Task Node challenge has expired");
+    }
+    if expires > now_unix.saturating_add(1_860) {
+        return Err("the Task Node challenge is valid for longer than 30 minutes");
+    }
+    Ok(())
+}
+
+/// The proof Task Node's `connect/complete` takes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TasknodeBindingProof {
+    pub validator_id: String,
+    pub ml_dsa_public_key: String,
+    pub signature: String,
+}
 
 /// Which key signs a message: the vote key (`--finality-key-file`, `--key-file`)
 /// or the proposal key (`--finality-proposal-key-file`, `--proposal-key-file`).
@@ -70,6 +116,7 @@ pub fn validator_signer_key_for_context(context: &[u8]) -> Option<ValidatorSigne
         CONSENSUS_V2_VOTE_CONTEXT,
         CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT,
         TRANSPORT_AUTH_CONTEXT,
+        TASKNODE_VALIDATOR_BINDING_CONTEXT,
     ]
     .contains(&context)
     {
@@ -440,6 +487,22 @@ impl HeldKeys {
                         "message_hex is not hex",
                     );
                 };
+                // Under the binding context the signer signs a current Task
+                // Node challenge and nothing else.
+                if context.as_bytes() == TASKNODE_VALIDATOR_BINDING_CONTEXT {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |elapsed| elapsed.as_secs());
+                    let checked = std::str::from_utf8(&message)
+                        .map_err(|_| "not a Task Node challenge")
+                        .and_then(|challenge| validate_tasknode_challenge(challenge, now));
+                    if let Err(reason) = checked {
+                        return ValidatorSignerResponse::refusal(
+                            "validator_signer_binding_refused",
+                            reason,
+                        );
+                    }
+                }
                 let signer = self.for_key(key);
                 let signed = signer
                     .validator_key(context.as_bytes(), Some(validator_id))
@@ -835,6 +898,94 @@ fn exchange(
         ));
     }
     Ok((response, peer_uid))
+}
+
+/// Asks the signer at `socket` to sign a Task Node challenge for
+/// `validator_id`. The signer checks the challenge itself.
+pub fn tasknode_binding_proof_via_socket(
+    socket: &Path,
+    deadline: Duration,
+    validator_id: &str,
+    challenge: &str,
+) -> io::Result<TasknodeBindingProof> {
+    let request = ValidatorSignerRequest {
+        schema: VALIDATOR_SIGNER_REQUEST_SCHEMA.to_string(),
+        method: "sign".to_string(),
+        validator_id: Some(validator_id.to_string()),
+        context: Some(String::from_utf8_lossy(TASKNODE_VALIDATOR_BINDING_CONTEXT).into_owned()),
+        message_hex: Some(bytes_to_hex(challenge.as_bytes())),
+    };
+    let (response, _) = exchange(socket, deadline, &request)?;
+    match (response.public_key_hex, response.signature_hex) {
+        (Some(ml_dsa_public_key), Some(signature)) => Ok(TasknodeBindingProof {
+            validator_id: validator_id.to_string(),
+            ml_dsa_public_key,
+            signature,
+        }),
+        _ => Err(signer_error(
+            io::ErrorKind::InvalidData,
+            "validator_signer_protocol",
+            "sign answered without a key and a signature",
+        )),
+    }
+}
+
+/// Signs a Task Node challenge with the key file a validator without a
+/// separate signer process uses. The file must be private to its owner.
+pub fn tasknode_binding_proof_from_key_file(
+    key_file: &Path,
+    validator_id: &str,
+    challenge: &str,
+    now_unix: u64,
+) -> io::Result<TasknodeBindingProof> {
+    let refuse =
+        |detail: &str| signer_error(io::ErrorKind::InvalidInput, "tasknode_bind_refused", detail);
+    validate_tasknode_challenge(challenge, now_unix).map_err(refuse)?;
+    {
+        use std::os::unix::fs::MetadataExt;
+        let metadata = std::fs::metadata(key_file)?;
+        if !metadata.is_file() || metadata.mode() & 0o077 != 0 || metadata.len() > 1_048_576 {
+            return Err(refuse(
+                "the key file must be a private regular file (mode 600 or 400)",
+            ));
+        }
+    }
+    let keys: ValidatorKeyFile = serde_json::from_slice(&std::fs::read(key_file)?)
+        .map_err(|_| refuse("the key file is not a validator key file"))?;
+    let mut records = keys
+        .validators
+        .iter()
+        .filter(|record| record.node_id == validator_id);
+    let (Some(record), None) = (records.next(), records.next()) else {
+        return Err(refuse("the validator id must match exactly one key record"));
+    };
+    if record.algorithm_id != ML_DSA_65_ALGORITHM {
+        return Err(refuse("the key algorithm must be ML-DSA-65"));
+    }
+    let private =
+        hex_to_bytes(&record.private_key_hex).map_err(|_| refuse("invalid private key"))?;
+    let public = hex_to_bytes(&record.public_key_hex).map_err(|_| refuse("invalid public key"))?;
+    let signature = postfiat_crypto_provider::ml_dsa_65_sign_with_context(
+        &private,
+        challenge.as_bytes(),
+        TASKNODE_VALIDATOR_BINDING_CONTEXT,
+    )
+    .map_err(|_| refuse("ML-DSA signing failed"))?;
+    if !postfiat_crypto_provider::ml_dsa_65_verify_with_context(
+        &public,
+        challenge.as_bytes(),
+        &signature,
+        TASKNODE_VALIDATOR_BINDING_CONTEXT,
+    ) {
+        return Err(refuse(
+            "the public and private key of the record do not match",
+        ));
+    }
+    Ok(TasknodeBindingProof {
+        validator_id: validator_id.to_string(),
+        ml_dsa_public_key: record.public_key_hex.clone(),
+        signature: bytes_to_hex(&signature),
+    })
 }
 
 /// Asks the signer at `socket` to describe itself; returns its description
