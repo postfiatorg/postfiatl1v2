@@ -5205,6 +5205,22 @@ fn rpc_catch_up_with_audit(
                 "rpc catch-up certified delta requires a new block: local height {local_height}, source height {source_height}"
             ));
         }
+        // Nothing to apply is not the same as being on the source's chain:
+        // the source's tip must be a block this node has.
+        let data_dir = options.data_dir.clone();
+        let no_work_status =
+            rpc_catch_up_source_not_ahead(&local_before, &source_status, |height| {
+                let window = blocks(BlockQueryOptions {
+                    data_dir: data_dir.clone(),
+                    from_height: Some(height),
+                    limit: Some(1),
+                })
+                .map_err(|error| format!("rpc catch-up local block {height} read failed: {error}"))?;
+                Ok(window
+                    .into_iter()
+                    .find(|block| block.header.height == height)
+                    .map(|block| block.header.block_hash))
+            })?;
         let follow = matches!(audit_mode, RpcCatchUpAuditMode::Follow);
         let verification = if follow {
             serde_json::json!({
@@ -5212,13 +5228,14 @@ fn rpc_catch_up_with_audit(
                 "status": "deferred",
                 "terminal_full_audit_required": true,
                 "certified_continuity_verified": true,
+                "source_tip_matches_local_chain": true,
             })
         } else {
             rpc_catch_up_verify_completed_state(&options.data_dir)?
         };
         return Ok(serde_json::json!({
             "schema": "postfiat-rpc-catch-up-v1",
-            "status": "up_to_date",
+            "status": no_work_status,
             "source_node": source_status.node_id,
             "local_node": local_before.node_id,
             "local_height_before": local_height,
@@ -5430,6 +5447,44 @@ fn rpc_catch_up_with_audit(
         "full_verification_count": full_verification_count,
         "verification": verification,
     }))
+}
+
+/// With a source at or below the local height there is nothing to apply. That
+/// is only "up to date" when the source's tip is a block of the local chain:
+/// at equal height the same block and state root, below it the local block at
+/// the source's height. Anything else is another chain, and an error.
+fn rpc_catch_up_source_not_ahead(
+    local: &StatusReport,
+    source: &StatusReport,
+    local_block_hash_at: impl Fn(u64) -> Result<Option<String>, String>,
+) -> Result<&'static str, String> {
+    if source.block_height == local.block_height {
+        if source.block_tip_hash != local.block_tip_hash || source.state_root != local.state_root {
+            return Err(format!(
+                "rpc catch-up: the source is on another chain tip at height {}: local block {} state root {}, source block {} state root {}",
+                local.block_height,
+                local.block_tip_hash,
+                local.state_root,
+                source.block_tip_hash,
+                source.state_root
+            ));
+        }
+        return Ok("up_to_date");
+    }
+    if source.block_height == 0 {
+        return Ok("source_behind");
+    }
+    match local_block_hash_at(source.block_height)? {
+        Some(hash) if hash == source.block_tip_hash => Ok("source_behind"),
+        Some(hash) => Err(format!(
+            "rpc catch-up: the source is behind and on another chain: at height {} the local block is {hash}, the source's tip is {}",
+            source.block_height, source.block_tip_hash
+        )),
+        None => Err(format!(
+            "rpc catch-up: the source is behind at height {} and the local node no longer holds that block, so the two chains cannot be compared",
+            source.block_height
+        )),
+    }
 }
 
 fn rpc_catch_up_verify_completed_state(
@@ -6179,6 +6234,64 @@ mod child_dispatch_limit_tests {
             error.contains("global concurrent child dispatch limit 2"),
             "{error}"
         );
+    }
+}
+
+#[cfg(test)]
+mod catch_up_source_not_ahead_tests {
+    use super::*;
+
+    fn at(height: u64, tip: &str, state_root: &str) -> StatusReport {
+        StatusReport {
+            chain_id: "catch-up-test".to_string(),
+            genesis_hash: "00".repeat(48),
+            protocol_version: 1,
+            rpc_schema: "postfiat-local-rpc-v1".to_string(),
+            build_git_revision: "test".to_string(),
+            build_profile: "test".to_string(),
+            active_nav_profiles: Vec::new(),
+            deployment_manifest_sha256: None,
+            deployment_manifest_verified: false,
+            deployment_validator_id: None,
+            deployment_service_artifacts: Vec::new(),
+            deployment_runtime_artifacts: None,
+            validator_count: 6,
+            node_id: "test-node".to_string(),
+            status: "ok".to_string(),
+            last_run_unix: 1,
+            state_root: state_root.to_string(),
+            block_height: height,
+            block_tip_hash: tip.to_string(),
+            mempool_pending: 0,
+            storage: None,
+        }
+    }
+
+    #[test]
+    fn a_source_at_or_below_the_local_height_must_be_on_the_local_chain() {
+        let local = at(100, "block-100", "root-100");
+        let unused = |_: u64| -> Result<Option<String>, String> { panic!("no block is read at equal height") };
+        // The same height, the same block and state: up to date.
+        assert_eq!(
+            rpc_catch_up_source_not_ahead(&local, &at(100, "block-100", "root-100"), unused),
+            Ok("up_to_date")
+        );
+        // The same height and another block, or the same block and another state: another chain.
+        for source in [at(100, "other-100", "root-100"), at(100, "block-100", "other-root")] {
+            let error = rpc_catch_up_source_not_ahead(&local, &source, unused).unwrap_err();
+            assert!(error.contains("another chain tip at height 100"), "{error}");
+        }
+        // A source that is behind is on this chain only if its tip is the local block at that height.
+        let held = |height: u64| Ok((height == 97).then(|| "block-97".to_string()));
+        assert_eq!(
+            rpc_catch_up_source_not_ahead(&local, &at(97, "block-97", "root-97"), held),
+            Ok("source_behind")
+        );
+        let error = rpc_catch_up_source_not_ahead(&local, &at(97, "fork-97", "root-97"), held).unwrap_err();
+        assert!(error.contains("behind and on another chain"), "{error}");
+        // A block the local node no longer holds cannot be compared, and that is not "up to date".
+        let error = rpc_catch_up_source_not_ahead(&local, &at(50, "block-50", "root-50"), held).unwrap_err();
+        assert!(error.contains("cannot be compared"), "{error}");
     }
 }
 

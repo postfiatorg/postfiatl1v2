@@ -73,6 +73,18 @@ struct RpcReplicaSourceTip {
     source_height: u64,
     local_height: u64,
     checked_at_unix: u64,
+    /// When `rpc-catch-up --follow --full-audit-interval-secs` last ran the
+    /// full state audit and it passed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_full_audit_unix: Option<u64>,
+}
+
+/// The time of the last full state audit a follower recorded, if any.
+fn rpc_replica_last_full_audit(path: &Path) -> Option<u64> {
+    let record = serde_json::from_slice::<RpcReplicaSourceTip>(&fs::read(path).ok()?).ok()?;
+    (record.schema == RPC_REPLICA_SOURCE_TIP_SCHEMA)
+        .then_some(record.last_full_audit_unix)
+        .flatten()
 }
 
 const RPC_REPLICA_SOURCE_TIP_SCHEMA: &str = "postfiat-rpc-replica-source-tip-v1";
@@ -81,12 +93,14 @@ fn write_rpc_replica_source_tip(
     path: &Path,
     source_height: u64,
     local_height: u64,
+    last_full_audit_unix: Option<u64>,
 ) -> Result<(), String> {
     let record = RpcReplicaSourceTip {
         schema: RPC_REPLICA_SOURCE_TIP_SCHEMA.to_string(),
         source_height,
         local_height,
         checked_at_unix: unix_now_secs(),
+        last_full_audit_unix,
     };
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -423,8 +437,16 @@ fn rpc_replica_lag_refusal_for(
 ///
 /// `metrics` carries the clock and the server's own counters and is always
 /// read fresh. `receipts` takes its own lease and is not cached.
+///
+/// Two reads are not of committed state at all and are never cached:
+/// `block_vote_records` reads files kept beside the blocks, which can arrive
+/// or be restored without the height moving, and `account_tx_index_status`
+/// reports a local index that is rebuilt on its own schedule.
 fn is_height_pure_read(request: &RpcRequest) -> bool {
-    !matches!(request.method.as_str(), "metrics" | "receipts")
+    !matches!(
+        request.method.as_str(),
+        "metrics" | "receipts" | "block_vote_records" | "account_tx_index_status"
+    )
         && is_in_process_standard_read_method(request)
 }
 
@@ -999,6 +1021,7 @@ mod rpc_read_cache_tests {
                     source_height,
                     local_height: 100,
                     checked_at_unix,
+                    last_full_audit_unix: None,
                 })
                 .expect("json"),
             )
@@ -1020,7 +1043,11 @@ mod rpc_read_cache_tests {
         fs::write(&tip, b"not json").expect("write");
         assert!(matches!(rpc_replica_lag(&dir, 100, 5, now), RpcReplicaLag::Unknown { .. }));
         // The record `rpc-catch-up --source-tip-file` writes is the one read here.
-        write_rpc_replica_source_tip(&tip, 103, 100).expect("write record");
+        write_rpc_replica_source_tip(&tip, 103, 100, None).expect("write record");
+        assert_eq!(rpc_replica_last_full_audit(&tip), None);
+        write_rpc_replica_source_tip(&tip, 103, 100, Some(1_800_000_000)).expect("write record");
+        assert_eq!(rpc_replica_last_full_audit(&tip), Some(1_800_000_000));
+        write_rpc_replica_source_tip(&tip, 103, 100, None).expect("write record");
         assert_eq!(
             rpc_replica_lag(&dir, 100, 5, unix_now_secs()),
             RpcReplicaLag::Within { lag_blocks: 3 }
@@ -1034,7 +1061,6 @@ mod rpc_read_cache_tests {
         for method in [
             "validators", "manifests", "vault_bridge_route", "blocks", "account", "account_assets",
             "account_lines", "account_tx", "fee", "ledger", "tx", "bridge_status", "vault_bridge_status",
-            "block_vote_records",
         ] {
             assert!(is_height_pure_read(&request(method, serde_json::json!({}))), "{method}");
         }
@@ -1042,6 +1068,9 @@ mod rpc_read_cache_tests {
         // and anything that is not a read of this path.
         assert!(!is_height_pure_read(&request("metrics", serde_json::json!({}))));
         assert!(!is_height_pure_read(&request("receipts", serde_json::json!({}))));
+        // Files beside the blocks and a local index: they change without the height moving.
+        assert!(!is_height_pure_read(&request("block_vote_records", serde_json::json!({}))));
+        assert!(!is_height_pure_read(&request("account_tx_index_status", serde_json::json!({}))));
         assert!(!is_height_pure_read(&request("tx", serde_json::json!({"audit_block_log": true}))));
         assert!(!is_height_pure_read(&request("mempool_submit_signed_payment_v2", serde_json::json!({}))));
 
