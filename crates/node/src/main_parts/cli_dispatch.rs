@@ -667,6 +667,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "block-certificate"
         | "block-certificate-from-archive"
         | "rpc-catch-up"
+        | "rpc-replica-audit"
         | "rpc-catch-up-certified-delta"
         | "block-timeout-vote"
         | "block-timeout-certificate"

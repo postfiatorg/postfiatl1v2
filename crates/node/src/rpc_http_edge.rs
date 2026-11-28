@@ -139,6 +139,13 @@ pub struct RpcHttpEdgeOptions {
 /// Token bucket per client address. The address is the last entry of
 /// `X-Forwarded-For`, which the TLS proxy on the same host appends; a direct
 /// loopback caller without the header shares one bucket.
+///
+/// The boundary this rests on: the edge listens on loopback only, so whoever
+/// writes that header is a process on this host. The limit is a budget for
+/// remote clients behind the proxy. It is not a defence against a local
+/// process, which can name any address and can reach `rpc-serve` without the
+/// edge anyway. The proxy must write the header itself and never pass one
+/// through from the client (Caddy's default).
 #[derive(Debug, Default)]
 struct RateLimiter {
     buckets: std::collections::HashMap<String, (f64, std::time::Instant)>,
@@ -273,11 +280,21 @@ enum ReadError {
     Closed,
 }
 
-fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, ReadError> {
+/// Read one request. The whole of it, head and body, must arrive within
+/// `budget`: the per-read socket timeout alone would let a client that sends
+/// one byte at a time hold a connection for hours. Reads are buffered; the
+/// edge serves one request per connection, so nothing read ahead is lost.
+fn read_http_request(stream: &mut TcpStream, budget: Duration) -> Result<HttpRequest, ReadError> {
+    let deadline = std::time::Instant::now() + budget;
+    let too_slow = ReadError::Status(408, "request_timeout", "the request did not arrive in time");
+    let mut reader = std::io::BufReader::with_capacity(MAX_HEADER_BYTES, &*stream);
     let mut head = Vec::new();
     let mut byte = [0_u8; 1];
     while !head.ends_with(b"\r\n\r\n") {
-        match stream.read(&mut byte) {
+        if std::time::Instant::now() >= deadline {
+            return Err(too_slow);
+        }
+        match reader.read(&mut byte) {
             Ok(1) => head.push(byte[0]),
             _ => return Err(ReadError::Closed),
         }
@@ -354,9 +371,16 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, ReadError> {
         ));
     }
     let mut body = vec![0_u8; length];
-    stream
-        .read_exact(&mut body)
-        .map_err(|_| ReadError::Closed)?;
+    let mut filled = 0;
+    while filled < length {
+        if std::time::Instant::now() >= deadline {
+            return Err(too_slow);
+        }
+        match reader.read(&mut body[filled..]) {
+            Ok(0) | Err(_) => return Err(ReadError::Closed),
+            Ok(count) => filled += count,
+        }
+    }
     Ok(HttpRequest {
         method: method.to_string(),
         path: path.split('?').next().unwrap_or_default().to_string(),
@@ -421,7 +445,7 @@ fn handle_connection(
     options: &RpcHttpEdgeOptions,
     limiter: &std::sync::Mutex<RateLimiter>,
 ) {
-    let request = match read_http_request(stream) {
+    let request = match read_http_request(stream, Duration::from_millis(options.timeout_ms)) {
         Ok(request) => request,
         Err(ReadError::Status(status, code, message)) => {
             return write_error(stream, status, code, message)
@@ -743,6 +767,42 @@ mod tests {
             "a spoofed first entry buys nothing"
         );
         assert_eq!(call("203.0.113.8"), 200);
+    }
+
+    #[test]
+    fn a_request_that_trickles_in_is_cut_off_at_the_budget() {
+        let (node_port, received) = fake_node(r#"{"ok":true,"result":{}}"#);
+        let mut edge = options(node_port);
+        edge.timeout_ms = 400;
+        let port = start_edge(edge, 1);
+        // One header byte every 100 ms: each read is well inside the socket
+        // timeout, and the request as a whole never arrives.
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+        let started = std::time::Instant::now();
+        let mut cut_off = false;
+        for byte in b"POST /rpc HTTP/1.1\r\nHost: x\r\nX-Slow: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+            if stream.write_all(&[*byte]).is_err() {
+                cut_off = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+            if started.elapsed() > Duration::from_secs(3) {
+                break;
+            }
+        }
+        let mut reply = String::new();
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+        let _ = stream.read_to_string(&mut reply);
+        assert!(
+            cut_off || reply.contains("408") || reply.contains("request_timeout"),
+            "the edge kept reading after its budget: {reply:?}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "{:?}",
+            started.elapsed()
+        );
+        assert!(received.try_recv().is_err(), "nothing reaches the node");
     }
 
     #[test]

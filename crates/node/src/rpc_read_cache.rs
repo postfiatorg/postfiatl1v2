@@ -99,6 +99,101 @@ fn write_rpc_replica_source_tip(
     fs::rename(&tmp, path).map_err(|error| format!("replica source tip rename failed: {error}"))
 }
 
+/// The record of the full state audit of a replica (`rpc-replica-audit`).
+///
+/// The audit reads the whole store and holds it for minutes; nothing else can
+/// read it meanwhile. So the replica does not try: while an audit runs, and
+/// after one failed, it refuses reads at once and says why.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct RpcReplicaAuditRecord {
+    schema: String,
+    /// `running`, `passed` or `failed`.
+    status: String,
+    started_unix: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    finished_unix: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
+}
+
+const RPC_REPLICA_AUDIT_SCHEMA: &str = "postfiat-rpc-replica-audit-v1";
+const RPC_REPLICA_AUDIT_FILE: &str = "readiness/replica-audit.json";
+/// An audit that has said `running` for longer than this did not finish (it
+/// was killed). Its record no longer holds the replica back; the next audit
+/// replaces it.
+const RPC_REPLICA_AUDIT_MAX_RUNNING_SECS: u64 = 4 * 3600;
+
+/// Why a replica must not answer reads on account of its audit, if it must not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RpcReplicaAuditRefusal {
+    running: bool,
+    reason: String,
+}
+
+fn rpc_replica_audit_refusal(data_dir: &Path, now_unix: u64) -> Option<RpcReplicaAuditRefusal> {
+    let bytes = fs::read(data_dir.join(RPC_REPLICA_AUDIT_FILE)).ok()?;
+    let record = serde_json::from_slice::<RpcReplicaAuditRecord>(&bytes).ok()?;
+    if record.schema != RPC_REPLICA_AUDIT_SCHEMA {
+        return None;
+    }
+    match record.status.as_str() {
+        "failed" => Some(RpcReplicaAuditRefusal {
+            running: false,
+            reason: format!(
+                "the last full state audit failed: {}",
+                record.reason.unwrap_or_default()
+            ),
+        }),
+        "running" if now_unix.saturating_sub(record.started_unix) <= RPC_REPLICA_AUDIT_MAX_RUNNING_SECS => {
+            Some(RpcReplicaAuditRefusal {
+                running: true,
+                reason: "a full state audit is running".to_string(),
+            })
+        }
+        _ => None,
+    }
+}
+
+fn write_rpc_replica_audit_record(data_dir: &Path, record: &RpcReplicaAuditRecord) -> Result<(), String> {
+    let path = data_dir.join(RPC_REPLICA_AUDIT_FILE);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("replica audit record directory failed: {error}"))?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let bytes = serde_json::to_vec(record)
+        .map_err(|error| format!("replica audit record serialization failed: {error}"))?;
+    fs::write(&tmp, bytes).map_err(|error| format!("replica audit record write failed: {error}"))?;
+    fs::rename(&tmp, &path).map_err(|error| format!("replica audit record rename failed: {error}"))
+}
+
+/// Run `audit` over the replica's store and record how it went: `running`
+/// before it starts, then `passed` or `failed`.
+fn run_rpc_replica_audit(
+    data_dir: &Path,
+    audit: impl FnOnce(&Path) -> Result<(), String>,
+) -> Result<RpcReplicaAuditRecord, String> {
+    let mut record = RpcReplicaAuditRecord {
+        schema: RPC_REPLICA_AUDIT_SCHEMA.to_string(),
+        status: "running".to_string(),
+        started_unix: unix_now_secs(),
+        finished_unix: None,
+        reason: None,
+    };
+    write_rpc_replica_audit_record(data_dir, &record)?;
+    let outcome = audit(data_dir);
+    record.finished_unix = Some(unix_now_secs());
+    match outcome {
+        Ok(()) => record.status = "passed".to_string(),
+        Err(reason) => {
+            record.status = "failed".to_string();
+            record.reason = Some(reason);
+        }
+    }
+    write_rpc_replica_audit_record(data_dir, &record)?;
+    Ok(record)
+}
+
 fn unix_now_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -160,6 +255,14 @@ fn rpc_replica_lag_refusal(
 ) -> Option<RpcResponse> {
     if !context.rpc_profile.is_replica() {
         return None;
+    }
+    // First, and without touching the store: an audit holds it.
+    if let Some(refusal) = rpc_replica_audit_refusal(&context.data_dir, unix_now_secs()) {
+        return Some(rpc_serve_error_response(
+            request_id,
+            "replica_lagging",
+            &format!("replica is not serving: {}", refusal.reason),
+        ));
     }
     let local_height = rpc_serve_cached_status(&context.data_dir, &context.health_cache)
         .ok()
@@ -406,7 +509,21 @@ fn rpc_replica_lag_refusal_for(
     context: &RpcServeConnectionContext,
 ) -> Option<RpcResponse> {
     if matches!(method, "status" | "server_info" | "private_readiness") {
-        return None;
+        // These answer on a lagging replica, so an operator can see how far
+        // behind it is. They cannot answer during an audit: the store is
+        // held. Say so at once instead of waiting for the store and failing.
+        if !context.rpc_profile.is_replica() {
+            return None;
+        }
+        return rpc_replica_audit_refusal(&context.data_dir, unix_now_secs())
+            .filter(|refusal| refusal.running)
+            .map(|refusal| {
+                rpc_serve_error_response(
+                    request_id,
+                    "replica_lagging",
+                    &format!("replica is not serving: {}", refusal.reason),
+                )
+            });
     }
     rpc_replica_lag_refusal(request_id, context)
 }
@@ -423,8 +540,16 @@ fn rpc_replica_lag_refusal_for(
 ///
 /// `metrics` carries the clock and the server's own counters and is always
 /// read fresh. `receipts` takes its own lease and is not cached.
+///
+/// Two reads are not of committed state at all and are never cached:
+/// `block_vote_records` reads files kept beside the blocks, which can arrive
+/// or be restored without the height moving, and `account_tx_index_status`
+/// reports a local index that is rebuilt on its own schedule.
 fn is_height_pure_read(request: &RpcRequest) -> bool {
-    !matches!(request.method.as_str(), "metrics" | "receipts")
+    !matches!(
+        request.method.as_str(),
+        "metrics" | "receipts" | "block_vote_records" | "account_tx_index_status"
+    )
         && is_in_process_standard_read_method(request)
 }
 
@@ -1029,12 +1154,62 @@ mod rpc_read_cache_tests {
     }
 
     #[test]
+    fn a_replica_refuses_reads_while_its_audit_runs_and_after_it_failed() {
+        let dir = std::env::temp_dir().join(format!(
+            "postfiat-replica-audit-{}-{}",
+            std::process::id(),
+            unix_now_secs()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("dir");
+        let now = unix_now_secs();
+        assert_eq!(rpc_replica_audit_refusal(&dir, now), None, "no audit yet");
+
+        // The record says `running` for as long as the audit holds the store.
+        let seen_during = std::cell::RefCell::new(None);
+        let passed = run_rpc_replica_audit(&dir, |data_dir| {
+            *seen_during.borrow_mut() = rpc_replica_audit_refusal(data_dir, unix_now_secs());
+            Ok(())
+        })
+        .expect("audit");
+        assert!(seen_during.borrow().as_ref().is_some_and(|refusal| refusal.running));
+        assert_eq!(passed.status, "passed");
+        assert_eq!(rpc_replica_audit_refusal(&dir, unix_now_secs()), None, "a passed audit holds nothing back");
+
+        // A failed audit keeps the replica from serving until one passes.
+        let failed = run_rpc_replica_audit(&dir, |_| Err("state root mismatch".to_string())).expect("audit");
+        assert_eq!(failed.status, "failed");
+        let refusal = rpc_replica_audit_refusal(&dir, unix_now_secs()).expect("refusal");
+        assert!(!refusal.running && refusal.reason.contains("state root mismatch"), "{refusal:?}");
+        run_rpc_replica_audit(&dir, |_| Ok(())).expect("audit");
+        assert_eq!(rpc_replica_audit_refusal(&dir, unix_now_secs()), None);
+
+        // An audit that was killed leaves `running` behind. That stops holding after a while.
+        write_rpc_replica_audit_record(
+            &dir,
+            &RpcReplicaAuditRecord {
+                schema: RPC_REPLICA_AUDIT_SCHEMA.to_string(),
+                status: "running".to_string(),
+                started_unix: now,
+                finished_unix: None,
+                reason: None,
+            },
+        )
+        .expect("record");
+        assert!(rpc_replica_audit_refusal(&dir, now + 60).is_some());
+        assert_eq!(
+            rpc_replica_audit_refusal(&dir, now + RPC_REPLICA_AUDIT_MAX_RUNNING_SECS + 1),
+            None
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn cache_serves_a_read_only_at_the_height_it_was_read_at() {
         let request = |method: &str, params: serde_json::Value| RpcRequest::new("id", method, params);
         for method in [
             "validators", "manifests", "vault_bridge_route", "blocks", "account", "account_assets",
             "account_lines", "account_tx", "fee", "ledger", "tx", "bridge_status", "vault_bridge_status",
-            "block_vote_records",
         ] {
             assert!(is_height_pure_read(&request(method, serde_json::json!({}))), "{method}");
         }
@@ -1042,6 +1217,9 @@ mod rpc_read_cache_tests {
         // and anything that is not a read of this path.
         assert!(!is_height_pure_read(&request("metrics", serde_json::json!({}))));
         assert!(!is_height_pure_read(&request("receipts", serde_json::json!({}))));
+        // Files beside the blocks and a local index: they change without the height moving.
+        assert!(!is_height_pure_read(&request("block_vote_records", serde_json::json!({}))));
+        assert!(!is_height_pure_read(&request("account_tx_index_status", serde_json::json!({}))));
         assert!(!is_height_pure_read(&request("tx", serde_json::json!({"audit_block_log": true}))));
         assert!(!is_height_pure_read(&request("mempool_submit_signed_payment_v2", serde_json::json!({}))));
 

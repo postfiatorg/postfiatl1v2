@@ -651,6 +651,7 @@ fn print_usage() {
   postfiat-node tasknode-bind --validator-id NODE_ID (--signer-socket PATH | --key-file PATH) < CHALLENGE
       (signs the one-time Task Node challenge read from stdin and prints the proof; opens no network connection)
   postfiat-node rpc-catch-up [--data-dir PATH] --source-host HOST --source-rpc-port PORT [--work-dir PATH] [--max-blocks N] [--timeout-ms MS] [--follow] [--source-tip-file PATH]
+  postfiat-node rpc-replica-audit [--data-dir PATH]
   postfiat-node rpc-catch-up-certified-delta [--data-dir PATH] --source-host HOST --source-rpc-port PORT --expected-height N --expected-block-hash HASH --expected-state-root HASH [--work-dir PATH] [--max-blocks N] [--timeout-ms MS]
   postfiat-node metrics [--data-dir PATH]
   postfiat-node export-envelope-bundle [--data-dir PATH] --asset-id ASSET_ID --epoch N --bundle DIR [--overwrite]

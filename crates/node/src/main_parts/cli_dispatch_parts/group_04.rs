@@ -2256,6 +2256,18 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             let work_dir = flag_value(flags, "--work-dir")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("rpc_catchup"));
+            // A full state audit holds the store for minutes. The follower
+            // does not queue behind it: it leaves, the source tip record is
+            // not renewed, and the replica refuses reads until the audit is over.
+            if flag_present(flags, "--follow")
+                && rpc_replica_audit_refusal(&data_dir, unix_now_secs()).is_some_and(|r| r.running)
+            {
+                println!(
+                    "{}",
+                    serde_json::json!({"schema": "postfiat-rpc-catch-up-v1", "status": "audit_running", "applied_count": 0})
+                );
+                return Ok(());
+            }
             let options = RpcCatchUpOptions {
                 data_dir,
                 source_host,
@@ -2300,6 +2312,28 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 .map_err(|error| format!("rpc catch-up serialization failed: {error}"))?;
             println!("{json}");
             Ok(())
+        }
+        "rpc-replica-audit" => {
+            // The full state audit of a read replica, as its own job. While
+            // it runs, and after it failed, the replica refuses reads.
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let report = run_rpc_replica_audit(&data_dir, |dir| {
+                rpc_catch_up_verify_completed_state(dir).map(|_| ())
+            })?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .map_err(|error| format!("rpc replica audit serialization failed: {error}"))?
+            );
+            if report.status == "passed" {
+                Ok(())
+            } else {
+                Err(format!(
+                    "rpc replica audit failed: {}",
+                    report.reason.unwrap_or_default()
+                ))
+            }
         }
         "block-timeout-vote" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);

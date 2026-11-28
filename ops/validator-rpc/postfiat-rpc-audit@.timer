@@ -1,0 +1,13 @@
+[Unit]
+Description=Audit the whole state of the PostFiat read replica (%i) once a week
+
+[Timer]
+# Once a week, at a time that differs per host, so two replicas behind one
+# address are not both away at once.
+OnCalendar=weekly
+RandomizedDelaySec=12h
+Persistent=true
+Unit=postfiat-rpc-audit@%i.service
+
+[Install]
+WantedBy=timers.target
