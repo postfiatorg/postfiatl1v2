@@ -2694,7 +2694,7 @@ pub fn execute_upgrade(
                     break;
                 }
                 last_health_err = format!(
-                    "health gate mismatch: rev_ok={rev_ok} (node reports {:?}), height_ok={height_ok} ({}<{pre_height}), signer_ok={signer_ok}, units_not_running={stopped:?}",
+                    "health gate mismatch: rev_ok={rev_ok} (node reports {:?}), height_ok={height_ok} (node at {}, was at {pre_height}), signer_ok={signer_ok}, units_not_running={stopped:?}",
                     probe.git_revision, probe.block_height
                 );
             }
