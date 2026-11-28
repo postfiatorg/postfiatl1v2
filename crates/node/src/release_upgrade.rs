@@ -2627,7 +2627,11 @@ pub fn execute_upgrade(
             &options.signer_guard_dir,
             &excludes,
             options.installed_manifest_file.as_deref(),
-            (&options.rpc_host, options.rpc_port),
+            (
+                &options.rpc_host,
+                options.rpc_port,
+                options.health_timeout_ms,
+            ),
             &journal_path,
             cause,
             report,
@@ -2823,7 +2827,11 @@ fn recover_interrupted_upgrade(
                 Path::new(&journal.signer_guard_dir),
                 &excludes,
                 journal.installed_manifest_file.as_deref().map(Path::new),
-                (&options.rpc_host, options.rpc_port),
+                (
+                    &options.rpc_host,
+                    options.rpc_port,
+                    options.health_timeout_ms,
+                ),
                 &journal_path,
                 &cause,
                 &mut report,
@@ -2841,11 +2849,20 @@ fn recover_interrupted_upgrade(
                 let _ = fs::remove_dir_all(&partial);
             }
             let start = hooks.start_units(&journal.service_units);
-            let health =
-                start.and_then(|()| hooks.probe_node(&options.rpc_host, options.rpc_port, 5_000));
+            let health = start.and_then(|()| {
+                wait_for_node_after_start(
+                    hooks,
+                    &journal.service_units,
+                    (
+                        &options.rpc_host,
+                        options.rpc_port,
+                        options.health_timeout_ms,
+                    ),
+                )
+            });
             let stopped = stopped_units(hooks, &journal.service_units);
             match health {
-                Ok(_) if stopped.is_empty() => {
+                Ok(()) if stopped.is_empty() => {
                     let _ = fs::remove_file(&journal_path);
                     report.status = "rolled_back".to_string();
                     report.exit_code = UPGRADE_EXIT_ROLLED_BACK;
@@ -2872,6 +2889,34 @@ fn recover_interrupted_upgrade(
     }
 }
 
+/// After a start, wait until the node answers and every unit runs, for at most
+/// the health timeout. A node needs seconds to open its port after systemd
+/// reports the start; one probe at once would call a good rollback failed.
+/// `rpc` is host, port and the timeout in milliseconds.
+fn wait_for_node_after_start(
+    hooks: &dyn UpgradeSystemHooks,
+    service_units: &[String],
+    rpc: (&str, u16, u64),
+) -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_millis(rpc.2.max(100));
+    loop {
+        let problem = match hooks.probe_node(rpc.0, rpc.1, 2_000) {
+            Ok(_) => {
+                let stopped = stopped_units(hooks, service_units);
+                if stopped.is_empty() {
+                    return Ok(());
+                }
+                format!("units are not running: {}", stopped.join(", "))
+            }
+            Err(error) => error,
+        };
+        if Instant::now() >= deadline {
+            return Err(problem);
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn rollback_and_verify(
     hooks: &dyn UpgradeSystemHooks,
@@ -2883,7 +2928,7 @@ fn rollback_and_verify(
     signer_guard_dir: &Path,
     excludes: &[PathBuf],
     installed_manifest: Option<&Path>,
-    rpc: (&str, u16),
+    rpc: (&str, u16, u64),
     journal_path: &Path,
     cause: &str,
     report: &mut UpgradeReportV1,
@@ -2941,7 +2986,7 @@ fn rollback_and_verify(
     }
     let health = hooks
         .start_units(service_units)
-        .and_then(|()| hooks.probe_node(rpc.0, rpc.1, 5_000).map(|_| ()));
+        .and_then(|()| wait_for_node_after_start(hooks, service_units, rpc));
     let stopped = stopped_units(hooks, service_units);
 
     match health {
@@ -3082,6 +3127,10 @@ mod tests {
         dead_after_rollback: bool,
         /// A unit that systemd reports as not running whatever is done.
         dead_unit: Option<String>,
+        /// After a start the node refuses this many probes before it answers,
+        /// as a real node does while it opens its port.
+        probes_before_up: usize,
+        refused_probes: Mutex<usize>,
         /// After this many stops, a stop fails and the units keep running.
         stops_that_work: Option<usize>,
         /// The new binary's start damages the chain state of the backup found here.
@@ -3103,6 +3152,8 @@ mod tests {
                 dead_unit: None,
                 stops_that_work: None,
                 damage_backup_in: None,
+                probes_before_up: 0,
+                refused_probes: Mutex::new(0),
                 running: Mutex::new(true),
                 log: Mutex::new(Vec::new()),
             }
@@ -3131,6 +3182,7 @@ mod tests {
         }
         fn start_units(&self, _units: &[String]) -> Result<(), String> {
             *self.running.lock().expect("running") = true;
+            *self.refused_probes.lock().expect("refused") = self.probes_before_up;
             self.log.lock().expect("log").push("start".to_string());
             if let Some(backup_dir) = self
                 .damage_backup_in
@@ -3164,6 +3216,13 @@ mod tests {
         ) -> Result<UpgradeNodeStatusProbe, String> {
             if !*self.running.lock().expect("running") {
                 return Err("connection refused".to_string());
+            }
+            {
+                let mut still_refusing = self.refused_probes.lock().expect("refused");
+                if *still_refusing > 0 {
+                    *still_refusing -= 1;
+                    return Err("connection refused".to_string());
+                }
             }
             let new = self.new_binary_installed();
             if new && self.new_binary_unhealthy {
@@ -3750,6 +3809,22 @@ mod tests {
             "a damaged backup replaces nothing"
         );
         assert!(fixture.journal().exists());
+    }
+
+    #[test]
+    fn a_rollback_waits_for_a_node_that_takes_time_to_answer() {
+        // The prior binary comes back, and needs a few probes before its port is open.
+        let fixture = Fixture::new("rollback-slow-start");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        hooks.probes_before_up = 3;
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+        assert!(report.rolled_back);
+        assert!(
+            !fixture.journal().exists(),
+            "a rollback that worked leaves no journal"
+        );
     }
 
     #[test]
