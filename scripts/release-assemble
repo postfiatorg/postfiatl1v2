@@ -45,6 +45,22 @@ def deterministic_tar(target: Path, files: list[Path]) -> None:
             archive.addfile(info, io.BytesIO(data))
 
 
+# e_machine of the ELF header: EM_X86_64 and EM_AARCH64.
+ELF_MACHINE = {"postfiat-node-linux-x86_64": 62, "postfiat-node-linux-aarch64": 183}
+
+
+def elf_problem(header: bytes, machine: int) -> str | None:
+    """Why these first 20 bytes are not a 64-bit little-endian ELF for `machine`, or None."""
+    if len(header) < 20 or header[:4] != b"\x7fELF":
+        return "not an ELF file"
+    if header[4] != 2 or header[5] != 1:
+        return "not a 64-bit little-endian ELF"
+    found = int.from_bytes(header[18:20], "little")
+    if found != machine:
+        return f"built for ELF machine {found}, its name needs {machine}"
+    return None
+
+
 def tracked_files(prefix: str) -> list[Path]:
     """Only files git tracks: nothing a build or an editor left behind enters a release."""
     listed = subprocess.check_output(["git", "ls-files", "-z", "--", prefix], cwd=ROOT)
@@ -60,6 +76,14 @@ def main() -> int:
     if missing:
         print(f"release-assemble: missing in {release}: {', '.join(missing)}", file=sys.stderr)
         return 1
+    # A file name is not an architecture. Each binary must be a 64-bit
+    # little-endian ELF executable for the machine its name says, or a signed
+    # release could carry a node its operators cannot start.
+    for name, machine in ELF_MACHINE.items():
+        problem = elf_problem((release / name).read_bytes()[:20], machine)
+        if problem:
+            print(f"release-assemble: {name}: {problem}", file=sys.stderr)
+            return 1
     units = [path for prefix in UNIT_SOURCES for path in tracked_files(prefix)] + [ROOT / s for s in OBSERVER_SCRIPTS]
     deterministic_tar(release / "postfiat-units.tar", units)
     deterministic_tar(release / "postfiat-docker-profiles.tar", [])

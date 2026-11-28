@@ -66,8 +66,23 @@ class ReleaseFlow(unittest.TestCase):
             # 2. The release directory: the two binaries as CI built them, then the rest.
             release = tmp / "release"
             release.mkdir()
-            for arch in ("linux-x86_64", "linux-aarch64"):
-                shutil.copy2(node, release / f"postfiat-node-{arch}")
+            # One of them is the node built here. The other stands in for the
+            # other runner's build: the same bytes with the ELF machine of its name.
+            built = Path(node).read_bytes()
+            machines = {"linux-x86_64": 62, "linux-aarch64": 183}
+            for arch, machine in machines.items():
+                target = release / f"postfiat-node-{arch}"
+                target.write_bytes(built[:18] + machine.to_bytes(2, "little") + built[20:])
+                target.chmod(0o755)
+            # A binary under the wrong name stops the assembly.
+            swapped = tmp / "swapped"
+            swapped.mkdir()
+            for arch in machines:
+                shutil.copy2(node, swapped / f"postfiat-node-{arch}")
+            refused = subprocess.run([str(REPO / "scripts/release-assemble"), str(swapped)], capture_output=True, text=True)
+            self.assertEqual(refused.returncode, 1, refused.stderr)
+            self.assertIn("built for ELF machine", refused.stderr)
+            self.assertFalse((swapped / "SHA256SUMS").exists())
             subprocess.run([str(REPO / "scripts/release-assemble"), str(release)], check=True, capture_output=True)
             sums = (release / "SHA256SUMS").read_text()
             for name in ("postfiat-units.tar", "postfiat-cargo-sbom.cdx.json", "postfiat-node-linux-aarch64"):
