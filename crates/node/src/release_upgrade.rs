@@ -39,6 +39,11 @@ pub const INSTALLED_RELEASE_SCHEMA: &str = "postfiat-node-installed-release-v1";
 pub const INSTALLED_RELEASE_FILE: &str = "installed-release.json";
 pub const UPGRADE_JOURNAL_SCHEMA: &str = "postfiat-node-upgrade-journal-v1";
 pub const UPGRADE_JOURNAL_FILE: &str = "upgrade-journal.json";
+pub const UPGRADE_LOCK_FILE: &str = "upgrade.lock";
+/// The manifest of the installed release. The packaged units check the binary
+/// against it before every start, so an upgrade replaces it with the binary.
+pub const DEFAULT_INSTALLED_MANIFEST_FILE: &str = "/etc/postfiat/release-manifest.json";
+const BACKUP_PRIOR_MANIFEST_FILE: &str = "release-manifest.prev.json";
 pub const RELEASE_KEYSET_ROTATION_SCHEMA: &str = "postfiat.release_keyset_rotation.v1";
 pub const RELEASE_KEYSET_ROTATION_CONTEXT: &str = "postfiat-l1-v2/release-keyset-rotation/v1";
 /// Entries of the data directory that are never backed up and never rolled
@@ -228,6 +233,10 @@ pub struct UpgradeBackupManifestV1 {
     pub prior_binary_sha256: String,
     pub prior_binary_size_bytes: u64,
     pub data_files: Vec<UpgradeBackupFileEntry>,
+    /// SHA-256 of the installed release manifest saved with the backup, when
+    /// there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prior_release_manifest_sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -274,6 +283,15 @@ pub struct UpgradeReportV1 {
     pub rolled_back: bool,
     /// Units that are not running at exit. Empty unless the exit code is 6.
     pub units_stopped: Vec<String>,
+    /// The height the node had reached when the rollback began, if it answered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height_before_rollback: Option<u64>,
+    /// The height of the restored node.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height_after_rollback: Option<u64>,
+    /// The restored node is behind the chain and has to be caught up by hand.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub catch_up_needed: bool,
 }
 
 /// What runs now, written after a successful upgrade.
@@ -297,8 +315,16 @@ pub struct UpgradeJournalV1 {
     pub release_id: String,
     pub release_sequence: u64,
     pub started_unix: u64,
-    /// `stopping`, `backed_up`, `swapped` or `started`.
+    /// `stopping`, `backed_up`, `swapped`, `started` or `record_pending`.
+    /// At `record_pending` the new release runs and is healthy; only the
+    /// installed-release record is still to be written.
     pub step: String,
+    /// The revision of the release being installed, for the installed-release record.
+    #[serde(default)]
+    pub git_revision: String,
+    /// The installed release manifest this upgrade replaces, if it manages one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_manifest_file: Option<String>,
     pub data_dir: String,
     pub binary_path: String,
     pub signer_guard_dir: String,
@@ -346,6 +372,13 @@ pub struct UpgradeOptions {
     pub json: bool,
     /// Further entries of `data_dir` to leave out of the backup and the rollback.
     pub exclude_paths: Vec<String>,
+    /// Where the manifest of the installed release is kept. It is replaced
+    /// together with the binary and put back by a rollback. `None` leaves it alone.
+    pub installed_manifest_file: Option<PathBuf>,
+    /// An RPC server of another node of the same chain (`host`, `port`). After
+    /// a rollback the restored node fetches from it the blocks that were made
+    /// while the upgrade was tried, before it is started again.
+    pub catch_up_source: Option<(String, u16)>,
 }
 
 #[derive(Debug, Clone)]
@@ -369,6 +402,9 @@ pub trait UpgradeSystemHooks {
     ) -> Result<UpgradeNodeStatusProbe, String>;
     fn free_disk_bytes(&self, path: &Path) -> Result<u64, String>;
     fn unit_is_active(&self, unit: &str) -> bool;
+    /// Fetches and verifies the blocks the stopped node at `data_dir` is
+    /// missing, from the RPC server at `source`, using `binary`.
+    fn catch_up(&self, binary: &Path, data_dir: &Path, source: (&str, u16)) -> Result<(), String>;
 }
 
 pub struct LiveUpgradeSystemHooks;
@@ -401,6 +437,89 @@ impl UpgradeSystemHooks for LiveUpgradeSystemHooks {
             .status()
             .is_ok_and(|status| status.success())
     }
+
+    fn catch_up(&self, binary: &Path, data_dir: &Path, source: (&str, u16)) -> Result<(), String> {
+        run_catch_up_as_data_owner(binary, data_dir, source)
+    }
+}
+
+/// One `rpc-catch-up` run applies at most this many blocks.
+const ROLLBACK_CATCH_UP_BLOCKS_PER_RUN: u64 = 64;
+/// A rollback is behind by the few blocks made during the attempt; more runs
+/// than this means something else is wrong and the operator should look.
+const ROLLBACK_CATCH_UP_MAX_RUNS: usize = 16;
+/// A source that is writing a block can refuse one read. Seen in rehearsal:
+/// the first run failed on a source under load and the next one passed.
+const ROLLBACK_CATCH_UP_MAX_FAILED_RUNS: usize = 5;
+const ROLLBACK_CATCH_UP_RETRY_PAUSE: Duration = Duration::from_secs(2);
+
+/// Runs `rpc-catch-up` with the given binary until the node at `data_dir` has
+/// every block the source has. Every block is checked against its
+/// certificate. `upgrade` runs as root and the node does not: the command runs
+/// as the owner of the data directory, so the files it writes stay readable
+/// to the node.
+fn run_catch_up_as_data_owner(
+    binary: &Path,
+    data_dir: &Path,
+    source: (&str, u16),
+) -> Result<(), String> {
+    use std::os::unix::fs::MetadataExt;
+    use std::os::unix::process::CommandExt;
+    let owner = fs::metadata(data_dir)
+        .map_err(|error| format!("cannot read the owner of {}: {error}", data_dir.display()))?;
+    let running_as_root = unsafe { libc::geteuid() } == 0;
+    let mut failed_runs = 0;
+    for _ in 0..ROLLBACK_CATCH_UP_MAX_RUNS {
+        let mut command = Command::new(binary);
+        command
+            .arg("rpc-catch-up")
+            .arg("--data-dir")
+            .arg(data_dir)
+            .args(["--source-host", source.0])
+            .args(["--source-rpc-port", &source.1.to_string()])
+            .args([
+                "--max-blocks",
+                &ROLLBACK_CATCH_UP_BLOCKS_PER_RUN.to_string(),
+            ])
+            .args(["--timeout-ms", "15000"]);
+        if running_as_root && owner.uid() != 0 {
+            command.uid(owner.uid()).gid(owner.gid());
+        }
+        let output = command
+            .output()
+            .map_err(|error| format!("cannot run {} rpc-catch-up: {error}", binary.display()))?;
+        if !output.status.success() {
+            failed_runs += 1;
+            if failed_runs < ROLLBACK_CATCH_UP_MAX_FAILED_RUNS {
+                thread::sleep(ROLLBACK_CATCH_UP_RETRY_PAUSE);
+                continue;
+            }
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!(
+                "{failed_runs} runs failed, the last with: {}",
+                stderr
+                    .lines()
+                    .find(|line| line.starts_with("error"))
+                    .or_else(|| stderr.lines().next())
+                    .unwrap_or("no message")
+            ));
+        }
+        let answer: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .map_err(|error| format!("rpc-catch-up answer is not JSON: {error}"))?;
+        let height = |field: &str| answer.get(field).and_then(serde_json::Value::as_u64);
+        match (height("local_height_after"), height("source_height")) {
+            (Some(local), Some(source)) if local >= source => return Ok(()),
+            (Some(_), Some(_)) if height("applied_count").unwrap_or(0) > 0 => {}
+            (local, source) => {
+                return Err(format!(
+                    "rpc-catch-up stopped short: local height {local:?}, source height {source:?}"
+                ));
+            }
+        }
+    }
+    Err(format!(
+        "still behind the source after {ROLLBACK_CATCH_UP_MAX_RUNS} runs of {ROLLBACK_CATCH_UP_BLOCKS_PER_RUN} blocks"
+    ))
 }
 
 fn stopped_units(hooks: &dyn UpgradeSystemHooks, units: &[String]) -> Vec<String> {
@@ -461,6 +580,39 @@ pub fn read_installed_release(backup_dir: &Path) -> Result<Option<InstalledRelea
         ));
     }
     Ok(Some(record))
+}
+
+/// Take the exclusive upgrade lock of an installation, without waiting.
+/// `--check` changes nothing, so it creates neither the directory nor the
+/// lock file: with no lock file there is no upgrade to collide with.
+fn acquire_upgrade_lock(backup_dir: &Path, check_only: bool) -> Result<Option<File>, String> {
+    let path = backup_dir.join(UPGRADE_LOCK_FILE);
+    let file = if check_only {
+        match File::open(&path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(format!("open `{}` failed: {error}", path.display())),
+        }
+    } else {
+        fs::create_dir_all(backup_dir)
+            .map_err(|error| format!("create `{}` failed: {error}", backup_dir.display()))?;
+        OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .map_err(|error| format!("open `{}` failed: {error}", path.display()))?
+    };
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(fs::TryLockError::WouldBlock) => Err(format!(
+            "another `postfiat-node upgrade` is running on this installation (lock `{}`); wait for it to finish",
+            path.display()
+        )),
+        Err(fs::TryLockError::Error(error)) => {
+            Err(format!("lock `{}` failed: {error}", path.display()))
+        }
+    }
 }
 
 pub fn read_upgrade_journal(backup_dir: &Path) -> Result<Option<UpgradeJournalV1>, String> {
@@ -1316,8 +1468,23 @@ pub fn fetch_https_bounded(url: &str, max_bytes: usize) -> Result<Vec<u8>, Strin
             "--fail",
             "--silent",
             "--show-error",
-            "--max-time",
+            // Release hosts answer with a redirect to their object store.
+            // Every redirect stays on https; what is fetched is still checked
+            // against the signed manifest.
+            "--location",
+            "--proto-redir",
+            "=https",
+            "--max-redirs",
+            "5",
+            "--connect-timeout",
             "30",
+            // A stalled transfer is dropped; a slow one of a large binary is not.
+            "--speed-limit",
+            "10240",
+            "--speed-time",
+            "30",
+            "--max-time",
+            "1800",
             "--max-filesize",
             &max_bytes.to_string(),
             url,
@@ -1619,6 +1786,7 @@ fn create_pre_upgrade_backup(
     backup_dir: &Path,
     signer_guard_dir: &Path,
     excludes: &[PathBuf],
+    installed_manifest: Option<&Path>,
 ) -> Result<(PathBuf, PathBuf, PathBuf), String> {
     let canonical_guard = resolve_normalized_path(signer_guard_dir)
         .map_err(|error| format!("resolve signer-guard-dir failed: {error}"))?;
@@ -1667,6 +1835,23 @@ fn create_pre_upgrade_backup(
         ));
     };
 
+    let prior_release_manifest_sha256 = match installed_manifest.filter(|path| path.is_file()) {
+        Some(path) => {
+            let saved = snapshot_dir.join(BACKUP_PRIOR_MANIFEST_FILE);
+            fs::copy(path, &saved)
+                .map_err(|error| format!("installed release manifest backup failed: {error}"))?;
+            File::open(&saved)
+                .and_then(|file| file.sync_all())
+                .map_err(|error| format!("fsync release manifest backup failed: {error}"))?;
+            Some(
+                sha256_file_and_size(&saved)
+                    .map_err(|error| format!("hash release manifest backup failed: {error}"))?
+                    .0,
+            )
+        }
+        None => None,
+    };
+
     let manifest = UpgradeBackupManifestV1 {
         schema: UPGRADE_BACKUP_MANIFEST_SCHEMA.to_string(),
         release_id: release_id.to_string(),
@@ -1681,10 +1866,153 @@ fn create_pre_upgrade_backup(
         prior_binary_sha256,
         prior_binary_size_bytes,
         data_files,
+        prior_release_manifest_sha256,
     };
     // Written last: a snapshot without this file is not a complete backup.
     write_json_atomically(&snapshot_dir.join("backup-manifest.json"), &manifest)?;
     Ok((snapshot_dir, backup_binary, backup_data_dir))
+}
+
+/// Write `bytes` to `dest` through a temporary file in the same directory,
+/// mode 0644, and sync the directory.
+fn install_file_atomically(dest: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = dest
+        .parent()
+        .ok_or_else(|| format!("`{}` has no parent directory", dest.display()))?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("create `{}` failed: {error}", parent.display()))?;
+    let tmp = dest.with_extension(format!("tmp.{}", std::process::id()));
+    let write = || -> io::Result<()> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&tmp)?;
+        file.write_all(bytes)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(0o644))?;
+        }
+        file.sync_all()?;
+        fs::rename(&tmp, dest)?;
+        fsync_dir(parent)
+    };
+    write().map_err(|error| {
+        let _ = fs::remove_file(&tmp);
+        format!("write `{}` failed: {error}", dest.display())
+    })
+}
+
+/// Put the release manifest back that was installed before the upgrade: the
+/// one saved with the backup, or none if there was none.
+fn restore_installed_manifest(backup_root: &Path, installed_manifest: &Path) -> Result<(), String> {
+    let saved = backup_root.join(BACKUP_PRIOR_MANIFEST_FILE);
+    match fs::read(&saved) {
+        Ok(bytes) => install_file_atomically(installed_manifest, &bytes),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            match fs::remove_file(installed_manifest) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(format!(
+                    "remove `{}` failed: {error}",
+                    installed_manifest.display()
+                )),
+            }
+        }
+        Err(error) => Err(format!("read `{}` failed: {error}", saved.display())),
+    }
+}
+
+/// Check a backup against the inventory written when it was taken: the prior
+/// binary and every chain-state file by size and SHA-256, and no file the
+/// inventory does not name.
+pub fn verify_pre_upgrade_backup(
+    backup_binary: &Path,
+    backup_data_dir: &Path,
+) -> Result<(), String> {
+    let root = backup_binary
+        .parent()
+        .ok_or_else(|| "backup binary has no parent directory".to_string())?;
+    let manifest_path = root.join("backup-manifest.json");
+    let bytes = fs::read(&manifest_path)
+        .map_err(|error| format!("read `{}` failed: {error}", manifest_path.display()))?;
+    let manifest: UpgradeBackupManifestV1 = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("backup manifest is not valid: {error}"))?;
+    if manifest.schema != UPGRADE_BACKUP_MANIFEST_SCHEMA {
+        return Err(format!("backup manifest has schema `{}`", manifest.schema));
+    }
+    let (digest, size) = sha256_file_and_size(backup_binary)
+        .map_err(|error| format!("hash backup binary failed: {error}"))?;
+    if digest != manifest.prior_binary_sha256 || size != manifest.prior_binary_size_bytes {
+        return Err("the backed-up binary does not match the backup manifest".to_string());
+    }
+    if let Some(expected) = &manifest.prior_release_manifest_sha256 {
+        let saved = root.join(BACKUP_PRIOR_MANIFEST_FILE);
+        let (digest, _) = sha256_file_and_size(&saved)
+            .map_err(|error| format!("hash backed-up release manifest failed: {error}"))?;
+        if &digest != expected {
+            return Err(
+                "the backed-up release manifest does not match the backup manifest".to_string(),
+            );
+        }
+    }
+    let mut expected: BTreeMap<&str, &UpgradeBackupFileEntry> = BTreeMap::new();
+    for entry in &manifest.data_files {
+        let relative = Path::new(&entry.relative_path);
+        if relative.is_absolute()
+            || relative
+                .components()
+                .any(|part| !matches!(part, std::path::Component::Normal(_)))
+            || expected
+                .insert(entry.relative_path.as_str(), entry)
+                .is_some()
+        {
+            return Err(format!(
+                "backup manifest names an invalid path `{}`",
+                entry.relative_path
+            ));
+        }
+    }
+    let mut seen = 0usize;
+    let mut stack = vec![PathBuf::new()];
+    while let Some(rel) = stack.pop() {
+        let dir = backup_data_dir.join(&rel);
+        let children = fs::read_dir(&dir)
+            .map_err(|error| format!("read `{}` failed: {error}", dir.display()))?;
+        for child in children {
+            let child =
+                child.map_err(|error| format!("read `{}` failed: {error}", dir.display()))?;
+            let child_rel = rel.join(child.file_name());
+            let meta = fs::symlink_metadata(child.path())
+                .map_err(|error| format!("stat `{}` failed: {error}", child.path().display()))?;
+            if meta.is_dir() {
+                stack.push(child_rel);
+                continue;
+            }
+            let name = child_rel.to_string_lossy();
+            let Some(entry) = expected.get(name.as_ref()).filter(|_| meta.is_file()) else {
+                return Err(format!(
+                    "the backup holds `{name}`, which its manifest does not name"
+                ));
+            };
+            let (digest, size) = sha256_file_and_size(&child.path())
+                .map_err(|error| format!("hash `{name}` failed: {error}"))?;
+            if digest != entry.sha256 || size != entry.size_bytes {
+                return Err(format!(
+                    "backed-up file `{name}` does not match the backup manifest"
+                ));
+            }
+            seen += 1;
+        }
+    }
+    if seen != expected.len() {
+        return Err(format!(
+            "the backup holds {seen} of the {} files its manifest names",
+            expected.len()
+        ));
+    }
+    Ok(())
 }
 
 /// Restore the pre-upgrade binary and chain state. The excluded entries (the
@@ -1702,6 +2030,8 @@ fn restore_pre_upgrade_backup(
     verify_signer_guard_isolation(signer_guard_dir, dest_data_dir, backup_data_dir)?;
     let canonical_guard = resolve_normalized_path(signer_guard_dir)
         .map_err(|error| format!("resolve signer-guard-dir failed: {error}"))?;
+    // A damaged backup replaces nothing.
+    verify_pre_upgrade_backup(backup_binary, backup_data_dir)?;
 
     // 1. Atomically restore prior binary.
     atomic_install_binary(backup_binary, dest_binary)
@@ -1799,6 +2129,9 @@ fn base_report(check_only: bool) -> UpgradeReportV1 {
         backup_path: None,
         rolled_back: false,
         units_stopped: Vec::new(),
+        height_before_rollback: None,
+        height_after_rollback: None,
+        catch_up_needed: false,
     }
 }
 
@@ -1848,6 +2181,19 @@ pub fn execute_upgrade(
         }
     }
 
+    // One upgrade at a time on an installation. The lock is held to the end
+    // of this call, so a second run can never take a journal that a running
+    // upgrade wrote for an interrupted one.
+    let _upgrade_lock = match acquire_upgrade_lock(&options.backup_dir, options.check_only) {
+        Ok(lock) => lock,
+        Err(error) => {
+            report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+            report.error_code = Some("upgrade_in_progress".to_string());
+            report.message = Some(error);
+            return report;
+        }
+    };
+
     // An earlier run that did not finish comes first. Nothing else is done
     // until its rollback is complete.
     match read_upgrade_journal(&options.backup_dir) {
@@ -1856,10 +2202,17 @@ pub fn execute_upgrade(
             report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
             report.error_code = Some("interrupted_upgrade".to_string());
             report.release_id = Some(journal.release_id.clone());
-            report.message = Some(format!(
-                "an upgrade to `{}` was interrupted at step `{}`; run `postfiat-node upgrade` to roll it back",
-                journal.release_id, journal.step
-            ));
+            report.message = Some(if journal.step == "record_pending" {
+                format!(
+                    "`{}` is installed, but its installed-release record is not written; run `postfiat-node upgrade` to finish",
+                    journal.release_id
+                )
+            } else {
+                format!(
+                    "an upgrade to `{}` was interrupted at step `{}`; run `postfiat-node upgrade` to roll it back",
+                    journal.release_id, journal.step
+                )
+            });
             return report;
         }
         Ok(Some(journal)) => return recover_interrupted_upgrade(&journal, options, hooks, report),
@@ -2279,6 +2632,11 @@ pub fn execute_upgrade(
         release_sequence: manifest.release_sequence,
         started_unix: now_unix,
         step: "stopping".to_string(),
+        git_revision: manifest.git_revision.clone(),
+        installed_manifest_file: options
+            .installed_manifest_file
+            .as_ref()
+            .map(|path| path.display().to_string()),
         data_dir: options.data_dir.display().to_string(),
         binary_path: options.binary_path.display().to_string(),
         signer_guard_dir: options.signer_guard_dir.display().to_string(),
@@ -2338,6 +2696,7 @@ pub fn execute_upgrade(
         &options.backup_dir,
         &options.signer_guard_dir,
         &excludes,
+        options.installed_manifest_file.as_deref(),
     ) {
         Ok(paths) => paths,
         Err(error) => {
@@ -2369,7 +2728,16 @@ pub fn execute_upgrade(
             &options.data_dir,
             &options.signer_guard_dir,
             &excludes,
-            (&options.rpc_host, options.rpc_port),
+            options.installed_manifest_file.as_deref(),
+            (
+                &options.rpc_host,
+                options.rpc_port,
+                options.health_timeout_ms,
+            ),
+            options
+                .catch_up_source
+                .as_ref()
+                .map(|(host, port)| (host.as_str(), *port)),
             &journal_path,
             cause,
             report,
@@ -2381,6 +2749,16 @@ pub fn execute_upgrade(
     discard_candidate(&downloaded_temp);
     if let Err(error) = swap_result {
         return rollback(&format!("atomic binary swap failed: {error}"), &mut report);
+    }
+    // The manifest of the new release goes in with its binary: the units
+    // check one against the other before every start.
+    if let Some(installed) = &options.installed_manifest_file {
+        if let Err(error) = install_file_atomically(installed, &manifest_bytes) {
+            return rollback(
+                &format!("release manifest install failed: {error}"),
+                &mut report,
+            );
+        }
     }
     journal.step = "swapped".to_string();
     if let Err(error) = write_json_atomically(&journal_path, &journal) {
@@ -2422,9 +2800,15 @@ pub fn execute_upgrade(
                     break;
                 }
                 last_health_err = format!(
-                    "health gate mismatch: rev_ok={rev_ok} (node reports {:?}), height_ok={height_ok} ({}<{pre_height}), signer_ok={signer_ok}, units_not_running={stopped:?}",
+                    "health gate mismatch: rev_ok={rev_ok} (node reports {:?}), height_ok={height_ok} (node at {}, was at {pre_height}), signer_ok={signer_ok}, units_not_running={stopped:?}",
                     probe.git_revision, probe.block_height
                 );
+                // A running binary does not change its revision. Waiting out
+                // the timeout only lets the wrong binary vote for longer: in
+                // rehearsal it signed 17 blocks in that minute.
+                if !rev_ok && probe.git_revision.is_some() && stopped.is_empty() {
+                    break;
+                }
             }
             Err(error) => {
                 last_health_err = error;
@@ -2444,22 +2828,36 @@ pub fn execute_upgrade(
         git_revision: manifest.git_revision.clone(),
         installed_unix: now_unix,
     };
-    let recorded = write_json_atomically(&options.backup_dir.join(INSTALLED_RELEASE_FILE), &record);
-    let _ = fs::remove_file(&journal_path);
+    // The journal goes only once the installed sequence is on disk: without
+    // that record a later run could install an older release.
+    journal.step = "record_pending".to_string();
+    let marked = write_json_atomically(&journal_path, &journal);
+    let recorded = marked.and_then(|()| {
+        write_json_atomically(&options.backup_dir.join(INSTALLED_RELEASE_FILE), &record)
+    });
     report.installed_release_id = Some(record.release_id.clone());
     report.installed_release_sequence = Some(record.release_sequence);
-    report.status = "upgraded".to_string();
-    report.exit_code = UPGRADE_EXIT_OK;
-    report.message = Some(match recorded {
-        Ok(()) => format!(
-            "successfully upgraded to `{}` (git {})",
-            manifest.release_id, manifest.git_revision
-        ),
-        Err(error) => format!(
-            "upgraded to `{}`, but the installed-release record could not be written ({error}); the next upgrade cannot check its order until it is",
-            manifest.release_id
-        ),
-    });
+    match recorded {
+        Ok(()) => {
+            let _ = fs::remove_file(&journal_path);
+            report.status = "upgraded".to_string();
+            report.exit_code = UPGRADE_EXIT_OK;
+            report.message = Some(format!(
+                "successfully upgraded to `{}` (git {})",
+                manifest.release_id, manifest.git_revision
+            ));
+        }
+        Err(error) => {
+            report.status = "upgraded_record_pending".to_string();
+            report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+            report.error_code = Some("installed_release_record_failed".to_string());
+            report.message = Some(format!(
+                "`{}` is installed and healthy, but the installed-release record could not be written ({error}). Fix `{}` and run `postfiat-node upgrade` again to finish",
+                manifest.release_id,
+                options.backup_dir.display()
+            ));
+        }
+    }
     report
 }
 
@@ -2478,6 +2876,40 @@ fn recover_interrupted_upgrade(
         "an earlier upgrade to `{}` was interrupted at step `{}`",
         journal.release_id, journal.step
     );
+    if journal.step == "record_pending" {
+        // The new release runs and passed its health check. Nothing is rolled
+        // back; the record that was not written is written now.
+        let record = InstalledReleaseV1 {
+            schema: INSTALLED_RELEASE_SCHEMA.to_string(),
+            release_id: journal.release_id.clone(),
+            release_sequence: journal.release_sequence,
+            git_revision: journal.git_revision.clone(),
+            installed_unix: journal.started_unix,
+        };
+        report.installed_release_id = Some(record.release_id.clone());
+        report.installed_release_sequence = Some(record.release_sequence);
+        match write_json_atomically(&options.backup_dir.join(INSTALLED_RELEASE_FILE), &record) {
+            Ok(()) => {
+                let _ = fs::remove_file(&journal_path);
+                report.status = "upgraded".to_string();
+                report.exit_code = UPGRADE_EXIT_OK;
+                report.message = Some(format!(
+                    "the installed-release record of `{}` is written; the upgrade is complete",
+                    journal.release_id
+                ));
+            }
+            Err(error) => {
+                report.status = "upgraded_record_pending".to_string();
+                report.exit_code = UPGRADE_EXIT_PREFLIGHT_FAILED;
+                report.error_code = Some("installed_release_record_failed".to_string());
+                report.message = Some(format!(
+                    "`{}` is installed, but its installed-release record still cannot be written ({error})",
+                    journal.release_id
+                ));
+            }
+        }
+        return report;
+    }
     let excludes = match backup_excludes(&journal.exclude_paths) {
         Ok(excludes) => excludes,
         Err(error) => {
@@ -2506,7 +2938,16 @@ fn recover_interrupted_upgrade(
                 Path::new(&journal.data_dir),
                 Path::new(&journal.signer_guard_dir),
                 &excludes,
-                (&options.rpc_host, options.rpc_port),
+                journal.installed_manifest_file.as_deref().map(Path::new),
+                (
+                    &options.rpc_host,
+                    options.rpc_port,
+                    options.health_timeout_ms,
+                ),
+                options
+                    .catch_up_source
+                    .as_ref()
+                    .map(|(host, port)| (host.as_str(), *port)),
                 &journal_path,
                 &cause,
                 &mut report,
@@ -2524,11 +2965,20 @@ fn recover_interrupted_upgrade(
                 let _ = fs::remove_dir_all(&partial);
             }
             let start = hooks.start_units(&journal.service_units);
-            let health =
-                start.and_then(|()| hooks.probe_node(&options.rpc_host, options.rpc_port, 5_000));
+            let health = start.and_then(|()| {
+                wait_for_node_after_start(
+                    hooks,
+                    &journal.service_units,
+                    (
+                        &options.rpc_host,
+                        options.rpc_port,
+                        options.health_timeout_ms,
+                    ),
+                )
+            });
             let stopped = stopped_units(hooks, &journal.service_units);
             match health {
-                Ok(_) if stopped.is_empty() => {
+                Ok(()) if stopped.is_empty() => {
                     let _ = fs::remove_file(&journal_path);
                     report.status = "rolled_back".to_string();
                     report.exit_code = UPGRADE_EXIT_ROLLED_BACK;
@@ -2555,6 +3005,37 @@ fn recover_interrupted_upgrade(
     }
 }
 
+/// After a start, wait until the node answers and every unit runs, for at most
+/// the health timeout. A node needs seconds to open its port after systemd
+/// reports the start; one probe at once would call a good rollback failed.
+/// `rpc` is host, port and the timeout in milliseconds.
+fn wait_for_node_after_start(
+    hooks: &dyn UpgradeSystemHooks,
+    service_units: &[String],
+    rpc: (&str, u16, u64),
+) -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_millis(rpc.2.max(100));
+    loop {
+        let problem = match hooks.probe_node(rpc.0, rpc.1, 2_000) {
+            Ok(_) => {
+                let stopped = stopped_units(hooks, service_units);
+                if stopped.is_empty() {
+                    return Ok(());
+                }
+                format!("units are not running: {}", stopped.join(", "))
+            }
+            Err(error) => error,
+        };
+        if Instant::now() >= deadline {
+            return Err(problem);
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// What an operator does when the restored node is behind the chain.
+const ROLLBACK_CATCH_UP_BY_HAND: &str = "this node is BEHIND the chain and does not catch up by itself. It does not vote, and the chain waits when its turn to propose comes. Stop the units, run `postfiat-node rpc-catch-up --data-dir <data dir> --source-host <another node> --source-rpc-port <its RPC port>` as the node's user, then start the units";
+
 #[allow(clippy::too_many_arguments)]
 fn rollback_and_verify(
     hooks: &dyn UpgradeSystemHooks,
@@ -2565,12 +3046,39 @@ fn rollback_and_verify(
     data_dir: &Path,
     signer_guard_dir: &Path,
     excludes: &[PathBuf],
-    rpc: (&str, u16),
+    installed_manifest: Option<&Path>,
+    rpc: (&str, u16, u64),
+    catch_up_source: Option<(&str, u16)>,
     journal_path: &Path,
     cause: &str,
     report: &mut UpgradeReportV1,
 ) -> UpgradeReportV1 {
-    let _ = hooks.stop_units(service_units);
+    // How far the node got while the upgrade was tried. The restore below
+    // takes the chain state back to the backup; these blocks are then missing.
+    report.height_before_rollback = hooks
+        .probe_node(rpc.0, rpc.1, 2_000)
+        .ok()
+        .map(|probe| probe.block_height);
+    // Nothing is replaced under a running unit. A stop that did not take
+    // leaves the binary and the data directory exactly as they are.
+    let stop = hooks.stop_units(service_units);
+    let still_running: Vec<String> = service_units
+        .iter()
+        .filter(|unit| hooks.unit_is_active(unit))
+        .cloned()
+        .collect();
+    if !still_running.is_empty() {
+        report.status = "rollback_failed".to_string();
+        report.exit_code = UPGRADE_EXIT_ROLLBACK_FAILED;
+        report.error_code = Some("rollback_failed".to_string());
+        report.rolled_back = false;
+        report.message = Some(format!(
+            "CRITICAL: upgrade failed ({cause}) AND the rollback did not begin: these units could not be stopped: {} ({}); nothing was replaced. Stop them and run `postfiat-node upgrade` again",
+            still_running.join(", "),
+            stop.err().unwrap_or_else(|| "they are still active".to_string())
+        ));
+        return report.clone();
+    }
     let restore = restore_pre_upgrade_backup(
         backup_binary,
         backup_data_dir,
@@ -2578,14 +3086,38 @@ fn rollback_and_verify(
         data_dir,
         signer_guard_dir,
         excludes,
-    );
-    // The units are started whether or not the restore worked: a validator
-    // left stopped helps nobody, and the report names what is not running.
-    let start = hooks.start_units(service_units);
-    let health = restore
-        .clone()
-        .and_then(|()| start.clone())
-        .and_then(|()| hooks.probe_node(rpc.0, rpc.1, 5_000).map(|_| ()));
+    )
+    .and_then(|()| {
+        // The units check the binary against the installed manifest before
+        // they start: the prior binary needs the prior manifest back.
+        match (installed_manifest, backup_binary.parent()) {
+            (Some(installed), Some(root)) => restore_installed_manifest(root, installed)
+                .map_err(|error| format!("rollback release manifest restore failed: {error}")),
+            _ => Ok(()),
+        }
+    });
+    // A validator is never started on a data directory that was only partly
+    // restored: it could vote without its record of earlier votes. The units
+    // stay stopped, the journal stays, and the next run tries again.
+    if let Err(error) = restore {
+        report.status = "rollback_failed".to_string();
+        report.exit_code = UPGRADE_EXIT_ROLLBACK_FAILED;
+        report.error_code = Some("rollback_failed".to_string());
+        report.rolled_back = false;
+        report.units_stopped = stopped_units(hooks, service_units);
+        report.message = Some(format!(
+            "CRITICAL: upgrade failed ({cause}) AND rollback failed ({error}); the units were left stopped on purpose. Fix the cause and run `postfiat-node upgrade` again"
+        ));
+        return report.clone();
+    }
+    // The restored chain state ends where the backup was taken. A validator
+    // does not fetch the blocks made since by itself: it does not vote on a
+    // block whose parent it lacks, and when its turn to propose comes it
+    // cannot propose. With a source, fetch them now, while the units are down.
+    let catch_up = catch_up_source.map(|source| hooks.catch_up(binary_path, data_dir, source));
+    let health = hooks
+        .start_units(service_units)
+        .and_then(|()| wait_for_node_after_start(hooks, service_units, rpc));
     let stopped = stopped_units(hooks, service_units);
 
     match health {
@@ -2595,8 +3127,36 @@ fn rollback_and_verify(
             report.exit_code = UPGRADE_EXIT_ROLLED_BACK;
             report.error_code = Some("rolled_back".to_string());
             report.rolled_back = true;
+            report.height_after_rollback = hooks
+                .probe_node(rpc.0, rpc.1, 2_000)
+                .ok()
+                .map(|probe| probe.block_height);
+            let behind = match (report.height_before_rollback, report.height_after_rollback) {
+                (Some(before), Some(after)) => before > after,
+                _ => false,
+            };
+            let caught_up = matches!(catch_up, Some(Ok(())));
+            report.catch_up_needed = !caught_up && (behind || catch_up.is_some());
+            let heights = match (report.height_after_rollback, report.height_before_rollback) {
+                (Some(after), Some(before)) if behind => {
+                    format!("at height {after}; it had reached {before} during the attempt")
+                }
+                (Some(after), _) => format!("at height {after}"),
+                _ => "running".to_string(),
+            };
+            let next = match &catch_up {
+                Some(Ok(())) => {
+                    "; the blocks made during the attempt were fetched from the catch-up source"
+                        .to_string()
+                }
+                Some(Err(error)) => format!(
+                    "; CATCH-UP FAILED ({error}): {ROLLBACK_CATCH_UP_BY_HAND}"
+                ),
+                None if behind => format!("; {ROLLBACK_CATCH_UP_BY_HAND}"),
+                None => "; if other nodes made blocks during the attempt, this node lacks them: compare its height with the chain".to_string(),
+            };
             report.message = Some(format!(
-                "upgrade failed ({cause}); the prior binary and chain state are back, the vote record was carried forward, signer-guard untouched"
+                "upgrade failed ({cause}); the prior binary and chain state are back ({heights}), the vote record was carried forward, signer-guard untouched{next}"
             ));
         }
         other => {
@@ -2671,6 +3231,9 @@ pub fn format_upgrade_human_report(report: &UpgradeReportV1) -> String {
             report.units_stopped.join(", ")
         ));
     }
+    if report.catch_up_needed {
+        lines.push("  NODE IS BEHIND THE CHAIN: catch it up (see the message)".to_string());
+    }
     if let Some(code) = &report.error_code {
         lines.push(format!("  error_code: {code}"));
     }
@@ -2726,6 +3289,20 @@ mod tests {
         dead_after_rollback: bool,
         /// A unit that systemd reports as not running whatever is done.
         dead_unit: Option<String>,
+        /// After a start the node refuses this many probes before it answers,
+        /// as a real node does while it opens its port.
+        probes_before_up: usize,
+        refused_probes: Mutex<usize>,
+        /// The new binary runs and answers, on another revision than the
+        /// manifest names.
+        new_binary_wrong_revision: bool,
+        /// The catch-up source cannot be reached.
+        catch_up_fails: bool,
+        caught_up: Mutex<bool>,
+        /// After this many stops, a stop fails and the units keep running.
+        stops_that_work: Option<usize>,
+        /// The new binary's start damages the chain state of the backup found here.
+        damage_backup_in: Option<PathBuf>,
         running: Mutex<bool>,
         log: Mutex<Vec<String>>,
     }
@@ -2741,6 +3318,13 @@ mod tests {
                 new_binary_votes: false,
                 dead_after_rollback: false,
                 dead_unit: None,
+                stops_that_work: None,
+                damage_backup_in: None,
+                probes_before_up: 0,
+                refused_probes: Mutex::new(0),
+                new_binary_wrong_revision: false,
+                catch_up_fails: false,
+                caught_up: Mutex::new(false),
                 running: Mutex::new(true),
                 log: Mutex::new(Vec::new()),
             }
@@ -2755,13 +3339,34 @@ mod tests {
 
     impl UpgradeSystemHooks for MockHooks {
         fn stop_units(&self, _units: &[String]) -> Result<(), String> {
+            let stops = self.log().iter().filter(|l| l.starts_with("stop")).count();
+            if self.stops_that_work.is_some_and(|limit| stops >= limit) {
+                self.log
+                    .lock()
+                    .expect("log")
+                    .push("stop-failed".to_string());
+                return Err("job for postfiat-validator-0.service timed out".to_string());
+            }
             *self.running.lock().expect("running") = false;
             self.log.lock().expect("log").push("stop".to_string());
             Ok(())
         }
         fn start_units(&self, _units: &[String]) -> Result<(), String> {
             *self.running.lock().expect("running") = true;
+            *self.refused_probes.lock().expect("refused") = self.probes_before_up;
             self.log.lock().expect("log").push("start".to_string());
+            if let Some(backup_dir) = self
+                .damage_backup_in
+                .as_ref()
+                .filter(|_| self.new_binary_installed())
+            {
+                for snapshot in fs::read_dir(backup_dir).expect("backup dir").flatten() {
+                    let ledger = snapshot.path().join("chain-data").join("ledger.dat");
+                    if ledger.is_file() {
+                        fs::write(&ledger, b"DAMAGED_ON_DISK").expect("damage backup");
+                    }
+                }
+            }
             if self.new_binary_installed() {
                 // The new binary writes chain state as soon as it runs.
                 fs::write(self.data_dir.join("ledger.dat"), b"REWRITTEN_BY_NEW_BINARY")
@@ -2774,6 +3379,25 @@ mod tests {
             }
             Ok(())
         }
+        fn catch_up(
+            &self,
+            _binary: &Path,
+            _data_dir: &Path,
+            source: (&str, u16),
+        ) -> Result<(), String> {
+            // Only ever run on a stopped node with the prior binary back.
+            assert!(!*self.running.lock().expect("running"));
+            assert!(!self.new_binary_installed());
+            self.log
+                .lock()
+                .expect("log")
+                .push(format!("catch-up {}:{}", source.0, source.1));
+            if self.catch_up_fails {
+                return Err("source 10.0.0.9:27650 refused the connection".to_string());
+            }
+            *self.caught_up.lock().expect("caught up") = true;
+            Ok(())
+        }
         fn probe_node(
             &self,
             _host: &str,
@@ -2782,6 +3406,13 @@ mod tests {
         ) -> Result<UpgradeNodeStatusProbe, String> {
             if !*self.running.lock().expect("running") {
                 return Err("connection refused".to_string());
+            }
+            {
+                let mut still_refusing = self.refused_probes.lock().expect("refused");
+                if *still_refusing > 0 {
+                    *still_refusing -= 1;
+                    return Err("connection refused".to_string());
+                }
             }
             let new = self.new_binary_installed();
             if new && self.new_binary_unhealthy {
@@ -2796,8 +3427,13 @@ mod tests {
             Ok(UpgradeNodeStatusProbe {
                 chain_id: CHAIN.to_string(),
                 genesis_hash: "aa".repeat(48),
-                block_height: self.height + u64::from(new),
-                git_revision: Some(if new {
+                // The new binary takes the node one block further. A restore
+                // loses that block until a catch-up fetches it again.
+                block_height: self.height
+                    + u64::from(new || *self.caught_up.lock().expect("caught up")),
+                git_revision: Some(if new && self.new_binary_wrong_revision {
+                    "99999999".to_string()
+                } else if new {
                     TARGET_REV[..8].to_string()
                 } else {
                     "00000000".to_string()
@@ -2920,6 +3556,13 @@ mod tests {
             .unwrap();
             let backup_dir = root.join("backups");
             fs::create_dir_all(&backup_dir).unwrap();
+            // The manifest of the release that is installed now.
+            fs::create_dir_all(root.join("etc")).unwrap();
+            fs::write(
+                root.join("etc").join("release-manifest.json"),
+                b"PRIOR_RELEASE_MANIFEST",
+            )
+            .unwrap();
 
             let options = UpgradeOptions {
                 check_only: false,
@@ -2943,6 +3586,8 @@ mod tests {
                 yes: true,
                 json: true,
                 exclude_paths: Vec::new(),
+                installed_manifest_file: Some(root.join("etc").join("release-manifest.json")),
+                catch_up_source: None,
             };
             let mut fixture = Self {
                 _tmp: tmp,
@@ -3036,6 +3681,9 @@ mod tests {
         fn data(&self, relative: &str) -> Vec<u8> {
             fs::read(self.options.data_dir.join(relative))
                 .unwrap_or_else(|error| panic!("{relative}: {error}"))
+        }
+        fn installed_manifest(&self) -> Vec<u8> {
+            fs::read(self.options.installed_manifest_file.as_ref().unwrap()).unwrap()
         }
         fn journal(&self) -> PathBuf {
             self.options.backup_dir.join(UPGRADE_JOURNAL_FILE)
@@ -3308,6 +3956,259 @@ mod tests {
     }
 
     #[test]
+    fn a_rollback_replaces_nothing_under_a_running_unit_and_never_starts_on_a_failed_restore() {
+        // The stop of the rollback fails: the unit still runs, so nothing is replaced.
+        let fixture = Fixture::new("rollback-stop-fails");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        hooks.stops_that_work = Some(1);
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLBACK_FAILED, "{report:?}");
+        assert!(
+            report
+                .message
+                .as_deref()
+                .unwrap()
+                .contains("nothing was replaced"),
+            "{report:?}"
+        );
+        assert!(
+            hooks.new_binary_installed(),
+            "the binary was not swapped back under a running unit"
+        );
+        assert_eq!(hooks.log(), ["stop", "start", "stop-failed"]);
+        assert!(fixture.journal().exists(), "the next run tries again");
+
+        // The backup is damaged: nothing is replaced and no unit is started.
+        let fixture = Fixture::new("rollback-damaged-backup");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        hooks.damage_backup_in = Some(fixture.options.backup_dir.clone());
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLBACK_FAILED, "{report:?}");
+        assert!(
+            report
+                .message
+                .as_deref()
+                .unwrap()
+                .contains("does not match the backup manifest"),
+            "{report:?}"
+        );
+        assert_eq!(
+            hooks.log(),
+            ["stop", "start", "stop"],
+            "no start after a failed restore"
+        );
+        assert_eq!(report.units_stopped, fixture.options.service_units);
+        assert!(
+            hooks.new_binary_installed(),
+            "a damaged backup replaces nothing"
+        );
+        assert!(fixture.journal().exists());
+    }
+
+    #[test]
+    fn a_rollback_waits_for_a_node_that_takes_time_to_answer() {
+        // The prior binary comes back, and needs a few probes before its port is open.
+        let fixture = Fixture::new("rollback-slow-start");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        hooks.probes_before_up = 3;
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+        assert!(report.rolled_back);
+        assert!(
+            !fixture.journal().exists(),
+            "a rollback that worked leaves no journal"
+        );
+    }
+
+    #[test]
+    fn the_installed_manifest_follows_the_binary_forward_and_back() {
+        // The units check the binary against this file before they start.
+        let fixture = Fixture::new("manifest-forward");
+        let new_manifest = fs::read(fixture.options.manifest_file.as_ref().unwrap()).unwrap();
+        assert_eq!(fixture.installed_manifest(), b"PRIOR_RELEASE_MANIFEST");
+        let report = execute_upgrade(&fixture.options, &fixture.hooks());
+        assert_eq!(report.exit_code, UPGRADE_EXIT_OK, "{report:?}");
+        assert_eq!(
+            fixture.installed_manifest(),
+            new_manifest,
+            "the new binary has its own manifest"
+        );
+        let installed = fixture.options.installed_manifest_file.as_ref().unwrap();
+        assert_eq!(mode(installed) & 0o777, 0o644);
+
+        // A rollback puts the prior manifest back with the prior binary.
+        let fixture = Fixture::new("manifest-back");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+        assert_eq!(fixture.installed_manifest(), b"PRIOR_RELEASE_MANIFEST");
+
+        // With no manifest installed before, a rollback leaves none.
+        let fixture = Fixture::new("manifest-none");
+        let installed = fixture.options.installed_manifest_file.clone().unwrap();
+        fs::remove_file(&installed).unwrap();
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+        assert!(!installed.exists());
+
+        // `None` leaves the file alone.
+        let mut fixture = Fixture::new("manifest-unmanaged");
+        let installed = fixture.options.installed_manifest_file.take().unwrap();
+        let report = execute_upgrade(&fixture.options, &fixture.hooks());
+        assert_eq!(report.exit_code, UPGRADE_EXIT_OK, "{report:?}");
+        assert_eq!(fs::read(&installed).unwrap(), b"PRIOR_RELEASE_MANIFEST");
+    }
+
+    #[test]
+    fn a_second_upgrade_waits_for_the_first_and_touches_nothing() {
+        let fixture = Fixture::new("locked");
+        let hooks = fixture.hooks();
+        let held = acquire_upgrade_lock(&fixture.options.backup_dir, false).expect("first lock");
+        for check_only in [false, true] {
+            let mut options = fixture.options.clone();
+            options.check_only = check_only;
+            let report = execute_upgrade(&options, &hooks);
+            assert_eq!(
+                report.error_code.as_deref(),
+                Some("upgrade_in_progress"),
+                "{report:?}"
+            );
+        }
+        assert!(hooks.log().is_empty(), "no unit was touched");
+        drop(held);
+        assert_eq!(
+            execute_upgrade(&fixture.options, &hooks).exit_code,
+            UPGRADE_EXIT_OK
+        );
+    }
+
+    #[test]
+    fn an_upgrade_is_not_complete_until_its_sequence_is_on_disk() {
+        let fixture = Fixture::new("record-pending");
+        let hooks = fixture.hooks();
+        // The record cannot be written: a directory sits where its temporary file goes.
+        let record_path = fixture
+            .options
+            .backup_dir
+            .join(INSTALLED_RELEASE_FILE)
+            .with_extension(format!("tmp.{}", std::process::id()));
+        fs::create_dir_all(&record_path).unwrap();
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.status, "upgraded_record_pending", "{report:?}");
+        assert_ne!(report.exit_code, UPGRADE_EXIT_OK);
+        let journal = read_upgrade_journal(&fixture.options.backup_dir)
+            .unwrap()
+            .expect("journal kept");
+        assert_eq!(journal.step, "record_pending");
+
+        // The next run finishes the record. It rolls nothing back.
+        fs::remove_dir_all(&record_path).unwrap();
+        let log_before = hooks.log();
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_OK, "{report:?}");
+        assert_eq!(hooks.log(), log_before, "no unit was stopped or started");
+        assert!(hooks.new_binary_installed());
+        assert!(!fixture.journal().exists());
+        let installed = read_installed_release(&fixture.options.backup_dir)
+            .unwrap()
+            .expect("record");
+        assert_eq!(installed.release_sequence, journal.release_sequence);
+        assert_eq!(installed.git_revision, TARGET_REV);
+    }
+
+    /// Found by rehearsal on four voting validators: the new binary voted
+    /// on four blocks before its health check failed. The rollback took the
+    /// chain state back, the node stayed four blocks behind for good, and the
+    /// chain waited when its turn to propose came.
+    #[test]
+    fn a_rollback_says_when_the_node_is_left_behind_the_chain() {
+        let fixture = Fixture::new("left-behind");
+        let options = fixture.options.clone();
+        // The new binary answers, on the wrong revision: it runs and makes blocks.
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_wrong_revision = true;
+        let mut options = options;
+        options.health_timeout_ms = 60_000;
+        let started = Instant::now();
+        let report = execute_upgrade(&options, &hooks);
+        assert_eq!(
+            (report.status.as_str(), report.exit_code),
+            ("rolled_back", UPGRADE_EXIT_ROLLED_BACK)
+        );
+        assert_eq!(
+            (report.height_before_rollback, report.height_after_rollback),
+            (Some(432_001), Some(432_000))
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "a wrong revision fails at once, not after the health timeout"
+        );
+        assert!(report.catch_up_needed);
+        let message = report.message.unwrap();
+        assert!(
+            message.contains("at height 432000; it had reached 432001"),
+            "{message}"
+        );
+        assert!(
+            message.contains("BEHIND the chain") && message.contains("rpc-catch-up"),
+            "{message}"
+        );
+        let fixture = Fixture::new("left-behind-human");
+        let mut again = fixture.hooks();
+        again.new_binary_wrong_revision = true;
+        assert!(
+            format_upgrade_human_report(&execute_upgrade(&fixture.options, &again))
+                .contains("NODE IS BEHIND THE CHAIN")
+        );
+    }
+
+    #[test]
+    fn a_rollback_with_a_catch_up_source_fetches_the_missing_blocks_before_the_start() {
+        let fixture = Fixture::new("catch-up");
+        let mut options = fixture.options.clone();
+        options.catch_up_source = Some(("10.0.0.9".to_string(), 27650));
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_wrong_revision = true;
+        let report = execute_upgrade(&options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK);
+        assert_eq!(
+            (report.height_before_rollback, report.height_after_rollback),
+            (Some(432_001), Some(432_001))
+        );
+        assert!(!report.catch_up_needed, "{:?}", report.message);
+        // stop, start (new binary), stop, catch-up, start.
+        let log = hooks.log();
+        assert_eq!(
+            log[log.len() - 3..],
+            ["stop", "catch-up 10.0.0.9:27650", "start"].map(String::from)
+        );
+
+        // A source that cannot be reached does not stop the rollback: the node
+        // is started on the prior release and the report says it is behind.
+        let fixture = Fixture::new("catch-up-fails");
+        let mut options = fixture.options.clone();
+        options.catch_up_source = Some(("10.0.0.9".to_string(), 27650));
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_wrong_revision = true;
+        hooks.catch_up_fails = true;
+        let report = execute_upgrade(&options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK);
+        assert!(report.catch_up_needed);
+        let message = report.message.unwrap();
+        assert!(
+            message.contains("CATCH-UP FAILED (source 10.0.0.9:27650 refused the connection)"),
+            "{message}"
+        );
+        assert!(hooks.unit_is_active("postfiat-validator-0.service"));
+    }
+
+    #[test]
     fn a_failed_rollback_names_the_stopped_units_and_keeps_the_journal() {
         let fixture = Fixture::new("rollback-failed");
         let mut hooks = fixture.hooks();
@@ -3484,6 +4385,14 @@ mod tests {
             fn unit_is_active(&self, unit: &str) -> bool {
                 self.0.unit_is_active(unit)
             }
+            fn catch_up(
+                &self,
+                binary: &Path,
+                data_dir: &Path,
+                source: (&str, u16),
+            ) -> Result<(), String> {
+                self.0.catch_up(binary, data_dir, source)
+            }
         }
         let hooks = OtherChain(other.hooks());
         let report = execute_upgrade(&other.options, &hooks);
@@ -3566,12 +4475,14 @@ mod tests {
                 release_sequence: 7,
                 started_unix: NOW,
                 step: "stopping".to_string(),
+                git_revision: TARGET_REV.to_string(),
                 data_dir: early.options.data_dir.display().to_string(),
                 binary_path: early.options.binary_path.display().to_string(),
                 signer_guard_dir: early.options.signer_guard_dir.display().to_string(),
                 backup_root: None,
                 service_units: early.options.service_units.clone(),
                 exclude_paths: Vec::new(),
+                installed_manifest_file: None,
             },
         )
         .unwrap();

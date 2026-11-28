@@ -40,9 +40,16 @@ A release that outside operators install is described by one manifest
 nothing else. The format and the rules are in
 [`validator-rpc-profiles-v1.md`](specs/validator-rpc-profiles-v1.md).
 
-**Once: the keys.** Each of the three signers (release lead, independent
-builder, security custodian) makes a key on a machine of its own and hands over
-only the public entry the command prints:
+**Who holds the keys today.** The format is two of three signers: release lead,
+independent builder, security custodian. Post Fiat is one developer today, and
+all three keys are held by that one person. The two signatures on a devnet
+release therefore show that the release came from the key holder and was not
+altered; they do not show that two people checked it. Release notes say so.
+When there are separate people, each makes a key on a machine of its own, and
+the keyset is replaced by a rotation (below).
+
+**Once: the keys.** A signer makes a key and hands over only the public entry
+the command prints:
 
 ```sh
 postfiat-node release-key-create --signer-id release-lead-1 --role release_lead --out-file release-lead-1.key.json
@@ -51,17 +58,21 @@ postfiat-node release-key-create --signer-id release-lead-1 --role release_lead 
 The three entries, with `threshold: 2`, are the keyset file
 (`postfiat.release_keyset.v1`) that operators install at
 `/etc/postfiat/release-keyset.json`. The private halves never leave the
-signers' machines and are never in this repository.
+key holder's machine and are never in this repository.
 
 **Every release:**
 
 1. Tag the commit on `main`. The `release-build` workflow builds
    `postfiat-node` for `linux-x86_64` and `linux-aarch64` and assembles the
    release directory with `scripts/release-assemble`: the unit bundle, the
-   SBOM and `SHA256SUMS`. It signs nothing and publishes nothing.
-2. The independent builder builds the same tag on a clean machine and compares
+   SBOM and `SHA256SUMS`. Each binary is built on a runner of its own
+   architecture and run there once (`release-build-info`); the assembly
+   refuses a binary whose ELF machine is not the one its name says. It signs
+   nothing and publishes nothing.
+2. Build the same tag a second time on a clean machine and compare
    `postfiat-node release-build-info` with `SHA256SUMS`. A different hash stops
-   the release.
+   the release. (With one developer this is a second clean build, not a second
+   person.)
 3. The release lead builds the unsigned manifest from the release directory.
    `--release-sequence` is one more than the last release of the chain; the
    checkpoint is a finalized block the signers have checked on their own nodes.
@@ -83,8 +94,8 @@ signers' machines and are never in this repository.
 
    For a release that activates at a height, add `--activation-height H
    --advance-warning-blocks N`.
-4. Two signers sign, each on its own machine, each after checking the manifest
-   against what it built or verified:
+4. Sign with two of the three keys, after checking the manifest against what
+   was built and verified:
 
    ```sh
    postfiat-node release-manifest-sign --manifest-file release-manifest.json --key-file release-lead-1.key.json
@@ -99,8 +110,15 @@ signers' machines and are never in this repository.
      --runtime-binary-file release/postfiat-node-linux-x86_64 --arch linux-x86_64
    ```
 
-An operator then runs `postfiat-node upgrade --check` and `postfiat-node
-upgrade`. A manifest with a lower `release_sequence` than the installed release
+**A first install** has no trusted `postfiat-node` yet, and a binary must not be
+the one to say it is genuine. The operator checks the download with
+`scripts/verify-release` (Python and `dilithium-py`; it runs nothing from the
+release): the two signatures against the keyset, and the binary against the
+manifest. The keyset comes from somewhere other than the download, and its
+SHA-256 is published with the release.
+
+After that, an operator runs `postfiat-node upgrade --check` and `postfiat-node
+upgrade`: the installed binary checks the next one. A manifest with a lower `release_sequence` than the installed release
 is refused.
 
 **Replacing a key.** Two signers of the current keyset sign the new keyset
@@ -110,26 +128,24 @@ until then.
 
 `python/tests/test_release_flow.py` runs these commands end to end.
 
-## Protected-branch requirements
+## Branch rules as they are
 
-The public `main` branch must reject force-pushes and deletion, require review
-of CODEOWNERS paths, require all review conversations to be resolved, and apply
-the same rules to administrators. At least one approving review is required;
-changes to consensus, state transitions, cryptography/proofs, custody, bridge,
-release or workflow code require two approvals including the owning security or
-protocol reviewer.
+This section describes what is enforced today, not a target.
 
-The following pull-request jobs are required and may not be bypassed by a label
-or a maintainer-authored merge:
-
-- `rust-ci / check`
-- `rust-ci / test`
-- `docs-build / build`
-- `product-security-ci / public-tree-hygiene`
-- `product-security-ci / rust-supply-chain`
-- `product-security-ci / python-sdk`
-- `product-security-ci / wallet-and-proxy`
-- `product-security-ci / evm-contracts`
+- `postfiatorg/postfiatl1v2` `main` has no branch protection. A pull request
+  can be merged by its author without review. With one developer there is no
+  second reviewer; the checks below are the gate, and a written review (an
+  agent or an outside reader) is requested for changes to consensus, state
+  transitions, cryptography, custody, bridge, release or upgrade code. **Every
+  finding of such a review is fixed, or named as open in the pull request,
+  before the merge.**
+- Pull-request jobs that must be green before a merge: `rust-ci / check`,
+  `rust-ci / test`, `docs-build / build`, and the `product-security-ci` jobs
+  (`public-tree-hygiene`, `rust-supply-chain`, `python-sdk`,
+  `wallet-and-proxy`, `evm-contracts`). GitHub does not enforce this on `main`;
+  the person merging does.
+- `build-lane-export-identity` fails on `main`: the committed SP1 program and
+  verification key do not match a rebuild. It is a known open item.
 
 The secret-backed `product-security-ci / official-mainnet-fork` job is required
 on the exact post-merge release revision before tagging; it is deliberately not

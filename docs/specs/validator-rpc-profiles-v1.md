@@ -193,6 +193,8 @@ postfiat-node upgrade [OPTIONS]
 | `--channel-url URL` | `https://releases.postfiat.org/latest/release-manifest.json` | Fixed HTTPS release channel URL (TLS verified, no untrusted redirects, 1 MiB max manifest body). |
 | `--keyset-file PATH` | `/etc/postfiat/release-keyset.json` | Pinned 2-of-3 `postfiat.release_keyset.v1` trust file. |
 | `--data-dir PATH` | `/var/lib/postfiat/validator-0` | Node data directory. Its chain state is backed up; its vote record and key files are not (step 6). |
+| `--installed-manifest-file PATH` | `/etc/postfiat/release-manifest.json` | The manifest of the installed release, which the packaged units check the binary against before every start. `upgrade` replaces it together with the binary and a rollback puts the prior one back. `none` leaves the file alone. |
+| `--catch-up-source HOST:PORT` | none | An RPC server of another node of the same chain. After a rollback the restored node fetches from it the blocks made during the attempt, before it is started again (step 9). A validator should always pass it. |
 | `--exclude-path NAME` | none | Further entry of `--data-dir` to leave out of the backup and the rollback. Repeatable. |
 | `--rotate-keyset FILE` | none | Apply a `postfiat.release_keyset_rotation.v1` and exit (2.2.1). |
 | `--signer-guard-dir PATH` | `/var/lib/postfiat/signer-guard` | Immutable double-sign guard directory. Verified disjoint from `--data-dir` and `--backup-dir`; NEVER copied, backed up, or rolled back. |
@@ -217,20 +219,24 @@ postfiat-node upgrade [OPTIONS]
    - every key file, whatever its name: `validator_keys.json`, and any file of at most 1 MiB that names a private key field (`private_key_hex`, `private_key`, `secret_key_hex`, `secret_key`). The data directory is scanned before the backup; the files found are listed in the journal and in `backup-manifest.json`. If the scan cannot read a file, `upgrade` exits `4` (`key_file_scan_failed`) before any service is stopped;
    - `runtime/`, `readiness/`, sockets, and every `--exclude-path`;
    - `--signer-guard-dir`, which is outside the data directory by step 2.
-7. **Atomic binary swap:** Write staged binary to `<binary-path>.staging.<pid>`, `chmod 0755`, `fsync`, atomically `rename(2)` onto `<binary-path>`, and `fsync` parent directory.
+7. **Atomic binary swap:** Write staged binary to `<binary-path>.staging.<pid>`, `chmod 0755`, `fsync`, atomically `rename(2)` onto `<binary-path>`, and `fsync` parent directory. Then write the verified manifest to `--installed-manifest-file` the same way (mode `0644`). The units verify the binary against that file before they start (section 4), so the two always change together; the prior manifest was saved with the backup in step 6.
 8. **Start and post-upgrade health gate:** Start `--service-units` and verify within `--health-timeout-ms`:
    - `rpc-probe` returns `ok: true`;
-   - the revision the node reports is a prefix of manifest `git_revision` and at least 8 hex characters long (the node reports a short revision);
+   - the revision the node reports is a prefix of manifest `git_revision` and at least 8 hex characters long (the node reports a short revision). A node that is up and reports another revision fails the gate at once, without waiting for the timeout: the wrong binary should not go on voting;
    - `block_height >= pre_upgrade_height`;
    - when two-user signer socket mode is configured, `private_readiness` reports `validator_signer = "socket"` and `signer_double_sign_protection = true`.
 9. **Rollback on failure:** If any check in Step 8 fails:
-   - Stop `--service-units`;
-   - Restore the prior binary and the backed-up chain state, with owner, group and mode as they were;
+   - Stop `--service-units` and confirm that none is still active. If one is, nothing is replaced and the exit is `6`;
+   - Check the backup against its `backup-manifest.json` (the prior binary and every file by size and SHA-256, and no file the manifest does not name). A backup that does not match replaces nothing;
+   - Restore the prior binary, the prior installed release manifest, and the backed-up chain state, with owner, group and mode as they were;
    - **Leave every signing record of step 6 as the new binary left it.** If the new binary signed anything before the health gate failed, the old binary starts with that on record and cannot sign a different message for the same slot. A signing record is only ever carried forward. If the old binary cannot read a record the new one wrote, it refuses to start and the exit is `6`: a stopped validator, never one that signs twice;
-   - Restart `--service-units` and run `rpc-probe`;
+   - **Only after a complete restore**, restart `--service-units` and run `rpc-probe`. After a failed or partial restore the units stay stopped, the journal stays, and the exit is `6`: a validator is never started on a partly restored data directory;
+   - **The restored node is behind by the blocks made during the attempt, and a validator does not fetch them by itself.** It does not vote on a block whose parent it lacks, and the chain waits when its turn to propose comes. With `--catch-up-source HOST:PORT` the rollback fetches them after the restore and before the start: it runs the restored binary's `rpc-catch-up` against that RPC server as the owner of `--data-dir`, and every block is checked against its certificate. A source that fails does not stop the rollback. Without the flag, or when the source fails, the report sets `catch_up_needed`, gives both heights, and the message names the command to run by hand;
    - Exit `5` (`rolled_back`) if the prior version recovers cleanly, or `6` (`rollback_failed`).
 10. **Services are never left stopped silently.** Every exit after step 5 either has the units running or reports the stopped units by name in `units_stopped` with exit `6`.
 11. **Interrupted upgrade:** If `upgrade` starts and finds a journal, the earlier run did not finish. It refuses every other action and completes the rollback of that run from the journal (steps 9 and 10), then exits `5` or `6`. `--check` reports `interrupted_upgrade` and exits `4`.
+12. **One upgrade at a time.** `upgrade` holds an exclusive lock on `<backup-dir>/upgrade.lock` from before it reads the journal until it exits. A second run, `--check` included, reports `upgrade_in_progress` and exits `4` without touching anything.
+13. **The installed sequence is durable before the upgrade is complete.** After the health gate the journal moves to step `record_pending`, then `installed-release.json` is written, then the journal is removed. If the record cannot be written the status is `upgraded_record_pending` and the exit is `4`; the new release keeps running, and the next run writes the record from the journal and rolls nothing back.
 
 ### 3.2.1 Report (`postfiat-node-upgrade-report-v1`)
 
@@ -240,7 +246,7 @@ With `--json`, one object:
 | --- | --- | --- |
 | `schema` | string | `postfiat-node-upgrade-report-v1` |
 | `check_only` | bool | `--check` was given |
-| `status` | string | `up_to_date`, `upgrade_available`, `activation_imminent`, `upgraded`, `refused`, `rolled_back`, `rollback_failed` |
+| `status` | string | `up_to_date`, `upgrade_available`, `activation_imminent`, `upgraded`, `upgraded_record_pending`, `refused`, `rolled_back`, `rollback_failed` |
 | `exit_code` | integer | as in 3.3 |
 | `error_code`, `message` | string or null | typed reason and one line of text when not successful |
 | `release_id`, `release_sequence`, `target_git_revision` | string, integer, string, or null | from the verified manifest |
@@ -254,6 +260,9 @@ With `--json`, one object:
 | `backup_path` | string or null | step 6 |
 | `rolled_back` | bool | step 9 ran |
 | `units_stopped` | array of string | units not running at exit; empty unless exit `6` |
+| `height_before_rollback` | integer, optional | the height the node had reached when the rollback began, if it answered |
+| `height_after_rollback` | integer, optional | the height of the restored node |
+| `catch_up_needed` | bool, present when true | the restored node is behind the chain and has to be caught up by hand (step 9) |
 
 ### 3.3 Exit Codes
 
