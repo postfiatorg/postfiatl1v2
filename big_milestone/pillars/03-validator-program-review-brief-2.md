@@ -1,176 +1,143 @@
 # Pillar 3 — Review brief, second pass
 
-Written 2026-11-28 for a reviewer who was not part of the work. The first brief is [`03-validator-program-review-brief.md`](03-validator-program-review-brief.md); its results are [`03-validator-program-review-results.md`](03-validator-program-review-results.md). This brief covers what changed since, and points at the places most likely to be wrong. Read the code and try to break it.
+Updated 2026-11-28, after the fixes. Written for a reviewer who was not part of the work. The first brief is [`03-validator-program-review-brief.md`](03-validator-program-review-brief.md); its results are [`03-validator-program-review-results.md`](03-validator-program-review-results.md). Plan of record: [`03-validator-program.md`](03-validator-program.md).
 
-Plan of record: [`03-validator-program.md`](03-validator-program.md).
+Read the code and try to break it. Section 3 says where a mistake is most likely.
 
-## 1. What is different from the first pass
+## 1. Where things stand
 
-- **Everything the first pass reviewed is now merged.** `postfiatl1v2` `main` is `62edebc6a` (`#286`, `#290` including `#321`). `tasknode` `main` has `#459` as `33a74ee57`. The site notice `#66` is live.
-- **Most first-pass findings were merged unfixed.** One commit followed the review: `2b3e7111f` (never back up or roll back a signing record or key file). It answers the second P0 and part of one P1. Section 2 lists the rest.
-- **A release is published.** [`v0.4.0-devnet2-p3`](https://github.com/postfiatorg/postfiatl1v2/releases/tag/v0.4.0-devnet2-p3), GitHub pre-release, built from `62edebc6a` by workflow run `46090050228`, signed 2 of 3, release sequence 1.
-- **Two PRs are open.** [`#326`](https://github.com/postfiatorg/postfiatl1v2/pull/326) (`bm/p3-seed-new-node`, `32582ca43`, `history.rs` +185 −34) and [`#327`](https://github.com/postfiatorg/postfiatl1v2/pull/327) (`bm/p3-upgrade-follow-redirects`, `5f867ba60`, `release_upgrade.rs` +16 −1). Both show one failing check, `build-lane-export-identity`, which also fails on `main`.
-- **Nothing is deployed.** The six validators run another branch (section 3.6). Task Node enforcement is off.
-- **One person holds everything.** The founder is a solo developer. There is no second builder, no second signer, no reviewer. The author (an agent on the founder's machine) made all three release keys and merged its own PRs.
+- The five original PRs were merged on 28 November with most first-review findings open. A release was published from that code. Both were mistakes. The release is withdrawn (a draft, not downloadable).
+- Every first-review finding now has a fix with tests. Section 2 lists them.
+- Two rehearsals ran on real nodes under systemd. They found five more faults that the mocked tests had hidden. All five are fixed. Section 4 lists what was run.
+- Merged to `main`: [`postfiatl1v2#330`](https://github.com/postfiatorg/postfiatl1v2/pull/330) (`88f22f132`), [`#331`](https://github.com/postfiatorg/postfiatl1v2/pull/331) (`3f4554961`), [`#326`](https://github.com/postfiatorg/postfiatl1v2/pull/326) (`099ba5670`), [`tasknode#461`](https://github.com/postfiatorg/tasknode/pull/461) (`dc859d0e`).
+- Open: [`postfiatl1v2#329`](https://github.com/postfiatorg/postfiatl1v2/pull/329) (upgrade and release; checks running on `2d46d39b3`), [`site#84`](https://github.com/postfiatorg/postfiatorg.github.io/pull/84) (guide; merges after `#329`).
+- Nothing is deployed. The six validators run another branch (`train-a-r7`). Task Node `main` is not deployed with `#461`, and enforcement is off. No release is published.
+- A new node still cannot be seeded from a pruned snapshot ([`#320`](https://github.com/postfiatorg/postfiatl1v2/issues/320)). A fix for seeding from a full snapshot is being tested.
+- One person holds everything. The founder is a solo developer. There is no second builder, signer or reviewer. An agent on the founder's machine made the release keys and merged its own PRs. `docs/release-process.md` now says this.
 
-Line numbers below are for `crates/node/src/release_upgrade.rs` at `62edebc6a` unless another file is named.
+## 2. First-review findings and their fixes
 
-## 2. First-pass findings: what is still open on `main`
+Confirm each against the code. "Rehearsed" means it ran on a real node, not only in a mocked test.
 
-The author has not re-verified the "open" rows beyond confirming that no commit touched the files. Confirm each against the code.
-
-| First-pass finding | State on `main` | Where |
-|---|---|---|
-| P0 · A failed stop or failed restore can still start a voting service | **Open.** The stop result is discarded at L2573. The units are started whether or not the restore worked; the comment above `start_units` in `rollback_and_verify` says this is on purpose | `rollback_and_verify`, L2559–2620 |
-| P0 · Rollback rewinds a persisted vote lock | **Changed, not proven.** `block_proposal_vote_locks`, `transport_votes`, `consensus-v2-qcs`, `owned_locks.*` and two signing-state directories joined the exclusion list. See 3.1 for what that may break | `DEFAULT_BACKUP_EXCLUDES`, L53 |
-| P1 · A second `upgrade` can roll back one that is still running | **Open.** No lock is taken | `execute_upgrade`, L1820; `recover_interrupted_upgrade` |
-| P1 · Key exclusion depends on convention; restore does not verify the backup | **Half changed.** A content scan now finds key files under any name (3.2). Restore still installs the saved binary and tree without checking the hashes the backup wrote | `key_bearing_files`, L519; `restore_pre_upgrade_backup`, L1694 |
-| P1 · Downgrade protection lost if the installed-release record fails to write | **Open** | L2447 |
-| P1 · Late-vote credit is not bound to its source | **Open** | `scripts/validator-uptime-observer.py` |
-| P1 · Two observers can agree on a row without agreeing on the reward | **Open** | `scripts/validator_uptime_contract.py` |
-| P1 · A cold-started observer grants a new ramp-in to old validators | **Open.** The soak feed shows it today | observer, contract |
-| P1 · Task Node acts on an old quorum after the feed loses quorum | **Open.** `refreshL1ValidatorAccess` returns on `indeterminate` without recording it; `creditFromFeedRow` and `feedAllowsNewBindings` read rows up to an hour old | `tasknode/server/l1-validator-access.js` |
-| P1 · Concurrent refreshes and grants commit stale decisions | **Open.** Observer watermarks are read before the transaction and overwritten without a monotonic check | same file |
-| P1 · Research-key revocation depends on binding order | **Open.** The loop revokes keys inside the per-binding pass | same file |
-| P1 · A follower reports ready on a divergent tip of equal height | **Open** | `rpc_cli.rs`, `rpc_read_cache.rs` |
-| P1 · The guide runs the downloaded binary to verify itself | **Open.** `#66` added a notice only | `postfiatorg.github.io` `content/run-a-validator.md` |
-| P2 · Manifest assembly does not check binary architecture | **Open.** `scripts/release-assemble` has no ELF check. The published release went through it | |
-| P2 · Replica cache holds reads that can change at a fixed height | **Open** | `rpc_read_cache.rs` |
-| P2 · Python reader does not compare the feed's keyset id | **Open** | `scripts/validator_uptime_contract.py` |
-| P2 · Observer bracket attribution, removed ids kept for ever, HTTP edge limits | **Open** | |
-
-The first results file set a release order: fix both rollback P0s and rehearse recovery before any release. The release was published without that. Say whether the published binary's `upgrade` command should be withdrawn or marked "do not run on a validator" until the first row is fixed.
+| First-review finding | Fix | Where | Rehearsed |
+|---|---|---|---|
+| P0 · A failed stop or failed restore can still start a voting service | Rollback refuses if any unit is still active. After a failed restore the units stay stopped, exit 6, journal kept | `rollback_and_verify`, `#329` | Yes: damaged backup left the units stopped, then recovered |
+| P0 · Rollback rewinds a persisted vote lock | Every signing record is left out of backup and restore and only carried forward | `DEFAULT_BACKUP_EXCLUDES`, `#329` | Yes: a rolled-back validator refused to sign a second block for a slot it had signed |
+| P1 · A second `upgrade` can roll back one that is running | Exclusive lock on `<backup-dir>/upgrade.lock` | `acquire_upgrade_lock`, `#329` | Yes |
+| P1 · Restore does not verify the backup; key exclusion by convention | Backup checked file by file (size, SHA-256, no unnamed file) before anything is replaced. Key files found by content | `verify_pre_upgrade_backup`, `key_bearing_files`, `#329` | Yes (damaged backup) |
+| P1 · Downgrade protection lost if the installed record fails to write | Journal step `record_pending`; status `upgraded_record_pending`, exit 4; next run writes the record | `#329` | Test only |
+| P1 · Late-vote credit not bound to its source | A vote record counts only from the proposer's own source (`--source validator-id=endpoint`) | `validator-uptime-observer.py`, `#330` | Test only |
+| P1 · Observers agree on a row without agreeing on the reward | `reward_eligible` and `grace_started_at` are agreement fields in Python, Rust and JS | `#330`, `tasknode#461` | Test only |
+| P1 · Cold start grants a new ramp-in | Cold start is `bootstrap`; activation dates come from `--activation-file` | `#330` | Test only |
+| P1 · Task Node acts on an old quorum | Every refresh outcome is recorded (`l1_uptime_feed_state`); grants need a current decision | `tasknode#461` | Postgres smoke |
+| P1 · Concurrent refreshes commit stale decisions | Advisory lock; state re-read inside the transaction; `superseded` | `tasknode#461` | Postgres smoke |
+| P1 · Key revocation depends on binding order | Keys revoked once per account after all bindings are processed | `tasknode#461` | Postgres smoke |
+| P1 · Follower ready on a divergent tip of equal height | The source's tip must be a block of the follower's own chain | `rpc_catch_up_source_not_ahead`, `#331` | Test only |
+| P1 · Guide runs the downloaded binary to verify itself | `scripts/verify-release`: an independent Python check of signatures, size, hash and ELF | `#329`, `site#84` | Yes: agrees with the Rust check on a real release |
+| P2 · No architecture check at assembly | ELF machine check in `scripts/release-assemble` | `#329` | Yes |
+| P2 · Cache holds reads that change at a fixed height | `block_vote_records` and `account_tx_index_status` are never cached | `#331` | Test only |
+| P2 · Python reader ignores the keyset id | Compared | `#330` | Test only |
+| P2 · Observer and edge limits | `removed_since` retention, per-block committee, whole-request time budget on the HTTP edge | `#330`, `#331` | Test only |
 
 ## 3. Where a mistake is most likely
 
 Ordered by damage.
 
-### 3.1 Rollback now leaves voting state ahead of chain state
+### 3.1 Rollback on a voting validator
 
-`2b3e7111f` widened the list of things a rollback never restores. After a rollback the node has old chain state and newer vote locks, QCs, transport votes and owned-object locks.
+Rehearsed on four voting validators (section 4). What it showed and what it did not:
 
-- Does the prior binary start in that state? Does it resync, or does it refuse blocks because a lock names a block it does not have?
-- `consensus-v2-qcs` is excluded. Is a QC store ahead of the block store read safely on start?
-- `owned_locks.json`, `.wal`, `.guard` are FastPay lock state. Is carrying them forward across a state rewind right, or can it strand an owned object?
-- Is the list complete now? Search every writer under the data directory that records a signature the validator has given. The author found these by listing a live data directory, not by reading every signing path.
-- The only test is `signing_records_and_key_files_under_any_name_are_never_backed_up_or_rolled_back` (L3256), with a mocked systemd and a mocked node. **No rollback has run against a real node on any machine.**
+- A rolled-back validator has old chain state and newer vote records. It refused to sign a conflicting block. Only the proposal lock was provoked. Try the vote path: make it vote for a different block at a height it already voted on.
+- **New fault found and fixed:** the rolled-back node stayed behind by the blocks made during the attempt and never caught up, and the chain waited when its turn to propose came. `upgrade --catch-up-source HOST:PORT` now fetches them before the restart; without it the report sets `catch_up_needed`. Check `run_catch_up_as_data_owner`: it runs the restored binary as the data directory's owner, with retries. Is running `rpc-catch-up` on a validator's data directory sound in every storage mode? An older note in `scripts/wan-devnet-state-sync` avoids it for historic payloads.
+- The catch-up does a full state verification on each run. On devnet-2 that takes minutes, with the validator down.
+- Not tried: a vote record the old binary cannot read; two validators down at once; the redb store (the fleet and the rig use the JSON store).
+- The health gate took a full minute to fail on a wrong revision. In that minute the new binary voted on 17 blocks. Should a wrong revision fail at the first answer?
+- **The chain waits whenever the proposer for a height is down.** Seen on the rig; nothing takes over. That is existing behaviour, not part of this pillar, and it sets how a rolling upgrade feels.
 
 ### 3.2 The key-file scan is a heuristic
 
-`key_bearing_files` (L519) reads every regular file up to 1 MiB and looks for four quoted JSON names: `"private_key_hex"`, `"private_key"`, `"secret_key_hex"`, `"secret_key"`.
+`key_bearing_files` reads every regular file up to 1 MiB for four quoted JSON names (`"private_key_hex"`, `"private_key"`, `"secret_key_hex"`, `"secret_key"`).
 
-- **Misses:** a key in a file over 1 MiB, in PEM, raw hex, binary, or under another JSON name (`sk`, `seed`, `signing_key`, `mnemonic`). Grep the tree for every key-file writer and check each name.
-- **False hits:** any state file under 1 MiB that happens to contain one of those strings is left out of the backup and is therefore not rolled back. Could that be a file the old binary needs at its old content?
-- **Timing:** the scan runs at L1833, before the units are stopped at L2326. The backup is taken after the stop. A file written in between is not scanned.
-- Symlinks are skipped by the scan and by the copy. A key directory reached through a symlink inside the data directory: confirm it is neither copied nor deleted on restore.
+- Misses: a key in a larger file, in PEM, raw hex, binary, or under another name. Grep every key-file writer.
+- False hits: a state file that contains one of those strings is left out of the backup and not rolled back.
+- The scan runs before the units stop; the backup is taken after.
 
-### 3.3 The published release
+### 3.3 Releases
 
-- **The 2-of-3 signature gives no separation.** All three private keys are plain files, mode 0600, in `~/var/p3/release/keys/` on one development machine, made by an agent. The release notes say the founder holds all three. An operator who installs `release-keyset.json` pins those keys as the trust root. Is that acceptable for a pre-release, and what is the rotation path to real custody? `apply_release_keyset_rotation` (L673) exists but has only unit tests.
-- **Nobody rebuilt it.** `docs/release-process.md` step 2 requires a second clean build to match the hash. It was skipped. Rebuild `62edebc6a` and compare with `SHA256SUMS` (x86_64 `9c3d1fc8…`, aarch64 `191252ec…`).
-- **The aarch64 binary has never been executed.**
-- **Circuit metadata came from another build.** `swap.metadata.json` and `private-egress.metadata.json` were copied from validator-0, which runs `train-a-r3` (`#325`), not `main`. Their hashes are in the signed manifest. Check what consumes those hashes (`lifecycle_queries.rs` L1101–1115) and whether a `main` build with these files passes the pre-start check and proves and verifies correctly.
-- **The checkpoint** (block 1941, committee epoch 3) was read from one replica the author runs. Check it against the six validators.
-- **`protocol_version` is 1**; the documented example says 2. `release_sequence` is 1 with no earlier record. Are both right for devnet-2?
-- **Known defect shipped:** `upgrade --channel-url` fails against GitHub (3.4). The notes give a workaround.
+- 2 of 3 signatures give no separation while one machine holds all three keys.
+- Nobody has rebuilt a release independently.
+- Circuit metadata in the withdrawn release came from a validator on another branch. The next release must take it from its own build.
+- `upgrade --channel-url` follows redirects to any https host (`#327`, inside `#329`). Integrity rests on the signed manifest and the binary hash. Confirm nothing fetched is used before it is verified.
 
-### 3.4 `#327`: following redirects
+### 3.4 Replica audit as its own job
 
-`fetch_https_bounded` (L1305) shells out to `curl`. The PR adds `--location --proto-redir =https --max-redirs 5`, and replaces `--max-time 30` with `--connect-timeout 30 --speed-limit 10240 --speed-time 30 --max-time 1800`.
+The full state audit left the follower and became `rpc-replica-audit` with its own timer (`#331`). While it runs the replica refuses reads. Check `RPC_REPLICA_AUDIT_MAX_RUNNING_SECS` (4 h): what happens when an audit dies without clearing its record, and when it outlives the limit.
 
-- A redirect may now go to any https host. Integrity rests on the signed manifest and the hash check of the binary. Confirm nothing fetched this way is used before it is verified, and that `max_bytes` is still enforced on the redirected body.
-- `--proto-redir` needs a recent `curl`. What does an old `curl` do: fail closed or ignore it?
-- `curl` is found through `PATH` and `upgrade` runs as root. Is the path pinned?
-- The fetches happen before the units stop (L1942, L2153), so a 30-minute download does not hold a validator down. Confirm no fetch sits after L2326.
+### 3.5 Seeding a new node (`#320`)
 
-### 3.5 `#326` and what it uncovered
+Three separate faults:
 
-Two transaction ids on devnet-2 are committed in more than one block: one at heights 64 and 66 with identical accepted receipts, one at 940, 941 and 945 with two distinct receipts.
+1. The import bound on the block history file is 256 MiB; devnet-2's is 370 MB. Fix under test: 4 GiB for that one file. At about 190 KB a block the new bound lasts to roughly height 22,000. That is a stopgap.
+2. `build_history_checkpoint_state` replays from genesis and block 12 fails under current code. So no pruned checkpoint can be built. **Something in the state transition changed without a version gate.** Find it.
+3. `validate_history_checkpoint_state` uses the v1 state root, so a checkpoint taken after the activation cannot validate.
 
-- **Why does the chain commit one transaction id more than once?** If the transaction ran twice, that is a replay hole in the state machine, far more serious than the archive bug. The author fixed the archive code and did not investigate this. It is the first thing to look at.
-- The fix (`receipts_in_commit_order`, `history.rs` L2020 on the PR branch) pairs the k-th block that names an id with the k-th stored receipt for that id. That assumes the receipt file is in commit order and holds exactly one receipt per commit. Three commits with two distinct receipts suggests one receipt may be missing or duplicated. What does the pairing do then?
-- `history_prune_plan` now refuses a boundary that splits such an id (L811–826). On a chain with many repeats, is there any legal boundary?
-- One test, written by the author of the fix.
+### 3.6 Repeated transaction ids on devnet-2
 
-### 3.6 A new node still cannot join
-
-Issue [`#320`](https://github.com/postfiatorg/postfiatl1v2/issues/320) is open. This is the user story of the pillar, and it fails.
-
-- The full snapshot's `blocks.json` is 369 MB; the import bound is 256 MiB.
-- Pruning first is impossible: `build_history_checkpoint_state` replays from genesis and block 12 fails with `checkpoint state root mismatch` under current code.
-- **Block 12 not replaying means the state transition changed without a version gate.** Find the change. Does any other path replay from genesis (audit, terminal full-state audit of the follower, archive verify)? Those are broken too.
-- The author's proposed fix is block history in bounded segments streamed into the transactional store. Not started. Is that the right fix, or should the bound simply be raised for now?
+Ids repeat at heights 64/66 and 940/941/945. The author's answer: these are governance route-profile actions that were refused and resubmitted, and the code allows it under `WAN_DEVNET2_DEDUPLICATED_GOVERNANCE_RECEIPT`; nothing ran twice. Check that independently.
 
 ### 3.7 Two release systems that do not meet
 
-- `postfiat-node upgrade` swaps one binary at `/usr/local/bin/postfiat-node` and reads a v3 manifest.
-- The six validators use a deployment-manifest layout (`/opt/postfiat/releases/<id>/`, `/etc/postfiat/releases/<id>/`, `python/postfiat_ops/safe_rollout`).
-- So the command the guide tells outside operators to run has never run on any validator, and cannot be rehearsed on the fleet as it stands. Which system is the real one? Should outside operators and the fleet differ?
-- The fleet runs `train-a-r3` from open PR `#325` (`b9b024327`), not `main`. Pillar 3 code is on no validator. Validators answer `block_vote_records` with `rpc_method_not_allowed`, so the soak feed still counts certificates only and shows validator-5 under 95%.
+`postfiat-node upgrade` swaps `/usr/local/bin/postfiat-node` under a v3 manifest. The six validators use a deployment-manifest layout (`/opt/postfiat/releases/<id>/`). The command the guide gives outside operators has never run on a fleet validator. Which system is the real one?
 
 ### 3.8 Task Node, before enforcement is switched on
 
-All in `server/l1-validator-access.js` on `tasknode` `main`.
-
-- `l1UptimeFeedConfig`: enforcement set to `true` with a missing URL or keyset returns `enforced: false` and says nothing.
-- `refreshL1ValidatorAccess` locks every L1 binding `FOR UPDATE` on each run. Key revocation is permanent and happens inside the per-binding loop.
-- `creditFromFeedRow` grants from a row up to an hour old and is not re-checked under the lock that writes the ledger entry.
-- The smoke test `scripts/l1-validator-access-postgres-smoke.mjs` was added to `scripts/smoke-suites.json` only to make the `check` job pass. Confirm CI actually runs it against Postgres.
+`server/l1-validator-access.js` and `server/l1-validator-rewards.js` after `#461`. Enforcement with a missing URL or keyset now throws at start. Look for a path that grants credit or a research key without a current feed decision.
 
 ### 3.9 Process
 
-- L1 `main` has no branch protection. `docs/release-process.md` ("Protected-branch requirements", and three signers on three machines) describes rules that do not exist. The document is wrong today.
-- All PRs were merged by their author with no approving review. `#290` was merged with `build-lane-export-identity` red, and after a re-run of the flaky test `pq_active_pool_requires_atomic_inclusion_at_proposal_and_commit`. Is that test flaky, or is it an intermittent real fault?
-- `build-lane-export-identity` fails because the committed SP1 program and verification key do not match a rebuild. The author left it alone. Someone should decide which is right.
+- L1 `main` has no branch protection. PRs are merged by their author.
+- `build-lane-export-identity` fails on `main` and every PR: the committed SP1 program and key do not match a rebuild. Nobody has decided which is right.
+- A consensus timing test (`a_prepare_answered_8s_late_does_not_delay_an_early_quorum_round`) failed once on `#329` at 8.17 s and passed on re-run. Flaky, or a real intermittent delay?
+- A source on the JSON store can refuse a read while it writes a block ([`#333`](https://github.com/postfiatorg/postfiatl1v2/issues/333)).
 
-## 4. How to run it
+## 4. What was rehearsed
 
-`postfiatl1v2`, from `/home/postfiat/repos/_bm_worktrees/w1-p3-validator-ops` (branch `bm/p3-upgrade-follow-redirects`; `public` is the remote for `postfiatorg/postfiatl1v2`):
+**Replica of devnet-2 under systemd** (container `p3-rehearse`, real 2,000-block store): upgrade (59 s), rollback on a failed health check, rollback with a damaged backup (units left stopped, exit 6, then recovered), second upgrader refused by the lock, `kill -9` mid-upgrade and recovery, the audit job (786 s; reads refused in about 100 ms each while it ran). Faults found: the manifest was not installed with the binary; one probe after rollback gave a false failure; the audit inside the follower blocked the store.
 
-```bash
-git fetch public main bm/p3-seed-new-node bm/p3-upgrade-follow-redirects
-cargo test --locked -p postfiat-node --lib -- release_upgrade history
-git diff public/main...public/bm/p3-seed-new-node
-git diff public/main...public/bm/p3-upgrade-follow-redirects
-```
+**Four voting validators under systemd** (containers `p3-v0`..`p3-v3`, test chain, loopback, units and flags copied from the fleet; rig in `~/var/p3/vote/`): upgrade of one validator under traffic (4 s, every transfer certified), forced rollback, attempt to make the rolled-back validator sign twice (refused), rollback with catch-up (rejoined at the tip, proposed again). Faults found: the node left behind after rollback; one refused read on the source.
 
-The release, as an outsider:
+## 5. How to run it
 
 ```bash
-T=$(mktemp -d) && cd "$T"
-gh release download v0.4.0-devnet2-p3 -R postfiatorg/postfiatl1v2
-sha256sum -c SHA256SUMS
-chmod +x postfiat-node-linux-x86_64
-./postfiat-node-linux-x86_64 release-manifest-verify --manifest-file release-manifest.json \
-  --keyset-file release-keyset.json --runtime-binary-file postfiat-node-linux-x86_64 --arch linux-x86_64
+cd /home/postfiat/repos/_bm_worktrees/w1-p3-validator-ops   # remote `public` = postfiatorg/postfiatl1v2
+git fetch public main bm/p3-upgrade-review-fixes
+git diff public/main...public/bm/p3-upgrade-review-fixes
+cargo test --locked -p postfiat-node --lib release_upgrade
+python3 -m unittest python/tests/test_release_flow.py
 ```
 
-Seeding failure: store copy and logs at `/mnt/HC_Volume_106212907/stakehub-hyperliquid/p3-seed-test/` (`prune.log`, `seed.log`, `out/handoff.json`). The repeated ids are on devnet-2 at heights 64, 66 and 940, 941, 945; read them through the tunnels `127.0.0.1:39650`–`39655`.
+Voting rig: `. ~/var/p3/vote/lib.sh`, then `python3 -I ~/var/p3/vote/st.py 6` (heights and signers), `python3 -I ~/var/p3/vote/send.py 27850` (one transfer), `vupgrade <release>`.
 
-Still running locally: replica `p3-replica` (TCP 27751), edge `p3-edge` (HTTP 8750), follower `p3-follow`, soak feed in `~/var/p3/observer-soak/`.
+**Do not write to the six validators.** The author's fleet access was read-only throughout.
 
-**Do not write to the validators.** The author's fleet access was read-only throughout.
+## 6. Not exercised at all
 
-## 5. Not exercised at all
-
-- A full `upgrade` (stop, back up, swap, start, health check) on a real node.
-- A rollback on a real node.
+- Any of this on a fleet validator.
 - A keyset rotation outside unit tests.
-- The packaged systemd units under systemd.
-- The aarch64 binary.
-- A second, independent build of the release.
-- Seeding a new node from the published release.
-- Three observers on three machines. The soak runs three on one machine with keys the author made.
+- The aarch64 binary beyond one run of `release-build-info` on its build runner.
+- A second, independent build of a release.
+- Seeding a new node and following the chain from it.
+- Three observers on three machines.
 - Task Node with enforcement on, against a real feed.
 - `tasknode-bind` on a real validator host.
 - Not built: the join and ratification flow for an outside operator, public read servers, one credit per operator across chains.
 
-## 6. What a useful review returns
+## 7. What a useful review returns
 
 For each finding: file and line, a concrete input or state that goes wrong, and what happens. Sort by severity. Answer these plainly:
 
-1. Did the repeated transactions execute more than once?
-2. What change makes block 12 fail to replay?
-3. Is a rollback safe with voting state ahead of chain state?
-4. Should the published `upgrade` be marked unsafe until the rollback P0 is fixed?
-5. Which open rows of section 2 must be fixed before Task Node enforcement is switched on?
+1. Can a rolled-back validator be made to sign two different votes for one slot?
+2. Is `rpc-catch-up` on a validator's data directory sound?
+3. What change makes block 12 fail to replay?
+4. Is there a path in Task Node that grants without a current feed decision?
+5. Which of the two release systems should the fleet use?
