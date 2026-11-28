@@ -585,6 +585,73 @@ async function testCekCommitmentBlindedSealedAndEpochRotation() {
   );
 }
 
+async function testRecipientCapsAndChainIdNulGuard() {
+  const { mlDsa65 } = await mp.loadPqModules();
+  const sender = mlDsa65.keygen(crypto.randomBytes(32));
+  const senderAddr = mp.deriveAccountAddress(sender.publicKey);
+
+  // 1) NUL byte in chain_id rejected in AAD context
+  assert.throws(() => mp.computeAadContext('postfiat\0devnet', Buffer.from('hdr')), /NUL/);
+
+  // 2) > MAX_ENVELOPE_RECIPIENTS rejected on seal and decode
+  const dummyWrap = {
+    recipient_key_id: Buffer.alloc(32, 0x11),
+    recipient_account: '',
+    xwing_ciphertext: Buffer.alloc(mp.XWING_CIPHERTEXT_BYTES, 0x22),
+    wrap_nonce: Buffer.alloc(mp.AEAD_NONCE_BYTES, 0x33),
+    wrapped_cek: Buffer.alloc(mp.WRAPPED_CEK_BYTES, 0x44),
+  };
+  const oversizedHdrBytes = mp.encodeXWingEncryptionHeader({
+    cipher_suite: mp.CipherSuite.XWING_XCHACHA20_POLY1305,
+    aead_nonce: Buffer.alloc(mp.AEAD_NONCE_BYTES, 0x01),
+    aad_context: Buffer.alloc(32, 0x02),
+    chunk_index: 0,
+    kdf_info: mp.DOMAIN_XWING_WRAP_INFO,
+    recipients: Array.from({ length: mp.MAX_ENVELOPE_RECIPIENTS + 1 }, () => dummyWrap),
+    cek_commitment: Buffer.alloc(32, 0x03),
+  });
+  assert.throws(() => mp.decodeXWingEncryptionHeader(oversizedHdrBytes), /exceeds cap/);
+
+  // 3) SEALED trial-decapsulation enforces maxSealedWraps before running decap
+  const recips = await Promise.all([
+    mp.generateRotatableXWingKeypair(),
+    mp.generateRotatableXWingKeypair(),
+    mp.generateRotatableXWingKeypair(),
+  ]);
+  const sealed = await mp.sealEnvelope({
+    header: {
+      protocol_version: 1,
+      chain_id: 'postfiat-devnet-2',
+      sender_account: senderAddr,
+      created_at_unix_ms: 1764201600000,
+      kind: mp.ContentKind.CHAT,
+      visibility: mp.Visibility.SEALED,
+      cipher_suite: mp.CipherSuite.XWING_XCHACHA20_POLY1305,
+      body_encoding: mp.BodyEncoding.PROTOBUF,
+      schema_id: mp.SCHEMA_ID.TEXT_V1,
+      schema_name: 'pf.msg.text.v1',
+    },
+    bodyPlaintext: Buffer.from('cap-check'),
+    senderPubkey: sender.publicKey,
+    senderSecretKey: sender.secretKey,
+    recipients: recips.map((r) => ({ xwingPublicKey: r.publicKey })),
+  });
+  let decapCalls = 0;
+  await assert.rejects(
+    () =>
+      mp.openEnvelope(sealed.envelopeBytes, {
+        expectedCidBin: sealed.cidBin,
+        maxSealedWraps: 2,
+        xwingDecapFn: async () => {
+          decapCalls++;
+          return Buffer.alloc(32);
+        },
+      }),
+    /exceeds scanner cap 2/
+  );
+  assert.equal(decapCalls, 0);
+}
+
 async function main() {
   const extension = Buffer.from('f00101', 'hex');
   for (const decode of [mp.decodeEnvelope, mp.decodeMessageKeyBinding, mp.decodeX402PaymentRequired,
@@ -599,7 +666,8 @@ async function main() {
   await testRealPqRoundtrips();
   await testKeyBindingIsSignedByTheNamedAccount();
   await testCekCommitmentBlindedSealedAndEpochRotation();
-  console.log('test_message_protocol: all C1 vectors, real PQ, cek_commitment, blinded SEALED & epoch-rotation tests passed');
+  await testRecipientCapsAndChainIdNulGuard();
+  console.log('test_message_protocol: all C1 vectors, real PQ, cek_commitment, blinded SEALED, epoch-rotation & DoS-cap tests passed');
 }
 
 main().catch((err) => {

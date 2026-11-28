@@ -655,6 +655,74 @@ class MessageProtocolVectorTests(unittest.TestCase):
                 min_known_epoch=1,
             )
 
+    def test_recipient_caps_and_chain_id_nul_guard(self) -> None:
+        # 1) NUL byte in chain_id rejected
+        with self.assertRaisesRegex(mp.MessageProtocolError, "NUL"):
+            mp.compute_aad_context("postfiat\x00devnet", b"hdr")
+
+        # 2) > MAX_ENVELOPE_RECIPIENTS rejected on decode
+        dummy_wrap = mp.RecipientWrap(
+            recipient_key_id=b"\x11" * 32,
+            recipient_account="",
+            xwing_ciphertext=b"\x22" * mp.XWING_CIPHERTEXT_BYTES,
+            wrap_nonce=b"\x33" * mp.AEAD_NONCE_BYTES,
+            wrapped_cek=b"\x44" * mp.WRAPPED_CEK_BYTES,
+        )
+        oversized = mp.XWingEncryptionHeader(
+            cipher_suite=mp.CipherSuite.XWING_XCHACHA20_POLY1305,
+            aead_nonce=b"\x01" * mp.AEAD_NONCE_BYTES,
+            aad_context=b"\x02" * 32,
+            chunk_index=0,
+            kdf_info=mp.DOMAIN_XWING_WRAP_INFO.decode("ascii"),
+            recipients=tuple(dummy_wrap for _ in range(mp.MAX_ENVELOPE_RECIPIENTS + 1)),
+            cek_commitment=b"\x03" * 32,
+        ).encode()
+        with self.assertRaisesRegex(mp.MessageProtocolError, "exceeds cap"):
+            mp.XWingEncryptionHeader.decode(oversized)
+
+        # 3) SEALED trial-decapsulation enforces max_sealed_wraps before calling decap
+        sender_pk = b"\xaa" * mp.ML_DSA_65_PUBKEY_BYTES
+        sender_addr = mp.derive_account_address(sender_pk)
+        hdr = mp.MessageHeader(
+            protocol_version=1,
+            chain_id="postfiat-devnet-2",
+            schema_name="pf.msg.text.v1",
+            schema_id=mp.SCHEMA_ID_TEXT_V1,
+            kind=mp.ContentKind.CHAT,
+            visibility=mp.Visibility.SEALED,
+            body_encoding=mp.BodyEncoding.RAW_UTF8,
+            cipher_suite=mp.CipherSuite.XWING_XCHACHA20_POLY1305,
+            sender_account=sender_addr,
+            created_at_unix_ms=1764201600000,
+        )
+        sealed = mp.seal_envelope(
+            header=hdr,
+            body_plaintext=b"cap-check",
+            sender_pubkey=sender_pk,
+            sign_fn=lambda _: b"\x55" * mp.ML_DSA_65_SIGNATURE_BYTES,
+            recipients=[
+                mp.RecipientSpec(xwing_public_key=bytes([i + 1]) * mp.XWING_PUBKEY_BYTES)
+                for i in range(3)
+            ],
+            xwing_encap_fn=lambda pk: (b"\x77" * mp.XWING_CIPHERTEXT_BYTES, pk[:32]),
+        )
+        decap_calls = 0
+
+        def counting_decap(_ct: bytes) -> bytes:
+            nonlocal decap_calls
+            decap_calls += 1
+            return b"\x00" * 32
+
+        with self.assertRaisesRegex(mp.MessageProtocolError, "exceeds scanner cap 2"):
+            mp.open_envelope(
+                sealed.envelope_bytes,
+                verify_signature_fn=lambda *_: True,
+                expected_cid_bin=sealed.cid_bin,
+                xwing_decap_fn=counting_decap,
+                max_sealed_wraps=2,
+            )
+        self.assertEqual(decap_calls, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

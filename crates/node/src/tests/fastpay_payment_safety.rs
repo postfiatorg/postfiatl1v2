@@ -3169,6 +3169,11 @@ fn fastpay_active_storage_transfer_restart_and_six_validator_anchor() {
     }
     // Missing/forged evidence and a journal from another tip cannot publish a
     // partial view. Old-format single-effect journals remain recoverable.
+    let _ = fastpay_wal_export_v1(NodeOptions {
+        data_dir: dirs[0].clone(),
+    })
+    .unwrap();
+    let _ = std::fs::remove_file(dirs[0].join(FASTPAY_SPECULATIVE_WAL_FILE));
     let journal_path = dirs[0].join(FASTPAY_SPECULATIVE_JOURNAL_FILE);
     let original = std::fs::read(&journal_path).unwrap();
     let value: serde_json::Value = serde_json::from_slice(&original).unwrap();
@@ -3487,6 +3492,10 @@ fn fastpay_active_storage_minority_omission_then_unwrap_at_later_height() {
             .is_empty()
     );
     assert_eq!(store.read_ledger().unwrap(), before);
+    let _ = fastpay_wal_export_v1(NodeOptions {
+        data_dir: dirs[1].clone(),
+    })
+    .unwrap();
     let journal: serde_json::Value = serde_json::from_slice(
         &std::fs::read(dirs[1].join(FASTPAY_SPECULATIVE_JOURNAL_FILE)).unwrap(),
     )
@@ -3503,6 +3512,655 @@ fn assert_same_fastpay_ack_effect(left: &str, right: &str) {
     left.as_object_mut().unwrap().remove("signature_hex");
     right.as_object_mut().unwrap().remove("signature_hex");
     assert_eq!(left, right);
+}
+
+#[test]
+fn fastpay_v3_transactional_apply_avoids_full_block_scan_and_invalidates_cache() {
+    let (root, dirs, owner) = active_fastpay_fixture();
+    let cert1 = active_fastpay_transfer(&dirs, &owner);
+    let cert1_json = serde_json::to_string(&cert1).unwrap();
+    for (index, dir) in dirs.iter().take(5).enumerate() {
+        let store = NodeStore::new(dir);
+        let tx_store = store.transactional_store().unwrap();
+        let scans_before = tx_store.work_counters().full_history_scans;
+        owned_apply_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &cert1_json,
+            &format!("validator-{index}"),
+        )
+        .unwrap();
+        let scans_after = tx_store.work_counters().full_history_scans;
+        assert_eq!(
+            scans_after, scans_before,
+            "transactional owned_apply_v3 must not scan full block history"
+        );
+    }
+
+    // Chain a second transfer spending the output created by cert1 (hits in-process cache).
+    let recip1 = ml_dsa_65_keygen_from_seed(&[81; 32]);
+    let recip2 = ml_dsa_65_keygen_from_seed(&[82; 32]);
+    let out1 = postfiat_execution::owned_transfer_output_objects(
+        &cert1.owner_pubkey_hex,
+        cert1.order.nonce,
+        &cert1.order.outputs,
+    );
+    let mut order2 = postfiat_types::OwnedTransferOrderV3 {
+        domain: cert1.order.domain.clone(),
+        recovery: postfiat_types::FastPayOrderRecoveryV1 {
+            schema: postfiat_types::FASTPAY_ORDER_RECOVERY_SCHEMA_V1.into(),
+            committee_epoch: cert1.order.recovery.committee_epoch,
+            valid_from_height: cert1.order.recovery.valid_from_height,
+            expires_at_height: cert1.order.recovery.expires_at_height,
+            recovery_closes_at_height: cert1.order.recovery.recovery_closes_at_height,
+            lock_id: String::new(),
+        },
+        inputs: vec![postfiat_types::OwnedObjectRef {
+            id: out1[0].id.clone(),
+            version: out1[0].version,
+        }],
+        outputs: vec![postfiat_types::OwnedOutputSpec {
+            owner_pubkey_hex: bytes_to_hex(&recip2.public_key),
+            value: 98,
+            asset: "PFT".into(),
+        }],
+        fee: 1,
+        nonce: 43,
+        memos: Vec::new(),
+    };
+    order2.recovery.lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&order2);
+    let signed2 = postfiat_types::SignedOwnedTransferOrderV3 {
+        owner_pubkey_hex: bytes_to_hex(&recip1.public_key),
+        owner_signature_hex: bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &recip1.private_key,
+                &postfiat_execution::owned_transfer_v3_signing_bytes(&order2),
+                postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
+            )
+            .unwrap(),
+        ),
+        order: order2.clone(),
+    };
+    let signed2_json = serde_json::to_string(&signed2).unwrap();
+    // Explicitly reopen and drop the transactional store between calls so redb
+    // updates the database file's mtime/ctime (mirroring sibling RPC traffic),
+    // and assert that owned_sign_v3 still hits the in-process FastPay cache
+    // rather than reloading the finalized ledger snapshot.
+    for dir in dirs.iter().take(5) {
+        let reopened = NodeStore::new(dir).transactional_store().unwrap();
+        let _ = reopened.meta().unwrap();
+    }
+    let votes2: Vec<postfiat_types::OwnedTransferVote> = dirs
+        .iter()
+        .take(5)
+        .enumerate()
+        .map(|(i, dir)| {
+            let vote: postfiat_types::OwnedTransferVote = serde_json::from_str(
+                &owned_sign_v3(
+                    NodeOptions {
+                        data_dir: dir.clone(),
+                    },
+                    &signed2_json,
+                    &format!("validator-{i}"),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let metrics = crate::take_fastpay_rpc_metrics().expect("sign metrics");
+            assert_eq!(
+                metrics.ledger_cache_hit,
+                Some(true),
+                "owned_sign_v3 must hit the in-process FastPay cache across redb reopen on validator-{i}"
+            );
+            vote
+        })
+        .collect();
+    let cert2 = postfiat_types::OwnedTransferCertificateV3 {
+        order: order2,
+        owner_pubkey_hex: signed2.owner_pubkey_hex,
+        owner_signature_hex: signed2.owner_signature_hex,
+        votes: votes2,
+    };
+    let cert2_json = serde_json::to_string(&cert2).unwrap();
+    for (index, dir) in dirs.iter().take(5).enumerate() {
+        owned_apply_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &cert2_json,
+            &format!("validator-{index}"),
+        )
+        .unwrap();
+    }
+    let out2 = postfiat_execution::owned_transfer_output_objects(
+        &cert2.owner_pubkey_hex,
+        cert2.order.nonce,
+        &cert2.order.outputs,
+    );
+    let final_objects = read_fastpay_ledger(&NodeStore::new(&dirs[0]))
+        .unwrap()
+        .owned_objects;
+    assert_eq!(final_objects, out2);
+
+    // Corrupting the speculative journal externally must immediately bust the cache.
+    std::fs::write(
+        dirs[0].join(FASTPAY_SPECULATIVE_JOURNAL_FILE),
+        b"{\"schema\":\"corrupted\"}\n",
+    )
+    .unwrap();
+    assert!(
+        owned_sign_v3(
+            NodeOptions {
+                data_dir: dirs[0].clone(),
+            },
+            &signed2_json,
+            "validator-0",
+        )
+        .is_err(),
+        "corrupted journal must invalidate the in-process FastPay cache"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn fastpay_v3_w2_zero_redb_opens_torn_wal_tail_and_export_v1() {
+    let (root, dirs, owner) = active_fastpay_fixture();
+    let cert1 = active_fastpay_transfer(&dirs, &owner);
+    let cert1_json = serde_json::to_string(&cert1).unwrap();
+    for (index, dir) in dirs.iter().take(5).enumerate() {
+        owned_apply_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &cert1_json,
+            &format!("validator-{index}"),
+        )
+        .unwrap();
+        assert!(
+            dir.join(FASTPAY_SPECULATIVE_WAL_FILE).exists(),
+            "transactional apply must write fastpay_speculative_effects_v2.wal"
+        );
+        assert!(
+            dir.join(CHAIN_TIP_GENERATION_SIDECAR_FILE).exists(),
+            "transactional apply must maintain chain_tip_generation.v1 sidecar"
+        );
+    }
+
+    // Build second chained transfer spending cert1's output.
+    let recip1 = ml_dsa_65_keygen_from_seed(&[81; 32]);
+    let recip2 = ml_dsa_65_keygen_from_seed(&[82; 32]);
+    let out1 = postfiat_execution::owned_transfer_output_objects(
+        &cert1.owner_pubkey_hex,
+        cert1.order.nonce,
+        &cert1.order.outputs,
+    );
+    let mut order2 = postfiat_types::OwnedTransferOrderV3 {
+        domain: cert1.order.domain.clone(),
+        recovery: postfiat_types::FastPayOrderRecoveryV1 {
+            schema: postfiat_types::FASTPAY_ORDER_RECOVERY_SCHEMA_V1.into(),
+            committee_epoch: cert1.order.recovery.committee_epoch,
+            valid_from_height: cert1.order.recovery.valid_from_height,
+            expires_at_height: cert1.order.recovery.expires_at_height,
+            recovery_closes_at_height: cert1.order.recovery.recovery_closes_at_height,
+            lock_id: String::new(),
+        },
+        inputs: vec![postfiat_types::OwnedObjectRef {
+            id: out1[0].id.clone(),
+            version: out1[0].version,
+        }],
+        outputs: vec![postfiat_types::OwnedOutputSpec {
+            owner_pubkey_hex: bytes_to_hex(&recip2.public_key),
+            value: 98,
+            asset: "PFT".into(),
+        }],
+        fee: 1,
+        nonce: 43,
+        memos: Vec::new(),
+    };
+    order2.recovery.lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&order2);
+    let signed2 = postfiat_types::SignedOwnedTransferOrderV3 {
+        owner_pubkey_hex: bytes_to_hex(&recip1.public_key),
+        owner_signature_hex: bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &recip1.private_key,
+                &postfiat_execution::owned_transfer_v3_signing_bytes(&order2),
+                postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
+            )
+            .unwrap(),
+        ),
+        order: order2.clone(),
+    };
+    let signed2_json = serde_json::to_string(&signed2).unwrap();
+
+    // Warm sign + warm apply across all 5 validators must open redb ZERO times!
+    let votes2: Vec<postfiat_types::OwnedTransferVote> = dirs
+        .iter()
+        .take(5)
+        .enumerate()
+        .map(|(i, dir)| {
+            let vote: postfiat_types::OwnedTransferVote = serde_json::from_str(
+                &owned_sign_v3(
+                    NodeOptions {
+                        data_dir: dir.clone(),
+                    },
+                    &signed2_json,
+                    &format!("validator-{i}"),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let metrics = crate::take_fastpay_rpc_metrics().expect("sign metrics");
+            assert_eq!(
+                metrics.ledger_cache_hit,
+                Some(true),
+                "warm owned_sign_v3 must hit FastPay ledger cache on validator-{i}"
+            );
+            assert_eq!(
+                metrics.redb_opened,
+                Some(false),
+                "warm owned_sign_v3 must not open redb on validator-{i}"
+            );
+            vote
+        })
+        .collect();
+    let cert2 = postfiat_types::OwnedTransferCertificateV3 {
+        order: order2,
+        owner_pubkey_hex: signed2.owner_pubkey_hex,
+        owner_signature_hex: signed2.owner_signature_hex,
+        votes: votes2,
+    };
+    let cert2_json = serde_json::to_string(&cert2).unwrap();
+    for (index, dir) in dirs.iter().take(5).enumerate() {
+        owned_apply_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &cert2_json,
+            &format!("validator-{index}"),
+        )
+        .unwrap();
+        let metrics = crate::take_fastpay_rpc_metrics().expect("apply metrics");
+        assert_eq!(
+            metrics.ledger_cache_hit,
+            Some(true),
+            "warm owned_apply_v3 must hit FastPay ledger cache on validator-{index}"
+        );
+        assert_eq!(
+            metrics.redb_opened,
+            Some(false),
+            "warm owned_apply_v3 must not open redb on validator-{index}"
+        );
+        assert!(
+            metrics.wal_fdatasync_ms.is_some(),
+            "warm owned_apply_v3 must record WAL fdatasync timing on validator-{index}"
+        );
+    }
+
+    // Torn trailing WAL frame recovery: append truncated bytes and corrupt-CRC tail,
+    // verify startup recovery truncates cleanly and preserves both committed effects.
+    let wal_path = dirs[0].join(FASTPAY_SPECULATIVE_WAL_FILE);
+    let clean_len = std::fs::metadata(&wal_path).unwrap().len();
+    {
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new().append(true).open(&wal_path).unwrap();
+        // Partial frame header + payload (torn write on power loss)
+        f.write_all(&0x5046_5732_u32.to_le_bytes()).unwrap();
+        f.write_all(&500_u32.to_le_bytes()).unwrap();
+        f.write_all(&0xDEAD_BEEF_u32.to_le_bytes()).unwrap();
+        f.write_all(b"partial-torn-tail").unwrap();
+    }
+    crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(&dirs[0]);
+    let recovered_objects = read_fastpay_ledger(&NodeStore::new(&dirs[0]))
+        .unwrap()
+        .owned_objects;
+    let out2 = postfiat_execution::owned_transfer_output_objects(
+        &cert2.owner_pubkey_hex,
+        cert2.order.nonce,
+        &cert2.order.outputs,
+    );
+    assert_eq!(recovered_objects, out2);
+    assert_eq!(
+        std::fs::metadata(&wal_path).unwrap().len(),
+        clean_len,
+        "torn trailing WAL frame must be truncated back to exact last valid offset"
+    );
+
+    // Export v2 WAL back to v1 JSON via rollback command and verify exact equivalence.
+    let export_report: serde_json::Value = serde_json::from_str(
+        &fastpay_wal_export_v1(NodeOptions {
+            data_dir: dirs[0].clone(),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(export_report["exported_effects"], 2);
+    let v1_bytes = std::fs::read(dirs[0].join(FASTPAY_SPECULATIVE_JOURNAL_FILE)).unwrap();
+    let v1_json: serde_json::Value = serde_json::from_slice(&v1_bytes).unwrap();
+    assert_eq!(v1_json["effects"].as_array().unwrap().len(), 2);
+
+    // Removing v2.wal and leaving only exported v1.json must reproduce exact same ledger.
+    std::fs::remove_file(&wal_path).unwrap();
+    crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(&dirs[0]);
+    assert_eq!(
+        read_fastpay_ledger(&NodeStore::new(&dirs[0]))
+            .unwrap()
+            .owned_objects,
+        out2
+    );
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn fastpay_v3_w4_protobuf_v2_wire_budget_lru_fallback_and_cross_codec_equivocation() {
+    use crate::fastpay_rpc_v2::{
+        decode_fastpay_rpc_v2_frame, dispatch_fastpay_rpc_v2_request,
+        encode_fastpay_rpc_v2_request_frame, FastPayRpcV2MethodPayload, FastPayRpcV2Request,
+        STATUS_OK, STATUS_ORDER_NOT_CACHED,
+    };
+
+    let (root, dirs, owner) = active_fastpay_fixture();
+    let base_ledger = read_fastpay_ledger(&NodeStore::new(&dirs[0])).unwrap();
+    let input_obj = base_ledger.owned_objects[0].clone();
+    let domain = owned_certificate_domain_v3(&dirs[0]).unwrap();
+    let payee = ml_dsa_65_keygen_from_seed(&[91; 32]);
+    let attacker = ml_dsa_65_keygen_from_seed(&[92; 32]);
+
+    // 2-output transfer (payee + change back to owner) exercises owner_is_change_recipient flag!
+    let mut order1 = postfiat_types::OwnedTransferOrderV3 {
+        domain: domain.clone(),
+        recovery: postfiat_types::FastPayOrderRecoveryV1 {
+            schema: postfiat_types::FASTPAY_ORDER_RECOVERY_SCHEMA_V1.into(),
+            committee_epoch: 1,
+            valid_from_height: 1,
+            expires_at_height: 10,
+            recovery_closes_at_height: 20,
+            lock_id: String::new(),
+        },
+        inputs: vec![postfiat_types::OwnedObjectRef {
+            id: input_obj.id.clone(),
+            version: input_obj.version,
+        }],
+        outputs: vec![
+            postfiat_types::OwnedOutputSpec {
+                owner_pubkey_hex: bytes_to_hex(&payee.public_key),
+                value: 40,
+                asset: "PFT".into(),
+            },
+            postfiat_types::OwnedOutputSpec {
+                owner_pubkey_hex: bytes_to_hex(&owner.public_key),
+                value: input_obj.value - 41,
+                asset: "PFT".into(),
+            },
+        ],
+        fee: 1,
+        nonce: 77,
+        memos: Vec::new(),
+    };
+    order1.recovery.lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&order1);
+    let signed1 = postfiat_types::SignedOwnedTransferOrderV3 {
+        owner_pubkey_hex: bytes_to_hex(&owner.public_key),
+        owner_signature_hex: bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &owner.private_key,
+                &postfiat_execution::owned_transfer_v3_signing_bytes(&order1),
+                postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
+            )
+            .unwrap(),
+        ),
+        order: order1.clone(),
+    };
+
+    // 1. Encode v2 owned_sign_v3 frame: MUST fit inside 7,800 B (<< 14.6 KB initcwnd)!
+    let sign_req_frame = encode_fastpay_rpc_v2_request_frame(&FastPayRpcV2Request {
+        request_id: 1,
+        validator_id: "validator-0".to_string(),
+        payload: FastPayRpcV2MethodPayload::OwnedSignV3(signed1.clone()),
+    })
+    .unwrap();
+    assert!(
+        sign_req_frame.len() <= 7_800,
+        "v2 owned_sign_v3 frame must fit under 7.8 KB (14.6 KB initcwnd), got {} B",
+        sign_req_frame.len()
+    );
+    let decoded_sign_req = decode_fastpay_rpc_v2_frame(&sign_req_frame).unwrap();
+    assert_eq!(
+        decoded_sign_req.payload,
+        FastPayRpcV2MethodPayload::OwnedSignV3(signed1.clone())
+    );
+
+    // 2. Sign via v2 Protobuf on all 5 validators.
+    let mut votes = Vec::new();
+    for (i, dir) in dirs.iter().take(5).enumerate() {
+        let resp = dispatch_fastpay_rpc_v2_request(
+            dir,
+            FastPayRpcV2Request {
+                request_id: (i + 1) as u64,
+                validator_id: format!("validator-{i}"),
+                payload: FastPayRpcV2MethodPayload::OwnedSignV3(signed1.clone()),
+            },
+        );
+        assert_eq!(resp.status, STATUS_OK, "v2 sign failed: {}", resp.error_message);
+        votes.push(resp.vote.expect("vote"));
+    }
+
+    // 3. Cross-codec equivocation refusal: conflicting order spending the SAME input via v1 JSON
+    //    MUST be rejected against the exact same durable lock table.
+    let mut equivocating = order1.clone();
+    equivocating.outputs[0].owner_pubkey_hex = bytes_to_hex(&attacker.public_key);
+    equivocating.nonce = 78;
+    equivocating.recovery.lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&equivocating);
+    let signed_equiv = postfiat_types::SignedOwnedTransferOrderV3 {
+        owner_pubkey_hex: bytes_to_hex(&owner.public_key),
+        owner_signature_hex: bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &owner.private_key,
+                &postfiat_execution::owned_transfer_v3_signing_bytes(&equivocating),
+                postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
+            )
+            .unwrap(),
+        ),
+        order: equivocating,
+    };
+    assert!(
+        owned_sign_v3(
+            NodeOptions {
+                data_dir: dirs[0].clone(),
+            },
+            &serde_json::to_string(&signed_equiv).unwrap(),
+            "validator-0",
+        )
+        .is_err(),
+        "conflicting order via v1 JSON after v2 Protobuf sign must be refused"
+    );
+
+    // 4. owned_apply_v3_fast (~16.7 KB votes-only): hits 256-entry LRU on validators 0..3.
+    let fast_apply_frame = encode_fastpay_rpc_v2_request_frame(&FastPayRpcV2Request {
+        request_id: 10,
+        validator_id: "validator-0".to_string(),
+        payload: FastPayRpcV2MethodPayload::OwnedApplyV3Fast {
+            lock_id: order1.recovery.lock_id.clone(),
+            votes: votes.clone(),
+        },
+    })
+    .unwrap();
+    assert!(
+        fast_apply_frame.len() <= 17_200,
+        "v2 owned_apply_v3_fast frame must be <= 17.2 KB, got {} B",
+        fast_apply_frame.len()
+    );
+    for (i, dir) in dirs.iter().take(4).enumerate() {
+        let resp = dispatch_fastpay_rpc_v2_request(
+            dir,
+            FastPayRpcV2Request {
+                request_id: (10 + i) as u64,
+                validator_id: format!("validator-{i}"),
+                payload: FastPayRpcV2MethodPayload::OwnedApplyV3Fast {
+                    lock_id: order1.recovery.lock_id.clone(),
+                    votes: votes.clone(),
+                },
+            },
+        );
+        assert_eq!(resp.status, STATUS_OK, "fast apply failed: {}", resp.error_message);
+        let metrics = crate::take_fastpay_rpc_metrics().expect("fast apply metrics");
+        assert_eq!(metrics.order_lru_hit, Some(true));
+    }
+
+    // 5. LRU-miss fallback on validator-4: clear LRU -> OrderNotCached -> full v2 apply succeeds!
+    crate::clear_fastpay_signed_order_lru_for_test();
+    let miss_resp = dispatch_fastpay_rpc_v2_request(
+        &dirs[4],
+        FastPayRpcV2Request {
+            request_id: 20,
+            validator_id: "validator-4".to_string(),
+            payload: FastPayRpcV2MethodPayload::OwnedApplyV3Fast {
+                lock_id: order1.recovery.lock_id.clone(),
+                votes: votes.clone(),
+            },
+        },
+    );
+    assert_eq!(miss_resp.status, STATUS_ORDER_NOT_CACHED);
+    let cert1 = postfiat_types::OwnedTransferCertificateV3 {
+        order: order1,
+        owner_pubkey_hex: signed1.owner_pubkey_hex,
+        owner_signature_hex: signed1.owner_signature_hex,
+        votes,
+    };
+    let full_resp = dispatch_fastpay_rpc_v2_request(
+        &dirs[4],
+        FastPayRpcV2Request {
+            request_id: 21,
+            validator_id: "validator-4".to_string(),
+            payload: FastPayRpcV2MethodPayload::OwnedApplyV3Full(cert1),
+        },
+    );
+    assert_eq!(full_resp.status, STATUS_OK, "full v2 fallback failed: {}", full_resp.error_message);
+    assert_eq!(
+        read_fastpay_ledger(&NodeStore::new(&dirs[0])).unwrap().owned_objects,
+        read_fastpay_ledger(&NodeStore::new(&dirs[4])).unwrap().owned_objects,
+        "fast LRU apply and full fallback apply must produce identical ledger state"
+    );
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn fastpay_v3_snapshot_sidecar_and_prewarmer_avoid_redb_on_cold_cache() {
+    let (root, dirs, owner) = active_fastpay_fixture();
+    // validator-0 committed block 1 via apply_batch; snapshot sidecar must already exist there.
+    assert!(
+        dirs[0].join(FASTPAY_LEDGER_SNAPSHOT_SIDECAR_FILE).exists(),
+        "committed transactional block on validator-0 must write fastpay_ledger_snapshot.v1.json"
+    );
+    // Clear in-process RAM cache on validator-0 and prove pre-warmer hydrates block 1 with 0 redb opens.
+    crate::invalidate_fastpay_ledger_cache(&dirs[0]);
+    assert!(
+        crate::prewarm_fastpay_ledger_cache_from_sidecar(&dirs[0]),
+        "pre-warmer must hydrate post-block cold cache on validator-0 from snapshot sidecar"
+    );
+    assert!(!crate::prewarm_fastpay_ledger_cache_from_sidecar(&dirs[0]));
+
+    // Run one transfer across validator-0..4 (validator-1..4 were snapshot-imported so their first
+    // cold load seeds their snapshot sidecar too), then clear RAM cache across all 5 validators
+    // and verify BOTH pre-warmed (v0..2) and direct-hydrated (v3..4) owned_sign_v3 open redb 0 times!
+    let cert1 = active_fastpay_transfer(&dirs, &owner);
+    let cert1_json = serde_json::to_string(&cert1).unwrap();
+    for (i, dir) in dirs.iter().take(5).enumerate() {
+        owned_apply_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &cert1_json,
+            &format!("validator-{i}"),
+        )
+        .unwrap();
+        assert!(
+            dir.join(FASTPAY_LEDGER_SNAPSHOT_SIDECAR_FILE).exists(),
+            "snapshot sidecar must exist on validator-{i}"
+        );
+    }
+
+    // Build chained order spending cert1's output.
+    let recip1 = ml_dsa_65_keygen_from_seed(&[81; 32]);
+    let recip2 = ml_dsa_65_keygen_from_seed(&[82; 32]);
+    let out1 = postfiat_execution::owned_transfer_output_objects(
+        &cert1.owner_pubkey_hex,
+        cert1.order.nonce,
+        &cert1.order.outputs,
+    );
+    let mut order2 = postfiat_types::OwnedTransferOrderV3 {
+        domain: cert1.order.domain.clone(),
+        recovery: postfiat_types::FastPayOrderRecoveryV1 {
+            schema: postfiat_types::FASTPAY_ORDER_RECOVERY_SCHEMA_V1.into(),
+            committee_epoch: cert1.order.recovery.committee_epoch,
+            valid_from_height: cert1.order.recovery.valid_from_height,
+            expires_at_height: cert1.order.recovery.expires_at_height,
+            recovery_closes_at_height: cert1.order.recovery.recovery_closes_at_height,
+            lock_id: String::new(),
+        },
+        inputs: vec![postfiat_types::OwnedObjectRef {
+            id: out1[0].id.clone(),
+            version: out1[0].version,
+        }],
+        outputs: vec![postfiat_types::OwnedOutputSpec {
+            owner_pubkey_hex: bytes_to_hex(&recip2.public_key),
+            value: 98,
+            asset: "PFT".into(),
+        }],
+        fee: 1,
+        nonce: 99,
+        memos: Vec::new(),
+    };
+    order2.recovery.lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&order2);
+    let signed2 = postfiat_types::SignedOwnedTransferOrderV3 {
+        owner_pubkey_hex: bytes_to_hex(&recip1.public_key),
+        owner_signature_hex: bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &recip1.private_key,
+                &postfiat_execution::owned_transfer_v3_signing_bytes(&order2),
+                postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
+            )
+            .unwrap(),
+        ),
+        order: order2,
+    };
+    let signed2_json = serde_json::to_string(&signed2).unwrap();
+
+    // Simulate fresh rpc-serve / post-block cold RAM cache across all 5 validators.
+    for dir in dirs.iter().take(5) {
+        crate::invalidate_fastpay_ledger_cache(dir);
+    }
+    // Pre-warm v0..2 off the hot path; leave v3..4 cold to test direct lock-free snapshot hydration.
+    for dir in dirs.iter().take(3) {
+        assert!(crate::prewarm_fastpay_ledger_cache_from_sidecar(dir));
+    }
+    for (i, dir) in dirs.iter().take(5).enumerate() {
+        owned_sign_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &signed2_json,
+            &format!("validator-{i}"),
+        )
+        .unwrap();
+        let metrics = crate::take_fastpay_rpc_metrics().expect("sign metrics");
+        assert_eq!(
+            metrics.redb_opened,
+            Some(false),
+            "post-block/cold owned_sign_v3 must not open redb on validator-{i}"
+        );
+        assert_eq!(metrics.redb_lease_wait_ms, Some(0.0));
+        if i < 3 {
+            assert_eq!(
+                metrics.ledger_cache_hit,
+                Some(true),
+                "prewarmed validator-{i} must be an immediate RAM cache hit"
+            );
+        }
+    }
+
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 include!("fastpay_fence_status_tests.rs");

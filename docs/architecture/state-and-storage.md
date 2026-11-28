@@ -120,6 +120,34 @@ The gate list and history are in the completed
 [storage milestone](../plans/completed/storage-scaling-milestone.md) and the
 [Storage Scaling Fix specification](storage-scaling-fix-spec.md).
 
+## FastPay hot-path sidecars and commit-time WAL pruning
+
+Because `redb` enforces single-writer access and opening the database file on
+post-block FastPay requests previously triggered writer-lease stalls (`352 ms`
+co-located p95, `3.78 s` WAN p95), the validator maintains dedicated FastPay
+sidecar files alongside the transactional store (`crates/node/src/fastpay_recovery_node.rs`,
+`crates/node/src/storage_commit.rs`):
+
+- **`owned_locks.wal` (guarded by `owned_locks.guard`):** Append-only `fdatasync`
+  journal written before signing any `owned_sign_v3` vote
+  (`reserve_owned_input_locks` in `crates/node/src/consensus_artifacts.rs`).
+- **`fastpay_speculative_effects_v2.wal`:** Append-only CRC32C-framed CBOR
+  journal of certified FastPay effects applied ahead of the next block.
+- **`chain_tip_generation.v1` and `fastpay_ledger_snapshot.v1.json`:** Atomic
+  sidecars refreshed on every finalized block commit in
+  `apply_transactional_ordered_commit_delta()`. Freshness checks compare the
+  snapshot inode and finalized tip commitment rather than `redb` file length
+  (which changes on close-time compaction).
+- **Commit-time WAL pruning:** `prune_fastpay_speculative_wal_after_block_commit`
+  runs inside `apply_transactional_ordered_commit_delta()` after each block
+  commit so anchored records are removed immediately (`v2.wal` drops to `0 B`),
+  preventing post-block `owned_apply_v3` calls from opening `redb`.
+- **Synchronized background pre-warmer:** Triggered at most once per finalized
+  tip. It reads and parses `fastpay_ledger_snapshot.v1.json` off-lock, then
+  acquires `lock_ordered_commit()` before replaying `v2.wal` and installing the
+  cache (without overwriting a newer in-block cache). Never read or truncate
+  `v2.wal` off-lock: doing so races concurrent `owned_apply_v3` WAL appends.
+
 ## Validator-registry activation on continuation
 
 When a node commits a new height, it activates due validator-registry updates

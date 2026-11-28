@@ -39,6 +39,8 @@ MAX_PAYMENT_MEMO_TOTAL_BYTES = 512
 # Envelope & Manifest payload caps
 MAX_SINGLE_ENVELOPE_BYTES = 1_048_576  # 1 MiB
 MAX_MANIFEST_PLAINTEXT_BYTES = 16_777_216  # 16 MiB
+MAX_ENVELOPE_RECIPIENTS = 64
+DEFAULT_MAX_SEALED_SCAN_WRAPS = 16
 
 # Normative post-quantum cryptographic byte sizes
 ML_DSA_65_PUBKEY_BYTES = 1952
@@ -431,6 +433,8 @@ def compute_aad_context(chain_id: str, header_bytes: bytes, chunk_index: int = 0
     """Compute 32-byte domain-separated AAD commitment for XChaCha20-Poly1305."""
     if not chain_id:
         raise MessageProtocolError("chain_id is required for AAD context")
+    if "\x00" in chain_id:
+        raise MessageProtocolError("chain_id must not contain NUL bytes")
     if chunk_index < 0 or chunk_index > 0xFFFF_FFFF:
         raise MessageProtocolError(f"chunk_index out of uint32 range: {chunk_index}")
     return sha256(
@@ -886,6 +890,10 @@ class XWingEncryptionHeader:
                 kdf_info = _decode_utf8(val, "XWingEncryptionHeader.kdf_info")
             elif fn == 6:
                 _expect_wt(fn, wt, 2)
+                if len(recipients) >= MAX_ENVELOPE_RECIPIENTS:
+                    raise MessageProtocolError(
+                        f"XWingEncryptionHeader.recipients exceeds cap of {MAX_ENVELOPE_RECIPIENTS}"
+                    )
                 recipients.append(RecipientWrap.decode(val, enforce_canonical_order=enforce_canonical_order))
             elif fn == 7:
                 _expect_wt(fn, wt, 2)
@@ -1956,6 +1964,8 @@ def seal_envelope(
             raise MessageProtocolError("PRIVATE/SEALED requires CIPHER_SUITE_XWING_XCHACHA20_POLY1305")
         if not recipients:
             raise MessageProtocolError("PRIVATE/SEALED envelope requires at least one recipient")
+        if len(recipients) > MAX_ENVELOPE_RECIPIENTS:
+            raise MessageProtocolError(f"PRIVATE/SEALED recipients exceed cap of {MAX_ENVELOPE_RECIPIENTS}")
         if xwing_encap_fn is None:
             raise MessageProtocolError("xwing_encap_fn is required for PRIVATE/SEALED envelopes")
 
@@ -2059,6 +2069,7 @@ def open_envelope(
     xwing_decap_fn: Callable[[bytes], bytes] | None = None,
     enforce_canonical_order: bool = False,
     require_cek_commitment: bool = False,
+    max_sealed_wraps: int | None = DEFAULT_MAX_SEALED_SCAN_WRAPS,
 ) -> OpenedEnvelopeResult:
     """Verify CID + raw-byte ML-DSA-65 signature BEFORE decoding nested fields, enforce anchor/sender bindings, then decrypt if private/sealed."""
     # Step 1: Verify CIDv1 raw over exact transmitted bytes (zero re-serialization).
@@ -2140,7 +2151,11 @@ def open_envelope(
     if matching_wrap is not None:
         shared_secret = xwing_decap_fn(matching_wrap.xwing_ciphertext)
     elif header.visibility == Visibility.SEALED:
-        # Blinded SEALED mode: trial-decapsulate wraps and match per-message unlinkable tag.
+        # Blinded SEALED mode: trial-decapsulate wraps up to max_sealed_wraps and match per-message unlinkable tag.
+        if max_sealed_wraps is not None and len(enc_header.recipients) > max_sealed_wraps:
+            raise MessageProtocolError(
+                f"SEALED envelope wrap count {len(enc_header.recipients)} exceeds scanner cap {max_sealed_wraps}"
+            )
         for candidate in enc_header.recipients:
             if len(candidate.recipient_key_id) != 32:
                 continue

@@ -1,149 +1,149 @@
-# Post Fiat x402 v2 Facilitator & MCP Payment Wrapper (prototype)
+# Post Fiat x402 v2 Facilitator, FastPay RPC v2 Client & MCP Payment Wrapper
 
 HTTP `402 Payment Required -> payment -> 200 OK` facilitator, resource-server
-gate, and thin MCP JSON-RPC client wrapper. The three headers follow Post Fiat
-Pillar 2 and Contract C1 (`postfiat.message.v1.X402PaymentRequired`,
-`X402PaymentSignature`, `X402PaymentResponse`).
+gate, native chain settlement adapter (`OwnedTransferOrderV3` & `SignedPaymentV2`),
+direct TLS 1.3 Protobuf FastPay RPC v2 client, `OwnedObjectPool`, and thin MCP
+JSON-RPC client wrapper. The three headers follow Post Fiat Pillar 2 and
+Contract C1 (`postfiat.message.v1.X402PaymentRequired`, `X402PaymentSignature`,
+`X402PaymentResponse`).
 
-## Settlement status
+## Production vs. Prototype Settlement Modes
 
-The prototype HTTP adapter can issue live RPC writes when configured with validator gateway URLs. Its FastPay implementation lacks pinned committee verification. Use a test network for this adapter.
+- **Production (`X402_MODE=production`):** Enforces **native chain payloads**
+  (`OwnedTransferOrderV3` for FastPay and `SignedPaymentV2` for consensus PFT)
+  verified against a pinned active committee (`X402_COMMITTEE_JSON` +
+  `X402_DOMAIN_JSON`) and durable spent-payment storage (`X402_SPENT_STORE_PATH`).
+  In `X402_SETTLEMENT_FINALITY_MODE=certificate` (1-RTT), durable certificate
+  persistence (`X402_CERT_STORE_PATH`, backed by `FileCertificateStore` with
+  `fsync`) is also mandatory.
+- **Prototype (`X402_MODE=prototype`, default CLI mode):** Allows local JSON
+  test orders (`signFastPayOrder`, `signConsensusTransfer`) for unit/local tests
+  without a live validator committee. Do **not** use prototype mode with real funds.
 
-- **Production requires a separately verified settlement adapter.** A payment counts as settled when the
-  `settlementAdapter` that the embedding code passes to `createFacilitatorCore`
-  says so. Without one, every payment is refused with
-  `503 settlement_backend_unavailable`; the only exception is
-  `pf-fastpay-settled` on the FastPay lane, which rests on the certificate
-  format described below.
-- **The object the payer signs is not a chain order.** It is a JSON format made
-  up in `facilitator.js` (`signFastPayOrder`, `signConsensusTransfer`), signed
-  with ML-DSA-65 under labels that exist only in that file. The chain's own
-  order type is `OwnedTransferOrderV3`; a validator would not accept the object
-  signed here, and the `version` label inside the payload does not change that.
-- **The `pf-fastpay-settled` certificate is not a chain certificate.** Its vote
-  format is also made up in `facilitator.js`, and it is checked against a
-  committee that the embedding code supplies by hand.
-- **The payer's key is not tied to the payer's account.** The signature is
-  checked against the key inside the same payload.
+## Sub-Second FastPay Settlement Architecture
 
-It stays a prototype until its settlement adapter is built on the chain's real
-RPC and on `OwnedTransferOrderV3`. The daemon enforces this: with
-`X402_MODE=production` it refuses to start without an adapter, and `server.js`
-has none, so from the command line it runs only as `X402_MODE=prototype` (the
-default). Code that embeds the daemon passes its adapter as
-`createFacilitatorFromEnv(env, { settlementAdapter })`.
+`createChainSettlementAdapter` (`chain-adapter.js`) supports two transports and
+two finality modes:
+
+- **Direct TLS 1.3 Protobuf FastPay RPC v2 (`fastpay-rpc-v2.js`):** Pass
+  `fastpayRpcV2Endpoints` and `fastpayRpcV2TlsOptions` (`ca`, `cert`, `key`) to
+  talk directly to validator `postfiat-fastpay-rpc-v2` listeners (`7,611 B`
+  `owned_sign_v3`, `16,716 B` `owned_apply_v3_fast` with automatic
+  `OrderNotCached` -> `owned_apply_v3_full` fallback). Validators decouple
+  persistent socket idle reads (`FASTPAY_V2_IDLE_READ_TIMEOUT_SECS = 300`) from
+  per-request `--timeout-ms` so sockets stay warm across consensus block pauses.
+  JSON-RPC v1 (`rpcUrls`) remains supported as a fallback and for
+  consensus/committee reads. On settlement failure, `chain-adapter.js` surfaces
+  the full per-validator error summary rather than only the first error.
+- **Live 3-Continent WAN Verification (`train-a-r8`, 19 blocks, `5-of-5` active
+  signers in a 6-node fleet):** Direct 1-RTT `273.0 ms` p50 / `306.6 ms` p95;
+  direct 2-RTT `563.8 ms` p50 / `596.0 ms` p95; x402 `402 -> 200` `321.7 ms`
+  p50 / `350.2 ms` p95; concurrent `OwnedObjectPool` (`K = 8` parallel x 4
+  waves = `32` calls) `9.33 calls/s` mean (`851.4 ms` p50 wave wall-clock,
+  `32/32` OK); `0` hot-path `redb` opens across `1,370` server RPCs.
+- **1-RTT Certificate Finality (`settlementFinalityMode: 'certificate'`):**
+  Races `owned_sign_v3` across all active committee validators, verifies
+  `>= 2f+1` distinct ML-DSA-65 votes locally against the pinned `registry_root`,
+  durably `fsync`s the certificate to `FileCertificateStore`, optionally applies
+  synchronously to a co-located validator (`coLocatedValidatorId` +
+  `coLocatedValidatorSyncApply: true`), and returns HTTP `200` while a
+  background worker converges `owned_apply_v3` across the remaining validators
+  with exponential retry (treating unsigned `postfiat-fastpay-held-effect-v1`
+  holder receipts cleanly). Call `adapter.replayPendingCertificates()` on
+  startup to resume any unconfirmed WAL entries after a crash.
+- **2-RTT Applied Quorum (`settlementFinalityMode: 'applied_quorum'`):**
+  Waits for both `>= 2f+1` verified votes and `>= 2f+1` signed
+  `FastPayApplyAckV1` acknowledgments before returning HTTP `200`.
 
 ## Wire Contract
 
 - **`PAYMENT-REQUIRED`** (`402 Payment Required`): unpadded base64url canonical
   protobuf `postfiat.message.v1.X402PaymentRequired` (`x402_version = 2`).
 - **`PAYMENT-SIGNATURE`** (client retry): unpadded base64url canonical protobuf
-  `postfiat.message.v1.X402PaymentSignature`. Its `signed_payload` carries this
-  prototype's signed transfer object, whose `pf.ptr` v5 `INLINE` memo
-  (`kind = CONTENT_KIND_X402 (14)`, `schema = 402`) embeds the 32-byte
-  `request_hash`, and whose `nonce_hex` names the challenge it answers.
+  `postfiat.message.v1.X402PaymentSignature`. In production, `signed_payload`
+  carries a native `SignedOwnedTransferOrderV3` (FastPay) or `SignedPaymentV2`
+  (consensus), whose `pf.ptr` v5 `INLINE` memo (`kind = CONTENT_KIND_X402 (14)`,
+  `schema = 402`) embeds the 32-byte `request_hash`.
 - **`PAYMENT-RESPONSE`** (`200 OK`): unpadded base64url canonical protobuf
   `postfiat.message.v1.X402PaymentResponse` carrying `settled = true` and the
-  payment reference as the adapter reported it.
+  immutable 48-byte `order_hash` (FastPay) or `tx_hash` (consensus).
 
 ## Resource Gate
 
 `createX402Gate` answers an unpaid request with a challenge and serves a paid
-one. It serves only when all of this holds:
+one only when:
 
-- The challenge is one this gate issued. Every gate keeps its own challenges;
-  a challenge from another gate or from `POST /v1/challenge` is unknown to it.
-- The challenge and the signed transfer are for exactly the gate's own scheme,
-  lane, asset, recipient and price (not less, not more), and for the hash the
-  gate computes of the request in front of it (method, path, content type,
-  body).
-- The signed transfer names this challenge (`nonce_hex`). The
-  `PAYMENT-SIGNATURE` wrapper itself is not signed, so without this a transfer
-  could be moved to another challenge.
-- The challenge has not been used. It is held while its payment settles,
-  removed when the payment has settled, and given back when settlement fails
-  so the payer can present the same payment again.
-
-Open challenges live in memory. After a restart of the gate, a challenge it
-gave out before is unknown, and a payer who already settled a
-`pf-fastpay-settled` payment for it cannot present that payment any more.
+- The challenge was issued by this exact gate (never from another gate or
+  `POST /v1/challenge`).
+- The signed transfer matches the gate's exact scheme, lane, asset, recipient,
+  price, and locally computed `request_hash` (method, path, content type, body).
+- The challenge has not been consumed (held during settlement, consumed on
+  success, released on settlement failure).
 
 ## Security Invariants
 
 1. **Immutable deduplication key:** Spent-payment deduplication keys strictly on
-   immutable `order_hash` (`PAYMENT_LANE_FASTPAY`) or `tx_hash`
+   immutable 48-byte `order_hash` (`PAYMENT_LANE_FASTPAY`) or `tx_hash`
    (`PAYMENT_LANE_CONSENSUS_PFT` / `PAYMENT_LANE_CONSENSUS_ISSUED`), never on
-   `certificate_digest` (eliminating validator-signature malleability replays).
-   `FileSpentStore` keeps the used payments in an append-only file, one JSON
-   line each, that several processes on one machine may share. A payment is
-   marked by appending its line and syncing it to disk before anything is
-   served; when two processes append the same payment, the first line in the
-   file wins. If the file cannot be read or written, the payment is refused
-   with `503 spent_store_unavailable`. The file must be on a local filesystem.
-   `MemorySpentStore` forgets everything on restart and is for tests only.
-2. **Local verification before the settlement adapter is called:** Rate limits,
-   challenge expiry, `network`/`lane`/`asset_id`/`pay_to`/amount,
-   `pf.ptr` v5 `INLINE` `request_hash` memo binding, Sui-inspired FastPay fee
-   floor (`25 + ceil(weight/512) + 1000 * net_new_objects + inputs`), and
-   ML-DSA-65 signatures are all verified locally before the adapter is called.
-3. **Committee rotation:** `pf-fastpay-settled` certificates (this prototype's
-   format) verify against epoch-tagged ML-DSA-65 committees and reject stale
-   epochs.
-4. **Limits that cannot be turned against a payer:** asking for a challenge
-   and presenting a payment are each limited per address, in separate counts.
-   The per-payer limit counts only a payment that passed every local check and
-   is not used yet, so junk that names a payer's key, or an old payment of that
-   payer sent again, does not use up the payer's allowance. Every issuer of
-   challenges (each gate, and `POST /v1/challenge`) holds at most
-   `maxOpenChallenges` (default 10,000) and refuses new ones with
-   `503 challenge_store_full` until older ones expire; it never drops a
-   challenge a payer may already have paid for. A challenge lives at most 15
-   minutes. A limiter holds at most `maxRateLimitBuckets` (default 50,000)
-   counters and forgets a counter when its window is over. A full limiter
-   forgets its oldest counter instead of refusing a new key, so a flood of
-   throwaway keys cannot lock other callers out. Payers are counted in a table
-   of their own, so made-up API keys cannot push a payer's counter out of it.
+   `certificate_digest`. `FileSpentStore` appends and `fsync`s to a local
+   append-only JSONL file before serving; I/O errors fail closed with
+   `503 spent_store_unavailable`.
+2. **Local verification before touching validators:** Rate limits, challenge
+   expiry, `network`/`lane`/`asset_id`/`pay_to`/amount, `pf.ptr` v5 `INLINE`
+   `request_hash` memo binding, Sui-inspired FastPay fee floor
+   (`25 + ceil(weight/512) + 1000 * max(0, outputs - inputs) + inputs`), and
+   ML-DSA-65 signatures are all verified locally first.
+3. **Committee rotation & quorum verification:** Certificates verify against
+   epoch-tagged ML-DSA-65 committees (`CommitteeRegistry`) and reject stale
+   epochs or duplicate validator votes.
+4. **Abuse-resistant bounded limits:** Separate per-IP challenge and payment
+   counters, per-payer buckets counted only after local verification passes,
+   `maxOpenChallenges` (default `10,000`, 15-minute max TTL), and bounded
+   sliding-window limiter tables (`maxRateLimitBuckets = 50,000`).
 
-## Paying Client
+## Paying Client & `OwnedObjectPool` (`mcp-client.js`)
 
-`X402HttpClient` and `X402McpClient` (`mcp-client.js`) pay a `402` challenge
-once per call and retry.
+`X402HttpClient` and `X402McpClient` pay a `402` challenge once per call and
+retry with `PAYMENT-SIGNATURE`:
 
-- `maxBudgetAtoms` is a total for the lifetime of the client object, fees
-  included. A payment counts the moment it is signed and is never given back:
-  whoever receives a signed payment can settle it, whatever they answer. When
-  the next payment does not fit, the call fails with `budget_exceeded`.
-- A caller can state what it agreed to pay:
-  `request(url, { expectedPayment: { amountAtoms, assetId, payTo } })` or
-  `callTool(name, args, { expectedPayment })`. A challenge with another price,
-  asset or recipient is refused with `payment_terms_mismatch` and nothing is
-  signed. Without `expectedPayment` the server's challenge sets all three,
-  limited only by the budget and the `allowedAssets` / `allowedNetworks` lists.
+- **`nativeFastPay`:** Pass a config object or callback returning `{ domain, recovery, payeePubkeyHex, inputs, inputTotalAtoms, nextNonce }` to sign real `OwnedTransferOrderV3` payloads (`native-chain.js`).
+- **`OwnedObjectPool`:** Pre-split `K` owned objects so agents can run `K`
+  concurrent 1-RTT x402 calls without blocking on remote change-output apply or
+  risking equivocation locks (`checkout`, `recordSpent`, `confirmPending`,
+  `releaseUnspent`, `needsReplenish`).
+- **`maxBudgetAtoms`:** Hard lifetime cap across calls (fees included), reserved
+  before signing because signed orders have no protocol-level refund.
+- **`expectedPayment`:** Pass `{ expectedPayment: { amountAtoms, assetId, payTo } }`
+  on `request(...)` or `callTool(...)` to refuse mismatched challenges with
+  `payment_terms_mismatch` before signing.
 
-## Endpoints
+## HTTP Endpoints (`server.js`)
 
 - `GET /healthz` — liveness and active committee epoch metadata.
-- `POST /v1/challenge` — issue a tracked `X402PaymentRequired` challenge. Open
-  to any caller, who chooses amount and recipient; no gate accepts it.
+- `GET /x402/certificates/:orderHash` — durable certificate & background
+  quorum-apply convergence status (`FileCertificateStore`).
+- `POST /v1/challenge` — issue a tracked `X402PaymentRequired` challenge.
 - `POST /v1/verify` — locally verify a `PAYMENT-SIGNATURE` header without settling.
 - `POST /v1/settle` — verify locally, check spent-payment deduplication, settle
-  through the injected adapter, and return `PAYMENT-RESPONSE`. The caller may
-  hand in the challenge terms itself (`payment_required_header`), so this
-  endpoint does not prove that anybody's price was paid.
+  through the configured adapter, and return `PAYMENT-RESPONSE`.
 
-## Running
+## Running Tests & Daemon
 
 ```bash
-# Run automated end-to-end smoke + replay + committee-rotation + MCP tests:
-node tools/x402-facilitator/test_x402_e2e.js
+# First install wallet-proxy dependencies (message-protocol.js):
+(cd wallet-proxy && npm ci)
 
-# Run the refusal tests (gate terms, used payments, client budget, limits, daemon start):
-node tools/x402-facilitator/test_x402_refusals.js
+# Run all 6 test suites (contract, e2e, native, refusals, W1 latency/replay, W3/W4 straggler):
+for t in tools/x402-facilitator/test_*.js; do node "$t"; done
 
-# Run the facilitator daemon as a prototype (binds 127.0.0.1:4020 by default).
-# X402_SPENT_STORE_PATH is required: the file that keeps used payments across restarts.
-X402_SPENT_STORE_PATH=/var/lib/postfiat-x402/spent.jsonl node tools/x402-facilitator/server.js
+# Run facilitator daemon in production 1-RTT certificate mode:
+X402_MODE=production \
+X402_SPENT_STORE_PATH=/var/lib/postfiat-x402/spent.jsonl \
+X402_CERT_STORE_PATH=/var/lib/postfiat-x402/certs.jsonl \
+X402_SETTLEMENT_FINALITY_MODE=certificate \
+X402_COLOCATED_VALIDATOR_ID=validator-2 \
+X402_RPC_URLS="http://127.0.0.1:27650,..." \
+X402_COMMITTEE_JSON='...' \
+X402_DOMAIN_JSON='...' \
+node tools/x402-facilitator/server.js
 ```
-
-Both test files and the daemon load `../../wallet-proxy/message-protocol.js`, so
-run `npm ci` in `wallet-proxy` first.

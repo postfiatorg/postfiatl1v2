@@ -10,7 +10,7 @@
 //    acknowledgements are cryptographically authenticated against the active committee.
 
 const { CommitteeRegistry, FileSpentStore, createFacilitatorCore, createFacilitatorServer } = require('./facilitator');
-const { createChainSettlementAdapter } = require('./chain-adapter');
+const { FileCertificateStore, createChainSettlementAdapter } = require('./chain-adapter');
 
 const MODE_PROTOTYPE = 'prototype';
 const MODE_PRODUCTION = 'production';
@@ -43,16 +43,28 @@ function createFacilitatorFromEnv(env = process.env, { settlementAdapter = null 
   let resolvedAdapter = settlementAdapter;
   const rpcUrlsRaw = String(env.X402_RPC_URLS || '').trim();
   const quorum = env.X402_QUORUM_THRESHOLD ? Number(env.X402_QUORUM_THRESHOLD) : null;
+  const finalityMode = String(env.X402_SETTLEMENT_FINALITY_MODE || '').trim().toLowerCase() || null;
+  const certStorePath = String(env.X402_CERT_STORE_PATH || '').trim();
+  const coLocatedValidatorId = String(env.X402_COLOCATED_VALIDATOR_ID || '').trim() || null;
+  const certificateStore = certStorePath ? new FileCertificateStore(certStorePath) : null;
 
   if (!resolvedAdapter && rpcUrlsRaw) {
     if (mode === MODE_PRODUCTION) {
       if (committeeCfg && expectedDomain) {
+        if (finalityMode === 'certificate' && !certificateStore) {
+          throw new Error(
+            'X402_SETTLEMENT_FINALITY_MODE=certificate in production requires X402_CERT_STORE_PATH for durable certificate persistence'
+          );
+        }
         resolvedAdapter = createChainSettlementAdapter({
           rpcUrls: rpcUrlsRaw,
           quorumThreshold: quorum,
           committeeRegistry,
           expectedDomain,
           requireAuthenticatedCommittee: true,
+          settlementFinalityMode: finalityMode,
+          certificateStore,
+          coLocatedValidatorId,
           rpcTimeoutMs: env.X402_RPC_TIMEOUT_MS ? Number(env.X402_RPC_TIMEOUT_MS) : undefined,
           finalityTimeoutMs: env.X402_FINALITY_TIMEOUT_MS ? Number(env.X402_FINALITY_TIMEOUT_MS) : undefined,
         });
@@ -63,6 +75,9 @@ function createFacilitatorFromEnv(env = process.env, { settlementAdapter = null 
         quorumThreshold: quorum,
         committeeRegistry: committeeCfg ? committeeRegistry : null,
         expectedDomain,
+        settlementFinalityMode: finalityMode,
+        certificateStore,
+        coLocatedValidatorId,
         rpcTimeoutMs: env.X402_RPC_TIMEOUT_MS ? Number(env.X402_RPC_TIMEOUT_MS) : undefined,
         finalityTimeoutMs: env.X402_FINALITY_TIMEOUT_MS ? Number(env.X402_FINALITY_TIMEOUT_MS) : undefined,
       });
@@ -112,6 +127,17 @@ function main() {
     return;
   }
   const { core, listenHost, listenPort, mode } = facilitator;
+
+  if (typeof core.settlementAdapter?.replayPendingCertificates === 'function') {
+    Promise.resolve(core.settlementAdapter.replayPendingCertificates()).catch((err) => {
+      console.error(
+        JSON.stringify({
+          event: 'x402_pending_certificate_replay_error',
+          error: String(err?.message || err),
+        })
+      );
+    });
+  }
 
   const server = createFacilitatorServer(core);
   server.listen(listenPort, listenHost, () => {

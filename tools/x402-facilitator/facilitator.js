@@ -1204,6 +1204,7 @@ function createFacilitatorCore({
     network,
     committeeRegistry,
     spentStore,
+    settlementAdapter,
     issueChallenge,
     verifyPaymentLocally,
     settlePayment,
@@ -1263,6 +1264,37 @@ function createFacilitatorServer(core, { maxHeaderSize = 65_536 } = {}) {
           network: core.network,
           active_committee_epoch: core.committeeRegistry.activeEpoch(),
           spent_count: core.spentStore.size(),
+          unconfirmed_certs:
+            typeof core.settlementAdapter?.unconfirmedCertificateCount === 'function'
+              ? core.settlementAdapter.unconfirmedCertificateCount()
+              : 0,
+        });
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname.startsWith('/x402/certificates/')) {
+        const orderHashHex = url.pathname.slice('/x402/certificates/'.length).trim().toLowerCase();
+        if (!/^[0-9a-f]{96}$/.test(orderHashHex)) {
+          sendJson(res, 400, { ok: false, code: 'invalid_order_hash', error: 'order_hash must be 96 hex characters' });
+          return;
+        }
+        const stored =
+          typeof core.settlementAdapter?.getStoredCertificate === 'function'
+            ? core.settlementAdapter.getStoredCertificate(orderHashHex)
+            : null;
+        if (!stored) {
+          sendJson(res, 404, { ok: false, code: 'certificate_not_found' });
+          return;
+        }
+        sendJson(res, 200, {
+          ok: true,
+          order_hash_hex: stored.order_hash_hex,
+          certificate_digest_hex: stored.certificate_digest_hex,
+          lock_id: stored.lock_id,
+          committee_epoch: stored.committee_epoch,
+          status: stored.status,
+          confirmed_validators: stored.confirmed_validators,
+          certificate: JSON.parse(stored.cert_json),
         });
         return;
       }

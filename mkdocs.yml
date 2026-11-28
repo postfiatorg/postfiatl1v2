@@ -138,6 +138,7 @@ nav:
       - Testnet Path: status/testnet-path.md
       - Release Gate Inventory: status/release-gate-inventory.md
   - Integrate:
+      - FastPay For Agents: integrate/fastpay-for-agents.md
       - Exchange Integration Guide: integrate/exchange-guide.md
       - Addresses, Keys And Signatures: integrate/addresses-keys-signatures.md
       - RPC:

@@ -458,7 +458,104 @@ class X402McpClient {
   }
 }
 
+// Client-side pre-split OwnedObjectPool (W1) allowing K concurrent 1-RTT
+// x402 FastPay API calls without blocking on remote change-output apply.
+class OwnedObjectPool {
+  constructor(initialObjects = [], { lowWaterRatio = 0.5 } = {}) {
+    this._lowWaterRatio = lowWaterRatio;
+    this._targetSize = Math.max(1, initialObjects.length);
+    this._ready = new Map(); // id -> { id, version, value, asset }
+    this._inFlight = new Map(); // id -> object
+    this._pendingConfirm = new Map(); // id -> object (change outputs awaiting remote apply confirmation)
+    for (const obj of initialObjects) {
+      this.addReady(obj);
+    }
+  }
+
+  addReady(obj) {
+    if (!obj || typeof obj.id !== 'string') throw new Error('OwnedObjectPool object requires id');
+    const rec = {
+      id: String(obj.id),
+      version: Number(obj.version),
+      value: Number(obj.value),
+      asset: String(obj.asset || 'PFT'),
+    };
+    this._inFlight.delete(rec.id);
+    this._pendingConfirm.delete(rec.id);
+    this._ready.set(rec.id, rec);
+    if (this.totalCount() > this._targetSize) {
+      this._targetSize = this.totalCount();
+    }
+  }
+
+  checkout(minAtoms, asset = 'PFT') {
+    let best = null;
+    for (const obj of this._ready.values()) {
+      if (obj.asset !== asset || obj.value < minAtoms) continue;
+      if (!best || obj.value < best.value) best = obj;
+    }
+    if (!best) return null;
+    this._ready.delete(best.id);
+    this._inFlight.set(best.id, best);
+    return { ...best };
+  }
+
+  releaseUnspent(id) {
+    const obj = this._inFlight.get(id);
+    if (!obj) return false;
+    this._inFlight.delete(id);
+    this._ready.set(id, obj);
+    return true;
+  }
+
+  recordSpent(spentId, changeObject = null, { immediatelyReady = false } = {}) {
+    this._inFlight.delete(spentId);
+    if (changeObject && Number(changeObject.value) > 0) {
+      const rec = {
+        id: String(changeObject.id),
+        version: Number(changeObject.version),
+        value: Number(changeObject.value),
+        asset: String(changeObject.asset || 'PFT'),
+      };
+      if (immediatelyReady) {
+        this._ready.set(rec.id, rec);
+      } else {
+        this._pendingConfirm.set(rec.id, rec);
+      }
+    }
+  }
+
+  confirmPending(id) {
+    const rec = this._pendingConfirm.get(id);
+    if (!rec) return false;
+    this._pendingConfirm.delete(id);
+    this._ready.set(rec.id, rec);
+    return true;
+  }
+
+  availableCount() {
+    return this._ready.size;
+  }
+
+  inFlightCount() {
+    return this._inFlight.size;
+  }
+
+  pendingConfirmCount() {
+    return this._pendingConfirm.size;
+  }
+
+  totalCount() {
+    return this._ready.size + this._inFlight.size + this._pendingConfirm.size;
+  }
+
+  needsReplenish() {
+    return this._ready.size < Math.ceil(this._targetSize * this._lowWaterRatio);
+  }
+}
+
 module.exports = {
   X402HttpClient,
   X402McpClient,
+  OwnedObjectPool,
 };
