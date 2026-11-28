@@ -57,6 +57,18 @@ admission height separately controls when validators accept new orders. Earlier
 committees remain available for recovery; a V2-to-V1 downgrade is rejected.
 See [release compatibility](../specs/release-history-compatibility-20260916.md).
 
+On the validator hot path, FastPay v3 avoids opening `redb` during both steady-state
+and post-block `owned_sign_v3` / `owned_apply_v3` calls while preserving
+persist-before-vote and persist-before-ack durability: input locks sync to
+`owned_locks.wal`, speculative effects append to CRC32C-framed
+`fastpay_speculative_effects_v2.wal`, finalized block commits atomically refresh
+`chain_tip_generation.v1` and `fastpay_ledger_snapshot.v1.json` and prune
+anchored WAL entries (`prune_fastpay_speculative_wal_after_block_commit`), and
+persistent TLS 1.3 Protobuf RPC v2 sockets keep a `300 s` idle read timeout
+(`FASTPAY_V2_IDLE_READ_TIMEOUT_SECS`) across consensus block pauses. See
+[FastPay For Agents](../integrate/fastpay-for-agents.md) and
+[FastPay RPC v2](../rpc/methods.md#fastpay-rpc-v2-direct-tls-13-binary-protobuf-transport).
+
 ## FastSwap DvP lane
 
 FastSwap is a separate dual-owner object protocol. Both owners sign the same
@@ -141,6 +153,9 @@ caps.
 - `crates/execution/src/entrypoints.rs`
 - `crates/execution/src/owned_transfer.rs`
 - `crates/execution/src/owned_transfer_recovery.rs`
+- `crates/node/src/fastpay_rpc_v2.rs`
+- `crates/node/src/fastpay_recovery_node.rs`
+- `crates/node/src/storage_commit.rs`
 - `crates/execution/src/fastswap.rs`
 - `crates/node/src/atomic_swap_rpc_server.rs`
 - `crates/node/src/fastswap_service.rs`

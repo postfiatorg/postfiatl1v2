@@ -14,7 +14,22 @@ fn rpc_serve_inner(
 /// Serves until the accept budget, drains in-flight connections, then writes
 /// the end-of-run report while the listener is still bound, so the port closes
 /// only immediately before the process exits and systemd restarts it.
+#[cfg(test)]
 fn rpc_serve_with_report(options: RpcServeOptions, out: &mut impl Write) -> Result<(), String> {
+    rpc_serve_with_report_and_fastpay_v2(options, None, out)
+}
+
+fn rpc_serve_with_report_and_fastpay_v2(
+    options: RpcServeOptions,
+    fastpay_v2_cfg: Option<postfiat_node::fastpay_rpc_v2::FastPayRpcV2ServerConfig>,
+    out: &mut impl Write,
+) -> Result<(), String> {
+    let _fastpay_v2_handle = match fastpay_v2_cfg {
+        Some(cfg) => Some(
+            postfiat_node::fastpay_rpc_v2::spawn_fastpay_rpc_v2_tls_listener(cfg)?,
+        ),
+        None => None,
+    };
     let (report, listener) = rpc_serve_drain(
         options,
         #[cfg(test)]

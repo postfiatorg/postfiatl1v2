@@ -13,13 +13,206 @@
 //    and archive, polls `tx` until finality, and checks recipient, amount, and memo hash.
 
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+const { performance } = require('node:perf_hooks');
 const mp = require('../../wallet-proxy/message-protocol');
 const nativeChain = require('./native-chain');
+const { FastPayRpcV2Client } = require('./fastpay-rpc-v2');
 const { extractX402RequestHashFromMemos } = require('./facilitator');
 
 const DEFAULT_RPC_TIMEOUT_MS = 10_000;
 const DEFAULT_POLL_INTERVAL_MS = 500;
 const DEFAULT_FINALITY_TIMEOUT_MS = 30_000;
+const DEFAULT_APPLY_RETRY_SCHEDULE_MS = [250, 500, 1_000, 2_000, 5_000];
+const FINALITY_MODE_CERTIFICATE = 'certificate';
+const FINALITY_MODE_APPLIED_QUORUM = 'applied_quorum';
+const CERT_FILE_MODE = 0o600;
+const LINE_FEED = 0x0a;
+
+function syncDirectory(dirPath) {
+  let fd;
+  try {
+    fd = fs.openSync(dirPath, 'r');
+    fs.fsyncSync(fd);
+  } catch (_) {
+    // Non-fatal on filesystems that do not support directory fsync.
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch (_) {}
+    }
+  }
+}
+
+class MemoryCertificateStore {
+  constructor() {
+    this._records = new Map(); // orderHashHex -> record
+  }
+
+  putPending(record) {
+    const key = String(record.order_hash_hex).toLowerCase();
+    const existing = this._records.get(key);
+    if (existing) return existing;
+    const stored = {
+      ...record,
+      order_hash_hex: key,
+      confirmed_validators: Array.isArray(record.confirmed_validators) ? [...record.confirmed_validators] : [],
+      status: record.status || 'pending',
+    };
+    this._records.set(key, stored);
+    return stored;
+  }
+
+  updateAck(orderHashHex, validatorId, { finalizedHeight = 0, requiredAcks = 1 } = {}) {
+    const key = String(orderHashHex).toLowerCase();
+    const rec = this._records.get(key);
+    if (!rec) return null;
+    if (!rec.confirmed_validators.includes(validatorId)) {
+      rec.confirmed_validators.push(validatorId);
+    }
+    if (Number.isSafeInteger(finalizedHeight) && finalizedHeight > (rec.finalized_height || 0)) {
+      rec.finalized_height = finalizedHeight;
+    }
+    if (rec.confirmed_validators.length >= requiredAcks) {
+      rec.status = 'applied';
+    }
+    return rec;
+  }
+
+  get(orderHashHex) {
+    return this._records.get(String(orderHashHex).toLowerCase()) || null;
+  }
+
+  listPending() {
+    return [...this._records.values()].filter((r) => r.status !== 'applied');
+  }
+
+  close() {}
+}
+
+// Durable append-only WAL for verified FastPay v3 certificates (W1).
+// Every put/ack update is written in one writeSync + fsyncSync before returning,
+// with leading/trailing newlines so torn tail writes are ignored cleanly on reload.
+class FileCertificateStore {
+  constructor(filePath) {
+    this._filePath = path.resolve(filePath);
+    this._records = new Map();
+    const dir = path.dirname(this._filePath);
+    fs.mkdirSync(dir, { recursive: true });
+    this._fd = fs.openSync(this._filePath, 'a+', CERT_FILE_MODE);
+    syncDirectory(dir);
+    this._reload();
+  }
+
+  _append(event) {
+    const line = Buffer.from(`\n${JSON.stringify(event)}\n`, 'utf8');
+    const written = fs.writeSync(this._fd, line);
+    if (written !== line.length) {
+      throw new Error(`certificate WAL ${this._filePath} partial write`);
+    }
+    fs.fsyncSync(this._fd);
+  }
+
+  _reload() {
+    const { size } = fs.fstatSync(this._fd);
+    if (size === 0) return;
+    const raw = Buffer.alloc(size);
+    let offset = 0;
+    while (offset < size) {
+      const n = fs.readSync(this._fd, raw, offset, size - offset, offset);
+      if (n === 0) break;
+      offset += n;
+    }
+    const completeEnd = raw.subarray(0, offset).lastIndexOf(LINE_FEED) + 1;
+    for (const line of raw.subarray(0, completeEnd).toString('utf8').split('\n')) {
+      if (!line.startsWith('{') || !line.endsWith('}')) continue;
+      let ev;
+      try {
+        ev = JSON.parse(line);
+      } catch (_) {
+        continue;
+      }
+      if (ev.op === 'put' && typeof ev.record?.order_hash_hex === 'string') {
+        const key = ev.record.order_hash_hex.toLowerCase();
+        if (!this._records.has(key)) {
+          this._records.set(key, {
+            ...ev.record,
+            order_hash_hex: key,
+            confirmed_validators: Array.isArray(ev.record.confirmed_validators) ? [...ev.record.confirmed_validators] : [],
+            status: ev.record.status || 'pending',
+          });
+        }
+      } else if (ev.op === 'ack' && typeof ev.order_hash_hex === 'string' && typeof ev.validator_id === 'string') {
+        const rec = this._records.get(ev.order_hash_hex.toLowerCase());
+        if (rec) {
+          if (!rec.confirmed_validators.includes(ev.validator_id)) {
+            rec.confirmed_validators.push(ev.validator_id);
+          }
+          if (Number.isSafeInteger(ev.finalized_height) && ev.finalized_height > (rec.finalized_height || 0)) {
+            rec.finalized_height = ev.finalized_height;
+          }
+          if (ev.applied === true) rec.status = 'applied';
+        }
+      }
+    }
+  }
+
+  putPending(record) {
+    const key = String(record.order_hash_hex).toLowerCase();
+    const existing = this._records.get(key);
+    if (existing) return existing;
+    const stored = {
+      ...record,
+      order_hash_hex: key,
+      confirmed_validators: Array.isArray(record.confirmed_validators) ? [...record.confirmed_validators] : [],
+      status: record.status || 'pending',
+    };
+    this._append({ op: 'put', record: stored });
+    this._records.set(key, stored);
+    return stored;
+  }
+
+  updateAck(orderHashHex, validatorId, { finalizedHeight = 0, requiredAcks = 1 } = {}) {
+    const key = String(orderHashHex).toLowerCase();
+    const rec = this._records.get(key);
+    if (!rec) return null;
+    if (!rec.confirmed_validators.includes(validatorId)) {
+      rec.confirmed_validators.push(validatorId);
+    }
+    if (Number.isSafeInteger(finalizedHeight) && finalizedHeight > (rec.finalized_height || 0)) {
+      rec.finalized_height = finalizedHeight;
+    }
+    const applied = rec.confirmed_validators.length >= requiredAcks;
+    if (applied) rec.status = 'applied';
+    this._append({
+      op: 'ack',
+      order_hash_hex: key,
+      validator_id: validatorId,
+      finalized_height: rec.finalized_height || 0,
+      applied,
+    });
+    return rec;
+  }
+
+  get(orderHashHex) {
+    return this._records.get(String(orderHashHex).toLowerCase()) || null;
+  }
+
+  listPending() {
+    return [...this._records.values()].filter((r) => r.status !== 'applied');
+  }
+
+  close() {
+    if (this._fd !== null && this._fd !== undefined) {
+      try {
+        fs.closeSync(this._fd);
+      } catch (_) {}
+      this._fd = null;
+    }
+  }
+}
 
 function parseValidatorEndpoints(rpcUrls, validatorIds = []) {
   const list = Array.isArray(rpcUrls)
@@ -141,17 +334,26 @@ function verifyOnChainTxMatchesPayment(txResult, verified, txId) {
 
 function createChainSettlementAdapter({
   rpcUrls,
+  fastpayRpcV2Endpoints = null, // optional { 'validator-0': { host, port } } or CSV "validator-0=host:port,..."
+  fastpayRpcV2TlsOptions = {},
   validatorIds = [],
   quorumThreshold = null,
   committeeRegistry = null,
   expectedDomain = null,
   requireAuthenticatedCommittee = false,
   verifyIndexedOrder = false,
+  settlementFinalityMode = null, // 'certificate' | 'applied_quorum'
+  certificateStore = null,
+  coLocatedValidatorId = null,
+  coLocatedValidatorSyncApply = true,
+  applyRetryScheduleMs = DEFAULT_APPLY_RETRY_SCHEDULE_MS,
+  maxApplyRetryRounds = 8,
   rpcTimeoutMs = DEFAULT_RPC_TIMEOUT_MS,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
   finalityTimeoutMs = DEFAULT_FINALITY_TIMEOUT_MS,
   fetchFn = globalThis.fetch,
   sleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  onAlert = null,
 } = {}) {
   const endpoints = parseValidatorEndpoints(rpcUrls, validatorIds);
   const authenticatedCommittee = Boolean(committeeRegistry && typeof committeeRegistry.getActiveCommittee === 'function' && expectedDomain);
@@ -167,8 +369,159 @@ function createChainSettlementAdapter({
     throw new Error(`quorumThreshold ${quorum} must be within 1..${endpoints.length}`);
   }
 
+  const resolvedFinalityMode =
+    settlementFinalityMode ||
+    (verifyIndexedOrder ? FINALITY_MODE_APPLIED_QUORUM : certificateStore ? FINALITY_MODE_CERTIFICATE : FINALITY_MODE_APPLIED_QUORUM);
+  if (resolvedFinalityMode !== FINALITY_MODE_CERTIFICATE && resolvedFinalityMode !== FINALITY_MODE_APPLIED_QUORUM) {
+    throw new Error(
+      `settlementFinalityMode must be "${FINALITY_MODE_CERTIFICATE}" or "${FINALITY_MODE_APPLIED_QUORUM}", got "${resolvedFinalityMode}"`
+    );
+  }
+  const certStore = certificateStore || new MemoryCertificateStore();
+  const endpointById = new Map(endpoints.map((ep) => [ep.validatorId, ep]));
+  const v2Clients = new Map();
+  if (fastpayRpcV2Endpoints) {
+    const entries =
+      typeof fastpayRpcV2Endpoints === 'string'
+        ? fastpayRpcV2Endpoints
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map((item) => {
+              const eq = item.indexOf('=');
+              const vid = eq > 0 ? item.slice(0, eq).trim() : '';
+              const addr = eq > 0 ? item.slice(eq + 1).trim() : item;
+              const colon = addr.lastIndexOf(':');
+              return [vid, { host: addr.slice(0, colon), port: Number(addr.slice(colon + 1)) }];
+            })
+        : Object.entries(fastpayRpcV2Endpoints);
+    for (const [vid, cfg] of entries) {
+      if (vid && cfg && cfg.host && cfg.port) {
+        v2Clients.set(
+          vid,
+          new FastPayRpcV2Client({
+            host: cfg.host,
+            port: cfg.port,
+            tlsOptions: fastpayRpcV2TlsOptions,
+            timeoutMs: rpcTimeoutMs,
+          })
+        );
+      }
+    }
+  }
+  const inFlightBackgroundApplies = new Set();
+  const metricsState = {
+    voteQuorumSamplesMs: [],
+    applyQuorumSamplesMs: [],
+    applyRetryTotal: 0,
+  };
+
   const rpc = (url, method, params) =>
     defaultJsonRpcCall(url, method, params, { timeoutMs: rpcTimeoutMs, fetchFn });
+
+  async function applyCertificateToEndpoint(ep, { certJson, certObj = null, committee, orderHashHex, lockId, expectedCertDigestHex }) {
+    const v2Client = v2Clients.get(ep.validatorId);
+    const ack = v2Client
+      ? (await v2Client.ownedApplyV3FastOrFallback(ep.validatorId, certObj || JSON.parse(certJson))).ack
+      : await rpc(ep.url, 'owned_apply_v3', {
+          validator_id: ep.validatorId,
+          cert_json: certJson,
+        });
+    const pk = committee.validators.get(ep.validatorId);
+    if (!pk || !ack) return { ok: false, reason: 'missing_ack_or_key' };
+    if (
+      ack.signed === false &&
+      ack.schema === 'postfiat-fastpay-held-effect-v1' &&
+      ack.validator_id === ep.validatorId &&
+      String(ack.lock_id || '').toLowerCase() === lockId &&
+      String(ack.certificate_digest || '').toLowerCase() === expectedCertDigestHex
+    ) {
+      return { ok: false, held: true, validatorId: ep.validatorId };
+    }
+    if (
+      ack.validator_id !== ep.validatorId ||
+      String(ack.order_digest || '').toLowerCase() !== orderHashHex ||
+      String(ack.lock_id || '').toLowerCase() !== lockId ||
+      String(ack.certificate_digest || '').toLowerCase() !== expectedCertDigestHex ||
+      Number(ack.committee_epoch) !== Number(committee.epoch) ||
+      !nativeChain.domainsMatch(ack.domain, expectedDomain)
+    ) {
+      return { ok: false, reason: 'apply_ack_binding_mismatch' };
+    }
+    const ackSigOk = await nativeChain.verifyNativeFastPayApplyAckV1(ack, pk);
+    if (!ackSigOk) return { ok: false, reason: 'apply_ack_signature_invalid' };
+    const finalizedHeight = Number(ack.block_height || ack.finalized_height || ack.height || 0);
+    return {
+      ok: true,
+      validatorId: ep.validatorId,
+      finalizedHeight: Number.isSafeInteger(finalizedHeight) && finalizedHeight > 0 ? finalizedHeight : 0,
+    };
+  }
+
+  function scheduleBackgroundApply(record, { committee, requiredAcks }) {
+    const orderHashHex = record.order_hash_hex;
+    const task = (async () => {
+      const tStart = performance.now();
+      const confirmed = new Set(record.confirmed_validators || []);
+      const heldOnly = new Set();
+      let attempt = 0;
+      let postQuorumRetries = 0;
+      while (confirmed.size + heldOnly.size < endpoints.length && attempt <= maxApplyRetryRounds) {
+        if (confirmed.size >= requiredAcks) {
+          if (postQuorumRetries >= 1) break;
+          postQuorumRetries += 1;
+        }
+        const remaining = endpoints.filter(
+          (ep) => !confirmed.has(ep.validatorId) && !heldOnly.has(ep.validatorId)
+        );
+        if (remaining.length === 0) break;
+        if (attempt > 0) {
+          metricsState.applyRetryTotal += 1;
+          const delayMs = applyRetryScheduleMs[Math.min(attempt - 1, applyRetryScheduleMs.length - 1)] || 250;
+          await sleepFn(delayMs);
+        }
+        await Promise.allSettled(
+          remaining.map(async (ep) => {
+            try {
+              const res = await applyCertificateToEndpoint(ep, {
+                certJson: record.cert_json,
+                committee,
+                orderHashHex,
+                lockId: record.lock_id,
+                expectedCertDigestHex: record.certificate_digest_hex,
+              });
+              if (res.ok) {
+                confirmed.add(ep.validatorId);
+                certStore.updateAck(orderHashHex, ep.validatorId, {
+                  finalizedHeight: res.finalizedHeight,
+                  requiredAcks,
+                });
+              } else if (res.held) {
+                heldOnly.add(ep.validatorId);
+              }
+            } catch (_) {
+              // Retried in the next backoff round.
+            }
+          })
+        );
+        attempt += 1;
+      }
+      if (confirmed.size >= requiredAcks) {
+        metricsState.applyQuorumSamplesMs.push(Number((performance.now() - tStart).toFixed(2)));
+      } else if (typeof onAlert === 'function') {
+        onAlert({
+          event: 'fastpay_unconfirmed_cert_expiring',
+          order_hash_hex: orderHashHex,
+          lock_id: record.lock_id,
+          confirmed_count: confirmed.size,
+          required_acks: requiredAcks,
+        });
+      }
+    })();
+    inFlightBackgroundApplies.add(task);
+    task.finally(() => inFlightBackgroundApplies.delete(task));
+    return task;
+  }
 
   async function settleFastPayAuthenticated(verified) {
     const committee = committeeRegistry.getActiveCommittee();
@@ -196,125 +549,211 @@ function createChainSettlementAdapter({
 
     const orderJson = JSON.stringify(signedOrder);
     const { mlDsa65 } = await mp.loadPqModules();
+    const requiredVotes = Math.max(quorum, committee.threshold);
+
+    // 1. Quorum-first `owned_sign_v3` fan-out: authenticate each vote immediately on arrival
+    //    and resolve as soon as `requiredVotes` distinct active-committee votes verify.
+    const tVoteStart = performance.now();
     const verifiedVotes = [];
     const seenValidators = new Set();
     const errors = [];
 
-    // 1. Fan out `owned_sign_v3` and cryptographically authenticate every committee vote.
-    const results = await Promise.allSettled(
-      endpoints.map(async (ep) => {
-        const vote = await rpc(ep.url, 'owned_sign_v3', {
-          order_json: orderJson,
-          validator_id: ep.validatorId,
-        });
-        return { endpoint: ep, vote };
-      })
-    );
+    await new Promise((resolve) => {
+      let settledCount = 0;
+      let done = false;
+      const finish = () => {
+        if (!done) {
+          done = true;
+          resolve();
+        }
+      };
+      if (endpoints.length < requiredVotes) {
+        finish();
+        return;
+      }
+      for (const ep of endpoints) {
+        const v2Client = v2Clients.get(ep.validatorId);
+        const signPromise = v2Client
+          ? v2Client.ownedSignV3(ep.validatorId, signedOrder).then((r) => r.vote)
+          : rpc(ep.url, 'owned_sign_v3', {
+              order_json: orderJson,
+              validator_id: ep.validatorId,
+            });
+        signPromise
+          .then((voteResult) => {
+            if (done) return;
+            const rawVote = voteResult?.vote || voteResult;
+            if (!rawVote || rawVote.error || rawVote.rejected === true) {
+              errors.push(`${ep.validatorId}:${rawVote?.error || 'rejected'}`);
+              return;
+            }
+            const voteValidatorId = String(rawVote.validator_id || '');
+            if (!voteValidatorId || voteValidatorId !== ep.validatorId) {
+              errors.push(`${ep.validatorId}:validator_id_mismatch`);
+              return;
+            }
+            if (seenValidators.has(voteValidatorId)) {
+              errors.push(`${voteValidatorId}:duplicate_vote`);
+              return;
+            }
+            const pk = committee.validators.get(voteValidatorId);
+            if (!pk) {
+              errors.push(`${voteValidatorId}:not_in_active_committee`);
+              return;
+            }
+            const sigHex = String(rawVote.signature_hex || '').toLowerCase();
+            const sigBuf = Buffer.from(sigHex, 'hex');
+            if (sigBuf.length !== mp.ML_DSA_65_SIGNATURE_BYTES) {
+              errors.push(`${voteValidatorId}:invalid_vote_signature_length`);
+              return;
+            }
+            if (!mlDsa65.verify(sigBuf, ownerCheck.signingBytes, pk, { context: nativeChain.OWNED_TRANSFER_CONTEXT_V3 })) {
+              errors.push(`${voteValidatorId}:invalid_vote_signature`);
+              return;
+            }
+            seenValidators.add(voteValidatorId);
+            verifiedVotes.push({ validator_id: voteValidatorId, signature_hex: sigHex });
+            if (verifiedVotes.length >= requiredVotes) {
+              finish();
+            }
+          })
+          .catch((err) => {
+            if (!done) errors.push(String(err?.message || err || 'rpc_failed'));
+          })
+          .finally(() => {
+            settledCount += 1;
+            const maxPossible = verifiedVotes.length + (endpoints.length - settledCount);
+            if (settledCount >= endpoints.length || maxPossible < requiredVotes) {
+              finish();
+            }
+          });
+      }
+    });
 
-    for (const outcome of results) {
-      if (outcome.status !== 'fulfilled' || !outcome.value?.vote) {
-        errors.push(String(outcome.reason?.message || outcome.reason || 'rpc_failed'));
-        continue;
-      }
-      const ep = outcome.value.endpoint;
-      const rawVote = outcome.value.vote.vote || outcome.value.vote;
-      if (rawVote.error || rawVote.rejected === true) {
-        errors.push(`${ep.validatorId}:${rawVote.error || 'rejected'}`);
-        continue;
-      }
-      const voteValidatorId = String(rawVote.validator_id || '');
-      if (!voteValidatorId || voteValidatorId !== ep.validatorId) {
-        errors.push(`${ep.validatorId}:validator_id_mismatch`);
-        continue;
-      }
-      if (seenValidators.has(voteValidatorId)) {
-        errors.push(`${voteValidatorId}:duplicate_vote`);
-        continue;
-      }
-      const pk = committee.validators.get(voteValidatorId);
-      if (!pk) {
-        errors.push(`${voteValidatorId}:not_in_active_committee`);
-        continue;
-      }
-      const sigHex = String(rawVote.signature_hex || '').toLowerCase();
-      const sigBuf = Buffer.from(sigHex, 'hex');
-      if (sigBuf.length !== mp.ML_DSA_65_SIGNATURE_BYTES) {
-        errors.push(`${voteValidatorId}:invalid_vote_signature_length`);
-        continue;
-      }
-      if (!mlDsa65.verify(sigBuf, ownerCheck.signingBytes, pk, { context: nativeChain.OWNED_TRANSFER_CONTEXT_V3 })) {
-        errors.push(`${voteValidatorId}:invalid_vote_signature`);
-        continue;
-      }
-      seenValidators.add(voteValidatorId);
-      verifiedVotes.push({ validator_id: voteValidatorId, signature_hex: sigHex });
-    }
-
-    const requiredVotes = Math.max(quorum, committee.threshold);
     if (verifiedVotes.length < requiredVotes) {
       return {
         accepted: false,
-        reason: `fastpay_authenticated_quorum_not_reached:${verifiedVotes.length}/${requiredVotes}${errors.length ? ` (${errors[0]})` : ''}`,
+        reason: `fastpay_authenticated_quorum_not_reached:${verifiedVotes.length}/${requiredVotes}${errors.length ? ` (${errors.join(' | ')})` : ''}`,
       };
     }
+    metricsState.voteQuorumSamplesMs.push(Number((performance.now() - tVoteStart).toFixed(2)));
 
-    // 2. Assemble canonical native `OwnedTransferCertificateV3` and verify locally.
+    // 2. Assemble canonical native `OwnedTransferCertificateV3`.
+    //    The payer ML-DSA-65 signature, domain, epoch, and every one of the `requiredVotes`
+    //    distinct active-committee ML-DSA-65 vote signatures were already verified above;
+    //    compute the canonical SHA3-384 certificate digest directly without re-verifying 6× ML-DSA-65.
     const cert = {
       order: signedOrder.order,
       owner_pubkey_hex: signedOrder.owner_pubkey_hex,
       owner_signature_hex: signedOrder.owner_signature_hex,
       votes: verifiedVotes.slice(0, requiredVotes),
     };
-    const certCheck = await nativeChain.verifyNativeOwnedTransferCertificateV3(cert, {
-      committee,
-      expectedDomain,
-      expectedOrderHash: ownerCheck.orderHash,
-    });
-    if (!certCheck.ok) {
-      return { accepted: false, reason: `assembled_certificate_invalid:${certCheck.reason}` };
-    }
-    const expectedCertDigestHex = certCheck.certificateDigest.toString('hex');
+    const expectedCertDigestHex = nativeChain.fastpayTransferCertificateDigestV3(cert).toString('hex');
     const certJson = JSON.stringify(cert);
 
-    // 3. Broadcast `owned_apply_v3` with `(validator_id, cert_json)` and authenticate `FastPayApplyAckV1`.
-    const applyResults = await Promise.allSettled(
-      endpoints.map(async (ep) => {
-        const ack = await rpc(ep.url, 'owned_apply_v3', {
-          validator_id: ep.validatorId,
-          cert_json: certJson,
-        });
-        return { endpoint: ep, ack };
-      })
-    );
+    // 3a. 1-RTT certificate finality mode (W1): durably persist verified certificate to local
+    //     WAL (plus optional synchronous apply to co-located validator) before returning,
+    //     and fan out remote `owned_apply_v3` asynchronously with bounded retry.
+    if (resolvedFinalityMode === FINALITY_MODE_CERTIFICATE) {
+      const stored = certStore.putPending({
+        order_hash_hex: ownerCheck.orderHashHex,
+        certificate_digest_hex: expectedCertDigestHex,
+        lock_id: ownerCheck.lockId,
+        committee_epoch: Number(committee.epoch),
+        expires_at_height: Number(order.recovery?.expires_at_height || 0),
+        recovery_closes_at_height: Number(order.recovery?.recovery_closes_at_height || 0),
+        cert_json: certJson,
+      });
 
+      let finalizedHeight = stored.finalized_height || 0;
+      let appliedValidators = stored.confirmed_validators.length;
+
+      if (coLocatedValidatorId && coLocatedValidatorSyncApply) {
+        const localEp = endpointById.get(String(coLocatedValidatorId));
+        if (!localEp) {
+          return { accepted: false, reason: `unknown_colocated_validator:${coLocatedValidatorId}` };
+        }
+        try {
+          const localRes = await applyCertificateToEndpoint(localEp, {
+            certJson,
+            committee,
+            orderHashHex: ownerCheck.orderHashHex,
+            lockId: ownerCheck.lockId,
+            expectedCertDigestHex,
+          });
+          if (!localRes.ok) {
+            return { accepted: false, reason: `colocated_apply_failed:${localRes.reason}` };
+          }
+          const updated = certStore.updateAck(ownerCheck.orderHashHex, localEp.validatorId, {
+            finalizedHeight: localRes.finalizedHeight,
+            requiredAcks: requiredVotes,
+          });
+          finalizedHeight = Math.max(finalizedHeight, localRes.finalizedHeight);
+          appliedValidators = updated ? updated.confirmed_validators.length : 1;
+        } catch (err) {
+          return { accepted: false, reason: `colocated_apply_error:${err?.message || err}` };
+        }
+      }
+
+      if (appliedValidators < requiredVotes) {
+        scheduleBackgroundApply(certStore.get(ownerCheck.orderHashHex) || stored, {
+          committee,
+          requiredAcks: requiredVotes,
+        });
+      }
+
+      return {
+        accepted: true,
+        finalityMode: FINALITY_MODE_CERTIFICATE,
+        orderHashHex: ownerCheck.orderHashHex,
+        certificateDigestHex: expectedCertDigestHex,
+        finalizedHeight,
+        quorumVotes: verifiedVotes.length,
+        appliedValidators,
+      };
+    }
+
+    // 3b. Strict 2-RTT `applied_quorum` mode: quorum-first `owned_apply_v3` fan-out
+    //     verifying signed `FastPayApplyAckV1` acknowledgements.
+    const tApplyStart = performance.now();
     const authenticatedAcks = new Set();
     let finalizedHeight = 0;
-    for (const outcome of applyResults) {
-      if (outcome.status !== 'fulfilled' || !outcome.value?.ack) continue;
-      const ep = outcome.value.endpoint;
-      const ack = outcome.value.ack;
-      const pk = committee.validators.get(ep.validatorId);
-      if (!pk) continue;
-      if (
-        ack.validator_id !== ep.validatorId ||
-        String(ack.order_digest || '').toLowerCase() !== ownerCheck.orderHashHex ||
-        String(ack.lock_id || '').toLowerCase() !== ownerCheck.lockId ||
-        String(ack.certificate_digest || '').toLowerCase() !== expectedCertDigestHex ||
-        Number(ack.committee_epoch) !== Number(committee.epoch) ||
-        !nativeChain.domainsMatch(ack.domain, expectedDomain)
-      ) {
-        continue;
+
+    await new Promise((resolve) => {
+      let settledCount = 0;
+      let done = false;
+      const finish = () => {
+        if (!done) {
+          done = true;
+          resolve();
+        }
+      };
+      for (const ep of endpoints) {
+        applyCertificateToEndpoint(ep, {
+          certJson,
+          committee,
+          orderHashHex: ownerCheck.orderHashHex,
+          lockId: ownerCheck.lockId,
+          expectedCertDigestHex,
+        })
+          .then((res) => {
+            if (!res.ok) return;
+            authenticatedAcks.add(ep.validatorId);
+            if (res.finalizedHeight > finalizedHeight) finalizedHeight = res.finalizedHeight;
+            if (authenticatedAcks.size >= requiredVotes) finish();
+          })
+          .catch(() => {})
+          .finally(() => {
+            settledCount += 1;
+            if (settledCount >= endpoints.length) finish();
+          });
       }
-      const ackSigOk = await nativeChain.verifyNativeFastPayApplyAckV1(ack, pk);
-      if (!ackSigOk) continue;
-      authenticatedAcks.add(ep.validatorId);
-      const h = Number(ack.block_height || ack.finalized_height || ack.height || 0);
-      if (Number.isSafeInteger(h) && h > finalizedHeight) finalizedHeight = h;
-    }
+    });
 
     if (authenticatedAcks.size === 0) {
       return { accepted: false, reason: 'fastpay_apply_no_authenticated_ack' };
     }
+    metricsState.applyQuorumSamplesMs.push(Number((performance.now() - tApplyStart).toFixed(2)));
 
     // 4. Optional indexed order verification via `tx` lookup by immutable 48-byte `order_hash`.
     if (verifyIndexedOrder) {
@@ -333,6 +772,7 @@ function createChainSettlementAdapter({
 
     return {
       accepted: true,
+      finalityMode: FINALITY_MODE_APPLIED_QUORUM,
       orderHashHex: ownerCheck.orderHashHex,
       certificateDigestHex: expectedCertDigestHex,
       finalizedHeight,
@@ -494,16 +934,69 @@ function createChainSettlementAdapter({
     }
   }
 
+  async function replayPendingCertificates() {
+    if (!authenticatedCommittee) return 0;
+    const pending = certStore.listPending();
+    let replayed = 0;
+    for (const rec of pending) {
+      const committee =
+        committeeRegistry.getCommittee(rec.committee_epoch) || committeeRegistry.getActiveCommittee();
+      if (!committee) continue;
+      const requiredAcks = Math.max(quorum, committee.threshold);
+      scheduleBackgroundApply(rec, { committee, requiredAcks });
+      replayed += 1;
+    }
+    return replayed;
+  }
+
+  async function flushPendingApplies() {
+    while (inFlightBackgroundApplies.size > 0) {
+      await Promise.allSettled([...inFlightBackgroundApplies]);
+    }
+  }
+
+  function getStoredCertificate(orderHashHex) {
+    return certStore.get(orderHashHex);
+  }
+
+  function unconfirmedCertificateCount() {
+    return certStore.listPending().length;
+  }
+
+  function metrics() {
+    return {
+      finality_mode: resolvedFinalityMode,
+      vote_quorum_ms: [...metricsState.voteQuorumSamplesMs],
+      apply_quorum_ms: [...metricsState.applyQuorumSamplesMs],
+      unconfirmed_certs: certStore.listPending().length,
+      apply_retry_total: metricsState.applyRetryTotal,
+    };
+  }
+
   return {
     endpoints,
     quorumThreshold: quorum,
     authenticatedCommittee,
+    settlementFinalityMode: resolvedFinalityMode,
     settleFastPay,
     settleConsensus,
+    getStoredCertificate,
+    unconfirmedCertificateCount,
+    replayPendingCertificates,
+    flushPendingApplies,
+    metrics,
+    close: () => {
+      for (const client of v2Clients.values()) client.close();
+      certStore.close();
+    },
   };
 }
 
 module.exports = {
+  FINALITY_MODE_CERTIFICATE,
+  FINALITY_MODE_APPLIED_QUORUM,
+  MemoryCertificateStore,
+  FileCertificateStore,
   createChainSettlementAdapter,
   parseValidatorEndpoints,
   verifyOnChainTxMatchesPayment,

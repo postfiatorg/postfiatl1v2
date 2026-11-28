@@ -17,6 +17,7 @@ pub fn transfer(options: TransferOptions) -> io::Result<Receipt> {
     let receipt = execute_transfer(&genesis, &mut ledger, &signed);
     if receipt.accepted {
         store.write_ledger(&ledger)?;
+        crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(store.data_dir());
     }
     store.append_receipt(receipt.clone())?;
     Ok(receipt)

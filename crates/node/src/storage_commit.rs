@@ -2506,7 +2506,12 @@ pub(super) fn write_ordered_commit_with_journal_timed_locked(
             ));
         }
         let stage_start = std::time::Instant::now();
-        apply_transactional_ordered_commit_delta(store, &journal, scheduled_activation_height)?;
+        apply_transactional_ordered_commit_delta(
+            store,
+            &genesis,
+            &journal,
+            scheduled_activation_height,
+        )?;
         timings.write_blocks_ms = apply_batch_elapsed_ms(stage_start);
         if let Some(registry) = journal.validator_registry.as_ref() {
             // This file is a compatibility mirror for legacy operator
@@ -2537,7 +2542,12 @@ pub(super) fn write_ordered_commit_with_journal_timed_locked(
 
     if backend_mode.is_transactional() && store.transactional_storage_configured()? {
         let stage_start = std::time::Instant::now();
-        apply_transactional_ordered_commit_delta(store, &journal, scheduled_activation_height)?;
+        apply_transactional_ordered_commit_delta(
+            store,
+            &genesis,
+            &journal,
+            scheduled_activation_height,
+        )?;
         timings.write_blocks_ms += apply_batch_elapsed_ms(stage_start);
     }
 
@@ -2598,6 +2608,7 @@ fn scheduled_storage_activation_after_journal(
 
 fn apply_transactional_ordered_commit_delta(
     store: &NodeStore,
+    genesis: &Genesis,
     journal: &OrderedCommitDeltaJournal,
     scheduled_activation_height: Option<u64>,
 ) -> io::Result<postfiat_storage::CommitOutcome> {
@@ -2623,7 +2634,7 @@ fn apply_transactional_ordered_commit_delta(
         )
         .into_iter()
         .collect::<Vec<_>>();
-    transactional
+    let outcome = transactional
         .commit_finalized_block(postfiat_storage::CommitFinalizedBlock {
             expected_tip: &expected_tip,
             new_tip: &new_tip,
@@ -2643,7 +2654,54 @@ fn apply_transactional_ordered_commit_delta(
             scheduled_activation_height,
             allow_legacy_receipt_id_mismatch: false,
         })
-        .map_err(io::Error::from)
+        .map_err(io::Error::from)?;
+    if let Ok(updated_meta) = transactional.meta() {
+        let snapshot_ledger = match journal.ledger.as_ref() {
+            Some(ledger) => Some(std::borrow::Cow::Borrowed(ledger)),
+            None => transactional
+                .ledger()
+                .ok()
+                .flatten()
+                .map(std::borrow::Cow::Owned),
+        };
+        if let Some(ledger) = snapshot_ledger {
+            let _ = crate::fastpay_recovery_node::prune_fastpay_speculative_wal_after_block_commit(
+                store.data_dir(),
+                &transactional,
+                updated_meta.finalized_height,
+                ledger.as_ref(),
+            );
+            let fee_v1_activation = match journal.governance.as_ref() {
+                Some(gov) => gov.fastpay_fee_v1_activation_height(),
+                None => transactional
+                    .governance()
+                    .ok()
+                    .flatten()
+                    .and_then(|gov| gov.fastpay_fee_v1_activation_height()),
+            };
+            let base_pending_unanchored_count =
+                fastpay_pre_state_effects_for_next_block(store, ledger.as_ref())
+                    .map(|effects| effects.len())
+                    .unwrap_or(0);
+            let _ = crate::fastpay_recovery_node::write_fastpay_ledger_snapshot_sidecar(
+                store.data_dir(),
+                &updated_meta,
+                ledger.as_ref(),
+                genesis,
+                fee_v1_activation,
+                base_pending_unanchored_count,
+            );
+        }
+        let db_path = transactional.database_path().to_path_buf();
+        drop(transactional);
+        let _ = crate::fastpay_recovery_node::write_chain_tip_generation_sidecar(
+            store.data_dir(),
+            &updated_meta,
+            &db_path,
+        );
+    }
+    crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(store.data_dir());
+    Ok(outcome)
 }
 
 pub(super) fn ordered_commit_delta_journal(
@@ -2768,8 +2826,10 @@ pub(super) fn recover_ordered_commit_journal_locked(
             }
 
             if backend_mode.is_transactional() && transactional_configured {
+                let genesis = store.read_genesis()?;
                 apply_transactional_ordered_commit_delta(
                     store,
+                    &genesis,
                     journal,
                     scheduled_activation_height,
                 )?;
@@ -2825,6 +2885,7 @@ pub(super) fn apply_ordered_commit_journal_timed(
     if let Some(ledger) = journal.ledger.as_ref() {
         let stage_start = std::time::Instant::now();
         store.write_ledger(ledger)?;
+        crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(store.data_dir());
         timings.write_ledger_ms = apply_batch_elapsed_ms(stage_start);
     }
     if let Some(governance) = journal.governance.as_ref() {
@@ -2981,6 +3042,7 @@ pub(super) fn apply_ordered_commit_delta_journal_timed(
     if let Some(ledger) = journal.ledger.as_ref() {
         let stage_start = std::time::Instant::now();
         store.write_ledger(ledger)?;
+        crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(store.data_dir());
         timings.write_ledger_ms = apply_batch_elapsed_ms(stage_start);
     }
     if let Some(governance) = journal.governance.as_ref() {

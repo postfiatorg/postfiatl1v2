@@ -163,6 +163,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             fuzz_nav_reserve_submit_operation(iterations)?,
             fuzz_consensus_round_monotonicity(iterations)?,
             fuzz_fastpay_recovery_committee_window(iterations)?,
+            fuzz_fastpay_rpc_v2_codec(iterations)?,
         ],
         "transaction-codec" => vec![fuzz_transaction_codec(iterations)?],
         "atomic-swap-codec" => vec![fuzz_atomic_swap_codec(iterations)?],
@@ -199,6 +200,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         "fastpay-recovery-committee-window" => {
             vec![fuzz_fastpay_recovery_committee_window(iterations)?]
         }
+        "fastpay-rpc-v2-codec" => vec![fuzz_fastpay_rpc_v2_codec(iterations)?],
         other => return Err(format!("unknown fuzz target `{other}`").into()),
     };
 
@@ -3384,6 +3386,50 @@ fn fuzz_consensus_round_monotonicity(
             report.assert_invariant(next.highest_prepare_round == state.highest_prepare_round);
             report.assert_invariant(next.highest_precommit_round == state.highest_precommit_round);
         }
+    }
+    Ok(report)
+}
+
+fn fuzz_fastpay_rpc_v2_codec(iterations: usize) -> Result<FuzzTargetReport, Box<dyn Error>> {
+    use postfiat_node::fastpay_rpc_v2::{
+        decode_fastpay_rpc_v2_frame, FastPayRpcV2DecodeError, FASTPAY_RPC_V2_VERSION,
+        MAX_FASTPAY_V2_FRAME_BYTES,
+    };
+    let mut report = FuzzTargetReport::new("fastpay-rpc-v2-codec", iterations, iterations + 1);
+    // Reject unknown versions and oversized frames deterministically.
+    report.assert_invariant(matches!(
+        decode_fastpay_rpc_v2_frame(&[1, 0, 0, 0, 1, 0]),
+        Err(FastPayRpcV2DecodeError::UnsupportedProtocolVersion(1))
+    ));
+    let oversized_len = (MAX_FASTPAY_V2_FRAME_BYTES as u32 + 1).to_be_bytes();
+    report.assert_invariant(matches!(
+        decode_fastpay_rpc_v2_frame(&[
+            FASTPAY_RPC_V2_VERSION,
+            oversized_len[0],
+            oversized_len[1],
+            oversized_len[2],
+            oversized_len[3],
+        ]),
+        Err(FastPayRpcV2DecodeError::FrameTooLarge(_))
+    ));
+    let seed = [
+        FASTPAY_RPC_V2_VERSION,
+        0,
+        0,
+        0,
+        8,
+        0x08,
+        0x01,
+        0x10,
+        0x01,
+        0x1a,
+        0x02,
+        b'v',
+        b'0',
+    ];
+    for mutated in mutated_inputs(&seed, iterations) {
+        let res = decode_fastpay_rpc_v2_frame(&mutated);
+        report.record_parse(res.is_ok());
     }
     Ok(report)
 }

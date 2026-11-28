@@ -12,6 +12,16 @@ struct RpcServeEventRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     handler_ms: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    fastpay_redb_lease_wait_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fastpay_wal_fdatasync_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fastpay_ledger_cache_hit: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fastpay_redb_opened: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fastpay_order_lru_hit: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     mempool_submit_peer_count: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mempool_submit_total_count: Option<u64>,
@@ -2038,6 +2048,13 @@ fn handle_rpc_serve_connection(
         "isolated_or_specialized".to_string()
     });
     event.handler_ms = Some(monotonic_elapsed_ms(handler_started));
+    if let Some(fp_metrics) = postfiat_node::take_fastpay_rpc_metrics() {
+        event.fastpay_redb_lease_wait_ms = fp_metrics.redb_lease_wait_ms;
+        event.fastpay_wal_fdatasync_ms = fp_metrics.wal_fdatasync_ms;
+        event.fastpay_ledger_cache_hit = fp_metrics.ledger_cache_hit;
+        event.fastpay_redb_opened = fp_metrics.redb_opened;
+        event.fastpay_order_lru_hit = fp_metrics.order_lru_hit;
+    }
     with_write_outcome(event, written)
 }
 
@@ -5845,6 +5862,11 @@ fn rpc_serve_event(
         ok: response.ok,
         handler_mode: None,
         handler_ms: None,
+        fastpay_redb_lease_wait_ms: None,
+        fastpay_wal_fdatasync_ms: None,
+        fastpay_ledger_cache_hit: None,
+        fastpay_redb_opened: None,
+        fastpay_order_lru_hit: None,
         mempool_submit_peer_count: mempool_submit_counts.map(|counts| counts.peer_count),
         mempool_submit_total_count: mempool_submit_counts.map(|counts| counts.total_count),
         orchard_batch_create_peer_count: orchard_batch_create_counts
