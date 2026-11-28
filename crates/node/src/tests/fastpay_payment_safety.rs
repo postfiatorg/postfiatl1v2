@@ -3316,7 +3316,7 @@ fn fastpay_active_storage_transfer_restart_and_six_validator_anchor() {
         .rposition(|window| window == magic)
         .expect("a WAL frame");
     assert!(last_frame > 0, "two effects, two frames");
-    atomic_write(&wal_path, wal[..last_frame].to_vec()).unwrap();
+    atomic_write(&wal_path, &wal[..last_frame]).unwrap();
     assert!(
         read_fastpay_ledger(&NodeStore::new(&dirs[0])).is_err(),
         "a WAL without its last effect was accepted"
