@@ -10,8 +10,9 @@ Read the code and try to break it. Section 3 says where a mistake is most likely
 - Every first-review finding now has a fix with tests. Section 2 lists them.
 - Two rehearsals ran on real nodes under systemd. They found seven more faults that the mocked tests had hidden. All are fixed. Section 4 lists what was run.
 - Everything is merged: [`postfiatl1v2#329`](https://github.com/postfiatorg/postfiatl1v2/pull/329) (`7d80aef48`, upgrade and release), [`#330`](https://github.com/postfiatorg/postfiatl1v2/pull/330), [`#331`](https://github.com/postfiatorg/postfiatl1v2/pull/331), [`#334`](https://github.com/postfiatorg/postfiatl1v2/pull/334) (seeding), [`#326`](https://github.com/postfiatorg/postfiatl1v2/pull/326), [`tasknode#461`](https://github.com/postfiatorg/tasknode/pull/461), [`site#84`](https://github.com/postfiatorg/postfiatorg.github.io/pull/84) (guide, live).
-- A release is published as a pre-release: [`v0.4.1-devnet2-p3`](https://github.com/postfiatorg/postfiatl1v2/releases/tag/v0.4.1-devnet2-p3), from `main` `7d80aef48`, sequence 2. Two clean workflow builds gave identical hashes. It was installed by `upgrade --channel-url` straight from GitHub on the replica rig, and the guide's install steps were followed in a clean container.
-- Nothing is deployed. The six validators run another branch (`train-a-r7`). Task Node `main` is not deployed with `#461`, and enforcement is off.
+- The current release is [`v0.5.0-devnet2`](https://github.com/postfiatorg/postfiatl1v2/releases/tag/v0.5.0-devnet2), from `main` `9f04bf2a2`, sequence 3. `main` now also holds the FastPay branch the fleet ran as `train-a-r8` ([`#335`](https://github.com/postfiatorg/postfiatl1v2/pull/335)); two failing checks of that branch were fixed there (a lint, and a stale half of a payment-safety test). Two clean workflow builds gave identical hashes.
+- **The six validators run that binary** since 28 November, as `train-a-r9`. They were rolled by the fleet's script (`ops/devnet-2/train-a-r9/`), one at a time, validator-5 first, with a block made after each; all six agreed each time. They were not upgraded with `postfiat-node upgrade`. Before the roll, four test-chain validators were started on the exact `train-a-r8` binary and rolled to the new code one at a time under load, and one was rolled back.
+- Task Node `main` is not deployed with `#461`, and enforcement is off.
 - A new node can join devnet-2 from a full snapshot (`#334`: imported at 1961, followed the chain, matched validator-0's tip and state root at 2016). A pruned snapshot still does not work ([`#320`](https://github.com/postfiatorg/postfiatl1v2/issues/320)).
 - One person holds everything. The founder is a solo developer. There is no second builder, signer or reviewer. An agent on the founder's machine made the release keys and merged its own PRs. `docs/release-process.md` now says this.
 
@@ -122,7 +123,8 @@ Voting rig: `. ~/var/p3/vote/lib.sh`, then `python3 -I ~/var/p3/vote/st.py 6` (h
 
 ## 6. Not exercised at all
 
-- Any of this on a fleet validator.
+- `postfiat-node upgrade` or a rollback on a fleet validator (the fleet was rolled by script).
+- A FastPay payment, or the FastPay speed benchmark, after the roll to `train-a-r9`.
 - A keyset rotation outside unit tests.
 - The aarch64 binary beyond one run of `release-build-info` on its build runner.
 - A build of the release by another route than the workflow.
