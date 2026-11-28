@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -129,6 +130,36 @@ class ReleaseFlow(unittest.TestCase):
             verified = json.loads(run(*verify).stdout)
             self.assertEqual(verified["verified_signers"], ["release-lead-1", "security-custodian-3"])
             self.assertEqual((verified["release_id"], verified["release_sequence"]), ("v0.0.1-test", 1))
+
+            # The check for a first install, which runs nothing from the release:
+            # an independent implementation reads the same signatures the same way.
+            first_install = [sys.executable, str(REPO / "scripts/verify-release"), "--manifest-file", str(manifest_file),
+                             "--keyset-file", str(keyset_file)]
+            for arch in ("linux-x86_64", "linux-aarch64"):
+                independent = subprocess.run([*first_install, "--binary-file", str(release / f"postfiat-node-{arch}"),
+                                              "--arch", arch], capture_output=True, text=True)
+                self.assertEqual(independent.returncode, 0, independent.stderr)
+                self.assertEqual(json.loads(independent.stdout)["verified_signers"], verified["verified_signers"])
+            wrong = subprocess.run([*first_install, "--binary-file", str(release / "postfiat-node-linux-aarch64"),
+                                    "--arch", "linux-x86_64"], capture_output=True, text=True)
+            self.assertEqual(wrong.returncode, 1)
+            one_signature = tmp / "one-signature.json"
+            signed_manifest = json.loads(manifest_file.read_text())
+            one_signature.write_text(json.dumps({**signed_manifest, "signatures": signed_manifest["signatures"][:1]}))
+            too_few = subprocess.run([sys.executable, str(REPO / "scripts/verify-release"), "--manifest-file", str(one_signature),
+                                      "--keyset-file", str(keyset_file), "--binary-file",
+                                      str(release / "postfiat-node-linux-x86_64"), "--arch", "linux-x86_64"],
+                                     capture_output=True, text=True)
+            self.assertEqual(too_few.returncode, 1)
+            self.assertIn("the keyset needs 2", too_few.stderr)
+            changed = tmp / "changed.json"
+            changed.write_text(json.dumps({**signed_manifest, "release_sequence": 2}))
+            tampered = subprocess.run([sys.executable, str(REPO / "scripts/verify-release"), "--manifest-file", str(changed),
+                                       "--keyset-file", str(keyset_file), "--binary-file",
+                                       str(release / "postfiat-node-linux-x86_64"), "--arch", "linux-x86_64"],
+                                      capture_output=True, text=True)
+            self.assertEqual(tampered.returncode, 1)
+            self.assertIn("does not verify", tampered.stderr)
 
             # 6. Another binary than the one the manifest names is refused at start.
             other = tmp / "other-binary"

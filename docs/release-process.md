@@ -110,8 +110,15 @@ key holder's machine and are never in this repository.
      --runtime-binary-file release/postfiat-node-linux-x86_64 --arch linux-x86_64
    ```
 
-An operator then runs `postfiat-node upgrade --check` and `postfiat-node
-upgrade`. A manifest with a lower `release_sequence` than the installed release
+**A first install** has no trusted `postfiat-node` yet, and a binary must not be
+the one to say it is genuine. The operator checks the download with
+`scripts/verify-release` (Python and `dilithium-py`; it runs nothing from the
+release): the two signatures against the keyset, and the binary against the
+manifest. The keyset comes from somewhere other than the download, and its
+SHA-256 is published with the release.
+
+After that, an operator runs `postfiat-node upgrade --check` and `postfiat-node
+upgrade`: the installed binary checks the next one. A manifest with a lower `release_sequence` than the installed release
 is refused.
 
 **Replacing a key.** Two signers of the current keyset sign the new keyset
