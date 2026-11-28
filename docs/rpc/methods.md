@@ -247,6 +247,22 @@ Both behaviours are governed; see
 | `wrap_owned` | Disabled unsafe compatibility path. FastPay funding uses a source-signed `mempool_submit_fastlane_primary` deposit committed by consensus. |
 | `unwrap_owned` | Disabled compatibility path. Public wallet flows must use signed/certified unwrap instead. |
 
+### FastPay RPC v2 (Direct TLS 1.3 Binary Protobuf Transport)
+
+In addition to JSON-RPC v1, `postfiat-node rpc-serve` exposes an optional direct
+TLS 1.3 + mutual TLS (mTLS) binary Protobuf listener (`postfiat-fastpay-rpc-v2`,
+implemented in `crates/node/src/fastpay_rpc_v2.rs`) configured via
+`--fastpay-v2-bind`, `--fastpay-v2-tls-cert`, `--fastpay-v2-tls-key`, and
+`--fastpay-v2-tls-client-ca` (or `--disable-fastpay-rpc-v2` as an instant
+rollback switch).
+
+- **Framing:** `[u8 version = 2][u32be body_len][canonical protobuf body]` on persistent `TCP_NODELAY` sockets, capped at `64 KiB` (`MAX_FASTPAY_V2_FRAME_BYTES = 65536`), with per-IP token-bucket rate limiting and a 128-connection ceiling.
+- **Method `1` (`owned_sign_v3`):** Compact `SignedOwnedTransferOrderV3` request (`7,611 B` on the wire when `owner_is_change_recipient` omits repeating the 1,952-byte owner pubkey on change outputs). Populates a 256-entry per-validator `SignedOwnedTransferOrderV3` LRU cache keyed by `lock_id`.
+- **Method `2` (`owned_apply_v3_fast`):** Votes-only apply request (`16,716 B` on the wire: `lock_id` + quorum `votes[]`), looking up the signed order from the 256-entry LRU cache. Returns status `3` (`OrderNotCached`) on a cache miss (e.g., after restart or on a non-voting holder).
+- **Method `3` (`owned_apply_v3_full`):** Full `OwnedTransferCertificateV3` fallback invoked automatically by `FastPayRpcV2Client` on `OrderNotCached`.
+- **Status codes:** `0` (`OK`), `1` (`InvalidInput`), `2` (`UnsupportedProtocolVersion`), `3` (`OrderNotCached`), `4` (`RateLimited`), `5` (`InternalError`).
+- **Hot-path storage:** Warm `owned_sign_v3` and `owned_apply_v3` RPCs validate cache freshness against an atomic `< 256 B` `chain_tip_generation.v1` sidecar and append CRC32C-framed CBOR records to `fastpay_speculative_effects_v2.wal`, avoiding `redb` opens completely (`redb_opened = false`) while preserving persist-before-vote and persist-before-ack invariants. See [FastPay For Agents](../integrate/fastpay-for-agents.md).
+
 ### Owned objects pages
 
 `owned_objects` returns objects in (asset, object id, version) order. A page
