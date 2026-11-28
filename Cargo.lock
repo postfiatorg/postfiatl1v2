@@ -3278,6 +3278,8 @@ dependencies = [
  "postfiat-storage",
  "postfiat-types",
  "rand 0.8.8",
+ "rustls",
+ "rustls-pki-types",
  "serde",
  "serde_cbor",
  "serde_json",

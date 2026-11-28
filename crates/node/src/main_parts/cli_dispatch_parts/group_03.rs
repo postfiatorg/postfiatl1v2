@@ -484,7 +484,64 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 return Err("--max-child-dispatch-per-peer must be positive".to_string());
             }
             let keep_alive = flag_present(flags, "--keep-alive");
-            rpc_serve_with_report(
+            let disable_fastpay_rpc_v2 = flag_present(flags, "--disable-fastpay-rpc-v2")
+                || std::env::var("POSTFIAT_DISABLE_FASTPAY_RPC_V2")
+                    .map(|v| matches!(v.trim(), "1" | "true" | "TRUE"))
+                    .unwrap_or(false);
+            let fastpay_v2_tls_port_raw = flag_value(flags, "--fastpay-v2-tls-port")
+                .map(str::to_string)
+                .or_else(|| std::env::var("POSTFIAT_FASTPAY_V2_TLS_PORT").ok())
+                .filter(|v| !v.trim().is_empty());
+            let fastpay_v2_cfg = if owned_lane_enabled && !disable_fastpay_rpc_v2 {
+                if let Some(port_str) = fastpay_v2_tls_port_raw {
+                    let tls_port = port_str
+                        .trim()
+                        .parse::<u16>()
+                        .map_err(|_| "--fastpay-v2-tls-port must be a valid u16".to_string())?;
+                    let v2_bind_host = flag_value(flags, "--fastpay-v2-bind-host")
+                        .map(str::to_string)
+                        .or_else(|| std::env::var("POSTFIAT_FASTPAY_V2_BIND_HOST").ok())
+                        .filter(|v| !v.trim().is_empty())
+                        .unwrap_or_else(|| bind_host.clone());
+                    let tls_cert_path = flag_value(flags, "--fastpay-v2-tls-cert")
+                        .map(PathBuf::from)
+                        .or_else(|| std::env::var("POSTFIAT_FASTPAY_V2_TLS_CERT").ok().map(PathBuf::from))
+                        .ok_or_else(|| "fastpay-v2 TLS requires --fastpay-v2-tls-cert or POSTFIAT_FASTPAY_V2_TLS_CERT".to_string())?;
+                    let tls_key_path = flag_value(flags, "--fastpay-v2-tls-key")
+                        .map(PathBuf::from)
+                        .or_else(|| std::env::var("POSTFIAT_FASTPAY_V2_TLS_KEY").ok().map(PathBuf::from))
+                        .ok_or_else(|| "fastpay-v2 TLS requires --fastpay-v2-tls-key or POSTFIAT_FASTPAY_V2_TLS_KEY".to_string())?;
+                    let tls_client_ca_path = flag_value(flags, "--fastpay-v2-tls-client-ca")
+                        .map(PathBuf::from)
+                        .or_else(|| {
+                            std::env::var("POSTFIAT_FASTPAY_V2_TLS_CLIENT_CA")
+                                .ok()
+                                .filter(|v| !v.trim().is_empty())
+                                .map(PathBuf::from)
+                        });
+                    let node_id = status(NodeOptions {
+                        data_dir: data_dir.clone(),
+                    })
+                    .map(|s| s.node_id)
+                    .unwrap_or_else(|_| "validator".to_string());
+                    Some(postfiat_node::fastpay_rpc_v2::FastPayRpcV2ServerConfig {
+                        data_dir: data_dir.clone(),
+                        bind_host: v2_bind_host,
+                        tls_port,
+                        tls_cert_path,
+                        tls_key_path,
+                        tls_client_ca_path,
+                        event_log: event_log.clone(),
+                        node_id,
+                        timeout_ms,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            rpc_serve_with_report_and_fastpay_v2(
                 RpcServeOptions {
                     data_dir,
                     spool_dir,
@@ -519,6 +576,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                     max_child_dispatch_per_peer,
                     keep_alive,
                 },
+                fastpay_v2_cfg,
                 &mut std::io::stdout().lock(),
             )
         }
@@ -1008,6 +1066,15 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 data_dir: PathBuf::from(data_dir),
             })
             .map_err(|error| format!("owned-safe-unlock failed: {error}"))?;
+            println!("{summary}");
+            Ok(())
+        }
+        "fastpay-wal-export-v1" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let summary = fastpay_wal_export_v1(NodeOptions {
+                data_dir: PathBuf::from(data_dir),
+            })
+            .map_err(|error| format!("fastpay-wal-export-v1 failed: {error}"))?;
             println!("{summary}");
             Ok(())
         }

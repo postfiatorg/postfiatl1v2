@@ -2623,7 +2623,7 @@ fn apply_transactional_ordered_commit_delta(
         )
         .into_iter()
         .collect::<Vec<_>>();
-    transactional
+    let outcome = transactional
         .commit_finalized_block(postfiat_storage::CommitFinalizedBlock {
             expected_tip: &expected_tip,
             new_tip: &new_tip,
@@ -2643,7 +2643,16 @@ fn apply_transactional_ordered_commit_delta(
             scheduled_activation_height,
             allow_legacy_receipt_id_mismatch: false,
         })
-        .map_err(io::Error::from)
+        .map_err(io::Error::from)?;
+    if let Ok(updated_meta) = transactional.meta() {
+        let _ = crate::fastpay_recovery_node::write_chain_tip_generation_sidecar(
+            store.data_dir(),
+            &updated_meta,
+            transactional.database_path(),
+        );
+    }
+    crate::fastpay_recovery_node::invalidate_fastpay_ledger_cache(store.data_dir());
+    Ok(outcome)
 }
 
 pub(super) fn ordered_commit_delta_journal(

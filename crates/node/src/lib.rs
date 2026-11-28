@@ -613,6 +613,7 @@ mod external_lane_checkpoint_source;
 mod external_lane_export_cli;
 mod fastpay_committee_prepare;
 mod fastpay_recovery_node;
+pub mod fastpay_rpc_v2;
 mod fastswap_control_signing;
 #[cfg(test)]
 use consensus_artifacts::write_signed_transfer_file;

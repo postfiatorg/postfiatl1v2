@@ -510,6 +510,11 @@ fn fee_quotes_start_from_the_ledger_admission_uses() {
     // Atomic swaps are not active in this fixture, so the swap quote stops at
     // its activation check. It reads its base ledger first: with a FastPay
     // journal admission's ledger rejects, the quote fails on that journal.
+    let _ = fastpay_wal_export_v1(NodeOptions {
+        data_dir: dirs[0].clone(),
+    })
+    .expect("export wal");
+    let _ = fs::remove_file(dirs[0].join(FASTPAY_SPECULATIVE_WAL_FILE));
     let journal_path = dirs[0].join(FASTPAY_SPECULATIVE_JOURNAL_FILE);
     let mut journal: serde_json::Value =
         serde_json::from_slice(&fs::read(&journal_path).expect("journal")).expect("journal json");

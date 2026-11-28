@@ -91,6 +91,8 @@ pub const HISTORY_ARCHIVE_WINDOWS_DIR: &str = "history_archive_windows";
 pub(super) const OWNED_LOCKS_FILE: &str = "owned_locks.json";
 pub(super) const OWNED_LOCKS_WAL_FILE: &str = "owned_locks.wal";
 pub(super) const FASTPAY_SPECULATIVE_JOURNAL_FILE: &str = "fastpay_speculative_effects_v1.json";
+pub(super) const FASTPAY_SPECULATIVE_WAL_FILE: &str = "fastpay_speculative_effects_v2.wal";
+pub(super) const CHAIN_TIP_GENERATION_SIDECAR_FILE: &str = "chain_tip_generation.v1";
 pub(super) const PROOF_LATENCY_METRICS_FILE: &str = "proof_latency_metrics.json";
 pub(super) const PROOF_LATENCY_METRICS_SCHEMA: &str = "postfiat.proof_latency_metrics.v1";
 

@@ -122,6 +122,7 @@ use postfiat_node::{
     orchard_pool_report, orchard_test_vector, orchard_view_key_export, orchard_wallet_keygen,
     orchard_wallet_scan, owned_apply, owned_apply_report, owned_apply_v3, owned_certificate_domain,
     owned_certificate_v3, owned_objects, owned_recovery_capabilities_v3, owned_recovery_status_v3,
+    fastpay_wal_export_v1,
     owned_safe_unlock, owned_sign, owned_sign_v3, owned_unwrap_apply, owned_unwrap_apply_report,
     owned_unwrap_apply_v3, owned_unwrap_sign, owned_unwrap_sign_v3, pftl_uniswap_receipt_witness,
     pfusdc_checkpoint_witness, pfusdc_egress_witness, propose_batch, external_lane_export_proof_input, write_external_lane_export_proof_input, ExternalLaneExportProofInputOptions,
@@ -465,6 +466,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "owned-sign"
         | "checkpoint-pending"
         | "owned-safe-unlock"
+        | "fastpay-wal-export-v1"
         | "wallet-keygen"
         | "wallet-restore"
         | "wallet-sign-transfer"
