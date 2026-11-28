@@ -448,6 +448,10 @@ const ROLLBACK_CATCH_UP_BLOCKS_PER_RUN: u64 = 64;
 /// A rollback is behind by the few blocks made during the attempt; more runs
 /// than this means something else is wrong and the operator should look.
 const ROLLBACK_CATCH_UP_MAX_RUNS: usize = 16;
+/// A source that is writing a block can refuse one read. Seen in rehearsal:
+/// the first run failed on a source under load and the next one passed.
+const ROLLBACK_CATCH_UP_MAX_FAILED_RUNS: usize = 5;
+const ROLLBACK_CATCH_UP_RETRY_PAUSE: Duration = Duration::from_secs(2);
 
 /// Runs `rpc-catch-up` with the given binary until the node at `data_dir` has
 /// every block the source has. Every block is checked against its
@@ -464,6 +468,7 @@ fn run_catch_up_as_data_owner(
     let owner = fs::metadata(data_dir)
         .map_err(|error| format!("cannot read the owner of {}: {error}", data_dir.display()))?;
     let running_as_root = unsafe { libc::geteuid() } == 0;
+    let mut failed_runs = 0;
     for _ in 0..ROLLBACK_CATCH_UP_MAX_RUNS {
         let mut command = Command::new(binary);
         command
@@ -484,13 +489,20 @@ fn run_catch_up_as_data_owner(
             .output()
             .map_err(|error| format!("cannot run {} rpc-catch-up: {error}", binary.display()))?;
         if !output.status.success() {
+            failed_runs += 1;
+            if failed_runs < ROLLBACK_CATCH_UP_MAX_FAILED_RUNS {
+                thread::sleep(ROLLBACK_CATCH_UP_RETRY_PAUSE);
+                continue;
+            }
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(stderr
-                .lines()
-                .find(|line| line.starts_with("error"))
-                .or_else(|| stderr.lines().next())
-                .unwrap_or("rpc-catch-up failed without a message")
-                .to_string());
+            return Err(format!(
+                "{failed_runs} runs failed, the last with: {}",
+                stderr
+                    .lines()
+                    .find(|line| line.starts_with("error"))
+                    .or_else(|| stderr.lines().next())
+                    .unwrap_or("no message")
+            ));
         }
         let answer: serde_json::Value = serde_json::from_slice(&output.stdout)
             .map_err(|error| format!("rpc-catch-up answer is not JSON: {error}"))?;
