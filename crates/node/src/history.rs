@@ -808,6 +808,25 @@ pub fn history_prune_plan(options: HistoryOptions) -> io::Result<HistoryPrunePla
     if !block_log_verified {
         refusal_reasons.push("block log verification failed".to_string());
     }
+    // Receipts are pruned by transaction id. An id committed on both sides of
+    // the boundary would lose the receipt of a retained block.
+    if let Some(boundary) = effective_prune_up_to_height {
+        let mut straddling = blocks
+            .blocks
+            .iter()
+            .filter(|block| block.header.height > boundary)
+            .flat_map(|block| block.receipt_ids.iter())
+            .filter(|receipt_id| eligible_receipt_ids.contains(*receipt_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        straddling.sort();
+        straddling.dedup();
+        if let Some(receipt_id) = straddling.first() {
+            refusal_reasons.push(format!(
+                "transaction `{receipt_id}` is committed on both sides of prune height {boundary}; choose a boundary that keeps its blocks together"
+            ));
+        }
+    }
     if options.archive_handoff_required && !archive_handoff_verified {
         if archive_handoff_present {
             let detail = archive_handoff_error
@@ -1997,6 +2016,18 @@ fn build_history_archive_handoff_proof(
     })
 }
 
+/// Receipts grouped by transaction id, each group in commit order.
+fn receipts_in_commit_order(receipts: &[Receipt]) -> HashMap<&str, std::collections::VecDeque<&Receipt>> {
+    let mut by_id: HashMap<&str, std::collections::VecDeque<&Receipt>> = HashMap::new();
+    for receipt in receipts {
+        by_id
+            .entry(receipt.tx_id.as_str())
+            .or_default()
+            .push_back(receipt);
+    }
+    by_id
+}
+
 fn select_history_archive_window(
     blocks: &BlockLog,
     archive: &BatchArchive,
@@ -2035,10 +2066,22 @@ fn select_history_archive_window(
         .iter()
         .map(|entry| ((entry.batch_kind.as_str(), entry.batch_id.as_str()), entry))
         .collect::<HashMap<_, _>>();
-    let receipts_by_id = receipts
+    // A transaction id can be committed more than once (a rejected route
+    // activation that is sent again keeps its id), each time with its own
+    // receipt. The receipt log is in commit order, so the k-th block reference
+    // to an id owns the k-th receipt with that id.
+    let mut receipts_by_id = receipts_in_commit_order(receipts);
+    for block in blocks
+        .blocks
         .iter()
-        .map(|receipt| (receipt.tx_id.as_str(), receipt))
-        .collect::<HashMap<_, _>>();
+        .filter(|block| block.header.height < from_height)
+    {
+        for receipt_id in &block.receipt_ids {
+            if let Some(queue) = receipts_by_id.get_mut(receipt_id.as_str()) {
+                queue.pop_front();
+            }
+        }
+    }
 
     let mut selected_batches = Vec::with_capacity(selected_blocks.len());
     let mut selected_receipts = Vec::new();
@@ -2059,16 +2102,19 @@ fn select_history_archive_window(
             })?;
         selected_batches.push((*archive_entry).clone());
         for receipt_id in &block.receipt_ids {
-            let receipt = receipts_by_id.get(receipt_id.as_str()).ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!(
-                        "missing receipt `{receipt_id}` for archive window block {}",
-                        block.header.height
-                    ),
-                )
-            })?;
-            selected_receipts.push((*receipt).clone());
+            let receipt = receipts_by_id
+                .get_mut(receipt_id.as_str())
+                .and_then(std::collections::VecDeque::pop_front)
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "missing receipt `{receipt_id}` for archive window block {}",
+                            block.header.height
+                        ),
+                    )
+                })?;
+            selected_receipts.push(receipt.clone());
         }
     }
     Ok((selected_blocks, selected_batches, selected_receipts))
@@ -2146,18 +2192,7 @@ fn history_archive_handoff_proof_from_window(
             ));
         }
     }
-    let mut receipts_by_id = HashMap::new();
-    for receipt in selected_receipts {
-        if receipts_by_id
-            .insert(receipt.tx_id.as_str(), receipt)
-            .is_some()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("duplicate receipt `{}` in archive window", receipt.tx_id),
-            ));
-        }
-    }
+    let mut receipts_by_id = receipts_in_commit_order(selected_receipts);
 
     let mut block_items = Vec::with_capacity(selected_blocks.len());
     let mut batch_items = Vec::with_capacity(selected_blocks.len());
@@ -2201,15 +2236,18 @@ fn history_archive_handoff_proof_from_window(
             payload_json_hash,
         ));
         for receipt_id in &block.receipt_ids {
-            let receipt = receipts_by_id.get(receipt_id.as_str()).ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!(
-                        "missing receipt `{receipt_id}` for handoff block {}",
-                        block.header.height
-                    ),
-                )
-            })?;
+            let receipt = receipts_by_id
+                .get_mut(receipt_id.as_str())
+                .and_then(std::collections::VecDeque::pop_front)
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "missing receipt `{receipt_id}` for handoff block {}",
+                            block.header.height
+                        ),
+                    )
+                })?;
             let receipt_json = serde_json::to_vec(receipt).map_err(invalid_data)?;
             let receipt_hash = hash_hex(
                 "postfiat.history_archive_handoff.receipt_json.v1",
@@ -2497,5 +2535,118 @@ mod history_tests {
         assert_eq!(verified.report.block_count, verified.bundle.blocks.len());
 
         std::fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    fn test_block(height: u64, receipt_ids: &[&str]) -> BlockRecord {
+        BlockRecord {
+            header: BlockHeader {
+                height,
+                view: 0,
+                parent_hash: format!("block-{}", height - 1),
+                proposer: "validator-0".to_string(),
+                batch_kind: BATCH_KIND_TRANSPARENT.to_string(),
+                batch_id: format!("batch-{height}"),
+                state_root: format!("state-root-{height}"),
+                bridge_exit_root: None,
+                pftl_uniswap_receipt_root: None,
+                external_lane_export_root: None,
+                receipt_count: receipt_ids.len() as u64,
+                certificate_id: format!("certificate-{height}"),
+                certificate: BlockCertificate {
+                    validators: vec!["validator-0".to_string()],
+                    quorum: 1,
+                    registry_root: String::new(),
+                    votes: Vec::new(),
+                },
+                consensus_v2_commit: None,
+                block_hash: format!("block-{height}"),
+            },
+            receipt_ids: receipt_ids.iter().map(|id| (*id).to_string()).collect(),
+            fastpay_pre_state_effects: Vec::new(),
+        }
+    }
+
+    fn test_receipt(tx_id: &str, accepted: bool) -> Receipt {
+        serde_json::from_value(serde_json::json!({
+            "tx_id": tx_id,
+            "accepted": accepted,
+            "code": if accepted { "accepted" } else { "rejected" },
+            "message": "",
+        }))
+        .expect("receipt")
+    }
+
+    /// devnet-2 committed one transaction id at heights 940, 941 and 945,
+    /// rejected and then accepted. Each block keeps its own receipt.
+    #[test]
+    fn a_transaction_committed_twice_keeps_one_receipt_per_block() {
+        let blocks = BlockLog {
+            blocks: vec![
+                test_block(1, &["again"]),
+                test_block(2, &["again", "other"]),
+                test_block(3, &["again"]),
+            ],
+        };
+        let archive = BatchArchive {
+            batches: (1..=3)
+                .map(|height| BatchArchiveEntry {
+                    batch_kind: BATCH_KIND_TRANSPARENT.to_string(),
+                    batch_id: format!("batch-{height}"),
+                    payload_hash: format!("payload-hash-{height}"),
+                    payload_json: format!("{{\"batch\":{height}}}"),
+                })
+                .collect(),
+        };
+        let receipts = vec![
+            test_receipt("again", false),
+            test_receipt("again", false),
+            test_receipt("other", true),
+            test_receipt("again", true),
+        ];
+        let proof_of = |from_height, to_height| {
+            let (selected_blocks, selected_batches, selected_receipts) =
+                select_history_archive_window(&blocks, &archive, &receipts, from_height, to_height)
+                    .expect("select");
+            let proof = history_archive_handoff_proof_from_window(HistoryArchiveWindowProofInput {
+                chain_id: "postfiat-local",
+                genesis_hash: "00",
+                protocol_version: 1,
+                archive_uri: "",
+                from_height,
+                to_height,
+                selected_blocks: &selected_blocks,
+                selected_batches: &selected_batches,
+                selected_receipts: &selected_receipts,
+            })
+            .expect("proof");
+            (selected_receipts, proof)
+        };
+        let (all, _) = proof_of(1, 3);
+        assert_eq!(all, receipts, "every block reference has its own receipt");
+        // A window that starts after the first commit takes the later receipts.
+        let (tail, _) = proof_of(3, 3);
+        assert_eq!(tail, [test_receipt("again", true)]);
+        let (middle, _) = proof_of(2, 2);
+        assert_eq!(
+            middle,
+            [test_receipt("again", false), test_receipt("other", true)]
+        );
+        // A receipt no block refers to is refused, as before.
+        let (selected_blocks, selected_batches, mut selected_receipts) =
+            select_history_archive_window(&blocks, &archive, &receipts, 1, 3).expect("select");
+        selected_receipts.push(test_receipt("again", true));
+        let error = history_archive_handoff_proof_from_window(HistoryArchiveWindowProofInput {
+            chain_id: "postfiat-local",
+            genesis_hash: "00",
+            protocol_version: 1,
+            archive_uri: "",
+            from_height: 1,
+            to_height: 3,
+            selected_blocks: &selected_blocks,
+            selected_batches: &selected_batches,
+            selected_receipts: &selected_receipts,
+        })
+        .expect_err("an unreferenced receipt is refused");
+        assert!(error.to_string().contains("unreferenced receipts"), "{error}");
     }
 }
