@@ -3574,6 +3574,16 @@ fn fastpay_v3_transactional_apply_avoids_full_block_scan_and_invalidates_cache()
         order: order2.clone(),
     };
     let signed2_json = serde_json::to_string(&signed2).unwrap();
+    // Explicitly reopen and drop the transactional store between calls so redb
+    // updates the database file's mtime/ctime (mirroring sibling RPC traffic),
+    // and assert that owned_sign_v3 still hits the in-process FastPay cache
+    // rather than reloading the finalized ledger snapshot.
+    for dir in dirs.iter().take(5) {
+        let reopened = NodeStore::new(dir).transactional_store().unwrap();
+        let _ = reopened.meta().unwrap();
+    }
+    let cache_hits_before_sign2 =
+        FASTPAY_LEDGER_CACHE_HITS.load(std::sync::atomic::Ordering::Relaxed);
     let votes2: Vec<postfiat_types::OwnedTransferVote> = dirs
         .iter()
         .take(5)
@@ -3592,6 +3602,13 @@ fn fastpay_v3_transactional_apply_avoids_full_block_scan_and_invalidates_cache()
             .unwrap()
         })
         .collect();
+    let cache_hits_after_sign2 =
+        FASTPAY_LEDGER_CACHE_HITS.load(std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(
+        cache_hits_after_sign2.saturating_sub(cache_hits_before_sign2),
+        5,
+        "owned_sign_v3 must hit the in-process FastPay cache across redb reopen on all 5 validators"
+    );
     let cert2 = postfiat_types::OwnedTransferCertificateV3 {
         order: order2,
         owner_pubkey_hex: signed2.owner_pubkey_hex,

@@ -34,26 +34,30 @@ struct FastPaySpeculativeTipV1 {
 
 /// Process-local FastPay ledger cache for transactional stores.
 ///
-/// Keyed by `(canonical_data_dir, chain_tip, redb_file_fingerprint,
-/// journal_bytes_hash)`. Never retains a `redb` handle across RPCs so sibling
+/// Keyed by `(canonical_data_dir, db_identity, chain_tip, store_meta_commitment,
+/// journal_bytes_hash)`. Intentionally omits file `mtime`/`ctime` because `redb`
+/// updates file timestamps on every read-write `Database::open` even when no
+/// write transaction occurs; cryptographic tip/meta commitments plus file inode
+/// and byte length detect any database write or file replacement without
+/// false cache misses. Never retains a `redb` handle across RPCs so sibling
 /// services (`transport-validator-serve`) are never starved.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct FastPayDbFingerprint {
+struct FastPayDbIdentity {
+    path: std::path::PathBuf,
     len: u64,
-    mtime_nanos: u128,
     #[cfg(unix)]
     ino: u64,
-    #[cfg(unix)]
-    ctime_nanos: u128,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FastPayLedgerCacheKey {
     data_dir: std::path::PathBuf,
+    generation: String,
     height: u64,
     block_hash: String,
     state_root: String,
-    db_fingerprint: FastPayDbFingerprint,
+    ordered_history_accumulator: String,
+    db_identity: FastPayDbIdentity,
     journal_bytes_hash: [u8; 32],
 }
 
@@ -77,6 +81,10 @@ struct LoadedFastPayState {
 
 const MAX_FASTPAY_LEDGER_CACHE_ENTRIES: usize = 8;
 
+#[cfg(test)]
+pub(super) static FASTPAY_LEDGER_CACHE_HITS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 fn fastpay_ledger_cache() -> &'static std::sync::Mutex<Vec<CachedFastPayState>> {
     static CACHE: std::sync::OnceLock<std::sync::Mutex<Vec<CachedFastPayState>>> =
         std::sync::OnceLock::new();
@@ -95,30 +103,18 @@ pub(super) fn invalidate_fastpay_ledger_cache(data_dir: &std::path::Path) {
     cache.retain(|entry| entry.key.data_dir != dir);
 }
 
-fn fastpay_db_fingerprint(db_path: &std::path::Path) -> io::Result<FastPayDbFingerprint> {
+fn fastpay_db_identity(db_path: &std::path::Path) -> io::Result<FastPayDbIdentity> {
     let meta = std::fs::metadata(db_path)?;
-    let mtime_nanos = meta
-        .modified()?
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
     #[cfg(unix)]
-    let (ino, ctime_nanos) = {
+    let ino = {
         use std::os::unix::fs::MetadataExt;
-        let sec = u128::try_from(meta.ctime()).unwrap_or(0);
-        let nsec = u128::try_from(meta.ctime_nsec()).unwrap_or(0);
-        (
-            meta.ino(),
-            sec.saturating_mul(1_000_000_000).saturating_add(nsec),
-        )
+        meta.ino()
     };
-    Ok(FastPayDbFingerprint {
+    Ok(FastPayDbIdentity {
+        path: canonical_fastpay_cache_dir(db_path),
         len: meta.len(),
-        mtime_nanos,
         #[cfg(unix)]
         ino,
-        #[cfg(unix)]
-        ctime_nanos,
     })
 }
 
@@ -165,15 +161,17 @@ fn store_cached_fastpay_state(state: CachedFastPayState) {
 fn load_fastpay_state(store: &NodeStore, take_ownership: bool) -> io::Result<LoadedFastPayState> {
     if store.transactional_storage_active()? {
         let transactional = store.transactional_store()?;
-        let tip = store.read_chain_tip()?;
-        let db_fingerprint = fastpay_db_fingerprint(transactional.database_path())?;
+        let meta = transactional.meta()?;
+        let db_identity = fastpay_db_identity(transactional.database_path())?;
         let journal_bytes_hash = fastpay_speculative_journal_hash(store.data_dir())?;
         let key = FastPayLedgerCacheKey {
             data_dir: canonical_fastpay_cache_dir(store.data_dir()),
-            height: tip.height,
-            block_hash: tip.block_hash,
-            state_root: tip.state_root,
-            db_fingerprint,
+            generation: meta.generation,
+            height: meta.finalized_height,
+            block_hash: meta.finalized_block_hash,
+            state_root: meta.finalized_state_root,
+            ordered_history_accumulator: meta.ordered_history_accumulator,
+            db_identity,
             journal_bytes_hash,
         };
         let hit = if take_ownership {
@@ -182,6 +180,8 @@ fn load_fastpay_state(store: &NodeStore, take_ownership: bool) -> io::Result<Loa
             peek_cached_fastpay_state(&key)
         };
         if let Some(cached) = hit {
+            #[cfg(test)]
+            FASTPAY_LEDGER_CACHE_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Ok(LoadedFastPayState {
                 height: cached.key.height,
                 cache_key: Some(cached.key),
