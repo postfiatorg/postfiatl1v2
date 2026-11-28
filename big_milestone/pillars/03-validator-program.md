@@ -1,6 +1,6 @@
 # Pillar 3 — Validator Rewards Program
 
-> **Status:** Code in review, proven on live data, nothing released. Five PRs are open and wait for review: the contract ([postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286)), the node code ([#290](https://github.com/postfiatorg/postfiatl1v2/pull/290)), the release pipeline ([#321](https://github.com/postfiatorg/postfiatl1v2/pull/321), stacked on #290), Task Node enforcement ([tasknode#459](https://github.com/postfiatorg/tasknode/pull/459), off by default) and a status notice for the live guide ([site#66](https://github.com/postfiatorg/postfiatorg.github.io/pull/66)). A soak run of the uptime feed has been reading devnet-2 every five minutes since 27 November. Blocked: a new node cannot be seeded on devnet-2 ([postfiatl1v2#320](https://github.com/postfiatorg/postfiatl1v2/issues/320)). Not started: the three release keys and a first signed release, the rollout to the six validators, the join and ratification client. Full step list under [Build milestones](#build-milestones).
+> **Status:** Code merged, proven on live data, nothing released or switched on. All five PRs are merged (28 November): the contract ([postfiatl1v2#286](https://github.com/postfiatorg/postfiatl1v2/pull/286)), the node code ([#290](https://github.com/postfiatorg/postfiatl1v2/pull/290), with the release pipeline [#321](https://github.com/postfiatorg/postfiatl1v2/pull/321) folded in), Task Node enforcement ([tasknode#459](https://github.com/postfiatorg/tasknode/pull/459), off by default) and the status notice on the live guide ([site#66](https://github.com/postfiatorg/postfiatorg.github.io/pull/66)). A soak run of the uptime feed has been reading devnet-2 every five minutes since 27 November. Blocked: a new node cannot be seeded on devnet-2 ([postfiatl1v2#320](https://github.com/postfiatorg/postfiatl1v2/issues/320); one of its causes is fixed in open PR [#326](https://github.com/postfiatorg/postfiatl1v2/pull/326), the other is not: early blocks do not replay, so history cannot be pruned). Not started: the three release keys and a first signed release, the rollout to the six validators, the real observers, the join and ratification client. Full step list under [Build milestones](#build-milestones).
 >
 > **Outcome:** [B · A production-ready new chain](../README.md#three-outcomes) — moving `postfiatl1v2` from 6 Foundation-run nodes to a real outside validator network.
 
@@ -8,7 +8,7 @@
 
 | Gate 1 · Code / Executed | Gate 2 · Founder UAT | Gate 3 · Docs | Gate 4 · Blog Post |
 | --- | --- | --- | --- |
-| **5 PRs open, waiting for review** (`l1#286`, `l1#290`, `l1#321`, `tasknode#459` CI green, `site#66` CI green). `main` requires approving reviews, so none can be merged by its author. Soak feed running on devnet-2. Seeding a new node blocked (`l1#320`). Release pipeline, rollout, join client Not Started | Not Started | **Guide live** (`site#56`); a notice of what is not released yet waits in `site#66`; MkDocs copy missing | **Draft merged** (`draft: true`, `site#57`) |
+| **All 5 PRs merged** (`l1#286`, `l1#290` incl. `#321`, `tasknode#459`, `site#66`). Neither repository requires an approving review; the earlier note that they did was wrong. Before merging, the upgrade backup was changed to leave out every signing record and every key file under any name. Soak feed running on devnet-2. Seeding a new node blocked (`l1#320`, part fix in `l1#326`). First release, rollout, real observers, join client Not Started | Not Started | **Guide live** (`site#56`); a notice of what is not released yet waits in `site#66`; MkDocs copy missing | **Draft merged** (`draft: true`, `site#57`) |
 
 - **Merged on `main`:** Validator doctor fixes ([postfiatl1v2#281](https://github.com/postfiatorg/postfiatl1v2/pull/281)) and the pillar spec ([postfiatl1v2#285](https://github.com/postfiatorg/postfiatl1v2/pull/285)).
 - **In open PRs (all 12 blocking review points and the smaller ones answered):**
@@ -24,7 +24,7 @@
 - **Measured:** counting only certificate votes puts a healthy validator at 90.2%, below the 95% rule; counting every accepted vote puts it at 97.3%. The metric was changed (decision 2).
 - **Found by running it for real:**
   - A new node cannot be seeded on devnet-2: a snapshot's block history is 369 MB and the import accepts 256 MB ([#320](https://github.com/postfiatorg/postfiatl1v2/issues/320)). This blocks outside validators and replicas.
-  - `rpc-catch-up` re-verified the whole state on every run (5 minutes). `--follow` (in `#290`) takes 1.5 seconds; applying a live block with it has not been observed yet.
+  - `rpc-catch-up` re-verified the whole state on every run (5 minutes). `--follow` (in `#290`) takes 1.5 seconds; it applied live blocks 1934 and 1935 on the test replica.
   - The packaged TLS proxy could not have worked: the node's RPC is not HTTP. `#290` adds `rpc-http-edge`.
   - A replica holds no key, so it cannot serve private-payment admission. The two Foundation endpoints Pillar 5 needs are the HTTP edge in front of a validator.
   - The Mac client in `tasknode-apple#40` accepts only `http://` URLs while its defaults are `https://`.
