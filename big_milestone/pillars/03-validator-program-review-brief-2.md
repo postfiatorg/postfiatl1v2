@@ -8,11 +8,11 @@ Read the code and try to break it. Section 3 says where a mistake is most likely
 
 - The five original PRs were merged on 28 November with most first-review findings open. A release was published from that code. Both were mistakes. The release is withdrawn (a draft, not downloadable).
 - Every first-review finding now has a fix with tests. Section 2 lists them.
-- Two rehearsals ran on real nodes under systemd. They found five more faults that the mocked tests had hidden. All five are fixed. Section 4 lists what was run.
-- Merged to `main`: [`postfiatl1v2#330`](https://github.com/postfiatorg/postfiatl1v2/pull/330) (`88f22f132`), [`#331`](https://github.com/postfiatorg/postfiatl1v2/pull/331) (`3f4554961`), [`#326`](https://github.com/postfiatorg/postfiatl1v2/pull/326) (`099ba5670`), [`tasknode#461`](https://github.com/postfiatorg/tasknode/pull/461) (`dc859d0e`).
-- Open: [`postfiatl1v2#329`](https://github.com/postfiatorg/postfiatl1v2/pull/329) (upgrade and release; checks running on `2d46d39b3`), [`site#84`](https://github.com/postfiatorg/postfiatorg.github.io/pull/84) (guide; merges after `#329`).
-- Nothing is deployed. The six validators run another branch (`train-a-r7`). Task Node `main` is not deployed with `#461`, and enforcement is off. No release is published.
-- A new node still cannot be seeded from a pruned snapshot ([`#320`](https://github.com/postfiatorg/postfiatl1v2/issues/320)). A fix for seeding from a full snapshot is being tested.
+- Two rehearsals ran on real nodes under systemd. They found seven more faults that the mocked tests had hidden. All are fixed. Section 4 lists what was run.
+- Everything is merged: [`postfiatl1v2#329`](https://github.com/postfiatorg/postfiatl1v2/pull/329) (`7d80aef48`, upgrade and release), [`#330`](https://github.com/postfiatorg/postfiatl1v2/pull/330), [`#331`](https://github.com/postfiatorg/postfiatl1v2/pull/331), [`#334`](https://github.com/postfiatorg/postfiatl1v2/pull/334) (seeding), [`#326`](https://github.com/postfiatorg/postfiatl1v2/pull/326), [`tasknode#461`](https://github.com/postfiatorg/tasknode/pull/461), [`site#84`](https://github.com/postfiatorg/postfiatorg.github.io/pull/84) (guide, live).
+- A release is published as a pre-release: [`v0.4.1-devnet2-p3`](https://github.com/postfiatorg/postfiatl1v2/releases/tag/v0.4.1-devnet2-p3), from `main` `7d80aef48`, sequence 2. Two clean workflow builds gave identical hashes. It was installed by `upgrade --channel-url` straight from GitHub on the replica rig, and the guide's install steps were followed in a clean container.
+- Nothing is deployed. The six validators run another branch (`train-a-r7`). Task Node `main` is not deployed with `#461`, and enforcement is off.
+- A new node can join devnet-2 from a full snapshot (`#334`: imported at 1961, followed the chain, matched validator-0's tip and state root at 2016). A pruned snapshot still does not work ([`#320`](https://github.com/postfiatorg/postfiatl1v2/issues/320)).
 - One person holds everything. The founder is a solo developer. There is no second builder, signer or reviewer. An agent on the founder's machine made the release keys and merged its own PRs. `docs/release-process.md` now says this.
 
 ## 2. First-review findings and their fixes
@@ -65,8 +65,8 @@ Rehearsed on four voting validators (section 4). What it showed and what it did 
 ### 3.3 Releases
 
 - 2 of 3 signatures give no separation while one machine holds all three keys.
-- Nobody has rebuilt a release independently.
-- Circuit metadata in the withdrawn release came from a validator on another branch. The next release must take it from its own build.
+- The release was built twice by the same workflow with identical hashes. Nobody has rebuilt it on other hardware or by another route.
+- Circuit metadata now comes from the files committed in `main` (`deployments/combined-fastpay-20260928`); the artifacts they name match `main` by size and SHA-256. The manifest's `committee_epoch` (3) is not checked by the node against the chain.
 - `upgrade --channel-url` follows redirects to any https host (`#327`, inside `#329`). Integrity rests on the signed manifest and the binary hash. Confirm nothing fetched is used before it is verified.
 
 ### 3.4 Replica audit as its own job
@@ -77,7 +77,7 @@ The full state audit left the follower and became `rpc-replica-audit` with its o
 
 Three separate faults:
 
-1. The import bound on the block history file is 256 MiB; devnet-2's is 370 MB. Fix under test: 4 GiB for that one file. At about 190 KB a block the new bound lasts to roughly height 22,000. That is a stopgap.
+1. The import bound on the block history file was 256 MiB; devnet-2's is 370 MB. Fixed in `#334`: 4 GiB for that one file. `rpc-catch-up` also asked for more blocks than one reply can hold; it now shrinks its request (`fetch_in_shrinking_windows`). One block over 4 MiB still cannot be fetched. At about 190 KB a block the new bound lasts to roughly height 22,000. That is a stopgap.
 2. `build_history_checkpoint_state` replays from genesis and block 12 fails under current code. So no pruned checkpoint can be built. **Something in the state transition changed without a version gate.** Find it.
 3. `validate_history_checkpoint_state` uses the v1 state root, so a checkpoint taken after the activation cannot validate.
 
@@ -110,8 +110,8 @@ Ids repeat at heights 64/66 and 940/941/945. The author's answer: these are gove
 
 ```bash
 cd /home/postfiat/repos/_bm_worktrees/w1-p3-validator-ops   # remote `public` = postfiatorg/postfiatl1v2
-git fetch public main bm/p3-upgrade-review-fixes
-git diff public/main...public/bm/p3-upgrade-review-fixes
+git fetch public main
+git diff 62edebc6a..public/main -- crates scripts ops docs
 cargo test --locked -p postfiat-node --lib release_upgrade
 python3 -m unittest python/tests/test_release_flow.py
 ```
@@ -125,8 +125,8 @@ Voting rig: `. ~/var/p3/vote/lib.sh`, then `python3 -I ~/var/p3/vote/st.py 6` (h
 - Any of this on a fleet validator.
 - A keyset rotation outside unit tests.
 - The aarch64 binary beyond one run of `release-build-info` on its build runner.
-- A second, independent build of a release.
-- Seeding a new node and following the chain from it.
+- A build of the release by another route than the workflow.
+- Seeding from a pruned snapshot.
 - Three observers on three machines.
 - Task Node with enforcement on, against a real feed.
 - `tasknode-bind` on a real validator host.
