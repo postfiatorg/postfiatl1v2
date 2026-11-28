@@ -41,6 +41,18 @@ An observer dates blocks by when it saw them. If two reads are more than 15 minu
 
 It stops, and writes nothing, when the source is on another chain, behind what it already saw, or shows a block that does not follow the last one it saw.
 
+## Sources and the first run
+
+Give every validator's own RPC as `--source validator-id=<endpoint>`. A proposer's vote record is not signed, so the observer takes it only from the proposer itself and only for the blocks that validator proposed. A source without `validator-id=` is used for blocks and certificates and never for vote records; with only such sources a healthy but slow validator can score below 95%.
+
+On its first run the observer finds validators already in the registry. It did not see them ratified. Put their ratification dates in a file and pass it once:
+
+```json
+{"validator-0": "2026-07-17", "validator-1": "2026-07-17"}
+```
+
+Without the file those validators are taken to be older than the 30-day ramp-in: they keep access, and this observer reports `insufficient_observed_days` (no credit from its claim) until it has observed 25 days. A validator that joins while the observer runs is dated from the day it appears. Losing the state file has the same effect as a first run, so back it up.
+
 ## Bundle the feed
 
 On any host, with the pinned keyset at `/etc/postfiat/observer-keyset.json`:

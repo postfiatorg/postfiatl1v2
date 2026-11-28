@@ -7,8 +7,12 @@ Wants=network-online.target
 Type=oneshot
 User=postfiat-observer
 Group=postfiat-observer
-# POSTFIAT_OBSERVER_SOURCES: one `--source tcp://host:port` or `--source https://host/rpc`
-#   per endpoint, space separated. Name every validator whose vote records should count.
+# POSTFIAT_OBSERVER_SOURCES: one `--source validator-id=tcp://host:port` per validator,
+#   space separated: that validator's own RPC. Its vote records count only for the
+#   blocks it proposed. A source without `validator-id=` gives blocks and certificates
+#   only. On the first run add `--activation-file /etc/postfiat/validator-activation.json`
+#   (validator id to ratification date) or no validator already in the registry
+#   is treated as new.
 # POSTFIAT_OBSERVER_NETWORK: l1-devnet, l1-testnet or l1-mainnet.
 # POSTFIAT_OBSERVER_KEYSET_ID: keyset_id of the pinned keyset this observer is in.
 EnvironmentFile=/etc/postfiat/uptime-observer.env

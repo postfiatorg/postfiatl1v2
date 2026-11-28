@@ -525,8 +525,13 @@ pub fn derive_claim(
         .count() as u32;
     let ramp_in = within_days_after(facts.first_active_date.as_ref(), window_end_day)?;
     let in_recovery = within_days_after(facts.recovery_floor_date.as_ref(), window_end_day)?;
+    // Outside the ramp-in and a recovery, fewer than the minimum of scored
+    // days are too few to judge: liveness is not failed on them.
+    let too_few_to_judge = !ramp_in && !in_recovery && observed_days < UPTIME_MIN_OBSERVED_DAYS;
     let liveness_met = facts.registry_active
-        && (observed_days == 0 || mean.is_some_and(|mean| mean >= UPTIME_LIVENESS_THRESHOLD_BPS));
+        && (observed_days == 0
+            || too_few_to_judge
+            || mean.is_some_and(|mean| mean >= UPTIME_LIVENESS_THRESHOLD_BPS));
 
     let (reason, hub, reward, removal) = match facts.access_state.as_str() {
         "pending" => ("awaiting_ratification", false, false, false),
@@ -933,6 +938,9 @@ pub fn reconcile_validator_rows(
                     && other.registry_active == claim.registry_active
                     && other.liveness_met == claim.liveness_met
                     && other.access_state == claim.access_state
+                    // Everything a consumer acts on is agreed, not only the state.
+                    && other.reward_eligible == claim.reward_eligible
+                    && other.grace_started_at == claim.grace_started_at
             };
             match groups.iter_mut().find(|group| agrees(group[0].1)) {
                 Some(group) => group.push((observer_id, claim)),
@@ -1705,6 +1713,44 @@ mod tests {
         nonsense[0].access_state = "pending".to_string();
         assert!(sign_observer_attestation(&keys[0], &unsigned(nonsense)).is_err());
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn too_few_days_are_not_judged_and_the_credit_is_part_of_the_agreement() {
+        let (feed, _, _) = fixture();
+        let end = parse_utc_date("2026-11-27").expect("end");
+        let healthy = &feed.observer_attestations[0].validator_claims[0];
+        assert!(healthy.reward_eligible && !healthy.ramp_in_active);
+        // The same validator as an observer that missed most days sees it:
+        // five bad days are too few to fail liveness on, and too few for the credit.
+        let mut facts = facts_of(healthy);
+        for (index, day) in facts.days.iter_mut().enumerate() {
+            if index >= 5 {
+                day.complete = false;
+                day.participation_bps = None;
+            } else if day.committed_blocks > 0 {
+                day.signed_blocks = day.committed_blocks / 2;
+                day.participation_bps = Some(5_000);
+            }
+        }
+        let thin = derive_claim(&facts, end).expect("derive");
+        assert!(thin.observed_days < UPTIME_MIN_OBSERVED_DAYS);
+        assert!(thin.liveness_met && thin.finance_hub_access && !thin.reward_eligible);
+        assert_eq!(thin.access_state_reason, "insufficient_observed_days");
+
+        // Same state, another credit: that observer is not in the agreement.
+        let mut attestations = feed.observer_attestations.clone();
+        attestations[0].validator_claims[0] = thin;
+        let refs: Vec<&ObserverAttestationV1> = attestations.iter().collect();
+        let (rows, no_quorum) = reconcile_validator_rows(&refs);
+        assert!(no_quorum.is_empty());
+        assert!(rows[0].claim.reward_eligible);
+        assert!(!rows[0]
+            .agreeing_observer_ids
+            .contains(&attestations[0].observer_id));
+        // With that observer and one other alone, nobody acts on either claim.
+        let (_, no_quorum) = reconcile_validator_rows(&refs[..2]);
+        assert_eq!(no_quorum, std::slice::from_ref(&healthy.validator_id));
     }
 
     #[test]

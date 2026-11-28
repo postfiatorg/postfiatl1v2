@@ -32,8 +32,17 @@ STALE_AFTER_SECONDS = 3600
 MAX_FUTURE_SKEW_SECONDS = 60
 QUORUM_THRESHOLD = 2
 
-# The fields two observers must share before their claims count as agreement.
-AGREEMENT_FIELDS = ("ml_dsa_public_key", "registry_active", "liveness_met", "access_state")
+# The fields two observers must share before their claims count as agreement:
+# who the validator is, where it stands, and everything a consumer acts on
+# (access follows from access_state; the credit and the grace date are named).
+AGREEMENT_FIELDS = (
+    "ml_dsa_public_key",
+    "registry_active",
+    "liveness_met",
+    "access_state",
+    "reward_eligible",
+    "grace_started_at",
+)
 
 
 class FeedRejected(ValueError):
@@ -138,7 +147,12 @@ def derive_row(
         recovery_floor_date is not None
         and window_end < parse_date(recovery_floor_date) + EVALUATION_HORIZON_DAYS * DAY
     )
-    liveness_met = registry_active and (observed == 0 or mean >= LIVENESS_THRESHOLD_BPS)
+    # Outside the ramp-in and a recovery, fewer than MIN_OBSERVED_DAYS scored
+    # days are too few to judge: liveness is not failed on them. Access stays
+    # and the credit waits (`insufficient_observed_days`). Inside the ramp-in
+    # or a recovery every scored day counts from the first.
+    too_few_to_judge = not ramp_in and not in_recovery and observed < MIN_OBSERVED_DAYS
+    liveness_met = registry_active and (observed == 0 or too_few_to_judge or mean >= LIVENESS_THRESHOLD_BPS)
 
     if access_state == "pending":
         reason, hub, reward, removal = "awaiting_ratification", False, False, False
@@ -351,6 +365,8 @@ def verify_feed(
         raise FeedRejected(f"schema: {path}: {errors[0].message}")
     if feed["chain"] != keyset["chain"]:
         raise FeedRejected("feed is for another chain than the pinned keyset")
+    if feed["quorum_policy"]["observer_keyset_id"] != keyset["keyset_id"]:
+        raise FeedRejected("feed names another observer keyset than the pinned one")
     window_start = parse_utc(feed["window_spec"]["window_start"])
     window_end = parse_utc(feed["window_spec"]["window_end"])
     if window_end != midnight(window_end.date()) or window_end - window_start != EVALUATION_HORIZON_DAYS * DAY:

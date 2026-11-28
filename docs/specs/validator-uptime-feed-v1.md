@@ -56,7 +56,9 @@ Real votes are counted, never committee membership. A day counts as observed onl
 
 Counting certificates only would put a healthy validator below the 95% rule. The proposer's vote record lists every validator it asked and what came back, including a vote that arrived after the quorum had closed, so it shows the votes the certificates leave out.
 
-**What a vote record is worth.** It is the proposer's own statement, kept beside the block and never read by consensus. A proposer can only speak for the blocks it proposed, a share of 1/n. It could wrongly deny a vote there, which is the same power it already has over which votes enter its certificate; it could wrongly grant one, which lifts a dead validator's score by at most 1/n. An observer reads the record from the proposer's RPC. For a block whose proposer the observer cannot reach, only the two certificates count. Consumers refuse a `metric_version` they do not know.
+**What a vote record is worth.** It is the proposer's own statement, kept beside the block and never read by consensus. A proposer can only speak for the blocks it proposed, a share of 1/n. It could wrongly deny a vote there, which is the same power it already has over which votes enter its certificate; it could wrongly grant one, which lifts a dead validator's score by at most 1/n. A record is not signed, so where it comes from is the whole of its standing. An observer takes a record for a block only from that block's proposer: the observer is configured with each validator's own RPC by validator id (`--source validator-3=tcp://…`), asks that endpoint only about the blocks validator-3 proposed, and ignores a record any other endpoint offers. A source without a validator id gives blocks and certificates and never a vote record. For a block whose proposer the observer cannot reach, only the two certificates count. The bound of 1/n holds only under this rule; a record that carries each vote's signature, checkable by anyone, is the stronger form and is not in this version.
+
+A block is scored against the validators of its own certificate (the `validators` list of its quorum certificate), not against the registry the observer read afterwards, so a registry change between two reads moves nobody's numerator or denominator for the blocks before it. Consumers refuse a `metric_version` they do not know.
 
 ### 2.3 The window
 
@@ -65,7 +67,7 @@ Counting certificates only would put a healthy validator below the 95% rule. The
 - `observed_days`: how many there are.
 - `mean_daily_participation_bps`: `floor(sum of participation_bps / observed_days)`, or `null` when there are none. Every day weighs the same.
 - `consecutive_passing_days`: the length of the run of days at or above 9500 that ends at the most recent one.
-- `liveness_met`: the validator is in the registry, and either `observed_days` is 0 or the mean is at least `liveness_threshold_bps = 9500`.
+- `liveness_met`: the validator is in the registry, and one of: `observed_days` is 0; the mean is at least `liveness_threshold_bps = 9500`; or the validator is outside its ramp-in and outside a recovery and has fewer than `min_observed_days = 25` observed days. The last case is "too few days to judge": liveness is not failed on a handful of days. Inside the ramp-in or a recovery every observed day counts from the first.
 
 All arithmetic is in whole basis points. 95% is exactly 9500.
 
@@ -121,9 +123,11 @@ A consumer does these steps in order. The top-level `validators` array is a conv
    - `observed_at` falls on the evaluation day, `window_end <= observed_at < window_end + 24h`;
    - every claim row follows from its own facts (section 5.5).
 
+   Before any attestation is read, the feed's `chain` and `quorum_policy.observer_keyset_id` must equal the pinned keyset's `chain` and `keyset_id`. A feed under another keyset id is refused whole, also when the observer keys are the same.
+
    An attestation that fails any check is dropped. **One wrong observer does not stop the feed.**
 3. If fewer than two attestations count, the feed is **indeterminate**: the consumer blocks new validator bindings and new credit grants, and changes nothing else. It never revokes access on an indeterminate feed. An observer outage or a partition cannot mass-revoke healthy operators.
-4. For each validator, group the counted claims by `(ml_dsa_public_key, registry_active, liveness_met, access_state)`. A group of two or three is agreement. Without one, that validator has no quorum and is treated as in step 3; other validators are unaffected.
+4. For each validator, group the counted claims by `(ml_dsa_public_key, registry_active, liveness_met, access_state, reward_eligible, grace_started_at)`: who the validator is, where it stands, and everything a consumer acts on (access follows from `access_state`; the credit and the date grace runs from are named). Two observers that share a state and differ on the credit or on the grace date do not agree. A group of two or three is agreement. Without one, that validator has no quorum and is treated as in step 3; other validators are unaffected.
 5. The validator's row is one observer's signed claim, copied whole. With three agreeing observers it is the one with the middle `mean_daily_participation_bps`; with two, the lower one. Ties go to the lower `observer_id`; an unknown score sorts lowest. The top-level row adds `source_observer_id` and `agreeing_observer_ids`. The consumer rebuilds the rows this way and refuses the feed if the served `validators` array differs in any byte.
 
 This is the only rule for disagreement. Copying one observer's row whole means a single odd observer can move neither the score nor any date.
@@ -155,10 +159,14 @@ A removal proposal is only made possible here. The validators still ratify it ex
 
 A validator becomes `active` the day it is ratified; `first_active_date` is that UTC day. It stays active while `liveness_met` holds. The reason says which case applies, in this order:
 
-- `day0_ramp_in`: the first 30 days after `first_active_date`. Credit is paid.
+- `day0_ramp_in`: the first 30 days after `first_active_date`. Credit is paid from day 0, before any day has been observed; that is the meaning of the ramp-in. A validator whose score in the ramp-in is below the threshold lapses like any other.
 - `recovered_3day_streak`: the 30 days after a recovery (5.4). Credit is paid.
 - `healthy_liveness`: at least `min_observed_days = 25` observed days. Credit is paid.
-- `insufficient_observed_days`: fewer than 25 observed days, for example because the chain made no block on six days of the window. Access stays; the credit waits. Nobody loses access because the chain was quiet or an observer had gaps.
+- `insufficient_observed_days`: fewer than 25 observed days, for example because the chain made no block on six days of the window. Access stays; the credit waits. Nobody loses access because the chain was quiet or an observer had gaps, and no grace starts on fewer than 25 observed days (`liveness_met` above).
+
+**Who is new.** `first_active_date` is the day of ratification. An observer that sees a validator enter the registry dates it from that day. An observer that starts and finds a validator already in the registry did not see it ratified: it takes the date from its activation file (`--activation-file`, the ratification dates, read once on the first run), and for a validator not named there it uses a date older than the ramp-in. A new or restarted observer therefore never grants a ramp-in of its own; without the dates it reports `insufficient_observed_days` until it has observed 25 days, and the other two observers carry the row.
+
+**Leaving the feed.** A validator that is out of the registry, `revoked`, and has been out for more than 30 days is dropped from an observer's claims.
 
 ### 5.3 Lapsed and revoked
 

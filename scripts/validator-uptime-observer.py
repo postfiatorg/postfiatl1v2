@@ -20,6 +20,17 @@ incomplete. Nothing is inferred for the time before the observer started.
 How a vote is counted: a validator is credited for a block when its vote is in
 the block's precommit or prepare certificate, or when the proposer's vote
 record for that block lists it as accepted (also after the quorum closed).
+A vote record is unsigned, so it is taken only from the block's proposer: a
+source given as `validator-id=tcp://host:port` is that validator's own RPC, and
+only its records for the blocks it proposed count. A source without an id gives
+blocks and certificates, never vote records.
+
+Who is new: a validator that enters the registry while the observer runs is
+new from that day (the 30-day ramp-in). A validator already in the registry
+when the observer first starts is not: its activation day comes from
+`--activation-file` (the ratification dates), and without one it is taken to
+be older than the ramp-in, so a restarted observer never hands out a new
+ramp-in.
 
 Signing and verifying are done by `postfiat-node` (observer-uptime-sign,
 observer-uptime-bundle, observer-uptime-verify).
@@ -83,9 +94,18 @@ class ObserverError(Exception):
 
 
 class Source:
-    """A read-only RPC endpoint: `tcp://host:port` (rpc-serve) or `http(s)://.../rpc` (the HTTP edge)."""
+    """A read-only RPC endpoint: `tcp://host:port` (rpc-serve) or `http(s)://.../rpc` (the HTTP edge).
+
+    `validator-id=<endpoint>` says the endpoint is that validator's own RPC.
+    """
 
     def __init__(self, spec: str, timeout: float = 20.0) -> None:
+        self.validator_id: str | None = None
+        head, sep, rest = spec.partition("=")
+        if sep and "://" not in head:
+            if not head:
+                raise ObserverError(f"source `{spec}` has an empty validator id")
+            self.validator_id, spec = head, rest
         self.spec = spec
         self.timeout = timeout
         if spec.startswith(("http://", "https://")):
@@ -159,6 +179,16 @@ def fetch_blocks(source: Source, from_height: int, to_height: int) -> list[dict[
     return blocks
 
 
+def block_committee(header: dict[str, Any]) -> list[str] | None:
+    """The validators the block's own certificate was drawn from, when the header names them."""
+    commit = header.get("consensus_v2_commit") or {}
+    for holder in (commit.get("precommit_qc"), commit.get("prepare_qc"), header.get("certificate")):
+        members = (holder or {}).get("validators")
+        if isinstance(members, list) and members and all(isinstance(m, str) for m in members):
+            return sorted(set(members))
+    return None
+
+
 def certificate_voters(header: dict[str, Any]) -> set[str]:
     commit = header.get("consensus_v2_commit") or {}
     voters: set[str] = set()
@@ -211,7 +241,9 @@ def mark_incomplete(state: dict[str, Any], first: dt.date, last: dt.date) -> Non
 # --------------------------------------------------------------------------- one read
 
 
-def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now: dt.datetime) -> dict[str, Any]:
+def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now: dt.datetime,
+         activation: dict[str, str] | None = None) -> dict[str, Any]:
+    """`activation` (validator id -> first active date) is read only when the observer first starts."""
     source, status = best_source(sources, state["chain"]["chain_id"] if state else None)
     chain = {"network": network, "chain_id": status["chain_id"], "genesis_hash": status["genesis_hash"]}
     registry_reply = source.call("validators")
@@ -228,7 +260,16 @@ def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now:
             "started_at": contract.format_utc(now),
             "days": {},
             "validators": {},
+            # Validators that were in the registry before this observer saw
+            # anything. They did not become active today.
+            "bootstrap": {},
         }
+        unknown = (today - contract.EVALUATION_HORIZON_DAYS * contract.DAY).isoformat()
+        for vid, key in registry.items():
+            first = (activation or {}).get(vid, unknown)
+            if contract.parse_date(first) > today:
+                raise ObserverError(f"activation date of {vid} is after today")
+            state["bootstrap"][vid] = {"ml_dsa_public_key": key, "first_active_date": first}
         day_entry(state, today)["complete"] = False
     else:
         if state["chain"] != chain:
@@ -254,11 +295,15 @@ def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now:
             elif not gap_too_long:
                 day = day_entry(state, today)
                 for header in headers:
+                    # A block is scored against the validators of its own
+                    # certificate. Several blocks of one read may fall on
+                    # either side of a registry change.
+                    members = block_committee(header) or sorted(registry)
                     day["blocks"][str(header["height"])] = {
                         "hash": header["block_hash"],
                         "proposer": header["proposer"],
-                        "registry": sorted(registry),
-                        "credited": sorted(certificate_voters(header) & set(registry)),
+                        "registry": members,
+                        "credited": sorted(certificate_voters(header) & set(members)),
                         "record": False,
                     }
         else:
@@ -268,6 +313,13 @@ def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now:
     state["last_poll_at"] = contract.format_utc(now)
     state["last_height"] = tip_height
     state["last_block_hash"] = tip["block_hash"] if tip else ""
+    removed = state.setdefault("removed_since", {})
+    for vid in list(removed):
+        if vid in registry:
+            del removed[vid]
+    for vid in state["validators"]:
+        if vid not in registry:
+            removed.setdefault(vid, today.isoformat())
     state["registry"] = registry
     state["registry_root"] = registry_reply["registry_root"]
     domain = (((tip or {}).get("consensus_v2_commit") or {}).get("precommit_qc") or {}).get("domain") or {}
@@ -279,7 +331,12 @@ def poll(state: dict[str, Any] | None, sources: list[Source], network: str, now:
 
 
 def read_vote_records(state: dict[str, Any], sources: list[Source], today: dt.date) -> None:
-    """Add the votes the certificates left out. A source holds records only for the blocks it proposed."""
+    """Add the votes the certificates left out.
+
+    A record is unsigned. It is taken only from the source that is the block's
+    proposer, so one validator can speak for the blocks it proposed and for no
+    others.
+    """
     wanted: dict[int, dict[str, Any]] = {}
     for date_text, day in state["days"].items():
         if (today - contract.parse_date(date_text)).days > VOTE_RECORD_RETRY_DAYS:
@@ -290,7 +347,10 @@ def read_vote_records(state: dict[str, Any], sources: list[Source], today: dt.da
     if not wanted:
         return
     for source in sources:
-        heights = sorted(h for h, block in wanted.items() if not block["record"])
+        proposer = getattr(source, "validator_id", None)
+        if proposer is None:
+            continue
+        heights = sorted(h for h, block in wanted.items() if not block["record"] and block["proposer"] == proposer)
         index = 0
         while index < len(heights):
             start = heights[index]
@@ -303,8 +363,10 @@ def read_vote_records(state: dict[str, Any], sources: list[Source], today: dt.da
                 record = row.get("record")
                 if block is None or not record:
                     continue
-                # The record must be about this very block and come from its proposer.
-                if record.get("block_hash") != block["hash"] or record.get("proposer") != block["proposer"]:
+                # The record must be about this very block, and this source must be its proposer.
+                if block["proposer"] != proposer or block["record"]:
+                    continue
+                if record.get("block_hash") != block["hash"] or record.get("proposer") != proposer:
                     continue
                 voted = {
                     entry["validator"]
@@ -386,10 +448,24 @@ def build_rows(state: dict[str, Any], now: dt.datetime) -> list[dict[str, Any]]:
     rows = []
     for vid in sorted(set(state["registry"]) | set(state["validators"])):
         previous = state["validators"].get(vid)
+        if previous and vid not in state["registry"] and previous["access_state"] == "revoked":
+            since = state.get("removed_since", {}).get(vid)
+            if since and (today - contract.parse_date(since)).days > contract.EVALUATION_HORIZON_DAYS:
+                # Out of the registry for longer than the window and revoked:
+                # there is nothing left to say about it.
+                del state["validators"][vid]
+                state["removed_since"].pop(vid, None)
+                continue
         key = state["registry"].get(vid) or previous["ml_dsa_public_key"]
         if previous and previous["ml_dsa_public_key"] != key:
             # A validator id under a new key is a new validator.
             previous = None
+        known = state.get("bootstrap", {}).get(vid)
+        if previous is None and known and known["ml_dsa_public_key"] == key:
+            # In the registry before this observer started: active since its
+            # activation day, not since today.
+            previous = {"ml_dsa_public_key": key, "access_state": "active", "first_active_date": known["first_active_date"],
+                        "grace_started_at": None, "recovery_floor_date": None}
         first_text = previous["first_active_date"] if previous else None
         first = contract.parse_date(first_text) if first_text else today
         row = contract.next_row(
@@ -463,7 +539,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     for path in (state_file, output):
         refuse_validator_data_dir(path.parent)
     now = parse_now(args.now)
-    state = poll(load_state(state_file), [Source(spec) for spec in args.source], args.network, now)
+    activation = None
+    if args.activation_file:
+        activation = json.loads(Path(args.activation_file).read_text(encoding="utf-8"))
+        if not isinstance(activation, dict) or not all(isinstance(v, str) for v in activation.values()):
+            raise ObserverError("--activation-file is a JSON object of validator id to YYYY-MM-DD")
+    state = poll(load_state(state_file), [Source(spec) for spec in args.source], args.network, now, activation)
     rows = build_rows(state, now)
     if rows:
         envelope = attest(state, rows, args.keyset_id, Path(args.key_file), args.node_bin, now)
@@ -518,7 +599,9 @@ def main(argv: list[str] | None = None) -> int:
 
     run = sub.add_parser("run", help="read the chain once and write one signed attestation")
     run.add_argument("--source", action="append", required=True,
-                     help="read-only RPC: tcp://host:port or https://host/rpc. Repeat for every validator whose vote records should count; the one furthest ahead gives the blocks")
+                     help="read-only RPC: tcp://host:port or https://host/rpc. Write validator-id=tcp://host:port for a validator's own RPC: only then do its vote records count, and only for the blocks it proposed. Repeat for every validator; the source furthest ahead gives the blocks")
+    run.add_argument("--activation-file",
+                     help="JSON object, validator id to first active date (YYYY-MM-DD), for validators already in the registry. Read only on the observer's first run")
     run.add_argument("--network", required=True, choices=["l1-devnet", "l1-testnet", "l1-mainnet"])
     run.add_argument("--keyset-id", required=True, help="keyset_id of the pinned observer keyset this observer is in")
     run.add_argument("--key-file", required=True, help="this observer's key file (observer-key-create)")
