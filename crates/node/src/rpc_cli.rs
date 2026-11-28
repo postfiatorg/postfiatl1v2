@@ -5511,6 +5511,48 @@ fn rpc_catch_up_validate_work_dir(work_dir: &Path) -> Result<(), String> {
         .map_err(|error| format!("rpc catch-up work dir write check cleanup failed: {error}"))
 }
 
+/// Fetches the items at heights `first..=last`. The source bounds the size of
+/// one reply, and blocks differ in size by orders of magnitude: on devnet-2
+/// eight blocks can exceed the bound. Ask for everything that is missing, and
+/// for half as many each time the source answers `rpc_response_too_large`,
+/// down to one. A height the source does not return is simply absent from the
+/// result; the caller names it.
+fn fetch_in_shrinking_windows<T>(
+    first: u64,
+    last: u64,
+    height_of: impl Fn(&T) -> u64,
+    mut fetch: impl FnMut(u64, usize) -> Result<Vec<T>, String>,
+) -> Result<std::collections::BTreeMap<u64, T>, String> {
+    let mut by_height = std::collections::BTreeMap::new();
+    let mut next = first;
+    let mut window = usize::MAX;
+    while next <= last {
+        let limit = window.min(usize::try_from(last - next + 1).unwrap_or(usize::MAX));
+        let items = match fetch(next, limit) {
+            Ok(items) => items,
+            Err(error) if limit > 1 && error.contains("rpc_response_too_large") => {
+                window = limit / 2;
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        let before = next;
+        for item in items {
+            let height = height_of(&item);
+            if height >= next && height <= last {
+                next = height + 1;
+                by_height.insert(height, item);
+            }
+        }
+        if next == before {
+            break;
+        }
+        // One large block should not slow down the small ones after it.
+        window = limit.saturating_mul(2);
+    }
+    Ok(by_height)
+}
+
 fn rpc_catch_up_preflight_blocks(
     options: &RpcCatchUpOptions,
     local_before: &StatusReport,
@@ -5519,19 +5561,22 @@ fn rpc_catch_up_preflight_blocks(
 ) -> Result<Vec<RpcCatchUpPreparedBlock>, String> {
     let local_height = local_before.block_height;
     let missing_count = (catch_up_to - local_height) as usize;
-    let blocks: Vec<BlockRecord> = rpc_catch_up_call(
-        options,
-        "blocks",
-        serde_json::json!({
-            "from_height": local_height + 1,
-            "limit": missing_count,
-        }),
-        "rpc-catch-up-blocks",
+    let mut blocks_by_height = fetch_in_shrinking_windows(
+        local_height + 1,
+        catch_up_to,
+        |block: &BlockRecord| block.header.height,
+        |from_height, limit| {
+            rpc_catch_up_call(
+                options,
+                "blocks",
+                serde_json::json!({
+                    "from_height": from_height,
+                    "limit": limit,
+                }),
+                "rpc-catch-up-blocks",
+            )
+        },
     )?;
-    let mut blocks_by_height = std::collections::BTreeMap::<u64, BlockRecord>::new();
-    for block in blocks {
-        blocks_by_height.insert(block.header.height, block);
-    }
 
     let mut expected_parent = local_before.block_tip_hash.clone();
     let mut prepared = Vec::with_capacity(missing_count);
@@ -6660,3 +6705,60 @@ mod transfer_fee_quote_arm_tests {
 }
 
 include!("b23_facility_offer_rpc.rs");
+
+#[cfg(test)]
+mod rpc_catch_up_window_tests {
+    use super::fetch_in_shrinking_windows;
+
+    /// A source that refuses any reply holding more than `cap` units of size.
+    fn source(sizes: &[u64], cap: u64) -> impl FnMut(u64, usize) -> Result<Vec<u64>, String> + '_ {
+        move |from, limit| {
+            let heights: Vec<u64> = (from..from + limit as u64)
+                .filter(|height| (*height as usize) <= sizes.len())
+                .collect();
+            let total: u64 = heights.iter().map(|height| sizes[*height as usize - 1]).sum();
+            if total > cap {
+                return Err(format!(
+                    "rpc catch-up blocks failed: rpc_response_too_large: rpc response of {total} bytes exceeds the {cap}-byte frame limit; request less data"
+                ));
+            }
+            Ok(heights)
+        }
+    }
+
+    #[test]
+    fn a_reply_that_is_too_large_is_asked_for_again_in_smaller_parts() {
+        // Found by seeding a node from devnet-2: 64 blocks were 26 MB and 8
+        // blocks 4.5 MB against a 4 MiB reply limit, and catch-up gave up.
+        let sizes = [1, 1, 9, 1, 1, 1, 8, 1, 1, 1, 1, 1];
+        let mut calls = 0;
+        let mut inner = source(&sizes, 10);
+        let fetched = fetch_in_shrinking_windows(1, 12, |height: &u64| *height, |from, limit| {
+            calls += 1;
+            inner(from, limit)
+        })
+        .unwrap();
+        assert_eq!(fetched.keys().copied().collect::<Vec<_>>(), (1..=12).collect::<Vec<_>>());
+        assert!(calls < 20, "bounded number of calls ({calls})");
+
+        // One block larger than the limit cannot be fetched at all: the error
+        // comes back as it is, not an endless retry.
+        let error = fetch_in_shrinking_windows(1, 3, |height: &u64| *height, source(&[1, 11, 1], 10))
+            .unwrap_err();
+        assert!(error.contains("rpc_response_too_large"), "{error}");
+
+        // Any other error is not retried.
+        let mut calls = 0;
+        let error = fetch_in_shrinking_windows(1, 8, |height: &u64| *height, |_, _| {
+            calls += 1;
+            Err::<Vec<u64>, _>("rpc catch-up connect failed".to_string())
+        })
+        .unwrap_err();
+        assert_eq!((calls, error.as_str()), (1, "rpc catch-up connect failed"));
+
+        // A source that stops short leaves the rest absent; the caller names it.
+        let fetched =
+            fetch_in_shrinking_windows(1, 9, |height: &u64| *height, source(&[1, 1, 1], 10)).unwrap();
+        assert_eq!(fetched.len(), 3);
+    }
+}

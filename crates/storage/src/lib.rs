@@ -67,6 +67,23 @@ const ORDERED_COMMIT_MUTATION_LOCK_FILE: &str = ".ordered-commit.mutation.lock";
 const JSONL_LOCK_SUFFIX: &str = ".mutation.lock";
 const ATOMIC_WRITE_TEMP_ATTEMPTS: u32 = 128;
 pub const MAX_STATE_FILE_BYTES: u64 = 256 * 1024 * 1024;
+/// The whole-file block log (`blocks.json`) of a legacy-layout directory.
+/// Every other state file is bounded by what the state can hold; this one
+/// grows by one block with every block. A running node keeps its blocks in the
+/// transactional store, so the file is read whole only where a snapshot is
+/// exported and imported: on devnet-2 it passed 256 MiB at about 1,900 blocks
+/// and no new node could be seeded. It is read into memory, so importing a
+/// snapshot needs several times the file's size in RAM.
+pub const MAX_BLOCK_LOG_FILE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+/// The size bound of a whole-file state file, by its name.
+pub fn state_file_max_bytes(path: &Path) -> u64 {
+    if path.file_name().and_then(|name| name.to_str()) == Some(BLOCKS_FILE) {
+        MAX_BLOCK_LOG_FILE_BYTES
+    } else {
+        MAX_STATE_FILE_BYTES
+    }
+}
 pub const MAX_JSONL_FILE_BYTES: u64 = 512 * 1024 * 1024;
 pub const MAX_JSONL_RECORD_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_JSONL_RECORDS: usize = 1_000_000;
@@ -860,6 +877,15 @@ impl NodeStore {
     /// Serialize `value` and append the keyed integrity trailer; see the
     /// format note in [`integrity`].
     fn write_json_with_mac(&self, label: &str, body: &[u8]) -> io::Result<Vec<u8>> {
+        self.write_bounded_json_with_mac(label, body, MAX_STATE_FILE_BYTES)
+    }
+
+    fn write_bounded_json_with_mac(
+        &self,
+        label: &str,
+        body: &[u8],
+        max_bytes: u64,
+    ) -> io::Result<Vec<u8>> {
         // Canonical form: exactly one newline between body and trailer, and
         // the MAC always covers the body *without* that trailing newline so
         // the verify side can be unambiguous.
@@ -868,7 +894,7 @@ impl NodeStore {
             "state",
             body.len() as u64,
             stripped_body.len() as u64,
-            MAX_STATE_FILE_BYTES,
+            max_bytes,
         )?;
         let mac = self.file_mac(label, stripped_body);
         let mut bytes =
@@ -921,7 +947,11 @@ impl NodeStore {
                      upgrading it to the keyed format",
                     path.display()
                 );
-                let bytes = self.write_json_with_mac(label, raw.as_bytes())?;
+                let bytes = self.write_bounded_json_with_mac(
+                    label,
+                    raw.as_bytes(),
+                    state_file_max_bytes(path),
+                )?;
                 atomic_write(path, bytes)?;
                 Ok(raw)
             }
@@ -931,7 +961,11 @@ impl NodeStore {
     fn write_json<T: serde::Serialize + ?Sized>(&self, path: PathBuf, value: &T) -> io::Result<()> {
         self.ensure_writable()?;
         let json = serde_json::to_string_pretty(value).map_err(invalid_data)?;
-        let bytes = self.write_json_with_mac("state file", json.as_bytes())?;
+        let bytes = self.write_bounded_json_with_mac(
+            "state file",
+            json.as_bytes(),
+            state_file_max_bytes(&path),
+        )?;
         atomic_write(path, bytes)
     }
 
@@ -2382,7 +2416,7 @@ fn read_text(path: &Path, label: &str) -> io::Result<String> {
             format!("failed to open {label} `{}`: {error}", path.display()),
         )
     })?;
-    enforce_serialized_size(label, file.metadata()?.len(), MAX_STATE_FILE_BYTES)?;
+    enforce_serialized_size(label, file.metadata()?.len(), state_file_max_bytes(path))?;
     let mut raw = String::new();
     BufReader::new(file)
         .read_to_string(&mut raw)
@@ -3749,5 +3783,33 @@ mod tests {
         );
 
         fs::remove_dir_all(dir).expect("cleanup");
+    }
+}
+
+#[cfg(test)]
+mod block_log_bound_tests {
+    use super::*;
+
+    /// devnet-2's `blocks.json` passed the 256 MiB state-file bound at about
+    /// 1,900 blocks and a signed snapshot could no longer be imported.
+    #[test]
+    fn only_the_block_log_may_grow_past_the_state_file_bound() {
+        assert_eq!(
+            state_file_max_bytes(Path::new("/var/lib/postfiat/node/blocks.json")),
+            MAX_BLOCK_LOG_FILE_BYTES
+        );
+        const { assert!(MAX_BLOCK_LOG_FILE_BYTES > 370 * 1024 * 1024) };
+        for other in [
+            "ledger.json",
+            "governance.json",
+            "blocks.json.bak",
+            "receipts.json",
+        ] {
+            assert_eq!(
+                state_file_max_bytes(&Path::new("/var/lib/postfiat/node").join(other)),
+                MAX_STATE_FILE_BYTES,
+                "{other}"
+            );
+        }
     }
 }
