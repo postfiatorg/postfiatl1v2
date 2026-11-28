@@ -457,6 +457,12 @@ def run_feed_tests(schema: Draft202012Validator, feed: dict[str, Any], keyset: d
     other_keyset["chain"] = {**keyset["chain"], "chain_id": "postfiat-other-1"}
     expect_rejected("other chain", lambda: verify_feed(feed, schema=schema, keyset=other_keyset, now_utc=now))
     cases += 1
+    # The same chain and the same observer keys under another keyset id: an
+    # old-generation feed is not read under the new keyset.
+    next_keyset = copy.deepcopy(keyset)
+    next_keyset["keyset_id"] = keyset["keyset_id"] + "-next"
+    expect_rejected("other keyset id", lambda: verify_feed(feed, schema=schema, keyset=next_keyset, now_utc=now))
+    cases += 1
 
     # --- disagreement
     # One observer disagrees on a state: the other two carry the row.
@@ -481,6 +487,29 @@ def run_feed_tests(schema: Draft202012Validator, feed: dict[str, Any], keyset: d
     split["validators"], no_quorum = reconcile(split["observer_attestations"])
     result = check(split)
     assert no_quorum == ["validator-3"] == result["validators_without_quorum"] and len(result["validators"]) == 5
+    cases += 1
+    # Two observers that agree on the state and disagree on the credit do not
+    # agree. With three, the two that match carry the row; with those two
+    # alone, the validator has no quorum and nobody acts on either claim.
+    credit = copy.deepcopy(feed)
+    claim = first(credit)["validator_claims"][0]
+    assert claim["access_state"] == "active" and claim["reward_eligible"]
+    facts = {k: claim[k] for k in ("validator_id", "ml_dsa_public_key", "registry_active", "access_state",
+                                     "grace_started_at", "recovery_floor_date")}
+    # This observer missed most days: the same state, too few observed days for the credit.
+    thin_days = [{**d, "complete": False, "participation_bps": None} if i >= 5 else d for i, d in enumerate(claim["days"])]
+    first(credit)["validator_claims"][0] = derive_row(**facts, first_active_date=claim["first_active_date"], days=thin_days,
+                                                       window_end=FIXTURE_WINDOW_END)
+    thin = first(credit)["validator_claims"][0]
+    assert thin["access_state"] == "active" and thin["liveness_met"] and not thin["reward_eligible"], thin
+    sign_attestation(credit, first(credit), first(credit)["observer_id"])
+    credit["validators"], no_quorum = reconcile(credit["observer_attestations"])
+    row = check(credit)["validators"][0]
+    assert no_quorum == [] and row["reward_eligible"] and first(credit)["observer_id"] not in row["agreeing_observer_ids"]
+    credit["observer_attestations"] = credit["observer_attestations"][:2]
+    credit["validators"], no_quorum = reconcile(credit["observer_attestations"])
+    result = check(credit)
+    assert no_quorum == [claim["validator_id"]] == result["validators_without_quorum"]
     cases += 1
     # Middle score of three, lower score of two.
     scores = copy.deepcopy(feed)
@@ -645,6 +674,27 @@ def run_lifecycle_tests() -> int:
     # 15. An idle chain during grace does not stop the clock and does not count as recovery.
     row = step(lapsed, True, days(end - 17 * DAY, end + 13 * DAY, lambda day: 0, lambda day: day >= end), end + 13 * DAY)
     assert row["access_state"] == "lapsed"
+    checks += 1
+    # 16. Too few days to judge. A validator long past its ramp-in whose
+    # observer saw only three days, all bad, keeps its access and earns no
+    # credit; it does not start grace on three days.
+    old = {"ml_dsa_public_key": key, "access_state": "active", "first_active_date": (end - 200 * DAY).isoformat(),
+           "grace_started_at": None, "recovery_floor_date": None}
+    sparse = days(start, end, lambda day: 50, lambda day: day < end - 3 * DAY)
+    row = step(old, True, sparse)
+    assert (row["access_state"], row["access_state_reason"], row["observed_days"]) == ("active", "insufficient_observed_days", 3)
+    assert row["liveness_met"] and row["finance_hub_access"] and not row["reward_eligible"]
+    # With 25 observed days the same score is judged, and grace starts.
+    row = step(old, True, days(start, end, lambda day: 50, lambda day: day < end - 25 * DAY))
+    assert (row["access_state"], row["observed_days"]) == ("lapsed", 25)
+    # Inside the ramp-in every day counts from the first: three bad days start grace.
+    young = {**old, "first_active_date": (end - 3 * DAY).isoformat()}
+    row = step(young, True, days(end - 3 * DAY, end, lambda day: 50))
+    assert row["access_state"] == "lapsed"
+    checks += 1
+    # 17. Day 0 of the ramp-in: access and the credit from the day of ratification, before any day is observed.
+    row = step(None, True, [])
+    assert (row["access_state_reason"], row["observed_days"], row["reward_eligible"]) == ("day0_ramp_in", 0, True)
     checks += 1
     return checks
 

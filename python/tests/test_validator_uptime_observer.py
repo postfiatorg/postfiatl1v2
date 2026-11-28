@@ -128,8 +128,8 @@ class Chain:
 
 
 class InProcessSource:
-    def __init__(self, chain: Chain, records: bool) -> None:
-        self.chain, self.records, self.spec = chain, records, "in-process"
+    def __init__(self, chain: Chain, records: bool, validator_id: str | None = None) -> None:
+        self.chain, self.records, self.spec, self.validator_id = chain, records, "in-process", validator_id
 
     def call(self, method: str, params: dict | None = None) -> object:
         return self.chain.handle(method, params or {}, self.records)
@@ -151,6 +151,11 @@ def serve(chain: Chain, records: bool) -> tuple[socketserver.ThreadingTCPServer,
     server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server, f"tcp://127.0.0.1:{server.server_address[1]}"
+
+
+def own_rpcs(chain: Chain) -> list[InProcessSource]:
+    """Every validator's own RPC: the only place its vote records are taken from."""
+    return [InProcessSource(chain, True, validator_id=v) for v in VALIDATORS]
 
 
 def day(n: int) -> dt.date:
@@ -178,8 +183,9 @@ class ObserverSimulation(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.chain = Chain()
         # A and B read the vote records. C cannot reach them and sees certificates only.
-        cls.sources = {"a": InProcessSource(cls.chain, True), "b": InProcessSource(cls.chain, True),
-                       "c": InProcessSource(cls.chain, False)}
+        cls.sources = {"a": own_rpcs(cls.chain), "b": own_rpcs(cls.chain), "c": [InProcessSource(cls.chain, False)]}
+        # The validators were ratified the day the observers started.
+        activation = {v: START.date().isoformat() for v in VALIDATORS}
         cls.states: dict[str, dict | None] = {"a": None, "b": None, "c": None}
         cls.rows: dict[str, dict[str, dict]] = {}
         cls.history: dict[str, list[tuple[str, str, str]]] = {v: [] for v in VALIDATORS}
@@ -198,7 +204,7 @@ class ObserverSimulation(unittest.TestCase):
                 # C is down for two hours on 12 November.
                 if name == "c" and today == day(12) and 8 <= now.hour < 10:
                     continue
-                state = observer.poll(cls.states[name], [cls.sources[name]], "l1-testnet", now)
+                state = observer.poll(cls.states[name], cls.sources[name], "l1-testnet", now, activation)
                 rows = observer.build_rows(state, now)
                 # A JSON round trip between runs must change nothing (per-day counters once got lost here).
                 cls.states[name] = json.loads(json.dumps(state))
@@ -416,6 +422,7 @@ class ObserverRefusals(unittest.TestCase):
     def test_a_vote_record_counts_only_for_its_own_block_and_from_its_proposer(self) -> None:
         chain = Chain()
         source = InProcessSource(chain, True)
+        proposers = own_rpcs(chain)
         state = observer.poll(None, [source], "l1-testnet", dt.datetime(2026, 11, 2, 9, 0, tzinfo=UTC))
         state = observer.poll(state, [InProcessSource(chain, False)], "l1-testnet", dt.datetime(2026, 11, 2, 23, 55, tzinfo=UTC))
         # A whole day begins. Three blocks close without validator-1; the records say it voted late.
@@ -425,7 +432,14 @@ class ObserverRefusals(unittest.TestCase):
             chain.add_block({"validator-0", "validator-2", "validator-3"}, {"validator-1"})
         chain.records[2]["block_hash"] = "e" * 96          # about another block
         chain.records[3]["proposer"] = "validator-0"        # not from the block's proposer
-        state = observer.poll(state, [source], "l1-testnet", now + STEP)
+        # A source that is nobody's own RPC, and a validator speaking for blocks
+        # it did not propose, add nothing: every record here is somebody else's.
+        elsewhere = [InProcessSource(chain, True), InProcessSource(chain, True, validator_id="validator-9")]
+        state = observer.poll(state, elsewhere, "l1-testnet", now + STEP)
+        blocks = state["days"]["2026-11-03"]["blocks"]
+        self.assertEqual([blocks[h]["record"] for h in "234"], [False, False, False])
+        self.assertFalse(any("validator-1" in blocks[h]["credited"] for h in "234"))
+        state = observer.poll(json.loads(json.dumps(state)), proposers, "l1-testnet", now + STEP)
         blocks = state["days"]["2026-11-03"]["blocks"]
         self.assertNotIn("validator-1", blocks["2"]["credited"])
         self.assertNotIn("validator-1", blocks["3"]["credited"])
@@ -433,8 +447,79 @@ class ObserverRefusals(unittest.TestCase):
         self.assertEqual([blocks[h]["record"] for h in "234"], [False, False, True])
         # A record that arrives later is still taken, and never read twice.
         chain.records[2]["block_hash"] = chain.blocks[1]["block_hash"]
-        state = observer.poll(json.loads(json.dumps(state)), [source], "l1-testnet", now + 2 * STEP)
+        state = observer.poll(json.loads(json.dumps(state)), proposers, "l1-testnet", now + 2 * STEP)
         self.assertIn("validator-1", state["days"]["2026-11-03"]["blocks"]["2"]["credited"])
+
+    def test_a_restarted_observer_hands_out_no_new_ramp_in(self) -> None:
+        chain = Chain()
+        sources = own_rpcs(chain)
+        now = dt.datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
+        # No saved state and no activation dates: the validators were in the
+        # registry before this observer saw anything.
+        state = observer.poll(None, sources, "l1-testnet", now)
+        rows = {row["validator_id"]: row for row in observer.build_rows(state, now)}
+        for vid in VALIDATORS:
+            row = rows[vid]
+            self.assertEqual([row["access_state"], row["access_state_reason"]], ["active", "insufficient_observed_days"])
+            self.assertEqual([row["ramp_in_active"], row["reward_eligible"], row["finance_hub_access"]], [False, False, True])
+            self.assertEqual(row["observed_days"], 0)
+        # With the ratification dates, a validator ratified ten days ago is in its ramp-in and one from spring is not.
+        dates = {"validator-0": "2026-10-23", "validator-1": "2026-04-01"}
+        state = observer.poll(None, sources, "l1-testnet", now, dates)
+        rows = {row["validator_id"]: row for row in observer.build_rows(state, now)}
+        self.assertEqual([rows["validator-0"]["access_state_reason"], rows["validator-0"]["first_active_date"]],
+                         ["day0_ramp_in", "2026-10-23"])
+        self.assertEqual(rows["validator-1"]["access_state_reason"], "insufficient_observed_days")
+        with self.assertRaisesRegex(observer.ObserverError, "after today"):
+            observer.poll(None, sources, "l1-testnet", now, {"validator-0": "2026-11-03"})
+        # A validator that enters the registry while the observer runs is new from that day.
+        VALIDATORS.append("validator-new")
+        KEYS["validator-new"] = hashlib.sha3_256(b"validator-new").hexdigest() * 61
+        try:
+            later = now + STEP
+            state = observer.poll(json.loads(json.dumps(state)), sources, "l1-testnet", later)
+            rows = {row["validator_id"]: row for row in observer.build_rows(state, later)}
+            self.assertEqual([rows["validator-new"]["access_state_reason"], rows["validator-new"]["first_active_date"]],
+                             ["day0_ramp_in", "2026-11-02"])
+        finally:
+            VALIDATORS.remove("validator-new")
+            del KEYS["validator-new"]
+
+    def test_a_block_is_scored_against_the_validators_of_its_own_certificate(self) -> None:
+        chain = Chain()
+        source = InProcessSource(chain, False)
+        now = dt.datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
+        state = observer.poll(None, [source], "l1-testnet", now)
+        chain.add_block(set(VALIDATORS), set())
+        # This block's certificate was drawn from three validators only.
+        chain.blocks[-1]["consensus_v2_commit"]["precommit_qc"]["validators"] = VALIDATORS[:3]
+        chain.add_block(set(VALIDATORS), set())
+        state = observer.poll(state, [source], "l1-testnet", now + STEP)
+        blocks = state["days"]["2026-11-02"]["blocks"]
+        self.assertEqual(blocks["2"]["registry"], sorted(VALIDATORS[:3]))
+        self.assertEqual(blocks["2"]["credited"], sorted(VALIDATORS[:3]))
+        self.assertEqual(blocks["3"]["registry"], sorted(VALIDATORS))
+
+    def test_a_validator_long_gone_from_the_registry_is_dropped(self) -> None:
+        chain = Chain()
+        source = InProcessSource(chain, False)
+        now = dt.datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
+        state = observer.poll(None, [source], "l1-testnet", now)
+        observer.build_rows(state, now)
+        gone = VALIDATORS.pop()
+        try:
+            seen = []
+            for days in (1, 13, 16, 30, 32):
+                at = now + dt.timedelta(days=days)
+                # Each read starts from a recent one, so only the registry differs.
+                state["last_poll_at"] = observer.contract.format_utc(at - STEP)
+                state = observer.poll(json.loads(json.dumps(state)), [source], "l1-testnet", at)
+                rows = {row["validator_id"]: row for row in observer.build_rows(state, at)}
+                seen.append(rows[gone]["access_state"] if gone in rows else None)
+            self.assertEqual(seen, ["lapsed", "lapsed", "revoked", "revoked", None])
+            self.assertNotIn(gone, state["validators"])
+        finally:
+            VALIDATORS.append(gone)
 
     def test_an_observer_writes_nothing_into_a_validator_data_directory(self) -> None:
         import tempfile
