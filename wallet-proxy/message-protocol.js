@@ -18,6 +18,8 @@ const MAX_PAYMENT_MEMO_TOTAL_BYTES = 512;
 // Envelope & Manifest payload caps
 const MAX_SINGLE_ENVELOPE_BYTES = 1_048_576; // 1 MiB
 const MAX_MANIFEST_PLAINTEXT_BYTES = 16_777_216; // 16 MiB
+const MAX_ENVELOPE_RECIPIENTS = 64;
+const DEFAULT_MAX_SEALED_SCAN_WRAPS = 16;
 
 // Normative post-quantum byte sizes
 const ML_DSA_65_PUBKEY_BYTES = 1952;
@@ -494,6 +496,9 @@ function computeAadContext(chainId, headerBytes, chunkIndex = 0) {
   if (typeof chainId !== 'string' || chainId.length === 0) {
     throw new MessageProtocolError('chainId is required for AAD context');
   }
+  if (chainId.includes('\0')) {
+    throw new MessageProtocolError('chainId must not contain NUL bytes');
+  }
   return sha256(
     Buffer.concat([
       DOMAIN_MESSAGE_AAD,
@@ -839,7 +844,13 @@ function decodeXWingEncryptionHeader(bytes, opts = {}) {
     else if (f.fieldNum === 3) { expectWt(f, 2); out.aad_context = Buffer.from(f.value); }
     else if (f.fieldNum === 4) { expectWt(f, 0); out.chunk_index = Number(f.value); }
     else if (f.fieldNum === 5) { expectWt(f, 2); out.kdf_info = f.value.toString('utf8'); }
-    else if (f.fieldNum === 6) { expectWt(f, 2); out.recipients.push(decodeRecipientWrap(f.value, opts)); }
+    else if (f.fieldNum === 6) {
+      expectWt(f, 2);
+      if (out.recipients.length >= MAX_ENVELOPE_RECIPIENTS) {
+        throw new MessageProtocolError(`XWingEncryptionHeader.recipients exceeds cap of ${MAX_ENVELOPE_RECIPIENTS}`);
+      }
+      out.recipients.push(decodeRecipientWrap(f.value, opts));
+    }
     else if (f.fieldNum === 7) { expectWt(f, 2); out.cek_commitment = Buffer.from(f.value); }
   }
   return out;
@@ -1537,6 +1548,9 @@ async function sealEnvelope({
     if (!Array.isArray(recipients) || recipients.length === 0) {
       throw new MessageProtocolError('PRIVATE/SEALED requires at least one recipient');
     }
+    if (recipients.length > MAX_ENVELOPE_RECIPIENTS) {
+      throw new MessageProtocolError(`PRIVATE/SEALED recipients exceed cap of ${MAX_ENVELOPE_RECIPIENTS}`);
+    }
     const contentKey = cek ? asBuf(cek) : crypto.randomBytes(AEAD_KEY_BYTES);
     const bodyNonce = aeadNonce ? asBuf(aeadNonce) : crypto.randomBytes(AEAD_NONCE_BYTES);
     const aadContext = computeAadContext(header.chain_id, headerBytes, chunkIndex);
@@ -1636,6 +1650,7 @@ async function openEnvelope(
     xwingDecapFn = null,
     enforceCanonicalOrder = false,
     requireCekCommitment = false,
+    maxSealedWraps = DEFAULT_MAX_SEALED_SCAN_WRAPS,
   } = {}
 ) {
   const raw = asBuf(envelopeBytes);
@@ -1740,7 +1755,12 @@ async function openEnvelope(
   if (wrap) {
     sharedSecret = await decapWrap(wrap.xwing_ciphertext);
   } else if (header.visibility === Visibility.SEALED) {
-    // Blinded SEALED mode: trial-decapsulate wraps and match per-message unlinkable tag.
+    // Blinded SEALED mode: trial-decapsulate wraps up to maxSealedWraps and match per-message unlinkable tag.
+    if (maxSealedWraps !== null && maxSealedWraps !== undefined && encryptionHeader.recipients.length > maxSealedWraps) {
+      throw new MessageProtocolError(
+        `SEALED envelope wrap count ${encryptionHeader.recipients.length} exceeds scanner cap ${maxSealedWraps}`
+      );
+    }
     for (const candidate of encryptionHeader.recipients) {
       if (candidate.recipient_key_id.length !== 32) continue;
       let ss;
@@ -1913,6 +1933,8 @@ module.exports = {
   CIDV1_RAW_PREFIX,
   CIDV1_RAW_BYTES,
   CHAIN_HASH_BYTES,
+  MAX_ENVELOPE_RECIPIENTS,
+  DEFAULT_MAX_SEALED_SCAN_WRAPS,
   DOMAIN_ENVELOPE_SIGN,
   DOMAIN_MESSAGE_AAD,
   DOMAIN_XWING_WRAP_INFO,
