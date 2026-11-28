@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# Regression test for ops/validator-host/logrotate: rule parsing and file selection,
+# install.sh heredoc byte identity, and coexistence with systemd/postfiat-logrotate.example.
+#   scripts/test-validator-host-logrotate [TREE]   (TREE defaults to this checkout)
+# The install.sh cases run as mapped root in a private user + mount namespace
+# (unshare -rm): /etc/logrotate.d, /etc/logrotate.conf, /etc/systemd, /var/log and
+# /var/lib/logrotate are bind-mounted from a scratch tree, so the host is never touched.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ "${1:-}" = __ns ]; then
+  TREE=$2 S=$3
+  fail=0
+  umask 022 # logrotate ignores group- or world-writable rule files
+  mount --bind "$S/etc/logrotate.d" /etc/logrotate.d
+  mount --bind "$S/etc/logrotate.conf" /etc/logrotate.conf
+  mount --bind "$S/etc/systemd" /etc/systemd
+  mount --bind "$S/etc/passwd" /etc/passwd
+  mount --bind "$S/etc/group" /etc/group
+  mount --bind "$S/var/log" /var/log
+  mount --bind "$S/var/lib/logrotate" /var/lib/logrotate
+  systemctl() { echo "systemctl $*" >>"$S/calls"; [ "$1" != is-active ] || echo active; }
+  journalctl() { echo "journalctl $*" >>"$S/calls"; }
+  export -f systemctl journalctl
+  export S
+
+  # name -> configuration installed before install.sh runs
+  fleet_rule() { # the 2026-09-29/30 fleet rules as deployed, still with delaycompress
+    sed 's/^    copytruncate$/    delaycompress\n    copytruncate/' "$TREE/ops/validator-host/logrotate/$1" >"/etc/logrotate.d/$1"
+  }
+  setup() {
+    find /etc/logrotate.d -mindepth 1 -delete
+    rm -rf /var/log/postfiat /etc/systemd/journald.conf.d "$S/calls"
+    mkdir -p /var/log/postfiat/validator-0 /var/log/postfiat/write-edge
+    for f in stdout.log stderr.log rpc-stdout.log rpc-stderr.log rpc-events.ndjson transport-validator-events.ndjson; do
+      echo x >"/var/log/postfiat/validator-0/$f"
+    done
+    echo x >/var/log/postfiat/node.log
+    echo x >/var/log/postfiat/write-edge/rpc-events.ndjson
+    case $1 in
+      fleet) fleet_rule postfiat-rpc-events; fleet_rule postfiat-validator-events ;;
+      generic) cp "$TREE/systemd/postfiat-logrotate.example" /etc/logrotate.d/postfiat ;;
+      generic+fleet)
+        cp "$TREE/systemd/postfiat-logrotate.example" /etc/logrotate.d/postfiat
+        fleet_rule postfiat-rpc-events; fleet_rule postfiat-validator-events ;;
+    esac
+  }
+  snapshot() { (cd /etc/logrotate.d && find . -type f -print0 | sort -z | xargs -0r sha256sum); }
+  full_dry_run() { # logrotate.timer's view: every rule file at once
+    local rc=0
+    logrotate --debug --state "$S/dry-state" /etc/logrotate.conf >/dev/null 2>"$S/full.txt" || rc=$?
+    grep '^error:' "$S/full.txt" >"$S/full-errors.txt" || true
+    if [ "$rc" -ne 0 ] || [ -s "$S/full-errors.txt" ]; then
+      echo "  full-config dry run rc=$rc:"; sed 's/^/    /' "$S/full-errors.txt"; return 1
+    fi
+    echo "  full-config dry run rc=0, 0 error lines"
+  }
+  check() { # description command...
+    local d=$1; shift
+    if "$@"; then echo "  ok: $d"; else echo "  FAIL: $d"; fail=1; fi
+  }
+  is() { [ "$1" = "$2" ]; }
+  same_nonempty() { [ -s "$1" ] && cmp -s "$1" "$2"; }
+
+  echo "case fleet: validator-host event rules already installed (as on the six validators), no generic rule"
+  setup fleet
+  rc=0; bash "$TREE/ops/validator-host/logrotate/install.sh" 0 >"$S/install.out" 2>&1 || rc=$?
+  sed 's/^/  | /' "$S/install.out"
+  check "install.sh rc=$rc" is "$rc" 0
+  check "installed postfiat-service-output identical to the repo file" cmp -s /etc/logrotate.d/postfiat-service-output "$TREE/ops/validator-host/logrotate/postfiat-service-output"
+  for r in postfiat-rpc-events postfiat-validator-events; do
+    check "$r: delaycompress removed, identical to the repo file" cmp -s "/etc/logrotate.d/$r" "$TREE/ops/validator-host/logrotate/$r"
+  done
+  check "full configuration conflict-free" full_dry_run
+
+  for c in generic generic+fleet; do
+    if [ "$c" = generic ]; then
+      echo "case generic: systemd/postfiat-logrotate.example installed as /etc/logrotate.d/postfiat (runbook)"
+    else
+      echo "case generic+fleet: the example and the fleet event rules both installed (already conflicting)"
+    fi
+    setup "$c"
+    before=$(snapshot)
+    full_dry_run >/dev/null || true
+    cp "$S/full-errors.txt" "$S/errors-before.txt"
+    rc=0; bash "$TREE/ops/validator-host/logrotate/install.sh" 0 >"$S/install.out" 2>&1 || rc=$?
+    sed 's/^/  | /' "$S/install.out"
+    after=$(snapshot)
+    if [ "$c" = generic ]; then
+      check "full configuration conflict-free after install.sh" full_dry_run
+    else
+      full_dry_run || true
+      check "pre-existing conflict reported, install.sh added no error ($(wc -l <"$S/errors-before.txt") error lines before)" \
+        same_nonempty "$S/errors-before.txt" "$S/full-errors.txt"
+    fi
+    check "install.sh refuses (rc=$rc, want 1)" is "$rc" 1
+    check "/etc/logrotate.d unchanged by install.sh" is "$before" "$after"
+    check "install.sh says why it refused" grep -q '^refusing:' "$S/install.out"
+  done
+  exit "$fail"
+fi
+
+TREE="$(cd "${1:-$ROOT}" && pwd)"
+D="$TREE/ops/validator-host/logrotate"
+for tool in logrotate unshare; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }
+done
+S="$(mktemp -d)"
+trap 'rm -rf "$S"' EXIT
+fail=0
+check() { # description command...
+  local d=$1; shift
+  if "$@"; then echo "  ok: $d"; else echo "  FAIL: $d"; fail=1; fi
+}
+
+echo "tree: $(git -C "$TREE" rev-parse HEAD 2>/dev/null || echo unknown) $(logrotate --version 2>&1 | head -1)"
+
+echo "heredoc: install.sh writes postfiat-service-output byte for byte"
+awk '/<<.C.$/{on=1; next} on && /^C$/{exit} on' "$D/install.sh" >"$S/heredoc"
+check "heredoc identical to postfiat-service-output ($(wc -l <"$S/heredoc") lines)" cmp -s "$S/heredoc" "$D/postfiat-service-output"
+
+echo "rules: each rule file parses alone and selects only its own files"
+mkdir -p "$S/log/validator-0" "$S/log/validator-12" "$S/log/write-edge"
+for v in validator-0 validator-12; do
+  for f in stdout.log stderr.log rpc-stdout.log rpc-stderr.log rpc-events.ndjson transport-validator-events.ndjson other.log stdout.log.1; do
+    echo x >"$S/log/$v/$f"
+  done
+done
+echo x >"$S/log/node.log"
+echo x >"$S/log/write-edge/rpc-events.ndjson"
+selects() { # rule size files...
+  local rule=$1 size=$2 rc=0 want got
+  shift 2
+  sed "s#/var/log/postfiat#$S/log#g" "$D/$rule" >"$S/$rule"
+  logrotate --debug --state "$S/state-$rule" "$S/$rule" >"$S/$rule.out" 2>&1 || rc=$?
+  got=$(sed -n "s#^considering log $S/log/##p" "$S/$rule.out" | sort)
+  want=$(for v in validator-0 validator-12; do for f in "$@"; do echo "$v/$f"; done; done | sort)
+  if [ "$rc" -ne 0 ] || grep -q '^error:' "$S/$rule.out" ||
+    ! grep -q " $size bytes (3 rotations)$" "$S/$rule.out" || [ "$got" != "$want" ]; then
+    echo "  $rule: rc=$rc, selected: $(echo "$got" | tr '\n' ' ')"
+    grep '^error:' "$S/$rule.out" | sed 's/^/    /'
+    return 1
+  fi
+}
+check "postfiat-service-output: size 100M, rotate 3, 4 service logs per validator" selects postfiat-service-output 104857600 stdout.log stderr.log rpc-stdout.log rpc-stderr.log
+check "postfiat-rpc-events: size 512M, rotate 3, rpc-events.ndjson per validator" selects postfiat-rpc-events 536870912 rpc-events.ndjson
+check "postfiat-validator-events: size 2G, rotate 3, transport-validator-events.ndjson per validator" selects postfiat-validator-events 2147483648 transport-validator-events.ndjson
+lacks() { ! grep -q "$1" "$2"; }
+for r in postfiat-service-output postfiat-rpc-events postfiat-validator-events; do
+  check "$r: compress" grep -qx '    compress' "$D/$r"
+  check "$r: copytruncate" grep -qx '    copytruncate' "$D/$r"
+  check "$r: no delaycompress" lacks delaycompress "$D/$r"
+done
+
+echo "coexistence: install.sh against a scratch /etc and /var/log (private namespace)"
+mkdir -p "$S/etc/logrotate.d" "$S/etc/systemd" "$S/var/log" "$S/var/lib/logrotate"
+umask 022
+printf 'weekly\nrotate 4\ninclude /etc/logrotate.d\n' >"$S/etc/logrotate.conf"
+# The example rotates as postfiat:postfiat; give that user and group to mapped root if absent.
+cp /etc/passwd "$S/etc/passwd"; cp /etc/group "$S/etc/group"
+getent passwd postfiat >/dev/null || echo 'postfiat:x:0:0::/nonexistent:/usr/sbin/nologin' >>"$S/etc/passwd"
+getent group postfiat >/dev/null || echo 'postfiat:x:0:' >>"$S/etc/group"
+check "install.sh cases" unshare -rm "$BASH" "${BASH_SOURCE[0]}" __ns "$TREE" "$S"
+
+if [ "$fail" -eq 0 ]; then echo "RESULT: PASS"; else echo "RESULT: FAIL"; fi
+exit "$fail"

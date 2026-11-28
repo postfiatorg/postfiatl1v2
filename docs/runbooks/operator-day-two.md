@@ -159,6 +159,15 @@ scripts/test-postfiat-logrotate
 sudo logrotate --debug /etc/logrotate.d/postfiat
 ```
 
+The validator-host rules in `ops/validator-host/logrotate/` (size caps per
+service and event log) are an alternative to this file, not an addition: both
+match `/var/log/postfiat/validator-N/` logs, and logrotate skips any rule file
+that lists a log a second time. Install one of the two and check the whole
+configuration, as `logrotate.timer` reads it, with
+`sudo logrotate --debug /etc/logrotate.conf`; `install.sh` runs that check and
+refuses without changing anything if another rule already owns the files.
+`scripts/test-validator-host-logrotate` tests the rules and `install.sh`.
+
 `copytruncate` is required by the current append-file services because they do
 not yet expose a coordinated reopen signal. Operators must account for its
 small copy/truncate race in incident evidence; a structured logging sink with
