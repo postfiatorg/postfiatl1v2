@@ -1,0 +1,10 @@
+export REL=train-a-r9
+export OLD=train-a-r8
+export STAGE_ROOT=/home/postfiat/var/$REL
+export EVID=$STAGE_ROOT/evidence
+B=$STAGE_ROOT/bin/postfiat-node
+S=$STAGE_ROOT/stage
+C=$S/rootfs/etc/postfiat/releases/$REL
+U=$S/rootfs/etc/systemd/system
+OC=/home/postfiat/var/$OLD/stage/rootfs/etc/postfiat/releases/$OLD
+OU=/home/postfiat/var/$OLD/stage/rootfs/etc/systemd/system
