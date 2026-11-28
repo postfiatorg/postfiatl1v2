@@ -283,6 +283,15 @@ pub struct UpgradeReportV1 {
     pub rolled_back: bool,
     /// Units that are not running at exit. Empty unless the exit code is 6.
     pub units_stopped: Vec<String>,
+    /// The height the node had reached when the rollback began, if it answered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height_before_rollback: Option<u64>,
+    /// The height of the restored node.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height_after_rollback: Option<u64>,
+    /// The restored node is behind the chain and has to be caught up by hand.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub catch_up_needed: bool,
 }
 
 /// What runs now, written after a successful upgrade.
@@ -366,6 +375,10 @@ pub struct UpgradeOptions {
     /// Where the manifest of the installed release is kept. It is replaced
     /// together with the binary and put back by a rollback. `None` leaves it alone.
     pub installed_manifest_file: Option<PathBuf>,
+    /// An RPC server of another node of the same chain (`host`, `port`). After
+    /// a rollback the restored node fetches from it the blocks that were made
+    /// while the upgrade was tried, before it is started again.
+    pub catch_up_source: Option<(String, u16)>,
 }
 
 #[derive(Debug, Clone)]
@@ -389,6 +402,9 @@ pub trait UpgradeSystemHooks {
     ) -> Result<UpgradeNodeStatusProbe, String>;
     fn free_disk_bytes(&self, path: &Path) -> Result<u64, String>;
     fn unit_is_active(&self, unit: &str) -> bool;
+    /// Fetches and verifies the blocks the stopped node at `data_dir` is
+    /// missing, from the RPC server at `source`, using `binary`.
+    fn catch_up(&self, binary: &Path, data_dir: &Path, source: (&str, u16)) -> Result<(), String>;
 }
 
 pub struct LiveUpgradeSystemHooks;
@@ -421,6 +437,77 @@ impl UpgradeSystemHooks for LiveUpgradeSystemHooks {
             .status()
             .is_ok_and(|status| status.success())
     }
+
+    fn catch_up(&self, binary: &Path, data_dir: &Path, source: (&str, u16)) -> Result<(), String> {
+        run_catch_up_as_data_owner(binary, data_dir, source)
+    }
+}
+
+/// One `rpc-catch-up` run applies at most this many blocks.
+const ROLLBACK_CATCH_UP_BLOCKS_PER_RUN: u64 = 64;
+/// A rollback is behind by the few blocks made during the attempt; more runs
+/// than this means something else is wrong and the operator should look.
+const ROLLBACK_CATCH_UP_MAX_RUNS: usize = 16;
+
+/// Runs `rpc-catch-up` with the given binary until the node at `data_dir` has
+/// every block the source has. Every block is checked against its
+/// certificate. `upgrade` runs as root and the node does not: the command runs
+/// as the owner of the data directory, so the files it writes stay readable
+/// to the node.
+fn run_catch_up_as_data_owner(
+    binary: &Path,
+    data_dir: &Path,
+    source: (&str, u16),
+) -> Result<(), String> {
+    use std::os::unix::fs::MetadataExt;
+    use std::os::unix::process::CommandExt;
+    let owner = fs::metadata(data_dir)
+        .map_err(|error| format!("cannot read the owner of {}: {error}", data_dir.display()))?;
+    let running_as_root = unsafe { libc::geteuid() } == 0;
+    for _ in 0..ROLLBACK_CATCH_UP_MAX_RUNS {
+        let mut command = Command::new(binary);
+        command
+            .arg("rpc-catch-up")
+            .arg("--data-dir")
+            .arg(data_dir)
+            .args(["--source-host", source.0])
+            .args(["--source-rpc-port", &source.1.to_string()])
+            .args([
+                "--max-blocks",
+                &ROLLBACK_CATCH_UP_BLOCKS_PER_RUN.to_string(),
+            ])
+            .args(["--timeout-ms", "15000"]);
+        if running_as_root && owner.uid() != 0 {
+            command.uid(owner.uid()).gid(owner.gid());
+        }
+        let output = command
+            .output()
+            .map_err(|error| format!("cannot run {} rpc-catch-up: {error}", binary.display()))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(stderr
+                .lines()
+                .find(|line| line.starts_with("error"))
+                .or_else(|| stderr.lines().next())
+                .unwrap_or("rpc-catch-up failed without a message")
+                .to_string());
+        }
+        let answer: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .map_err(|error| format!("rpc-catch-up answer is not JSON: {error}"))?;
+        let height = |field: &str| answer.get(field).and_then(serde_json::Value::as_u64);
+        match (height("local_height_after"), height("source_height")) {
+            (Some(local), Some(source)) if local >= source => return Ok(()),
+            (Some(_), Some(_)) if height("applied_count").unwrap_or(0) > 0 => {}
+            (local, source) => {
+                return Err(format!(
+                    "rpc-catch-up stopped short: local height {local:?}, source height {source:?}"
+                ));
+            }
+        }
+    }
+    Err(format!(
+        "still behind the source after {ROLLBACK_CATCH_UP_MAX_RUNS} runs of {ROLLBACK_CATCH_UP_BLOCKS_PER_RUN} blocks"
+    ))
 }
 
 fn stopped_units(hooks: &dyn UpgradeSystemHooks, units: &[String]) -> Vec<String> {
@@ -2030,6 +2117,9 @@ fn base_report(check_only: bool) -> UpgradeReportV1 {
         backup_path: None,
         rolled_back: false,
         units_stopped: Vec::new(),
+        height_before_rollback: None,
+        height_after_rollback: None,
+        catch_up_needed: false,
     }
 }
 
@@ -2632,6 +2722,10 @@ pub fn execute_upgrade(
                 options.rpc_port,
                 options.health_timeout_ms,
             ),
+            options
+                .catch_up_source
+                .as_ref()
+                .map(|(host, port)| (host.as_str(), *port)),
             &journal_path,
             cause,
             report,
@@ -2832,6 +2926,10 @@ fn recover_interrupted_upgrade(
                     options.rpc_port,
                     options.health_timeout_ms,
                 ),
+                options
+                    .catch_up_source
+                    .as_ref()
+                    .map(|(host, port)| (host.as_str(), *port)),
                 &journal_path,
                 &cause,
                 &mut report,
@@ -2917,6 +3015,9 @@ fn wait_for_node_after_start(
     }
 }
 
+/// What an operator does when the restored node is behind the chain.
+const ROLLBACK_CATCH_UP_BY_HAND: &str = "this node is BEHIND the chain and does not catch up by itself. It does not vote, and the chain waits when its turn to propose comes. Stop the units, run `postfiat-node rpc-catch-up --data-dir <data dir> --source-host <another node> --source-rpc-port <its RPC port>` as the node's user, then start the units";
+
 #[allow(clippy::too_many_arguments)]
 fn rollback_and_verify(
     hooks: &dyn UpgradeSystemHooks,
@@ -2929,10 +3030,17 @@ fn rollback_and_verify(
     excludes: &[PathBuf],
     installed_manifest: Option<&Path>,
     rpc: (&str, u16, u64),
+    catch_up_source: Option<(&str, u16)>,
     journal_path: &Path,
     cause: &str,
     report: &mut UpgradeReportV1,
 ) -> UpgradeReportV1 {
+    // How far the node got while the upgrade was tried. The restore below
+    // takes the chain state back to the backup; these blocks are then missing.
+    report.height_before_rollback = hooks
+        .probe_node(rpc.0, rpc.1, 2_000)
+        .ok()
+        .map(|probe| probe.block_height);
     // Nothing is replaced under a running unit. A stop that did not take
     // leaves the binary and the data directory exactly as they are.
     let stop = hooks.stop_units(service_units);
@@ -2984,6 +3092,11 @@ fn rollback_and_verify(
         ));
         return report.clone();
     }
+    // The restored chain state ends where the backup was taken. A validator
+    // does not fetch the blocks made since by itself: it does not vote on a
+    // block whose parent it lacks, and when its turn to propose comes it
+    // cannot propose. With a source, fetch them now, while the units are down.
+    let catch_up = catch_up_source.map(|source| hooks.catch_up(binary_path, data_dir, source));
     let health = hooks
         .start_units(service_units)
         .and_then(|()| wait_for_node_after_start(hooks, service_units, rpc));
@@ -2996,8 +3109,36 @@ fn rollback_and_verify(
             report.exit_code = UPGRADE_EXIT_ROLLED_BACK;
             report.error_code = Some("rolled_back".to_string());
             report.rolled_back = true;
+            report.height_after_rollback = hooks
+                .probe_node(rpc.0, rpc.1, 2_000)
+                .ok()
+                .map(|probe| probe.block_height);
+            let behind = match (report.height_before_rollback, report.height_after_rollback) {
+                (Some(before), Some(after)) => before > after,
+                _ => false,
+            };
+            let caught_up = matches!(catch_up, Some(Ok(())));
+            report.catch_up_needed = !caught_up && (behind || catch_up.is_some());
+            let heights = match (report.height_after_rollback, report.height_before_rollback) {
+                (Some(after), Some(before)) if behind => {
+                    format!("at height {after}; it had reached {before} during the attempt")
+                }
+                (Some(after), _) => format!("at height {after}"),
+                _ => "running".to_string(),
+            };
+            let next = match &catch_up {
+                Some(Ok(())) => {
+                    "; the blocks made during the attempt were fetched from the catch-up source"
+                        .to_string()
+                }
+                Some(Err(error)) => format!(
+                    "; CATCH-UP FAILED ({error}): {ROLLBACK_CATCH_UP_BY_HAND}"
+                ),
+                None if behind => format!("; {ROLLBACK_CATCH_UP_BY_HAND}"),
+                None => "; if other nodes made blocks during the attempt, this node lacks them: compare its height with the chain".to_string(),
+            };
             report.message = Some(format!(
-                "upgrade failed ({cause}); the prior binary and chain state are back, the vote record was carried forward, signer-guard untouched"
+                "upgrade failed ({cause}); the prior binary and chain state are back ({heights}), the vote record was carried forward, signer-guard untouched{next}"
             ));
         }
         other => {
@@ -3072,6 +3213,9 @@ pub fn format_upgrade_human_report(report: &UpgradeReportV1) -> String {
             report.units_stopped.join(", ")
         ));
     }
+    if report.catch_up_needed {
+        lines.push("  NODE IS BEHIND THE CHAIN: catch it up (see the message)".to_string());
+    }
     if let Some(code) = &report.error_code {
         lines.push(format!("  error_code: {code}"));
     }
@@ -3131,6 +3275,12 @@ mod tests {
         /// as a real node does while it opens its port.
         probes_before_up: usize,
         refused_probes: Mutex<usize>,
+        /// The new binary runs and answers, on another revision than the
+        /// manifest names.
+        new_binary_wrong_revision: bool,
+        /// The catch-up source cannot be reached.
+        catch_up_fails: bool,
+        caught_up: Mutex<bool>,
         /// After this many stops, a stop fails and the units keep running.
         stops_that_work: Option<usize>,
         /// The new binary's start damages the chain state of the backup found here.
@@ -3154,6 +3304,9 @@ mod tests {
                 damage_backup_in: None,
                 probes_before_up: 0,
                 refused_probes: Mutex::new(0),
+                new_binary_wrong_revision: false,
+                catch_up_fails: false,
+                caught_up: Mutex::new(false),
                 running: Mutex::new(true),
                 log: Mutex::new(Vec::new()),
             }
@@ -3208,6 +3361,25 @@ mod tests {
             }
             Ok(())
         }
+        fn catch_up(
+            &self,
+            _binary: &Path,
+            _data_dir: &Path,
+            source: (&str, u16),
+        ) -> Result<(), String> {
+            // Only ever run on a stopped node with the prior binary back.
+            assert!(!*self.running.lock().expect("running"));
+            assert!(!self.new_binary_installed());
+            self.log
+                .lock()
+                .expect("log")
+                .push(format!("catch-up {}:{}", source.0, source.1));
+            if self.catch_up_fails {
+                return Err("source 10.0.0.9:27650 refused the connection".to_string());
+            }
+            *self.caught_up.lock().expect("caught up") = true;
+            Ok(())
+        }
         fn probe_node(
             &self,
             _host: &str,
@@ -3237,8 +3409,13 @@ mod tests {
             Ok(UpgradeNodeStatusProbe {
                 chain_id: CHAIN.to_string(),
                 genesis_hash: "aa".repeat(48),
-                block_height: self.height + u64::from(new),
-                git_revision: Some(if new {
+                // The new binary takes the node one block further. A restore
+                // loses that block until a catch-up fetches it again.
+                block_height: self.height
+                    + u64::from(new || *self.caught_up.lock().expect("caught up")),
+                git_revision: Some(if new && self.new_binary_wrong_revision {
+                    "99999999".to_string()
+                } else if new {
                     TARGET_REV[..8].to_string()
                 } else {
                     "00000000".to_string()
@@ -3392,6 +3569,7 @@ mod tests {
                 json: true,
                 exclude_paths: Vec::new(),
                 installed_manifest_file: Some(root.join("etc").join("release-manifest.json")),
+                catch_up_source: None,
             };
             let mut fixture = Self {
                 _tmp: tmp,
@@ -3926,6 +4104,85 @@ mod tests {
         assert_eq!(installed.git_revision, TARGET_REV);
     }
 
+    /// Found by rehearsal on four voting validators: the new binary voted
+    /// on four blocks before its health check failed. The rollback took the
+    /// chain state back, the node stayed four blocks behind for good, and the
+    /// chain waited when its turn to propose came.
+    #[test]
+    fn a_rollback_says_when_the_node_is_left_behind_the_chain() {
+        let fixture = Fixture::new("left-behind");
+        let options = fixture.options.clone();
+        // The new binary answers, on the wrong revision: it runs and makes blocks.
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_wrong_revision = true;
+        let report = execute_upgrade(&options, &hooks);
+        assert_eq!(
+            (report.status.as_str(), report.exit_code),
+            ("rolled_back", UPGRADE_EXIT_ROLLED_BACK)
+        );
+        assert_eq!(
+            (report.height_before_rollback, report.height_after_rollback),
+            (Some(432_001), Some(432_000))
+        );
+        assert!(report.catch_up_needed);
+        let message = report.message.unwrap();
+        assert!(
+            message.contains("at height 432000; it had reached 432001"),
+            "{message}"
+        );
+        assert!(
+            message.contains("BEHIND the chain") && message.contains("rpc-catch-up"),
+            "{message}"
+        );
+        let fixture = Fixture::new("left-behind-human");
+        let mut again = fixture.hooks();
+        again.new_binary_wrong_revision = true;
+        assert!(
+            format_upgrade_human_report(&execute_upgrade(&fixture.options, &again))
+                .contains("NODE IS BEHIND THE CHAIN")
+        );
+    }
+
+    #[test]
+    fn a_rollback_with_a_catch_up_source_fetches_the_missing_blocks_before_the_start() {
+        let fixture = Fixture::new("catch-up");
+        let mut options = fixture.options.clone();
+        options.catch_up_source = Some(("10.0.0.9".to_string(), 27650));
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_wrong_revision = true;
+        let report = execute_upgrade(&options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK);
+        assert_eq!(
+            (report.height_before_rollback, report.height_after_rollback),
+            (Some(432_001), Some(432_001))
+        );
+        assert!(!report.catch_up_needed, "{:?}", report.message);
+        // stop, start (new binary), stop, catch-up, start.
+        let log = hooks.log();
+        assert_eq!(
+            log[log.len() - 3..],
+            ["stop", "catch-up 10.0.0.9:27650", "start"].map(String::from)
+        );
+
+        // A source that cannot be reached does not stop the rollback: the node
+        // is started on the prior release and the report says it is behind.
+        let fixture = Fixture::new("catch-up-fails");
+        let mut options = fixture.options.clone();
+        options.catch_up_source = Some(("10.0.0.9".to_string(), 27650));
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_wrong_revision = true;
+        hooks.catch_up_fails = true;
+        let report = execute_upgrade(&options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK);
+        assert!(report.catch_up_needed);
+        let message = report.message.unwrap();
+        assert!(
+            message.contains("CATCH-UP FAILED (source 10.0.0.9:27650 refused the connection)"),
+            "{message}"
+        );
+        assert!(hooks.unit_is_active("postfiat-validator-0.service"));
+    }
+
     #[test]
     fn a_failed_rollback_names_the_stopped_units_and_keeps_the_journal() {
         let fixture = Fixture::new("rollback-failed");
@@ -4102,6 +4359,14 @@ mod tests {
             }
             fn unit_is_active(&self, unit: &str) -> bool {
                 self.0.unit_is_active(unit)
+            }
+            fn catch_up(
+                &self,
+                binary: &Path,
+                data_dir: &Path,
+                source: (&str, u16),
+            ) -> Result<(), String> {
+                self.0.catch_up(binary, data_dir, source)
             }
         }
         let hooks = OtherChain(other.hooks());

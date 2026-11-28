@@ -906,6 +906,22 @@ fn run_upgrade_command(flags: &[String]) -> i32 {
             .collect(),
     };
 
+    // `--catch-up-source HOST:PORT`: where a rolled-back node fetches the
+    // blocks that were made while the upgrade was tried.
+    let catch_up_source = match flag_value(flags, "--catch-up-source") {
+        None | Some("" | "none") => None,
+        Some(value) => match value
+            .rsplit_once(':')
+            .and_then(|(host, port)| Some((host, port.parse::<u16>().ok()?)))
+        {
+            Some((host, port)) if !host.is_empty() && port != 0 => Some((host.to_string(), port)),
+            _ => {
+                eprintln!("error: --catch-up-source must be HOST:PORT");
+                return 2;
+            }
+        },
+    };
+
     let options = UpgradeOptions {
         check_only: flag_present(flags, "--check"),
         manifest_file: flag_value(flags, "--manifest-file").map(PathBuf::from),
@@ -932,6 +948,7 @@ fn run_upgrade_command(flags: &[String]) -> i32 {
             Some(path) => Some(PathBuf::from(path)),
             None => Some(PathBuf::from(DEFAULT_INSTALLED_MANIFEST_FILE)),
         },
+        catch_up_source,
         rpc_host: flag_value(flags, "--rpc-host")
             .unwrap_or("127.0.0.1")
             .to_string(),

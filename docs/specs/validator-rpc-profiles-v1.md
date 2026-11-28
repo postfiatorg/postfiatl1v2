@@ -194,6 +194,7 @@ postfiat-node upgrade [OPTIONS]
 | `--keyset-file PATH` | `/etc/postfiat/release-keyset.json` | Pinned 2-of-3 `postfiat.release_keyset.v1` trust file. |
 | `--data-dir PATH` | `/var/lib/postfiat/validator-0` | Node data directory. Its chain state is backed up; its vote record and key files are not (step 6). |
 | `--installed-manifest-file PATH` | `/etc/postfiat/release-manifest.json` | The manifest of the installed release, which the packaged units check the binary against before every start. `upgrade` replaces it together with the binary and a rollback puts the prior one back. `none` leaves the file alone. |
+| `--catch-up-source HOST:PORT` | none | An RPC server of another node of the same chain. After a rollback the restored node fetches from it the blocks made during the attempt, before it is started again (step 9). A validator should always pass it. |
 | `--exclude-path NAME` | none | Further entry of `--data-dir` to leave out of the backup and the rollback. Repeatable. |
 | `--rotate-keyset FILE` | none | Apply a `postfiat.release_keyset_rotation.v1` and exit (2.2.1). |
 | `--signer-guard-dir PATH` | `/var/lib/postfiat/signer-guard` | Immutable double-sign guard directory. Verified disjoint from `--data-dir` and `--backup-dir`; NEVER copied, backed up, or rolled back. |
@@ -230,6 +231,7 @@ postfiat-node upgrade [OPTIONS]
    - Restore the prior binary, the prior installed release manifest, and the backed-up chain state, with owner, group and mode as they were;
    - **Leave every signing record of step 6 as the new binary left it.** If the new binary signed anything before the health gate failed, the old binary starts with that on record and cannot sign a different message for the same slot. A signing record is only ever carried forward. If the old binary cannot read a record the new one wrote, it refuses to start and the exit is `6`: a stopped validator, never one that signs twice;
    - **Only after a complete restore**, restart `--service-units` and run `rpc-probe`. After a failed or partial restore the units stay stopped, the journal stays, and the exit is `6`: a validator is never started on a partly restored data directory;
+   - **The restored node is behind by the blocks made during the attempt, and a validator does not fetch them by itself.** It does not vote on a block whose parent it lacks, and the chain waits when its turn to propose comes. With `--catch-up-source HOST:PORT` the rollback fetches them after the restore and before the start: it runs the restored binary's `rpc-catch-up` against that RPC server as the owner of `--data-dir`, and every block is checked against its certificate. A source that fails does not stop the rollback. Without the flag, or when the source fails, the report sets `catch_up_needed`, gives both heights, and the message names the command to run by hand;
    - Exit `5` (`rolled_back`) if the prior version recovers cleanly, or `6` (`rollback_failed`).
 10. **Services are never left stopped silently.** Every exit after step 5 either has the units running or reports the stopped units by name in `units_stopped` with exit `6`.
 11. **Interrupted upgrade:** If `upgrade` starts and finds a journal, the earlier run did not finish. It refuses every other action and completes the rollback of that run from the journal (steps 9 and 10), then exits `5` or `6`. `--check` reports `interrupted_upgrade` and exits `4`.
@@ -258,6 +260,9 @@ With `--json`, one object:
 | `backup_path` | string or null | step 6 |
 | `rolled_back` | bool | step 9 ran |
 | `units_stopped` | array of string | units not running at exit; empty unless exit `6` |
+| `height_before_rollback` | integer, optional | the height the node had reached when the rollback began, if it answered |
+| `height_after_rollback` | integer, optional | the height of the restored node |
+| `catch_up_needed` | bool, present when true | the restored node is behind the chain and has to be caught up by hand (step 9) |
 
 ### 3.3 Exit Codes
 
