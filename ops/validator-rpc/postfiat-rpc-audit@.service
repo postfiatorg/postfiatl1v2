@@ -14,8 +14,8 @@ Group=postfiat-rpc
 ExecStart=/usr/local/bin/postfiat-node rpc-replica-audit \
   --data-dir /var/lib/postfiat-rpc/replica
 TimeoutStartSec=3600
-CPUQuota=50%
-CPUWeight=20
+CPUQuota=200%
+CPUWeight=25
 MemoryHigh=3G
 MemoryMax=4G
 IOWeight=50
