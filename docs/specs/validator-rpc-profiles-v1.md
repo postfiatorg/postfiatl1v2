@@ -193,6 +193,7 @@ postfiat-node upgrade [OPTIONS]
 | `--channel-url URL` | `https://releases.postfiat.org/latest/release-manifest.json` | Fixed HTTPS release channel URL (TLS verified, no untrusted redirects, 1 MiB max manifest body). |
 | `--keyset-file PATH` | `/etc/postfiat/release-keyset.json` | Pinned 2-of-3 `postfiat.release_keyset.v1` trust file. |
 | `--data-dir PATH` | `/var/lib/postfiat/validator-0` | Node data directory. Its chain state is backed up; its vote record and key files are not (step 6). |
+| `--installed-manifest-file PATH` | `/etc/postfiat/release-manifest.json` | The manifest of the installed release, which the packaged units check the binary against before every start. `upgrade` replaces it together with the binary and a rollback puts the prior one back. `none` leaves the file alone. |
 | `--exclude-path NAME` | none | Further entry of `--data-dir` to leave out of the backup and the rollback. Repeatable. |
 | `--rotate-keyset FILE` | none | Apply a `postfiat.release_keyset_rotation.v1` and exit (2.2.1). |
 | `--signer-guard-dir PATH` | `/var/lib/postfiat/signer-guard` | Immutable double-sign guard directory. Verified disjoint from `--data-dir` and `--backup-dir`; NEVER copied, backed up, or rolled back. |
@@ -217,7 +218,7 @@ postfiat-node upgrade [OPTIONS]
    - every key file, whatever its name: `validator_keys.json`, and any file of at most 1 MiB that names a private key field (`private_key_hex`, `private_key`, `secret_key_hex`, `secret_key`). The data directory is scanned before the backup; the files found are listed in the journal and in `backup-manifest.json`. If the scan cannot read a file, `upgrade` exits `4` (`key_file_scan_failed`) before any service is stopped;
    - `runtime/`, `readiness/`, sockets, and every `--exclude-path`;
    - `--signer-guard-dir`, which is outside the data directory by step 2.
-7. **Atomic binary swap:** Write staged binary to `<binary-path>.staging.<pid>`, `chmod 0755`, `fsync`, atomically `rename(2)` onto `<binary-path>`, and `fsync` parent directory.
+7. **Atomic binary swap:** Write staged binary to `<binary-path>.staging.<pid>`, `chmod 0755`, `fsync`, atomically `rename(2)` onto `<binary-path>`, and `fsync` parent directory. Then write the verified manifest to `--installed-manifest-file` the same way (mode `0644`). The units verify the binary against that file before they start (section 4), so the two always change together; the prior manifest was saved with the backup in step 6.
 8. **Start and post-upgrade health gate:** Start `--service-units` and verify within `--health-timeout-ms`:
    - `rpc-probe` returns `ok: true`;
    - the revision the node reports is a prefix of manifest `git_revision` and at least 8 hex characters long (the node reports a short revision);
@@ -226,7 +227,7 @@ postfiat-node upgrade [OPTIONS]
 9. **Rollback on failure:** If any check in Step 8 fails:
    - Stop `--service-units` and confirm that none is still active. If one is, nothing is replaced and the exit is `6`;
    - Check the backup against its `backup-manifest.json` (the prior binary and every file by size and SHA-256, and no file the manifest does not name). A backup that does not match replaces nothing;
-   - Restore the prior binary and the backed-up chain state, with owner, group and mode as they were;
+   - Restore the prior binary, the prior installed release manifest, and the backed-up chain state, with owner, group and mode as they were;
    - **Leave every signing record of step 6 as the new binary left it.** If the new binary signed anything before the health gate failed, the old binary starts with that on record and cannot sign a different message for the same slot. A signing record is only ever carried forward. If the old binary cannot read a record the new one wrote, it refuses to start and the exit is `6`: a stopped validator, never one that signs twice;
    - **Only after a complete restore**, restart `--service-units` and run `rpc-probe`. After a failed or partial restore the units stay stopped, the journal stays, and the exit is `6`: a validator is never started on a partly restored data directory;
    - Exit `5` (`rolled_back`) if the prior version recovers cleanly, or `6` (`rollback_failed`).

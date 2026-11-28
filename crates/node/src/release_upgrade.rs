@@ -40,6 +40,10 @@ pub const INSTALLED_RELEASE_FILE: &str = "installed-release.json";
 pub const UPGRADE_JOURNAL_SCHEMA: &str = "postfiat-node-upgrade-journal-v1";
 pub const UPGRADE_JOURNAL_FILE: &str = "upgrade-journal.json";
 pub const UPGRADE_LOCK_FILE: &str = "upgrade.lock";
+/// The manifest of the installed release. The packaged units check the binary
+/// against it before every start, so an upgrade replaces it with the binary.
+pub const DEFAULT_INSTALLED_MANIFEST_FILE: &str = "/etc/postfiat/release-manifest.json";
+const BACKUP_PRIOR_MANIFEST_FILE: &str = "release-manifest.prev.json";
 pub const RELEASE_KEYSET_ROTATION_SCHEMA: &str = "postfiat.release_keyset_rotation.v1";
 pub const RELEASE_KEYSET_ROTATION_CONTEXT: &str = "postfiat-l1-v2/release-keyset-rotation/v1";
 /// Entries of the data directory that are never backed up and never rolled
@@ -229,6 +233,10 @@ pub struct UpgradeBackupManifestV1 {
     pub prior_binary_sha256: String,
     pub prior_binary_size_bytes: u64,
     pub data_files: Vec<UpgradeBackupFileEntry>,
+    /// SHA-256 of the installed release manifest saved with the backup, when
+    /// there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prior_release_manifest_sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -305,6 +313,9 @@ pub struct UpgradeJournalV1 {
     /// The revision of the release being installed, for the installed-release record.
     #[serde(default)]
     pub git_revision: String,
+    /// The installed release manifest this upgrade replaces, if it manages one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_manifest_file: Option<String>,
     pub data_dir: String,
     pub binary_path: String,
     pub signer_guard_dir: String,
@@ -352,6 +363,9 @@ pub struct UpgradeOptions {
     pub json: bool,
     /// Further entries of `data_dir` to leave out of the backup and the rollback.
     pub exclude_paths: Vec<String>,
+    /// Where the manifest of the installed release is kept. It is replaced
+    /// together with the binary and put back by a rollback. `None` leaves it alone.
+    pub installed_manifest_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -1673,6 +1687,7 @@ fn create_pre_upgrade_backup(
     backup_dir: &Path,
     signer_guard_dir: &Path,
     excludes: &[PathBuf],
+    installed_manifest: Option<&Path>,
 ) -> Result<(PathBuf, PathBuf, PathBuf), String> {
     let canonical_guard = resolve_normalized_path(signer_guard_dir)
         .map_err(|error| format!("resolve signer-guard-dir failed: {error}"))?;
@@ -1721,6 +1736,23 @@ fn create_pre_upgrade_backup(
         ));
     };
 
+    let prior_release_manifest_sha256 = match installed_manifest.filter(|path| path.is_file()) {
+        Some(path) => {
+            let saved = snapshot_dir.join(BACKUP_PRIOR_MANIFEST_FILE);
+            fs::copy(path, &saved)
+                .map_err(|error| format!("installed release manifest backup failed: {error}"))?;
+            File::open(&saved)
+                .and_then(|file| file.sync_all())
+                .map_err(|error| format!("fsync release manifest backup failed: {error}"))?;
+            Some(
+                sha256_file_and_size(&saved)
+                    .map_err(|error| format!("hash release manifest backup failed: {error}"))?
+                    .0,
+            )
+        }
+        None => None,
+    };
+
     let manifest = UpgradeBackupManifestV1 {
         schema: UPGRADE_BACKUP_MANIFEST_SCHEMA.to_string(),
         release_id: release_id.to_string(),
@@ -1735,10 +1767,62 @@ fn create_pre_upgrade_backup(
         prior_binary_sha256,
         prior_binary_size_bytes,
         data_files,
+        prior_release_manifest_sha256,
     };
     // Written last: a snapshot without this file is not a complete backup.
     write_json_atomically(&snapshot_dir.join("backup-manifest.json"), &manifest)?;
     Ok((snapshot_dir, backup_binary, backup_data_dir))
+}
+
+/// Write `bytes` to `dest` through a temporary file in the same directory,
+/// mode 0644, and sync the directory.
+fn install_file_atomically(dest: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = dest
+        .parent()
+        .ok_or_else(|| format!("`{}` has no parent directory", dest.display()))?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("create `{}` failed: {error}", parent.display()))?;
+    let tmp = dest.with_extension(format!("tmp.{}", std::process::id()));
+    let write = || -> io::Result<()> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&tmp)?;
+        file.write_all(bytes)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(0o644))?;
+        }
+        file.sync_all()?;
+        fs::rename(&tmp, dest)?;
+        fsync_dir(parent)
+    };
+    write().map_err(|error| {
+        let _ = fs::remove_file(&tmp);
+        format!("write `{}` failed: {error}", dest.display())
+    })
+}
+
+/// Put the release manifest back that was installed before the upgrade: the
+/// one saved with the backup, or none if there was none.
+fn restore_installed_manifest(backup_root: &Path, installed_manifest: &Path) -> Result<(), String> {
+    let saved = backup_root.join(BACKUP_PRIOR_MANIFEST_FILE);
+    match fs::read(&saved) {
+        Ok(bytes) => install_file_atomically(installed_manifest, &bytes),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            match fs::remove_file(installed_manifest) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(format!(
+                    "remove `{}` failed: {error}",
+                    installed_manifest.display()
+                )),
+            }
+        }
+        Err(error) => Err(format!("read `{}` failed: {error}", saved.display())),
+    }
 }
 
 /// Check a backup against the inventory written when it was taken: the prior
@@ -1763,6 +1847,16 @@ pub fn verify_pre_upgrade_backup(
         .map_err(|error| format!("hash backup binary failed: {error}"))?;
     if digest != manifest.prior_binary_sha256 || size != manifest.prior_binary_size_bytes {
         return Err("the backed-up binary does not match the backup manifest".to_string());
+    }
+    if let Some(expected) = &manifest.prior_release_manifest_sha256 {
+        let saved = root.join(BACKUP_PRIOR_MANIFEST_FILE);
+        let (digest, _) = sha256_file_and_size(&saved)
+            .map_err(|error| format!("hash backed-up release manifest failed: {error}"))?;
+        if &digest != expected {
+            return Err(
+                "the backed-up release manifest does not match the backup manifest".to_string(),
+            );
+        }
     }
     let mut expected: BTreeMap<&str, &UpgradeBackupFileEntry> = BTreeMap::new();
     for entry in &manifest.data_files {
@@ -2437,6 +2531,10 @@ pub fn execute_upgrade(
         started_unix: now_unix,
         step: "stopping".to_string(),
         git_revision: manifest.git_revision.clone(),
+        installed_manifest_file: options
+            .installed_manifest_file
+            .as_ref()
+            .map(|path| path.display().to_string()),
         data_dir: options.data_dir.display().to_string(),
         binary_path: options.binary_path.display().to_string(),
         signer_guard_dir: options.signer_guard_dir.display().to_string(),
@@ -2496,6 +2594,7 @@ pub fn execute_upgrade(
         &options.backup_dir,
         &options.signer_guard_dir,
         &excludes,
+        options.installed_manifest_file.as_deref(),
     ) {
         Ok(paths) => paths,
         Err(error) => {
@@ -2527,6 +2626,7 @@ pub fn execute_upgrade(
             &options.data_dir,
             &options.signer_guard_dir,
             &excludes,
+            options.installed_manifest_file.as_deref(),
             (&options.rpc_host, options.rpc_port),
             &journal_path,
             cause,
@@ -2539,6 +2639,16 @@ pub fn execute_upgrade(
     discard_candidate(&downloaded_temp);
     if let Err(error) = swap_result {
         return rollback(&format!("atomic binary swap failed: {error}"), &mut report);
+    }
+    // The manifest of the new release goes in with its binary: the units
+    // check one against the other before every start.
+    if let Some(installed) = &options.installed_manifest_file {
+        if let Err(error) = install_file_atomically(installed, &manifest_bytes) {
+            return rollback(
+                &format!("release manifest install failed: {error}"),
+                &mut report,
+            );
+        }
     }
     journal.step = "swapped".to_string();
     if let Err(error) = write_json_atomically(&journal_path, &journal) {
@@ -2712,6 +2822,7 @@ fn recover_interrupted_upgrade(
                 Path::new(&journal.data_dir),
                 Path::new(&journal.signer_guard_dir),
                 &excludes,
+                journal.installed_manifest_file.as_deref().map(Path::new),
                 (&options.rpc_host, options.rpc_port),
                 &journal_path,
                 &cause,
@@ -2771,6 +2882,7 @@ fn rollback_and_verify(
     data_dir: &Path,
     signer_guard_dir: &Path,
     excludes: &[PathBuf],
+    installed_manifest: Option<&Path>,
     rpc: (&str, u16),
     journal_path: &Path,
     cause: &str,
@@ -2803,7 +2915,16 @@ fn rollback_and_verify(
         data_dir,
         signer_guard_dir,
         excludes,
-    );
+    )
+    .and_then(|()| {
+        // The units check the binary against the installed manifest before
+        // they start: the prior binary needs the prior manifest back.
+        match (installed_manifest, backup_binary.parent()) {
+            (Some(installed), Some(root)) => restore_installed_manifest(root, installed)
+                .map_err(|error| format!("rollback release manifest restore failed: {error}")),
+            _ => Ok(()),
+        }
+    });
     // A validator is never started on a data directory that was only partly
     // restored: it could vote without its record of earlier votes. The units
     // stay stopped, the journal stays, and the next run tries again.
@@ -3181,6 +3302,13 @@ mod tests {
             .unwrap();
             let backup_dir = root.join("backups");
             fs::create_dir_all(&backup_dir).unwrap();
+            // The manifest of the release that is installed now.
+            fs::create_dir_all(root.join("etc")).unwrap();
+            fs::write(
+                root.join("etc").join("release-manifest.json"),
+                b"PRIOR_RELEASE_MANIFEST",
+            )
+            .unwrap();
 
             let options = UpgradeOptions {
                 check_only: false,
@@ -3204,6 +3332,7 @@ mod tests {
                 yes: true,
                 json: true,
                 exclude_paths: Vec::new(),
+                installed_manifest_file: Some(root.join("etc").join("release-manifest.json")),
             };
             let mut fixture = Self {
                 _tmp: tmp,
@@ -3297,6 +3426,9 @@ mod tests {
         fn data(&self, relative: &str) -> Vec<u8> {
             fs::read(self.options.data_dir.join(relative))
                 .unwrap_or_else(|error| panic!("{relative}: {error}"))
+        }
+        fn installed_manifest(&self) -> Vec<u8> {
+            fs::read(self.options.installed_manifest_file.as_ref().unwrap()).unwrap()
         }
         fn journal(&self) -> PathBuf {
             self.options.backup_dir.join(UPGRADE_JOURNAL_FILE)
@@ -3618,6 +3750,48 @@ mod tests {
             "a damaged backup replaces nothing"
         );
         assert!(fixture.journal().exists());
+    }
+
+    #[test]
+    fn the_installed_manifest_follows_the_binary_forward_and_back() {
+        // The units check the binary against this file before they start.
+        let fixture = Fixture::new("manifest-forward");
+        let new_manifest = fs::read(fixture.options.manifest_file.as_ref().unwrap()).unwrap();
+        assert_eq!(fixture.installed_manifest(), b"PRIOR_RELEASE_MANIFEST");
+        let report = execute_upgrade(&fixture.options, &fixture.hooks());
+        assert_eq!(report.exit_code, UPGRADE_EXIT_OK, "{report:?}");
+        assert_eq!(
+            fixture.installed_manifest(),
+            new_manifest,
+            "the new binary has its own manifest"
+        );
+        let installed = fixture.options.installed_manifest_file.as_ref().unwrap();
+        assert_eq!(mode(installed) & 0o777, 0o644);
+
+        // A rollback puts the prior manifest back with the prior binary.
+        let fixture = Fixture::new("manifest-back");
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+        assert_eq!(fixture.installed_manifest(), b"PRIOR_RELEASE_MANIFEST");
+
+        // With no manifest installed before, a rollback leaves none.
+        let fixture = Fixture::new("manifest-none");
+        let installed = fixture.options.installed_manifest_file.clone().unwrap();
+        fs::remove_file(&installed).unwrap();
+        let mut hooks = fixture.hooks();
+        hooks.new_binary_unhealthy = true;
+        let report = execute_upgrade(&fixture.options, &hooks);
+        assert_eq!(report.exit_code, UPGRADE_EXIT_ROLLED_BACK, "{report:?}");
+        assert!(!installed.exists());
+
+        // `None` leaves the file alone.
+        let mut fixture = Fixture::new("manifest-unmanaged");
+        let installed = fixture.options.installed_manifest_file.take().unwrap();
+        let report = execute_upgrade(&fixture.options, &fixture.hooks());
+        assert_eq!(report.exit_code, UPGRADE_EXIT_OK, "{report:?}");
+        assert_eq!(fs::read(&installed).unwrap(), b"PRIOR_RELEASE_MANIFEST");
     }
 
     #[test]
@@ -3943,6 +4117,7 @@ mod tests {
                 backup_root: None,
                 service_units: early.options.service_units.clone(),
                 exclude_paths: Vec::new(),
+                installed_manifest_file: None,
             },
         )
         .unwrap();

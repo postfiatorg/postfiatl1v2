@@ -828,7 +828,7 @@ include!("cli_dispatch_parts/group_05.rs");
 fn run_upgrade_command(flags: &[String]) -> i32 {
     use postfiat_node::release_upgrade::{
         execute_upgrade, format_upgrade_human_report, LiveUpgradeSystemHooks, UpgradeOptions,
-        DEFAULT_RELEASE_KEYSET_FILE, DEFAULT_SIGNER_GUARD_DIR, DEFAULT_UPGRADE_BACKUP_DIR,
+        DEFAULT_INSTALLED_MANIFEST_FILE, DEFAULT_RELEASE_KEYSET_FILE, DEFAULT_SIGNER_GUARD_DIR, DEFAULT_UPGRADE_BACKUP_DIR,
         DEFAULT_UPGRADE_BINARY_PATH, DEFAULT_UPGRADE_DATA_DIR, DEFAULT_UPGRADE_SERVICE_UNITS,
         UPGRADE_EXIT_INVALID_ARGS,
     };
@@ -927,6 +927,11 @@ fn run_upgrade_command(flags: &[String]) -> i32 {
             flag_value(flags, "--backup-dir").unwrap_or(DEFAULT_UPGRADE_BACKUP_DIR),
         ),
         service_units,
+        installed_manifest_file: match flag_value(flags, "--installed-manifest-file") {
+            Some("none" | "") => None,
+            Some(path) => Some(PathBuf::from(path)),
+            None => Some(PathBuf::from(DEFAULT_INSTALLED_MANIFEST_FILE)),
+        },
         rpc_host: flag_value(flags, "--rpc-host")
             .unwrap_or("127.0.0.1")
             .to_string(),
