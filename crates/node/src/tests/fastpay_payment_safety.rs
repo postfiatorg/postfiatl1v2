@@ -3306,6 +3306,29 @@ fn fastpay_active_storage_transfer_restart_and_six_validator_anchor() {
             expected
         );
     }
+    // The effects now live in the v2 WAL. A WAL that lost its last whole
+    // record must not publish a partial view either.
+    let wal_path = dirs[0].join(FASTPAY_SPECULATIVE_WAL_FILE);
+    let wal = std::fs::read(&wal_path).unwrap();
+    let magic = 0x5046_5732u32.to_le_bytes();
+    let last_frame = wal
+        .windows(4)
+        .rposition(|window| window == magic)
+        .expect("a WAL frame");
+    assert!(last_frame > 0, "two effects, two frames");
+    atomic_write(&wal_path, wal[..last_frame].to_vec()).unwrap();
+    assert!(
+        read_fastpay_ledger(&NodeStore::new(&dirs[0])).is_err(),
+        "a WAL without its last effect was accepted"
+    );
+    atomic_write(&wal_path, wal).unwrap();
+    assert!(read_fastpay_ledger(&NodeStore::new(&dirs[0])).is_ok());
+    // The same for the exported v1 journal.
+    let _ = fastpay_wal_export_v1(NodeOptions {
+        data_dir: dirs[0].clone(),
+    })
+    .unwrap();
+    std::fs::remove_file(&wal_path).unwrap();
     let original = std::fs::read(&journal_path).unwrap();
     let mut missing: serde_json::Value = serde_json::from_slice(&original).unwrap();
     assert_eq!(

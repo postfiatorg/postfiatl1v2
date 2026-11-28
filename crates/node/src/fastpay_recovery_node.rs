@@ -302,11 +302,11 @@ fn hydrate_fastpay_state_from_snapshot_sidecar(
     }))
 }
 
-fn fastpay_prewarmed_tip_tracker(
-) -> &'static std::sync::Mutex<BTreeMap<std::path::PathBuf, (u64, String, String)>> {
-    static TRACKER: std::sync::OnceLock<
-        std::sync::Mutex<BTreeMap<std::path::PathBuf, (u64, String, String)>>,
-    > = std::sync::OnceLock::new();
+/// The finalized tip (height, block hash, state root) last prewarmed, by data directory.
+type FastPayPrewarmedTips = std::sync::Mutex<BTreeMap<std::path::PathBuf, (u64, String, String)>>;
+
+fn fastpay_prewarmed_tip_tracker() -> &'static FastPayPrewarmedTips {
+    static TRACKER: std::sync::OnceLock<FastPayPrewarmedTips> = std::sync::OnceLock::new();
     TRACKER.get_or_init(|| std::sync::Mutex::new(BTreeMap::new()))
 }
 
