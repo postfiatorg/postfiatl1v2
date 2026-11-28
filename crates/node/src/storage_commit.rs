@@ -2665,6 +2665,12 @@ fn apply_transactional_ordered_commit_delta(
                 .map(std::borrow::Cow::Owned),
         };
         if let Some(ledger) = snapshot_ledger {
+            let _ = crate::fastpay_recovery_node::prune_fastpay_speculative_wal_after_block_commit(
+                store.data_dir(),
+                &transactional,
+                updated_meta.finalized_height,
+                ledger.as_ref(),
+            );
             let fee_v1_activation = match journal.governance.as_ref() {
                 Some(gov) => gov.fastpay_fee_v1_activation_height(),
                 None => transactional

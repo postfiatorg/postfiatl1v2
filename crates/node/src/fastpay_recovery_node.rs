@@ -1588,6 +1588,84 @@ fn retain_fastpay_speculative_effect(
     Ok(new_chain_hash)
 }
 
+/// Prune anchored/terminal speculative WAL records inside a transactional block
+/// commit while `transactional` (`redb`) is already open under the ordered-commit
+/// lock. This keeps post-block `owned_apply_v3` on the O(1) append-only WAL path
+/// without re-opening `redb` or contending for the transactional writer lease.
+pub(super) fn prune_fastpay_speculative_wal_after_block_commit(
+    data_dir: &std::path::Path,
+    transactional: &postfiat_storage::TransactionalStore,
+    tip_height: u64,
+    ledger: &LedgerState,
+) -> io::Result<()> {
+    let Some(head) = load_or_refresh_fastpay_wal_head(data_dir)? else {
+        return Ok(());
+    };
+    if head.journal.effects.is_empty() {
+        return Ok(());
+    }
+    let has_older_height_records = head.journal.effects.iter().any(|record| {
+        record
+            .retained_tip
+            .as_ref()
+            .map_or(true, |retained| retained.height != tip_height)
+    });
+    let has_ordered_terminal = head.journal.effects.iter().any(|record| {
+        ledger.fastpay_version_fences.iter().any(|fence| {
+            fence.lock_id == record.fence.lock_id
+                && fence.origin == postfiat_types::FastPayFenceOriginV1::OrderedRecovery
+        })
+    });
+    if !has_older_height_records && !has_ordered_terminal {
+        return Ok(());
+    }
+
+    let mut anchored = BTreeSet::new();
+    if has_older_height_records {
+        for record in &head.journal.effects {
+            if transactional
+                .anchored_fastpay_effect(&record.fence.lock_id)?
+                .is_some()
+            {
+                anchored.insert(record.fence.lock_id.clone());
+            }
+        }
+    }
+
+    let mut journal = head.journal;
+    let before_len = journal.effects.len();
+    journal.effects.retain(|record| {
+        let recovery = record
+            .fence
+            .certificate
+            .as_ref()
+            .map(postfiat_types::FastPayCertificateV1::recovery);
+        let ordered_terminal = ledger.fastpay_version_fences.iter().any(|fence| {
+            fence.lock_id == record.fence.lock_id
+                && fence.origin == postfiat_types::FastPayFenceOriginV1::OrderedRecovery
+        });
+        !anchored.contains(&record.fence.lock_id)
+            && !ordered_terminal
+            && (ledger.fastpay_version_fences.contains(&record.fence)
+                || recovery.is_some_and(|window| tip_height < window.recovery_closes_at_height))
+    });
+    if journal.effects.len() == before_len {
+        return Ok(());
+    }
+    journal
+        .effects
+        .sort_by(|left, right| left.fence.lock_id.cmp(&right.fence.lock_id));
+    rewrite_fastpay_wal_compacted(data_dir, &journal)?;
+    let shadow = fastpay_wal_shadow_verify_enabled();
+    let v1_path = data_dir.join(FASTPAY_SPECULATIVE_JOURNAL_FILE);
+    if shadow {
+        write_fastpay_speculative_journal(data_dir, &journal)?;
+    } else if v1_path.exists() {
+        let _ = std::fs::remove_file(&v1_path);
+    }
+    Ok(())
+}
+
 fn fastpay_height(store: &NodeStore) -> io::Result<u64> {
     store
         .read_chain_tip()
