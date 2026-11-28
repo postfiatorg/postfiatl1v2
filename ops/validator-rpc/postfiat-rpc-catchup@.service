@@ -2,16 +2,19 @@
 Description=PostFiat read-replica catch-up from its source (%i)
 After=network-online.target
 Wants=network-online.target
+# Stopping the timer stops a run that is under way, so `postfiat-node upgrade`
+# (which stops the timer) never copies a store that is being written.
+PartOf=postfiat-rpc-catchup@%i.timer
 
 [Service]
 Type=oneshot
 User=postfiat-rpc
 Group=postfiat-rpc
 # POSTFIAT_SOURCE_RPC_HOST and POSTFIAT_SOURCE_RPC_PORT: the rpc-serve the
-# replica follows. Every block is verified against its certificate, the
-# source's tip must be a block of the replica's own chain, and once a day the
-# full state audit runs. If any of the three fails the run fails, the source
-# tip record goes stale, and the replica stops answering reads.
+# replica follows. Every block is verified against its certificate, and the
+# source's tip must be a block of the replica's own chain. If either fails the
+# run fails, the source tip record goes stale, and the replica stops answering
+# reads. The full state audit is a job of its own: postfiat-rpc-audit@.
 EnvironmentFile=/etc/postfiat/rpc-replica.env
 ExecStart=/usr/local/bin/postfiat-node rpc-catch-up --follow \
   --data-dir /var/lib/postfiat-rpc/replica \
@@ -19,10 +22,7 @@ ExecStart=/usr/local/bin/postfiat-node rpc-catch-up --follow \
   --source-rpc-port ${POSTFIAT_SOURCE_RPC_PORT} \
   --max-blocks 64 \
   --timeout-ms 15000 \
-  --source-tip-file /var/lib/postfiat-rpc/replica/readiness/replica-source-tip.json \
-  --full-audit-interval-secs 86400
-# The daily audit reads the whole store.
-TimeoutStartSec=1800
+  --source-tip-file /var/lib/postfiat-rpc/replica/readiness/replica-source-tip.json
 CPUQuota=50%
 CPUWeight=20
 MemoryHigh=1G

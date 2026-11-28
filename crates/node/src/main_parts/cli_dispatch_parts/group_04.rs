@@ -2256,7 +2256,18 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             let work_dir = flag_value(flags, "--work-dir")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("rpc_catchup"));
-            let audit_data_dir = data_dir.clone();
+            // A full state audit holds the store for minutes. The follower
+            // does not queue behind it: it leaves, the source tip record is
+            // not renewed, and the replica refuses reads until the audit is over.
+            if flag_present(flags, "--follow")
+                && rpc_replica_audit_refusal(&data_dir, unix_now_secs()).is_some_and(|r| r.running)
+            {
+                println!(
+                    "{}",
+                    serde_json::json!({"schema": "postfiat-rpc-catch-up-v1", "status": "audit_running", "applied_count": 0})
+                );
+                return Ok(());
+            }
             let options = RpcCatchUpOptions {
                 data_dir,
                 source_host,
@@ -2287,30 +2298,6 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             } else {
                 rpc_catch_up(options)?
             };
-            // A follower checks each block against its certificate and puts
-            // off the full state audit. With this flag the audit runs when the
-            // last one is older than the interval; a failed audit ends the run
-            // before the source tip record is written, so the replica stops
-            // answering reads.
-            let mut last_full_audit = flag_value(flags, "--source-tip-file")
-                .and_then(|tip_file| rpc_replica_last_full_audit(Path::new(tip_file)));
-            if let Some(interval) = flag_value(flags, "--full-audit-interval-secs") {
-                let interval = interval
-                    .parse::<u64>()
-                    .map_err(|_| "--full-audit-interval-secs must be a u64".to_string())?;
-                if !flag_present(flags, "--follow") || flag_value(flags, "--source-tip-file").is_none() {
-                    return Err(
-                        "--full-audit-interval-secs needs --follow and --source-tip-file".to_string(),
-                    );
-                }
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map_or(0, |elapsed| elapsed.as_secs());
-                if last_full_audit.is_none_or(|at| now.saturating_sub(at) >= interval) {
-                    rpc_catch_up_verify_completed_state(&audit_data_dir)?;
-                    last_full_audit = Some(now);
-                }
-            }
             // A replica's `rpc-serve` reads this record to know how far behind it is.
             if let Some(tip_file) = flag_value(flags, "--source-tip-file") {
                 let source_height = report["source_height"]
@@ -2319,17 +2306,34 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 let local_height = report["local_height_after"]
                     .as_u64()
                     .ok_or("rpc catch-up report has no local_height_after")?;
-                write_rpc_replica_source_tip(
-                    Path::new(tip_file),
-                    source_height,
-                    local_height,
-                    last_full_audit,
-                )?;
+                write_rpc_replica_source_tip(Path::new(tip_file), source_height, local_height)?;
             }
             let json = serde_json::to_string_pretty(&report)
                 .map_err(|error| format!("rpc catch-up serialization failed: {error}"))?;
             println!("{json}");
             Ok(())
+        }
+        "rpc-replica-audit" => {
+            // The full state audit of a read replica, as its own job. While
+            // it runs, and after it failed, the replica refuses reads.
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let report = run_rpc_replica_audit(&data_dir, |dir| {
+                rpc_catch_up_verify_completed_state(dir).map(|_| ())
+            })?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .map_err(|error| format!("rpc replica audit serialization failed: {error}"))?
+            );
+            if report.status == "passed" {
+                Ok(())
+            } else {
+                Err(format!(
+                    "rpc replica audit failed: {}",
+                    report.reason.unwrap_or_default()
+                ))
+            }
         }
         "block-timeout-vote" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);

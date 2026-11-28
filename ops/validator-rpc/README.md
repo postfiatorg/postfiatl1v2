@@ -9,7 +9,8 @@ The contract is [`docs/specs/validator-rpc-profiles-v1.md`](../../docs/specs/val
 | Piece | Unit | What it does |
 | --- | --- | --- |
 | Read replica | `postfiat-rpc-private.service` (port 27650) or `postfiat-rpc-public.service` (port 27651) | `rpc-serve --rpc-profile ...-replica` on loopback. Serves reads from its own copy of the chain. Holds no key and refuses to start in a data directory that has one. Serves exactly the `read_only_public` methods of the [method inventory](../../docs/runbooks/rpc-method-inventory.json). |
-| Catch-up | `postfiat-rpc-catchup@.service` + `.timer` | Every few seconds, `rpc-catch-up --follow` pulls new blocks from the source RPC, applies each only with its certificate, checks the tip and state root after every block, and records the source's height. When there is nothing to apply it still compares tips: at the same height the source must show the same block and state root, and a source that is behind must show a block the replica holds; another tip ends the run with an error. Once a day (`--full-audit-interval-secs 86400`) the run also re-verifies the whole state, which takes minutes. A replica more than 5 blocks behind, or one whose catch-up has stopped or failed for two minutes, refuses reads with `replica_lagging`. |
+| Catch-up | `postfiat-rpc-catchup@.service` + `.timer` | Every few seconds, `rpc-catch-up --follow` pulls new blocks from the source RPC, applies each only with its certificate, checks the tip and state root after every block, and records the source's height. When there is nothing to apply it still compares tips: at the same height the source must show the same block and state root, and a source that is behind must show a block the replica holds; another tip ends the run with an error. A replica more than 5 blocks behind, or one whose catch-up has stopped or failed for two minutes, refuses reads with `replica_lagging`. |
+| Full audit | `postfiat-rpc-audit@.service` + `.timer` | Once a week, `rpc-replica-audit` re-verifies the whole state. It holds the store while it runs (about five minutes on devnet-2 today, longer as the chain grows): for that time the replica refuses reads with `replica_lagging`, `/healthz` says not ready, and the follower stands aside. If the audit fails the replica keeps refusing until an audit passes. Run two replicas if reads must not stop; the timer starts at a time that differs per host. |
 | HTTP edge | `postfiat-rpc-http-edge.service` (port 8650) | `rpc-serve` speaks one JSON request per line over TCP. The edge takes `POST /rpc` and `GET /healthz` on loopback and forwards to it, with the same method list and a request budget per client address. |
 | TLS proxy | `postfiat-rpc-public-edge.service` + `Caddyfile.public-rpc` | TLS 1.3 on 443, forwards `/rpc` and `/healthz` to the HTTP edge, stops routing when `/healthz` is not 200. |
 | Validator priority | `consensus-cgroup-override.conf` | Drop-in for the validator unit on a host that also runs a replica: the validator gets CPU and I/O first. |
@@ -35,13 +36,14 @@ sudo -u postfiat-rpc postfiat-node snapshot-import-signed --data-dir /var/lib/po
   --node-id rpc-replica-1
 
 sudo install -m 0644 postfiat-rpc-public.service postfiat-rpc-catchup@.service postfiat-rpc-catchup@.timer \
+  postfiat-rpc-audit@.service postfiat-rpc-audit@.timer \
   postfiat-rpc-http-edge.service postfiat-rpc-public-edge.service /etc/systemd/system/
 sudo install -m 0640 -o root -g postfiat-rpc rpc-replica.env.example /etc/postfiat/rpc-replica.env
 sudo install -m 0640 -o root -g postfiat-edge rpc-http-edge.env.example /etc/postfiat/rpc-http-edge.env
 sudo install -m 0640 -o root -g postfiat-edge rpc-public.env.example /etc/postfiat/rpc-public.env
 sudo install -m 0644 Caddyfile.public-rpc /etc/postfiat/Caddyfile.public-rpc
 sudo systemctl daemon-reload
-sudo systemctl enable --now postfiat-rpc-catchup@public.timer postfiat-rpc-public.service \
+sudo systemctl enable --now postfiat-rpc-catchup@public.timer postfiat-rpc-audit@public.timer postfiat-rpc-public.service \
   postfiat-rpc-http-edge.service postfiat-rpc-public-edge.service
 
 postfiat-node rpc-probe --host 127.0.0.1 --port 27651 --timeout-ms 5000
@@ -51,4 +53,17 @@ curl -s https://$POSTFIAT_PUBLIC_RPC_DOMAIN/rpc -d '{"version":"postfiat-local-r
 
 On `postfiat-wan-devnet-2` the snapshot import does not work at the moment: the block history file of a snapshot is 369 MB and the import accepts 256 MB. Until that is fixed, a Foundation replica there is seeded from a copy of a validator's store without its key files. See the measured read numbers in the [contract](../../docs/specs/validator-rpc-profiles-v1.md).
 
-The replica unit checks before every start that the installed binary is the one a 2-of-3 signed release manifest names (`release-manifest-verify`). It needs `/etc/postfiat/release-manifest.json` and `/etc/postfiat/release-keyset.json` from the release.
+The replica unit checks before every start that the installed binary is the one a 2-of-3 signed release manifest names (`release-manifest-verify`). It needs `/etc/postfiat/release-manifest.json` and `/etc/postfiat/release-keyset.json` from the release. `postfiat-node upgrade` replaces that manifest together with the binary.
+
+## Upgrading a replica
+
+Name the replica's units, timers first. Stopping a timer stops its running job, so the store is not being written while it is copied:
+
+```bash
+sudo postfiat-node upgrade --data-dir /var/lib/postfiat-rpc/replica --rpc-port 27651 \
+  --service-units postfiat-rpc-catchup@public.timer,postfiat-rpc-audit@public.timer,postfiat-rpc-public.service
+```
+
+Do not name the catch-up or audit *service*: between two runs it is not running, and the upgrade's health check reads a unit that is not running as a failed start.
+
+A store is bound to the directory it was imported into. Do not move or rename `/var/lib/postfiat-rpc/replica`, and do not start a node on a copy of it at another path: the node refuses a store whose recorded directory is not the one it was opened in.

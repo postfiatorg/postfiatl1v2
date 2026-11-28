@@ -1,0 +1,38 @@
+[Unit]
+Description=PostFiat read-replica full state audit (%i)
+# Stopping the timer stops a running audit.
+PartOf=postfiat-rpc-audit@%i.timer
+
+[Service]
+Type=oneshot
+User=postfiat-rpc
+Group=postfiat-rpc
+# Re-verifies the whole store. It holds the store while it runs (minutes, and
+# longer as the chain grows): for that time the replica refuses reads with
+# `replica_lagging` and /healthz says not ready. If the audit fails the replica
+# keeps refusing until an audit passes.
+ExecStart=/usr/local/bin/postfiat-node rpc-replica-audit \
+  --data-dir /var/lib/postfiat-rpc/replica
+TimeoutStartSec=3600
+CPUQuota=50%
+CPUWeight=20
+MemoryHigh=3G
+MemoryMax=4G
+IOWeight=50
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+UMask=0077
+ReadWritePaths=/var/lib/postfiat-rpc/replica
