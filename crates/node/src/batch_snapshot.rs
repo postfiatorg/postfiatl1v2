@@ -3586,6 +3586,8 @@ fn snapshot_import_file_max_bytes(file_name: &str) -> u64 {
         CONSENSUS_V2_SAFETY_SNAPSHOT_FILE | CONSENSUS_V2_QC_SNAPSHOT_FILE => {
             MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_BYTES
         }
+        // The block log grows with every block; see the bound's note.
+        BLOCKS_FILE => postfiat_storage::MAX_BLOCK_LOG_FILE_BYTES,
         _ => postfiat_storage::MAX_STATE_FILE_BYTES,
     }
 }
